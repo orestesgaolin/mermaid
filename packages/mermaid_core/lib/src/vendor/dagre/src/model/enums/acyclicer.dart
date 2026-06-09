@@ -1,0 +1,4 @@
+enum Acyclicer{
+  greedy,
+  none,
+}
