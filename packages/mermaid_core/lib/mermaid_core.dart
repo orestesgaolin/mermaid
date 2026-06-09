@@ -1,8 +1,17 @@
-/// Support for doing something awesome.
-///
-/// More dartdocs go here.
+/// Pure Dart port of mermaid: detection, parsing, layout, and a
+/// backend-agnostic render scene.
 library;
 
-export 'src/mermaid_core_base.dart';
-
-// TODO: Export any libraries intended for clients of this package.
+export 'src/color.dart';
+export 'src/detect.dart';
+export 'src/diagrams/flowchart/flow_layout.dart';
+export 'src/diagrams/flowchart/flow_model.dart';
+export 'src/diagrams/flowchart/flow_parser.dart';
+export 'src/geometry.dart';
+export 'src/ir/scene.dart';
+export 'src/mermaid.dart';
+export 'src/parse_error.dart';
+export 'src/text/approximate_text_measurer.dart';
+export 'src/text/text_measurer.dart';
+export 'src/text/text_style.dart';
+export 'src/theme/theme.dart';
