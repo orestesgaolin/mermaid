@@ -1,0 +1,15 @@
+# Upstream mermaid-js clone (reference only, not part of this repo)
+/upstream/
+
+# Dart / Flutter
+.dart_tool/
+.packages
+build/
+pubspec.lock
+*.iml
+.idea/
+.DS_Store
+
+# Flutter platform ephemeral
+**/macos/Flutter/ephemeral/
+**/Flutter/ephemeral/

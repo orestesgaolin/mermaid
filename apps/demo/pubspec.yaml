@@ -1,0 +1,23 @@
+name: mermaid_demo
+description: macOS demo app for the mermaid Dart port - editor with live preview.
+publish_to: none
+version: 0.1.0+1
+
+environment:
+  sdk: ^3.12.0
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.8
+  mermaid_core: ^0.1.0
+  mermaid_flutter: ^0.1.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true

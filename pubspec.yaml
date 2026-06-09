@@ -1,0 +1,8 @@
+name: _mermaid_dart_workspace
+publish_to: none
+environment:
+  sdk: ^3.12.0
+workspace:
+  - packages/mermaid_core
+  - packages/mermaid_flutter
+  - apps/demo
