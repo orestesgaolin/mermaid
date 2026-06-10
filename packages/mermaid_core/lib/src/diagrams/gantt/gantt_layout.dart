@@ -56,12 +56,14 @@ RenderScene layoutGanttChart(
   }
   final spanMs = maxDate.difference(minDate).inMilliseconds;
 
-  // Left gutter for section names.
+  // Left gutter for section names (measured in the bold style they are
+  // drawn with, or they soft-wrap).
+  final sectionStyle = baseStyle.copyWith(fontWeight: 700);
   var gutter = 10.0;
   for (final s in chart.sections) {
     if (s.name.isEmpty) continue;
     gutter = math.max(
-        gutter, measurer.measure(s.name, baseStyle).width + 16);
+        gutter, measurer.measure(s.name, sectionStyle).width + 16);
   }
 
   double xOf(DateTime d) =>
@@ -85,12 +87,12 @@ RenderScene layoutGanttChart(
       ));
     }
     if (section.name.isNotEmpty) {
-      final size = measurer.measure(section.name, baseStyle);
+      final size = measurer.measure(section.name, sectionStyle);
       nodes.add(SceneText(
         text: section.name,
         bounds: Rect.fromLTWH(4, y + bandHeight / 2 - _rowGap / 2 - size.height / 2,
             size.width, size.height),
-        style: baseStyle.copyWith(fontWeight: 700),
+        style: sectionStyle,
         color: theme.textColor,
         align: TextAlignH.left,
       ));
@@ -158,16 +160,26 @@ RenderScene layoutGanttChart(
   }
   final chartBottom = y;
 
-  // Axis ticks + grid.
+  // Axis ticks + grid. Every tick draws a grid line; labels thin out when
+  // they would collide.
   final ticks = _ticks(minDate, maxDate);
   final fmt = chart.axisFormat ?? _defaultAxisFormat(minDate, maxDate);
-  for (final tick in ticks) {
+  var labelEvery = 1;
+  if (ticks.length > 1) {
+    final spacing = xOf(ticks[1]) - xOf(ticks[0]);
+    final labelW =
+        measurer.measure(formatGanttDate(ticks.first, fmt), baseStyle).width;
+    labelEvery = math.max(1, ((labelW + 12) / spacing).ceil());
+  }
+  for (var i = 0; i < ticks.length; i++) {
+    final tick = ticks[i];
     final x = xOf(tick);
     nodes.add(SceneShape(
       geometry: PathGeometry(
-          [MoveTo(Point(x, chartTop - 4)), LineTo(Point(x, chartBottom))]),
+          [MoveTo(Point(x, chartTop - 10)), LineTo(Point(x, chartBottom + 4))]),
       stroke: const Stroke(color: _gridColor, width: 1),
     ));
+    if (i % labelEvery != 0) continue;
     final label = formatGanttDate(tick, fmt);
     final size = measurer.measure(label, baseStyle);
     nodes.add(SceneText(
@@ -207,7 +219,8 @@ RenderScene layoutGanttChart(
   );
 }
 
-/// 5-9 ticks aligned to natural boundaries (hours/days/weeks/months).
+/// Ticks at natural boundaries; density tracks mermaid's d3 auto ticks
+/// (roughly one tick per 45-90px of chart).
 List<DateTime> _ticks(DateTime min, DateTime max) {
   final span = max.difference(min);
   Duration step;
@@ -215,9 +228,11 @@ List<DateTime> _ticks(DateTime min, DateTime max) {
     step = const Duration(hours: 1);
   } else if (span <= const Duration(days: 2)) {
     step = const Duration(hours: 6);
-  } else if (span <= const Duration(days: 14)) {
+  } else if (span <= const Duration(days: 16)) {
     step = const Duration(days: 1);
-  } else if (span <= const Duration(days: 60)) {
+  } else if (span <= const Duration(days: 40)) {
+    step = const Duration(days: 2);
+  } else if (span <= const Duration(days: 110)) {
     step = const Duration(days: 7);
   } else if (span <= const Duration(days: 365)) {
     step = const Duration(days: 30);
@@ -240,6 +255,6 @@ List<DateTime> _ticks(DateTime min, DateTime max) {
 String _defaultAxisFormat(DateTime min, DateTime max) {
   final span = max.difference(min);
   if (span <= const Duration(days: 2)) return '%H:%M';
-  if (span <= const Duration(days: 365)) return '%m-%d';
-  return '%Y-%m';
+  // Upstream default axisFormat (config.schema.yaml).
+  return '%Y-%m-%d';
 }

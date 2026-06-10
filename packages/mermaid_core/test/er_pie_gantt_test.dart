@@ -238,11 +238,11 @@ gantt
       final b = barOf('task0');
       expect(b.left, closeTo(a.right, 2));
       expect(b.top, greaterThan(a.top));
-      // Axis tick labels exist (formatted dates).
+      // Axis tick labels exist (upstream default %Y-%m-%d format).
       expect(
         flatten(scene.nodes)
             .whereType<SceneText>()
-            .any((t) => RegExp(r'^\d{2}-\d{2}$').hasMatch(t.text)),
+            .any((t) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t.text)),
         isTrue,
       );
     });
