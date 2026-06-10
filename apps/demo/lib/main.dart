@@ -213,6 +213,7 @@ class _EditorPageState extends State<EditorPage> {
   Timer? _debounce;
   int _sampleIndex = 0;
   String _renderedSource = _samples.first.source;
+  bool _autoFit = true;
 
   @override
   void initState() {
@@ -327,21 +328,51 @@ class _EditorPageState extends State<EditorPage> {
 
   Widget _buildPreviewPane() {
     final background = _mermaidTheme.background;
+    final diagram = MermaidDiagram(
+      source: _renderedSource,
+      theme: _mermaidTheme,
+      errorBuilder: (context, error) => _ErrorBanner(error: error),
+    );
     return Container(
       color: Color(background.value),
-      child: InteractiveViewer(
-        boundaryMargin: const EdgeInsets.all(4000),
-        constrained: false,
-        minScale: 0.25,
-        maxScale: 4,
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: MermaidDiagram(
-            source: _renderedSource,
-            theme: _mermaidTheme,
-            errorBuilder: (context, error) => _ErrorBanner(error: error),
+      child: Stack(
+        children: [
+          Positioned.fill(
+            child: _autoFit
+                // Scale the diagram down (never up) to fit the pane.
+                ? Padding(
+                    padding: const EdgeInsets.all(24),
+                    child: FittedBox(
+                      fit: BoxFit.scaleDown,
+                      child: diagram,
+                    ),
+                  )
+                : InteractiveViewer(
+                    boundaryMargin: const EdgeInsets.all(4000),
+                    constrained: false,
+                    minScale: 0.25,
+                    maxScale: 4,
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: diagram,
+                    ),
+                  ),
           ),
-        ),
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: Tooltip(
+              message: _autoFit
+                  ? 'Auto-fit on — tap for free pan/zoom'
+                  : 'Free pan/zoom — tap to fit to window',
+              child: FloatingActionButton.small(
+                heroTag: 'fit',
+                onPressed: () => setState(() => _autoFit = !_autoFit),
+                child: Icon(_autoFit ? Icons.fit_screen : Icons.pan_tool_alt),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
