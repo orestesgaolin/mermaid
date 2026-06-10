@@ -16,7 +16,7 @@ import 'gantt_model.dart';
 
 const double _barHeight = 22;
 const double _rowGap = 10;
-const double _chartWidth = 640;
+const double _chartWidth = 800;
 const double _diagramPadding = 12;
 
 // theme-default gantt colors.
@@ -29,10 +29,10 @@ const _critFill = Color(0xffff8888);
 const _critBorder = Color(0xffff0000);
 // Soft per-section band tints (upstream alternates section fills).
 const _sectionBands = <Color>[
-  Color(0x33ececff),
-  Color(0x33ffffde),
-  Color(0x33d5e5cf),
-  Color(0x33e5d0cf),
+  Color(0x66e6e6fa),
+  Color(0x44ffffde),
+  Color(0x55d5e5cf),
+  Color(0x55e5d0cf),
 ];
 const _gridColor = Color(0xffd3d3d3);
 
@@ -143,6 +143,9 @@ RenderScene layoutGanttChart(
       }
       final size = measurer.measure(t.name, baseStyle);
       final fitsInside = !t.milestone && size.width < (x2 - x1) - 8;
+      // Upstream paints crit/active task text white inside the bar.
+      final insideColor =
+          t.crit && !t.done ? const Color(0xffffffff) : theme.textColor;
       children.add(SceneText(
         text: t.name,
         bounds: fitsInside
@@ -154,7 +157,7 @@ RenderScene layoutGanttChart(
                 size.width,
                 size.height),
         style: baseStyle,
-        color: theme.textColor,
+        color: fitsInside ? insideColor : theme.textColor,
         align: TextAlignH.left,
       ));
       nodes.add(SceneGroup(id: t.id, semanticLabel: t.name, children: children));

@@ -112,18 +112,28 @@ Mindmap parseMindmap(String source) {
   };
 }
 
-/// Section colors per first-level branch, from upstream theme git/section
-/// palette feel.
+/// Section colors per first-level branch (mermaid default mindmap look:
+/// saturated pastel fills).
 const _branchColors = <Color>[
-  Color(0xff9370db),
-  Color(0xff2e8bc0),
-  Color(0xffe8a33d),
-  Color(0xff5fb6a9),
-  Color(0xffbf6790),
-  Color(0xff7fbf67),
-  Color(0xffb56576),
-  Color(0xff6788bf),
+  Color(0xfffff176),
+  Color(0xffaed581),
+  Color(0xffb39ddb),
+  Color(0xff4fc3f7),
+  Color(0xffff8a65),
+  Color(0xfff06292),
+  Color(0xff9fa8da),
+  Color(0xff80cbc4),
 ];
+
+/// Root node fill (upstream renders a large filled circle).
+const _rootFill = Color(0xff283593);
+
+Color _lighten(Color c, double amount) => Color.fromARGB(
+      255,
+      (c.red + (255 - c.red) * amount).round(),
+      (c.green + (255 - c.green) * amount).round(),
+      (c.blue + (255 - c.blue) * amount).round(),
+    );
 
 class _PlacedMind {
   _PlacedMind(this.node, this.size);
@@ -234,7 +244,7 @@ RenderScene layoutMindmap(
           CubicTo(Point(start.x + dir * mid, start.y),
               Point(end.x - dir * mid, end.y), end),
         ]),
-        stroke: Stroke(color: cp.color.withOpacity(0.7), width: 2.5),
+        stroke: Stroke(color: cp.color, width: 3),
       ));
       edges(c);
     }
@@ -249,22 +259,24 @@ RenderScene layoutMindmap(
         n.depth == 0 ? baseStyle.copyWith(fontWeight: 700) : baseStyle;
     final labelSize = measurer.measure(n.label, style, maxWidth: 170);
     final rect = Rect.fromCenter(p.center, p.size.width, p.size.height);
-    final fill = n.depth == 0
-        ? theme.mainBkg
-        : Color.fromARGB(40, p.color.red, p.color.green, p.color.blue);
+    // Filled nodes like upstream: the root is a dark filled circle with
+    // inverted text; branches fill with the section color, lightening with
+    // depth.
+    final isRoot = n.depth == 0;
+    final fill = isRoot
+        ? _rootFill
+        : _lighten(p.color, ((n.depth - 1) * 0.18).clamp(0.0, 0.6));
     final children = <SceneNode>[];
     switch (n.shape) {
       case MindmapShape.circle:
         children.add(SceneShape(
           geometry: CircleGeometry(p.center, p.size.width / 2),
           fill: Fill(fill),
-          stroke: Stroke(color: p.color, width: 2),
         ));
       case MindmapShape.rect:
         children.add(SceneShape(
           geometry: RectGeometry(rect),
           fill: Fill(fill),
-          stroke: Stroke(color: p.color, width: 2),
         ));
       case MindmapShape.hexagon:
         final m = rect.height / 3;
@@ -278,7 +290,6 @@ RenderScene layoutMindmap(
             Point(rect.left, rect.center.y),
           ]),
           fill: Fill(fill),
-          stroke: Stroke(color: p.color, width: 2),
         ));
       case MindmapShape.bang || MindmapShape.cloud:
         // Approximated as a stadium until dedicated geometry lands.
@@ -286,22 +297,11 @@ RenderScene layoutMindmap(
           geometry:
               RectGeometry(rect, rx: rect.height / 2, ry: rect.height / 2),
           fill: Fill(fill),
-          stroke: Stroke(color: p.color, width: 2),
         ));
-      case MindmapShape.rounded:
+      case MindmapShape.rounded || MindmapShape.plain:
         children.add(SceneShape(
-          geometry: RectGeometry(rect, rx: 10, ry: 10),
+          geometry: RectGeometry(rect, rx: 8, ry: 8),
           fill: Fill(fill),
-          stroke: Stroke(color: p.color, width: 2),
-        ));
-      case MindmapShape.plain:
-        // Underline-style: just the label with a baseline stroke.
-        children.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(rect.left, rect.bottom)),
-            LineTo(Point(rect.right, rect.bottom)),
-          ]),
-          stroke: Stroke(color: p.color, width: 2),
         ));
     }
     children.add(SceneText(
@@ -309,7 +309,7 @@ RenderScene layoutMindmap(
       bounds:
           Rect.fromCenter(p.center, labelSize.width, labelSize.height),
       style: style,
-      color: theme.textColor,
+      color: isRoot ? const Color(0xffffffff) : const Color(0xff1f1f1f),
     ));
     nodes.add(SceneGroup(
         id: 'mind_${n.label}', semanticLabel: n.label, children: children));

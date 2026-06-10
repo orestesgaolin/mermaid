@@ -106,8 +106,8 @@ class _ErLayout {
           FlowDirection.lr => dagre.RankDir.ltr,
           FlowDirection.rl => dagre.RankDir.rtl,
         },
-        nodeSep: 60,
-        rankSep: 70,
+        nodeSep: 80,
+        rankSep: 110,
       ),
     );
     for (final b in boxes.values) {
@@ -261,8 +261,12 @@ class _ErLayout {
       final total = colWidths.fold(0.0, (a, b) => a + b);
       if (total < width) colWidths[colCount - 1] += width - total;
     }
-    final height =
-        headerHeight + rowHeights.fold(0.0, (a, b) => a + b);
+    var height = headerHeight + rowHeights.fold(0.0, (a, b) => a + b);
+    if (cells.isEmpty) {
+      // Upstream renders attribute-less entities as roomy boxes.
+      width = math.max(width, headerSize.width + 50);
+      height = math.max(height, headerHeight * 2.2);
+    }
     return _EntityBox(e, width, height, colWidths, rowHeights, headerHeight);
   }
 
