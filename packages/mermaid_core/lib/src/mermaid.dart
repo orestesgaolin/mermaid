@@ -8,6 +8,8 @@ import 'diagrams/flowchart/flow_layout.dart';
 import 'diagrams/flowchart/flow_parser.dart';
 import 'diagrams/sequence/sequence_layout.dart';
 import 'diagrams/sequence/sequence_parser.dart';
+import 'diagrams/state/state_layout.dart';
+import 'diagrams/state/state_parser.dart';
 import 'ir/scene.dart';
 import 'parse_error.dart';
 import 'text/text_measurer.dart';
@@ -37,10 +39,13 @@ class Mermaid {
       case DiagramType.classDiagram:
         return layoutClassDiagram(parseClassDiagram(source),
             measurer: measurer, theme: theme);
+      case DiagramType.stateDiagram:
+        return layoutStateDiagram(parseStateDiagram(source),
+            measurer: measurer, theme: theme);
       case DiagramType.unknown:
         throw UnsupportedError(
-          'Unrecognized or not-yet-supported diagram type. '
-          'Currently supported: flowchart, sequenceDiagram, classDiagram.',
+          'Unrecognized or not-yet-supported diagram type. Currently '
+          'supported: flowchart, sequenceDiagram, classDiagram, stateDiagram.',
         );
     }
   }
