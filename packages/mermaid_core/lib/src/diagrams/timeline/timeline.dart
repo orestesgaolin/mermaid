@@ -138,7 +138,8 @@ RenderScene layoutTimeline(
   const sectionH = 26.0;
   const periodTop = sectionTop + sectionH + 10;
   const periodH = 30.0;
-  const eventsTop = periodTop + periodH + 14;
+  const axisY = periodTop + periodH + 16.0;
+  const eventsTop = axisY + 16.0;
 
   var x = 0.0;
   var sectionIndex = 0;
@@ -186,6 +187,15 @@ RenderScene layoutTimeline(
           color: theme.textColor,
         ),
       ];
+      // Dashed drop from the period box through the axis to the events.
+      children.add(SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(cx, periodTop + periodH)),
+          LineTo(Point(cx, eventsTop)),
+        ]),
+        stroke:
+            Stroke(color: theme.lineColor, width: 0.8, dash: const [3, 3]),
+      ));
       var y = eventsTop;
       for (final event in period.events) {
         final size =
@@ -197,7 +207,8 @@ RenderScene layoutTimeline(
               MoveTo(Point(cx, y - 8)),
               LineTo(Point(cx, y)),
             ]),
-            stroke: Stroke(color: theme.lineColor, width: 1),
+            stroke: Stroke(
+                color: theme.lineColor, width: 0.8, dash: const [3, 3]),
           ),
           SceneShape(
             geometry: RectGeometry(Rect.fromLTWH(x + 4, y, colWidth - 8, h),
@@ -222,6 +233,20 @@ RenderScene layoutTimeline(
       x += colWidth + colGap;
     }
     sectionIndex++;
+  }
+
+  // Horizontal arrow axis between the period row and the events.
+  if (x > 0) {
+    nodes.add(SceneShape(
+      geometry: PathGeometry([
+        MoveTo(const Point(0, axisY)),
+        LineTo(Point(x + 8, axisY)),
+        MoveTo(Point(x - 1, axisY - 5)),
+        LineTo(Point(x + 8, axisY)),
+        LineTo(Point(x - 1, axisY + 5)),
+      ]),
+      stroke: Stroke(color: theme.lineColor, width: 1.5),
+    ));
   }
 
   var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);

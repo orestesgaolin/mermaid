@@ -20,16 +20,16 @@ const double _diagramPadding = 12;
 const _palette = <Color>[
   Color(0xffececff),
   Color(0xffffffde),
-  Color(0xffd5c9e5),
-  Color(0xffc9e5d2),
-  Color(0xffe5d2c9),
-  Color(0xffc9d6e5),
-  Color(0xffe5c9dd),
-  Color(0xffdee5c9),
-  Color(0xffc9e5e2),
-  Color(0xffe5dfc9),
-  Color(0xffd2c9e5),
-  Color(0xffe5c9c9),
+  Color(0xffb5de2b),
+  Color(0xffb8b5f5),
+  Color(0xfff9f54a),
+  Color(0xff8fd0c5),
+  Color(0xffe5a3c8),
+  Color(0xffc4e59a),
+  Color(0xff9ac8e5),
+  Color(0xffe5c79a),
+  Color(0xffc09ae5),
+  Color(0xffe59a9a),
 ];
 
 RenderScene layoutPieChart(
@@ -64,7 +64,8 @@ RenderScene layoutPieChart(
               const ClosePath(),
             ]),
             fill: Fill(color),
-            stroke: Stroke(color: theme.background, width: 2),
+            // Upstream pieStrokeColor / pieOuterStrokeColor: black.
+            stroke: const Stroke(color: Color(0xff000000), width: 1.5),
           ),
           if (sweep > 0.15)
             () {

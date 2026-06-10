@@ -42,10 +42,10 @@ void main() {
 
   group('members', () {
     test('block body attributes and methods', () {
-      final d = parse('class Animal {\n+String name\n-int age\n+eat(food) bool\n}');
+      final d = parse('class Animal {\n+String name\n-int age\n+eat(food) : bool\n}');
       final c = d.classes['Animal']!;
       expect(c.attributes.map((m) => m.text), ['+String name', '-int age']);
-      expect(c.methods.map((m) => m.text), ['+eat(food) bool']);
+      expect(c.methods.map((m) => m.text), ['+eat(food) : bool']);
     });
     test('colon syntax', () {
       final d = parse('Animal : +String name\nAnimal : +eat()');

@@ -153,9 +153,11 @@ RenderScene layoutQuadrantChart(
     final label = chart.quadrantLabels[q];
     if (label != null) {
       final size = measurer.measure(label, baseStyle, maxWidth: plot / 2 - 16);
+      // Upstream places quadrant labels at the top of each region.
       nodes.add(SceneText(
         text: label,
-        bounds: Rect.fromCenter(regions[q].center, size.width, size.height),
+        bounds: Rect.fromLTWH(regions[q].center.x - size.width / 2,
+            regions[q].top + 8, size.width, size.height),
         style: baseStyle,
         color: theme.textColor,
       ));
@@ -173,12 +175,13 @@ RenderScene layoutQuadrantChart(
     final size = measurer.measure(p.label, baseStyle);
     nodes.add(SceneGroup(id: 'point_${p.label}', children: [
       SceneShape(
-        geometry: CircleGeometry(pos, 5),
-        fill: Fill(theme.nodeBorder),
+        geometry: CircleGeometry(pos, 4),
+        fill: Fill(theme.textColor),
       ),
+      // Upstream puts the label below the dot.
       SceneText(
         text: p.label,
-        bounds: Rect.fromLTWH(pos.x - size.width / 2, pos.y - size.height - 7,
+        bounds: Rect.fromLTWH(pos.x - size.width / 2, pos.y + 6,
             size.width, size.height),
         style: baseStyle,
         color: theme.textColor,

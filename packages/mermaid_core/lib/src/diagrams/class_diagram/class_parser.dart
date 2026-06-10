@@ -305,8 +305,17 @@ class _ClassParser {
       visibility = body[0];
       body = body.substring(1);
     }
+    var display = _convertGenerics(body.trim());
+    // Upstream renders trailing method return types as `name() : ret`.
+    final closeParen = display.lastIndexOf(')');
+    if (closeParen >= 0 && closeParen < display.length - 1) {
+      final ret = display.substring(closeParen + 1).trim();
+      if (ret.isNotEmpty && !ret.startsWith(':')) {
+        display = '${display.substring(0, closeParen + 1)} : $ret';
+      }
+    }
     final member = ClassMember(
-      text: '$visibility${_convertGenerics(body.trim())}',
+      text: '$visibility$display',
       isStatic: isStatic,
       isAbstract: isAbstract,
     );

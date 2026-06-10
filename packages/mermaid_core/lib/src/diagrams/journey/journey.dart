@@ -185,7 +185,9 @@ RenderScene layoutJourney(
           measurer.measure(t.name, baseStyle, maxWidth: taskWidth - 10).height);
     }
   }
-  final faceCenterY = taskLabelTop + labelBlockH + 36;
+  // Horizontal axis under the task row; faces hang below it, higher
+  // scores closer to the axis (upstream journey vertical placement).
+  final axisY = taskLabelTop + labelBlockH + 26;
 
   var x = 0.0;
   var sectionIndex = 0;
@@ -218,6 +220,7 @@ RenderScene layoutJourney(
       final cx = x + taskWidth / 2;
       final nameSize =
           measurer.measure(t.name, baseStyle, maxWidth: taskWidth - 10);
+      final faceY = axisY + 34 + (5 - t.score) * 26.0;
       final children = <SceneNode>[
         SceneShape(
           geometry: RectGeometry(
@@ -234,22 +237,44 @@ RenderScene layoutJourney(
           style: baseStyle,
           color: theme.textColor,
         ),
-        ..._face(Point(cx, faceCenterY), t.score, theme),
+        // Drop line from the axis to the face.
+        SceneShape(
+          geometry: PathGeometry(
+              [MoveTo(Point(cx, axisY)), LineTo(Point(cx, faceY - 17))]),
+          stroke: Stroke(
+              color: theme.lineColor, width: 0.8, dash: const [3, 3]),
+        ),
+        ..._face(Point(cx, faceY), t.score, theme),
       ];
-      // Actor dots above the face.
-      var dotX = cx - (t.actors.length - 1) * 9.0;
+      // Actor dots pinned to the task box's top edge (upstream look).
+      var dotX = x + 10.0;
       for (final a in t.actors) {
         children.add(SceneShape(
-          geometry: CircleGeometry(Point(dotX, faceCenterY - 32), 6),
+          geometry: CircleGeometry(Point(dotX, taskLabelTop), 5),
           fill: Fill(actorColor[a]!),
+          stroke: Stroke(color: theme.background, width: 1),
         ));
-        dotX += 18;
+        dotX += 13;
       }
       nodes.add(SceneGroup(id: 'task_${t.name}', semanticLabel: t.name,
           children: children));
       x += taskWidth + taskGap;
     }
     sectionIndex++;
+  }
+
+  // Axis arrow spanning all tasks.
+  if (x > 0) {
+    nodes.add(SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(0, axisY)),
+        LineTo(Point(x + 8, axisY)),
+        MoveTo(Point(x - 1, axisY - 5)),
+        LineTo(Point(x + 8, axisY)),
+        LineTo(Point(x - 1, axisY + 5)),
+      ]),
+      stroke: Stroke(color: theme.lineColor, width: 1.5),
+    ));
   }
 
   var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);

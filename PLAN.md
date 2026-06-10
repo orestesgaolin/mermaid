@@ -67,6 +67,19 @@ source text
   `// Vendored fix:` before debugging layout issues; the bug is often here.
   Reference sources: raw.githubusercontent.com/dagrejs/dagre/master/lib/.
 
+## Fidelity workflow (comparing against official mermaid.js)
+
+Render references with mermaid-cli and build side-by-side pairs:
+`npx -y @mermaid-js/mermaid-cli -i x.mmd -o ref.png -b white -s 2`, ours via
+the offscreen render test, then `magick montage` (see /tmp/fidelity in the
+2026-06-10 session, script in git history). A full pass over all samples was
+done 2026-06-10; per-type fixes landed for sequence (badges, frame style,
+label z-order), class (`name() : ret`), ER (lavender stripes), pie (palette,
+black strokes), journey (axis + score-height faces), timeline (arrow axis,
+dashed drops), gantt (section tints, axis density), quadrant (label
+placement). Remaining known deltas: no text rotation in the IR (quadrant
+y-labels horizontal), class note placement, state self-loop label overlap.
+
 ## Validation workflow (use it for every change)
 
 1. `cd packages/mermaid_core && dart test` — 143+ tests. Parser tests are

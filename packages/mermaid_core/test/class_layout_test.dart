@@ -28,12 +28,12 @@ SceneGroup group(RenderScene s, String id) => flatten(s.nodes)
 
 void main() {
   test('box contains name, attributes and methods in order', () {
-    final s = layout('class Animal {\n+String name\n+eat() bool\n}');
+    final s = layout('class Animal {\n+String name\n+eat() : bool\n}');
     final texts = flatten(group(s, 'Animal').children)
         .whereType<SceneText>()
         .toList();
     expect(texts.map((t) => t.text).toList(),
-        ['Animal', '+String name', '+eat() bool']);
+        ['Animal', '+String name', '+eat() : bool']);
     expect(texts[0].bounds.top, lessThan(texts[1].bounds.top));
     expect(texts[1].bounds.top, lessThan(texts[2].bounds.top));
   });

@@ -31,7 +31,9 @@ const _noteBkg = Color(0xfffff5ad);
 const _noteBorder = Color(0xffaaaa33);
 const _activationBkg = Color(0xfff4f4f4);
 const _activationBorder = Color(0xff666666);
-const _lifelineColor = Color(0xff999999);
+const _lifelineColor = Color(0xffb3a2e3);
+// Upstream .loopLine / labelBox styling.
+const _frameBorder = Color(0xffccccff);
 
 RenderScene layoutSequence(
   SequenceDiagram diagram, {
@@ -84,6 +86,7 @@ class _SequenceLayout {
   // Output buckets in paint order.
   final backgrounds = <SceneNode>[]; // rect-block fills
   final frames = <SceneNode>[]; // loop/alt/... frames (above bg, below rest)
+  final frameLabels = <SceneNode>[]; // tabs + divider labels (top-most)
   final lifelines = <SceneNode>[];
   final activationNodes = <SceneNode>[];
   final eventNodes = <SceneNode>[];
@@ -204,6 +207,7 @@ class _SequenceLayout {
       ...activationNodes,
       ...actorNodes,
       ...eventNodes,
+      ...frameLabels,
     ];
     var bounds = sceneBounds(nodes) ??
         Rect.fromLTWH(0, 0, _actorMinWidth, _actorHeight);
@@ -421,7 +425,7 @@ class _SequenceLayout {
           _head(SeqArrow.solidArrow, Point(x1, y), Point(-dir, 0)));
     }
     if (number != null) {
-      children.addAll(_numberBadge(number, Point(x1 + dir * 12, y)));
+      children.addAll(_numberBadge(number, Point(x1, y)));
     }
 
     eventNodes.add(SceneGroup(
@@ -465,7 +469,7 @@ class _SequenceLayout {
           color: theme.textColor,
           align: TextAlignH.left,
         ),
-      if (number != null) ..._numberBadge(number, Point(x + 12, y)),
+      if (number != null) ..._numberBadge(number, Point(x, y)),
     ];
     eventNodes.add(SceneGroup(
       id: 'msg_${msg.from}_${msg.from}',
@@ -529,17 +533,18 @@ class _SequenceLayout {
     final text = '$number';
     final style = baseStyle.copyWith(fontSize: baseStyle.fontSize * 0.75);
     final size = measurer.measure(text, style);
+    // Upstream sequenceNumber: solid dark circle with inverted text, sitting
+    // on the lifeline at the message start.
     return [
       SceneShape(
         geometry: CircleGeometry(center, math.max(8, size.width / 2 + 3)),
-        fill: Fill(theme.mainBkg),
-        stroke: Stroke(color: theme.nodeBorder),
+        fill: Fill(theme.lineColor),
       ),
       SceneText(
         text: text,
         bounds: Rect.fromCenter(center, size.width, size.height),
         style: style,
-        color: theme.textColor,
+        color: theme.background,
       ),
     ];
   }
@@ -627,11 +632,21 @@ class _SequenceLayout {
     final tabW = kwSize.width + 2 * _boxTextMargin + 8;
     final tabH = kwSize.height + 4;
 
-    final children = <SceneNode>[
+    frames.add(SceneGroup(id: 'frame_$keyword', children: [
       SceneShape(
         geometry: RectGeometry(rect),
-        stroke: Stroke(color: theme.lineColor),
+        stroke: const Stroke(color: _frameBorder, dash: [2, 2]),
       ),
+      for (final (dy, _) in frame.dividers)
+        SceneShape(
+          geometry: PathGeometry(
+              [MoveTo(Point(rect.left, dy)), LineTo(Point(rect.right, dy))]),
+          stroke: const Stroke(color: _frameBorder, dash: [2, 2]),
+        ),
+    ]));
+    // Tab and labels paint above everything (activation bars would occlude
+    // centered divider labels otherwise).
+    final labelChildren = <SceneNode>[
       // Pentagon label tab, upstream labelBox shape.
       SceneShape(
         geometry: PolygonGeometry([
@@ -642,7 +657,7 @@ class _SequenceLayout {
           Point(rect.left, rect.top + tabH),
         ]),
         fill: Fill(theme.mainBkg),
-        stroke: Stroke(color: theme.nodeBorder),
+        stroke: const Stroke(color: _frameBorder),
       ),
       SceneText(
         text: keyword,
@@ -657,17 +672,22 @@ class _SequenceLayout {
             Point(rect.left + tabW + 8, rect.top + 2)),
     ];
     for (final (dy, label) in frame.dividers) {
-      children.add(SceneShape(
-        geometry: PathGeometry(
-            [MoveTo(Point(rect.left, dy)), LineTo(Point(rect.right, dy))]),
-        stroke: Stroke(color: theme.lineColor, dash: const [2, 2]),
+      if (label.isEmpty) continue;
+      final size = measurer.measure('[$label]', baseStyle);
+      labelChildren.add(SceneShape(
+        geometry: RectGeometry(
+            Rect.fromLTWH(rect.center.x - size.width / 2 - 3, dy + 2,
+                size.width + 6, size.height + 2),
+            rx: 2,
+            ry: 2),
+        fill: Fill(theme.edgeLabelBackground),
       ));
-      if (label.isNotEmpty) {
-        children.add(_frameLabel('[$label]', Point(rect.center.x, dy + 3),
-            centered: true));
-      }
+      labelChildren
+          .add(_frameLabel('[$label]', Point(rect.center.x, dy + 3),
+              centered: true));
     }
-    frames.add(SceneGroup(id: 'frame_$keyword', children: children));
+    frameLabels
+        .add(SceneGroup(id: 'framelabel_$keyword', children: labelChildren));
   }
 
   SceneText _frameLabel(String text, Point topLeft, {bool centered = false}) {

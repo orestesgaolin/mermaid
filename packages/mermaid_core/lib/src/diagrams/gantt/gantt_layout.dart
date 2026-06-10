@@ -27,7 +27,13 @@ const _doneFill = Color(0xffd3d3d3);
 const _doneBorder = Color(0xff808080);
 const _critFill = Color(0xffff8888);
 const _critBorder = Color(0xffff0000);
-const _sectionBand = Color(0x14808080);
+// Soft per-section band tints (upstream alternates section fills).
+const _sectionBands = <Color>[
+  Color(0x33ececff),
+  Color(0x33ffffde),
+  Color(0x33d5e5cf),
+  Color(0x33e5d0cf),
+];
 const _gridColor = Color(0xffd3d3d3);
 
 RenderScene layoutGanttChart(
@@ -78,14 +84,12 @@ RenderScene layoutGanttChart(
   var sectionIndex = 0;
   for (final section in chart.sections) {
     final bandHeight = section.tasks.length * rowStride;
-    if (sectionIndex.isOdd) {
-      nodes.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromLTWH(0, y - _rowGap / 2, gutter + _chartWidth + 20,
-                bandHeight.toDouble())),
-        fill: const Fill(_sectionBand),
-      ));
-    }
+    nodes.add(SceneShape(
+      geometry: RectGeometry(
+          Rect.fromLTWH(0, y - _rowGap / 2, gutter + _chartWidth + 20,
+              bandHeight.toDouble())),
+      fill: Fill(_sectionBands[sectionIndex % _sectionBands.length]),
+    ));
     if (section.name.isNotEmpty) {
       final size = measurer.measure(section.name, sectionStyle);
       nodes.add(SceneText(

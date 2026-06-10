@@ -20,7 +20,7 @@ const double _cellPadY = 6;
 const double _diagramPadding = 8;
 const double _markerLen = 18;
 
-const _rowAltFill = Color(0xfff2f2f2);
+const _rowAltFill = Color(0xfff1eefb);
 
 RenderScene layoutErDiagram(
   ErDiagram diagram, {
