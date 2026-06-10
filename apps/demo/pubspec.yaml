@@ -13,6 +13,8 @@ dependencies:
   cupertino_icons: ^1.0.8
   mermaid_core: ^0.1.0
   mermaid_flutter: ^0.1.0
+  flutter_driver:
+    sdk: flutter
 
 dev_dependencies:
   flutter_test:

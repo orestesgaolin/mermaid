@@ -1,10 +1,16 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_driver/driver_extension.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 void main() {
+  // Lets tooling (screenshots, UI driving) attach in debug builds.
+  if (kDebugMode) {
+    enableFlutterDriverExtension();
+  }
   runApp(const MermaidDemoApp());
 }
 
