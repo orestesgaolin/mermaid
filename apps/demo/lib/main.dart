@@ -8,8 +8,11 @@ import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 void main() {
   // Lets tooling (screenshots, UI driving) attach in debug builds.
+  // Text entry emulation must stay OFF or it hijacks the platform text
+  // input connection and real keyboard typing stops working; automation
+  // can enable it at runtime via the set_text_entry_emulation command.
   if (kDebugMode) {
-    enableFlutterDriverExtension();
+    enableFlutterDriverExtension(enableTextEntryEmulation: false);
   }
   runApp(const MermaidDemoApp());
 }
