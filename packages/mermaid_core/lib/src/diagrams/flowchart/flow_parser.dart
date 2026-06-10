@@ -62,6 +62,7 @@ class _FlowParser {
   final edges = <FlowEdge>[];
   final subgraphs = <FlowSubgraph>[];
   final classDefs = <String, Map<String, String>>{};
+  final _defaultLinkStyles = <String, String>{};
   var direction = FlowDirection.tb;
   var _anonSubgraphCount = 0;
 
@@ -98,10 +99,16 @@ class _FlowParser {
         'unclosed subgraph "${_openSubgraphs.last.title}"',
       );
     }
+    final finalEdges = _defaultLinkStyles.isEmpty
+        ? edges
+        : [
+            for (final e in edges)
+              e.copyWith(styles: {..._defaultLinkStyles, ...e.styles}),
+          ];
     return FlowGraph(
       direction: direction,
       nodes: nodes,
-      edges: edges,
+      edges: finalEdges,
       subgraphs: _builtSubgraphs.whereType<FlowSubgraph>().toList(),
       classDefs: classDefs,
       title: title,
@@ -364,8 +371,12 @@ class _FlowParser {
     if (styleText.isEmpty) return;
     final styles = _parseStyles(styleText);
     final indexText = m.group(1)!.trim();
-    // `linkStyle default` would set the global default; not modeled yet.
-    if (indexText == 'default') return;
+    // `linkStyle default` applies to every edge; per-index styles override
+    // it (merged at the end of parse()).
+    if (indexText == 'default') {
+      _defaultLinkStyles.addAll(styles);
+      return;
+    }
     for (final part in indexText.split(',')) {
       final i = int.tryParse(part.trim());
       if (i == null || i < 0 || i >= edges.length) {
@@ -494,6 +505,9 @@ class _FlowParser {
         }
         final node = nodes[id]!;
         nodes[id] = node.copyWith(classes: [...node.classes, cls]);
+      } else if (!shapeParsed && sc.tryConsume('@{')) {
+        _parseNodeAttributes(id, sc);
+        shapeParsed = true;
       } else if (!shapeParsed) {
         final shape = _tryParseShape(sc);
         if (shape == null) break;
@@ -515,6 +529,149 @@ class _FlowParser {
     }
     return id;
   }
+
+  /// Parses the v11 `@{ key: value, ... }` node attribute object (the `@{`
+  /// has already been consumed). Recognized keys: `shape`, `label`; others
+  /// (icon, form, w, h, ...) are parsed and ignored.
+  void _parseNodeAttributes(String id, _Scanner sc) {
+    String? shapeName;
+    String? label;
+    while (true) {
+      sc.skipWs();
+      if (sc.tryConsume('}')) break;
+      if (sc.atEnd) {
+        throw MermaidParseException('unterminated "@{" attributes on "$id"',
+            line: sc.line);
+      }
+      final key = sc.readWhile(RegExp(r'[A-Za-z0-9_-]')).trim();
+      sc.skipWs();
+      if (!sc.tryConsume(':')) {
+        throw MermaidParseException(
+            'expected ":" after "@{" attribute key "$key"',
+            line: sc.line);
+      }
+      sc.skipWs();
+      String value;
+      if (sc.tryConsume('"')) {
+        final (_, quoted) = sc.readUntil(['"']);
+        value = quoted;
+      } else {
+        value = sc.readWhile(RegExp(r'[^,}]')).trim();
+      }
+      switch (key) {
+        case 'shape':
+          shapeName = value;
+        case 'label':
+          label = value;
+        default:
+          break; // Recognized-but-unsupported attribute; ignored.
+      }
+      sc.skipWs();
+      sc.tryConsume(',');
+    }
+    var node = nodes[id]!;
+    if (shapeName != null) {
+      final shape = _v11Shapes[shapeName];
+      if (shape == null && !_knownUnsupportedV11Shapes.contains(shapeName)) {
+        throw MermaidParseException('unknown shape "$shapeName"', line: sc.line);
+      }
+      // Unsupported-but-valid v11 shapes fall back to a plain rectangle.
+      node = node.copyWith(shape: shape ?? FlowNodeShape.rect);
+    }
+    if (label != null) {
+      final normalized = _normalizeLabel(label);
+      node = node.copyWith(label: normalized.isEmpty ? id : normalized);
+    }
+    nodes[id] = node;
+  }
+
+  /// v11 shape names/aliases (rendering-elements/shapes.ts) mapped onto the
+  /// geometries we support.
+  static const _v11Shapes = <String, FlowNodeShape>{
+    'rect': FlowNodeShape.rect,
+    'rectangle': FlowNodeShape.rect,
+    'proc': FlowNodeShape.rect,
+    'process': FlowNodeShape.rect,
+    'square': FlowNodeShape.rect,
+    'rounded': FlowNodeShape.rounded,
+    'event': FlowNodeShape.rounded,
+    'stadium': FlowNodeShape.stadium,
+    'terminal': FlowNodeShape.stadium,
+    'pill': FlowNodeShape.stadium,
+    'fr-rect': FlowNodeShape.subroutine,
+    'subprocess': FlowNodeShape.subroutine,
+    'subproc': FlowNodeShape.subroutine,
+    'framed-rectangle': FlowNodeShape.subroutine,
+    'subroutine': FlowNodeShape.subroutine,
+    'cyl': FlowNodeShape.cylinder,
+    'db': FlowNodeShape.cylinder,
+    'database': FlowNodeShape.cylinder,
+    'cylinder': FlowNodeShape.cylinder,
+    'datastore': FlowNodeShape.cylinder,
+    'data-store': FlowNodeShape.cylinder,
+    'lin-cyl': FlowNodeShape.cylinder,
+    'disk': FlowNodeShape.cylinder,
+    'lined-cylinder': FlowNodeShape.cylinder,
+    'h-cyl': FlowNodeShape.cylinder,
+    'das': FlowNodeShape.cylinder,
+    'horizontal-cylinder': FlowNodeShape.cylinder,
+    'circle': FlowNodeShape.circle,
+    'circ': FlowNodeShape.circle,
+    'sm-circ': FlowNodeShape.circle,
+    'start': FlowNodeShape.circle,
+    'small-circle': FlowNodeShape.circle,
+    'f-circ': FlowNodeShape.circle,
+    'junction': FlowNodeShape.circle,
+    'filled-circle': FlowNodeShape.circle,
+    'fr-circ': FlowNodeShape.doubleCircle,
+    'stop': FlowNodeShape.doubleCircle,
+    'framed-circle': FlowNodeShape.doubleCircle,
+    'dbl-circ': FlowNodeShape.doubleCircle,
+    'double-circle': FlowNodeShape.doubleCircle,
+    'diam': FlowNodeShape.diamond,
+    'decision': FlowNodeShape.diamond,
+    'diamond': FlowNodeShape.diamond,
+    'question': FlowNodeShape.diamond,
+    'hex': FlowNodeShape.hexagon,
+    'hexagon': FlowNodeShape.hexagon,
+    'prepare': FlowNodeShape.hexagon,
+    'lean-r': FlowNodeShape.leanRight,
+    'lean-right': FlowNodeShape.leanRight,
+    'in-out': FlowNodeShape.leanRight,
+    'lean-l': FlowNodeShape.leanLeft,
+    'lean-left': FlowNodeShape.leanLeft,
+    'out-in': FlowNodeShape.leanLeft,
+    'trap-b': FlowNodeShape.trapezoid,
+    'priority': FlowNodeShape.trapezoid,
+    'trapezoid-bottom': FlowNodeShape.trapezoid,
+    'trapezoid': FlowNodeShape.trapezoid,
+    'trap-t': FlowNodeShape.invTrapezoid,
+    'manual': FlowNodeShape.invTrapezoid,
+    'trapezoid-top': FlowNodeShape.invTrapezoid,
+    'inv-trapezoid': FlowNodeShape.invTrapezoid,
+    'odd': FlowNodeShape.asymmetric,
+  };
+
+  /// Valid v11 shapes whose geometry we have not ported yet; they render as
+  /// rectangles rather than failing the parse.
+  static const _knownUnsupportedV11Shapes = <String>{
+    'text', 'notch-rect', 'card', 'notched-rectangle', //
+    'lin-rect', 'lined-rectangle', 'lined-process', 'lin-proc',
+    'shaded-process', 'fork', 'join', 'hourglass', 'collate', 'brace',
+    'comment', 'brace-l', 'brace-r', 'braces', 'bolt', 'com-link',
+    'lightning-bolt', 'doc', 'document', 'delay', 'half-rounded-rectangle',
+    'curv-trap', 'curved-trapezoid', 'display', 'div-rect', 'div-proc',
+    'divided-rectangle', 'divided-process', 'tri', 'extract', 'triangle',
+    'win-pane', 'internal-storage', 'window-pane', 'notch-pent',
+    'loop-limit', 'notched-pentagon', 'flip-tri', 'manual-file',
+    'flipped-triangle', 'sl-rect', 'manual-input', 'sloped-rectangle',
+    'docs', 'documents', 'st-doc', 'stacked-document', 'st-rect',
+    'processes', 'procs', 'stacked-rectangle', 'flag', 'paper-tape',
+    'bow-rect', 'bow-tie-rectangle', 'stored-data', 'cross-circ',
+    'crossed-circle', 'summary', 'tag-doc', 'tagged-document', 'tag-rect',
+    'tag-proc', 'tagged-rectangle', 'tagged-process', 'lin-doc',
+    'lined-document', 'icon', 'image',
+  };
 
   /// Bracket-delimited node shapes; openers are matched longest-first.
   (FlowNodeShape, String)? _tryParseShape(_Scanner sc) {
@@ -742,6 +899,15 @@ class _Scanner {
     return m;
   }
 
+  /// Consumes characters while they match [charClass].
+  String readWhile(RegExp charClass) {
+    final start = pos;
+    while (!atEnd && charClass.hasMatch(text[pos])) {
+      pos++;
+    }
+    return text.substring(start, pos);
+  }
+
   static final _idChar = RegExp(r'[\p{L}\p{N}_!#$%&*+.?\\/' "'" r']', unicode: true);
 
   /// Mirrors upstream NODE_STRING: `-` only when not followed by `>`, `-` or
@@ -786,17 +952,18 @@ class _Scanner {
         pos++;
         continue;
       }
-      if (c == '"') {
-        inQuote = true;
-        buf.write(c);
-        pos++;
-        continue;
-      }
+      // Closers win over quote-starts so `"` itself can act as a closer.
       for (final closer in sorted) {
         if (text.startsWith(closer, pos)) {
           pos += closer.length;
           return (closer, buf.toString());
         }
+      }
+      if (c == '"') {
+        inQuote = true;
+        buf.write(c);
+        pos++;
+        continue;
       }
       buf.write(c);
       pos++;

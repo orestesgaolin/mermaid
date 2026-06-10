@@ -111,6 +111,55 @@ graph LR
     approve -->|rejected| notify
     prod --> monitor[(Metrics & alerts)]
 '''),
+  Sample('v11 shapes', '''
+flowchart LR
+    in@{ shape: start, label: " " } --> read@{ shape: datastore, label: "Read config" }
+    read --> check@{ shape: decision, label: "Valid?" }
+    check -->|yes| run@{ shape: subprocess, label: "Run job" }
+    check -->|no| fix@{ shape: manual, label: "Fix by hand" }
+    fix --> read
+    run --> report@{ shape: doc, label: "Report" }
+    report --> out@{ shape: stop, label: " " }
+'''),
+  Sample('Self-loops', '''
+graph TD
+    boot[Boot] --> poll[Poll queue]
+    poll -->|empty| poll
+    poll -->|job| work[Process job<br/>with retries]
+    work -->|retry| work
+    work -->|done| ack[Acknowledge]
+    work -->|fatal| dead[(Dead letter)]
+    ack --> poll
+'''),
+  Sample('Mixed directions', '''
+graph TB
+    req[Request] --> auth
+    subgraph mw[Middleware chain]
+        direction LR
+        auth[Auth] --> rate[Rate limit] --> log[Logging]
+    end
+    log --> app[App handler]
+    app --> resp[Response]
+'''),
+  Sample('Microservices', '''
+graph LR
+    web[Web client] --> gw[API Gateway]
+    mobile[Mobile app] --> gw
+    subgraph services[Services]
+        direction TB
+        gw2[Router] --> users[Users svc]
+        gw2 --> orders[Orders svc]
+        gw2 --> billing[Billing svc]
+    end
+    gw ==> gw2
+    users --> udb[(Users DB)]
+    orders --> odb[(Orders DB)]
+    orders -.->|events| bus{{Message bus}}
+    billing -.->|events| bus
+    bus -.-> mail[Email worker]
+    bus -.-> analytics[Analytics sink]
+    linkStyle default stroke:#666
+'''),
 ];
 
 // ---------------------------------------------------------------------------

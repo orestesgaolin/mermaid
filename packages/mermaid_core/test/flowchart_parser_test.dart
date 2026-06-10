@@ -504,6 +504,73 @@ end
     });
   });
 
+  group('v11 @{} attribute syntax', () {
+    test('shape and label attributes', () {
+      final g = parseFlowchart(
+          'flowchart LR\nA@{ shape: datastore, label: "Datastore" } --> B');
+      expect(g.nodes['A']!.shape, FlowNodeShape.cylinder);
+      expect(g.nodes['A']!.label, 'Datastore');
+    });
+    test('decision alias maps to diamond', () {
+      final g = parseFlowchart('flowchart TD\nq@{ shape: decision }');
+      expect(g.nodes['q']!.shape, FlowNodeShape.diamond);
+    });
+    test('label only keeps shape', () {
+      final g = parseFlowchart('flowchart TD\nA[old]\nA@{ label: "new" }');
+      expect(g.nodes['A']!.shape, FlowNodeShape.rect);
+      expect(g.nodes['A']!.label, 'new');
+    });
+    test('valid-but-unported shape falls back to rect', () {
+      final g = parseFlowchart('flowchart TD\nA@{ shape: hourglass }');
+      expect(g.nodes['A']!.shape, FlowNodeShape.rect);
+    });
+    test('unknown shape throws', () {
+      expect(() => parseFlowchart('flowchart TD\nA@{ shape: zigzag }'),
+          throwsA(isA<MermaidParseException>()));
+    });
+    test('unrecognized attributes are ignored', () {
+      final g = parseFlowchart(
+          'flowchart TD\nA@{ shape: rounded, w: 200, icon: "gear" } --> B');
+      expect(g.nodes['A']!.shape, FlowNodeShape.rounded);
+      expect(g.edges.single.to, 'B');
+    });
+    test('quoted label may contain commas and braces', () {
+      final g =
+          parseFlowchart('flowchart TD\nA@{ label: "a, b } c", shape: stadium }');
+      expect(g.nodes['A']!.label, 'a, b } c');
+      expect(g.nodes['A']!.shape, FlowNodeShape.stadium);
+    });
+    test('fixture 60 style: attributes mid-chain', () {
+      final g = parseFlowchart(
+          'flowchart LR\nDataStore@{shape: datastore, label: "Datastore"} '
+          '-->|input| Process((System)) -->|output| Entity[Customer];');
+      expect(g.nodes['DataStore']!.shape, FlowNodeShape.cylinder);
+      expect(g.nodes['Process']!.shape, FlowNodeShape.circle);
+      expect(g.edges.length, 2);
+      expect(g.edges[0].label, 'input');
+    });
+  });
+
+  group('linkStyle default', () {
+    test('applies to every edge', () {
+      final g = parseFlowchart(
+          'graph TD;A-->B;B-->C;linkStyle default stroke:#999,stroke-width:2px;');
+      expect(g.edges[0].styles['stroke'], '#999');
+      expect(g.edges[1].styles['stroke'], '#999');
+    });
+    test('per-index linkStyle overrides default', () {
+      final g = parseFlowchart('graph TD;A-->B;B-->C;'
+          'linkStyle default stroke:#999;linkStyle 1 stroke:#f00;');
+      expect(g.edges[0].styles['stroke'], '#999');
+      expect(g.edges[1].styles['stroke'], '#f00');
+    });
+    test('default declared before later edges still applies to them', () {
+      final g = parseFlowchart(
+          'graph TD;A-->B;linkStyle default stroke:#999;B-->C;');
+      expect(g.edges[1].styles['stroke'], '#999');
+    });
+  });
+
   group('comments, directives, frontmatter', () {
     test('comment lines are ignored', () {
       final g = parseFlowchart('graph TD\n%% this is a comment\nA-->B');
