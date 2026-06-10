@@ -41,10 +41,191 @@ RenderScene layoutFlowchart(
     fontFamily: theme.fontFamily,
     fontSize: theme.fontSize,
   );
+  final fragment = _layoutGraph(graph, measurer, theme, baseStyle);
+  var sceneNodes = fragment.nodes;
+  var bounds = fragment.bounds;
+
+  // Diagram title above the content.
+  final title = graph.title;
+  if (title != null && title.isNotEmpty) {
+    final titleStyle = baseStyle.copyWith(fontWeight: 700);
+    final titleSize =
+        measurer.measure(title, titleStyle, maxWidth: _wrappingWidth);
+    final titleNode = SceneText(
+      text: title,
+      bounds: Rect.fromLTWH(
+        bounds.center.x - titleSize.width / 2,
+        bounds.top - _diagramPadding - titleSize.height,
+        titleSize.width,
+        titleSize.height,
+      ),
+      style: titleStyle,
+      color: theme.titleColor,
+    );
+    sceneNodes = [...sceneNodes, titleNode];
+    bounds = bounds.union(titleNode.bounds);
+  }
+
+  // Translate so the min corner sits at (padding, padding).
+  final dx = _diagramPadding - bounds.left;
+  final dy = _diagramPadding - bounds.top;
+  sceneNodes = [for (final n in sceneNodes) _translateNode(n, dx, dy)];
+
+  return RenderScene(
+    size: Size(
+      bounds.width + 2 * _diagramPadding,
+      bounds.height + 2 * _diagramPadding,
+    ),
+    background: theme.background,
+    nodes: sceneNodes,
+  );
+}
+
+/// Laid-out content in local coordinates (not yet translated to padding).
+class _Fragment {
+  _Fragment(this.nodes, this.bounds);
+
+  final List<SceneNode> nodes;
+  final Rect bounds;
+}
+
+/// A subgraph whose effective direction differs from its parent's; it is laid
+/// out recursively and participates in the parent layout as one big node.
+class _IsolatedCluster {
+  _IsolatedCluster({
+    required this.subgraph,
+    required this.fragment,
+    required this.titleSize,
+    required this.width,
+    required this.height,
+  });
+
+  final FlowSubgraph subgraph;
+  final _Fragment fragment;
+  final Size titleSize;
+  final double width;
+  final double height;
+
+  double get titleBand => titleSize.height > 0 ? titleSize.height + 4 : 0;
+}
+
+_Fragment _layoutGraph(
+  FlowGraph graph,
+  TextMeasurer measurer,
+  MermaidTheme theme,
+  TextStyleSpec baseStyle,
+) {
+  // --- 0. Subgraphs with their own direction become recursive fragments. ---
+  // dagre has no per-cluster rankdir, so (like upstream mermaid) such a
+  // subgraph is laid out separately and inserted into the parent layout as a
+  // single fixed-size node.
+  final sgs = graph.subgraphs;
+  final effDir = List<FlowDirection>.filled(sgs.length, graph.direction);
+  final isolated = List<bool>.filled(sgs.length, false);
+  for (var i = 0; i < sgs.length; i++) {
+    final parent = sgs[i].parentIndex;
+    final parentDir = parent == null ? graph.direction : effDir[parent];
+    effDir[i] = sgs[i].direction ?? parentDir;
+    isolated[i] = effDir[i] != parentDir;
+  }
+  bool hasIsolatedAncestor(int i) {
+    for (var p = sgs[i].parentIndex; p != null; p = sgs[p].parentIndex) {
+      if (isolated[p]) return true;
+    }
+    return false;
+  }
+
+  bool isDescendantOf(int i, int root) {
+    for (var p = sgs[i].parentIndex; p != null; p = sgs[p].parentIndex) {
+      if (p == root) return true;
+    }
+    return false;
+  }
+
+  final removedSubgraphs = <int>{};
+  final absorbedBy = <String, int>{}; // node id -> isolated root index
+  final isolatedClusters = <int, _IsolatedCluster>{};
+  for (var root = 0; root < sgs.length; root++) {
+    if (!isolated[root] || hasIsolatedAncestor(root)) continue;
+    final descIdx = [
+      for (var i = 0; i < sgs.length; i++)
+        if (isDescendantOf(i, root)) i,
+    ];
+    removedSubgraphs
+      ..add(root)
+      ..addAll(descIdx);
+    final memberIds = <String>{
+      ...sgs[root].nodeIds,
+      for (final d in descIdx) ...sgs[d].nodeIds,
+    };
+    for (final id in memberIds) {
+      absorbedBy[id] = root;
+    }
+
+    // Nested subgraphs move into the sub-graph with remapped parent indices
+    // (descIdx is ascending, so parents are remapped before their children).
+    final remap = <int, int>{};
+    final subSgs = <FlowSubgraph>[];
+    for (final d in descIdx) {
+      remap[d] = subSgs.length;
+      final orig = sgs[d];
+      subSgs.add(FlowSubgraph(
+        id: orig.id,
+        title: orig.title,
+        nodeIds: orig.nodeIds,
+        direction: orig.direction,
+        parentIndex: orig.parentIndex == root ? null : remap[orig.parentIndex!],
+      ));
+    }
+    final fragment = _layoutGraph(
+      FlowGraph(
+        direction: effDir[root],
+        nodes: {
+          for (final e in graph.nodes.entries)
+            if (memberIds.contains(e.key)) e.key: e.value,
+        },
+        edges: [
+          for (final e in graph.edges)
+            if (memberIds.contains(e.from) && memberIds.contains(e.to)) e,
+        ],
+        subgraphs: subSgs,
+        classDefs: graph.classDefs,
+      ),
+      measurer,
+      theme,
+      baseStyle,
+    );
+    final titleSize = sgs[root].title.isEmpty
+        ? Size.zero
+        : measurer.measure(sgs[root].title, baseStyle,
+            maxWidth: _wrappingWidth);
+    final cluster = _IsolatedCluster(
+      subgraph: sgs[root],
+      fragment: fragment,
+      titleSize: titleSize,
+      width: math.max(fragment.bounds.width, titleSize.width) +
+          2 * _clusterPadding,
+      height: fragment.bounds.height +
+          2 * _clusterPadding +
+          (titleSize.height > 0 ? titleSize.height + 4 : 0),
+    );
+    isolatedClusters[root] = cluster;
+  }
+
+  /// Maps an edge endpoint to the node that represents it in this layout
+  /// (the isolated cluster's synthetic node for absorbed members).
+  String resolveId(String id) =>
+      absorbedBy.containsKey(id) ? sgs[absorbedBy[id]!].id : id;
+
+  bool isAbsorbedEdge(FlowEdge e) =>
+      absorbedBy.containsKey(e.from) &&
+      absorbedBy[e.from] == absorbedBy[e.to];
 
   // --- 1+2. Resolve styles, measure labels, compute shape boxes. -----------
   final placed = <String, _PlacedNode>{};
+  final syntheticIds = <String>{};
   for (final node in graph.nodes.values) {
+    if (absorbedBy.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
     final labelSize =
         measurer.measure(node.label, baseStyle, maxWidth: _wrappingWidth);
@@ -55,13 +236,34 @@ RenderScene layoutFlowchart(
       shape: _Shape.forNode(node.shape, labelSize),
     );
   }
+  for (final cluster in isolatedClusters.values) {
+    final id = cluster.subgraph.id;
+    syntheticIds.add(id);
+    placed[id] = _PlacedNode(
+      node: FlowNode(id: id, label: cluster.subgraph.title),
+      style: _resolveNodeStyle(
+          FlowNode(id: id, label: cluster.subgraph.title), graph, theme),
+      labelSize: Size.zero,
+      shape: _RectShape(cluster.width, cluster.height),
+    );
+  }
 
   // Innermost subgraph wins when a node id is listed at several levels
   // (subgraphs are ordered outermost-first).
   final parentOf = <String, String>{};
-  for (final sg in graph.subgraphs) {
-    for (final id in sg.nodeIds) {
-      if (placed.containsKey(id)) parentOf[id] = sg.id;
+  for (var i = 0; i < sgs.length; i++) {
+    if (removedSubgraphs.contains(i)) continue;
+    for (final id in sgs[i].nodeIds) {
+      if (placed.containsKey(id)) parentOf[id] = sgs[i].id;
+    }
+  }
+  // Synthetic cluster nodes nest under their nearest surviving ancestor.
+  for (final entry in isolatedClusters.entries) {
+    for (var p = sgs[entry.key].parentIndex; p != null; p = sgs[p].parentIndex) {
+      if (!removedSubgraphs.contains(p)) {
+        parentOf[entry.value.subgraph.id] = sgs[p].id;
+        break;
+      }
     }
   }
 
@@ -75,25 +277,32 @@ RenderScene layoutFlowchart(
       parent: parentOf[p.node.id],
     ));
   }
-  for (final sg in graph.subgraphs) {
-    g.addNode(dagre.DagreNode(
-      sg.id,
-      parent:
-          sg.parentIndex != null ? graph.subgraphs[sg.parentIndex!].id : null,
-    ));
+  for (var i = 0; i < sgs.length; i++) {
+    if (removedSubgraphs.contains(i)) continue;
+    var p = sgs[i].parentIndex;
+    while (p != null && removedSubgraphs.contains(p)) {
+      p = sgs[p].parentIndex;
+    }
+    g.addNode(dagre.DagreNode(sgs[i].id, parent: p != null ? sgs[p].id : null));
   }
   final edgeLabelSizes = <int, Size>{};
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
+    if (isAbsorbedEdge(e)) continue;
     Size? labelSize;
     final label = e.label;
     if (label != null && label.isNotEmpty) {
       labelSize = measurer.measure(label, baseStyle, maxWidth: _wrappingWidth);
       edgeLabelSizes[i] = labelSize;
     }
+    final from = resolveId(e.from);
+    final to = resolveId(e.to);
+    // Self-loops are routed manually after layout (dagre would thread them
+    // through a degenerate dummy chain).
+    if (from == to) continue;
     g.addEdge(dagre.DagreEdge(
-      e.from,
-      e.to,
+      from,
+      to,
       id: 'e$i',
       minLen: e.minLen.toDouble(),
       width: labelSize?.width ?? 0,
@@ -123,7 +332,13 @@ RenderScene layoutFlowchart(
 
   // Clusters, outermost first so nested ones paint on top.
   final clusterTitleStyle = baseStyle.copyWith(fontWeight: 400);
-  for (final sg in graph.subgraphs) {
+  for (var sgIndex = 0; sgIndex < sgs.length; sgIndex++) {
+    final sg = sgs[sgIndex];
+    if (removedSubgraphs.contains(sgIndex)) {
+      // Isolated clusters draw their own chrome below (their dagre entry is
+      // a regular node, not a compound cluster).
+      continue;
+    }
     final pos = result.graph.nodeMap[sg.id]?.position;
     if (pos == null) continue;
     final titleSize = sg.title.isEmpty
@@ -161,9 +376,50 @@ RenderScene layoutFlowchart(
     ));
   }
 
+  // Isolated-direction clusters: chrome plus the recursively laid-out
+  // fragment translated into the synthetic node's final rect.
+  for (final cluster in isolatedClusters.values) {
+    final p = placed[cluster.subgraph.id]!;
+    final rect = Rect.fromCenter(p.center, cluster.width, cluster.height);
+    final children = <SceneNode>[
+      SceneShape(
+        geometry: RectGeometry(rect),
+        fill: Fill(theme.clusterBkg),
+        stroke: Stroke(color: theme.clusterBorder),
+      ),
+      if (cluster.subgraph.title.isNotEmpty)
+        SceneText(
+          text: cluster.subgraph.title,
+          bounds: Rect.fromLTWH(
+            rect.center.x - cluster.titleSize.width / 2,
+            rect.top + 4,
+            cluster.titleSize.width,
+            cluster.titleSize.height,
+          ),
+          style: clusterTitleStyle,
+          color: theme.titleColor,
+        ),
+    ];
+    final dx = rect.left + _clusterPadding - cluster.fragment.bounds.left;
+    final dy = rect.top +
+        _clusterPadding +
+        cluster.titleBand -
+        cluster.fragment.bounds.top;
+    children.addAll(
+        [for (final n in cluster.fragment.nodes) _translateNode(n, dx, dy)]);
+    clusterGroups.add(SceneGroup(
+      id: cluster.subgraph.id,
+      semanticLabel:
+          cluster.subgraph.title.isEmpty ? null : cluster.subgraph.title,
+      children: children,
+    ));
+  }
+
   // Edges and their labels.
+  final selfLoopCount = <String, int>{};
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
+    if (isAbsorbedEdge(e)) continue; // Rendered inside the cluster fragment.
     final groupId = 'edge_${e.from}_${e.to}_$i';
     if (e.stroke == EdgeStroke.invisible) {
       // Keep an (empty) group so the edge still participates in spacing and
@@ -171,10 +427,28 @@ RenderScene layoutFlowchart(
       edgeGroups.add(SceneGroup(id: groupId, children: const []));
       continue;
     }
-    final dagreEdge = result.graph.findEdgeById('e$i')!;
-    final source = placed[e.from]!;
-    final target = placed[e.to]!;
+    final fromId = resolveId(e.from);
+    final toId = resolveId(e.to);
+    final source = placed[fromId]!;
+    final target = placed[toId]!;
     final style = _resolveEdgeStyle(e, theme);
+
+    if (fromId == toId) {
+      final loopIndex = selfLoopCount[fromId] ?? 0;
+      selfLoopCount[fromId] = loopIndex + 1;
+      final (loopNodes, labelCenter) = _selfLoop(
+          source, e, style, loopIndex, edgeLabelSizes[i]);
+      edgeGroups
+          .add(SceneGroup(id: groupId, semanticLabel: e.label, children: loopNodes));
+      final labelSize = edgeLabelSizes[i];
+      if (labelSize != null) {
+        edgeLabelGroups.add(_edgeLabelGroup(
+            e, i, labelCenter, labelSize, baseStyle, theme));
+      }
+      continue;
+    }
+
+    final dagreEdge = result.graph.findEdgeById('e$i')!;
 
     var points = List<Point>.from(dagreEdge.points);
     if (points.length < 2) {
@@ -216,34 +490,17 @@ RenderScene layoutFlowchart(
 
     final labelSize = edgeLabelSizes[i];
     if (labelSize != null) {
-      final mid = _pathMidpoint(points);
       final labelCenter = (dagreEdge.labelX != null && dagreEdge.labelY != null)
           ? Point(dagreEdge.labelX!, dagreEdge.labelY!)
-          : mid;
-      const pad = 2.0;
-      final bg = Rect.fromCenter(
-          labelCenter, labelSize.width + 2 * pad, labelSize.height + 2 * pad);
-      edgeLabelGroups.add(SceneGroup(
-        id: 'edgelabel_${e.from}_${e.to}_$i',
-        children: [
-          SceneShape(
-            geometry: RectGeometry(bg, rx: 2, ry: 2),
-            fill: Fill(theme.edgeLabelBackground),
-          ),
-          SceneText(
-            text: e.label!,
-            bounds: Rect.fromCenter(
-                labelCenter, labelSize.width, labelSize.height),
-            style: baseStyle,
-            color: theme.textColor,
-          ),
-        ],
-      ));
+          : _pathMidpoint(points);
+      edgeLabelGroups.add(
+          _edgeLabelGroup(e, i, labelCenter, labelSize, baseStyle, theme));
     }
   }
 
   // Nodes.
   for (final p in placed.values) {
+    if (syntheticIds.contains(p.node.id)) continue;
     final children = <SceneNode>[
       ...p.shape.build(p.center, p.style),
       SceneText(
@@ -265,49 +522,92 @@ RenderScene layoutFlowchart(
   }
 
   // Z-order: clusters, edges, edge labels, nodes.
-  var sceneNodes = <SceneNode>[
+  final sceneNodes = <SceneNode>[
     ...clusterGroups,
     ...edgeGroups,
     ...edgeLabelGroups,
     ...nodeGroups,
   ];
-
-  var bounds = _boundsOfAll(sceneNodes) ?? Rect.fromLTWH(0, 0, 0, 0);
-
-  // Diagram title above the content.
-  final title = graph.title;
-  if (title != null && title.isNotEmpty) {
-    final titleStyle = baseStyle.copyWith(fontWeight: 700);
-    final titleSize =
-        measurer.measure(title, titleStyle, maxWidth: _wrappingWidth);
-    final titleNode = SceneText(
-      text: title,
-      bounds: Rect.fromLTWH(
-        bounds.center.x - titleSize.width / 2,
-        bounds.top - _diagramPadding - titleSize.height,
-        titleSize.width,
-        titleSize.height,
-      ),
-      style: titleStyle,
-      color: theme.titleColor,
-    );
-    sceneNodes = [...sceneNodes, titleNode];
-    bounds = bounds.union(titleNode.bounds);
-  }
-
-  // Translate so the min corner sits at (padding, padding).
-  final dx = _diagramPadding - bounds.left;
-  final dy = _diagramPadding - bounds.top;
-  sceneNodes = [for (final n in sceneNodes) _translateNode(n, dx, dy)];
-
-  return RenderScene(
-    size: Size(
-      bounds.width + 2 * _diagramPadding,
-      bounds.height + 2 * _diagramPadding,
-    ),
-    background: theme.background,
-    nodes: sceneNodes,
+  return _Fragment(
+    sceneNodes,
+    _boundsOfAll(sceneNodes) ?? const Rect.fromLTWH(0, 0, 0, 0),
   );
+}
+
+SceneGroup _edgeLabelGroup(
+  FlowEdge e,
+  int index,
+  Point labelCenter,
+  Size labelSize,
+  TextStyleSpec baseStyle,
+  MermaidTheme theme,
+) {
+  const pad = 2.0;
+  final bg = Rect.fromCenter(
+      labelCenter, labelSize.width + 2 * pad, labelSize.height + 2 * pad);
+  return SceneGroup(
+    id: 'edgelabel_${e.from}_${e.to}_$index',
+    children: [
+      SceneShape(
+        geometry: RectGeometry(bg, rx: 2, ry: 2),
+        fill: Fill(theme.edgeLabelBackground),
+      ),
+      SceneText(
+        text: e.label!,
+        bounds: Rect.fromCenter(labelCenter, labelSize.width, labelSize.height),
+        style: baseStyle,
+        color: theme.textColor,
+      ),
+    ],
+  );
+}
+
+/// Routes a self-edge as a compact loop on the right side of the node,
+/// mirroring mermaid's look. Returns the scene nodes and the label center.
+(List<SceneNode>, Point) _selfLoop(
+  _PlacedNode p,
+  FlowEdge e,
+  _EdgeStyle style,
+  int loopIndex,
+  Size? labelSize,
+) {
+  final c = p.center;
+  final start =
+      p.shape.intersect(c, Point(c.x + p.shape.width, c.y - p.shape.height / 2));
+  final end =
+      p.shape.intersect(c, Point(c.x + p.shape.width, c.y + p.shape.height / 2));
+  final ext = 40.0 + loopIndex * 16;
+  final c1 = Point(start.x + ext, start.y - ext * 0.35);
+  final c2 = Point(end.x + ext, end.y + ext * 0.35);
+
+  final children = <SceneNode>[];
+  var pathEnd = end;
+  final endDir = _direction(c2, end);
+  if (e.headTo != ArrowHead.none) {
+    pathEnd = end - endDir * _markerShorten(e.headTo);
+  }
+  var pathStart = start;
+  final startDir = _direction(c1, start);
+  if (e.headFrom != ArrowHead.none) {
+    pathStart = start - startDir * _markerShorten(e.headFrom);
+  }
+  children.add(SceneShape(
+    geometry: PathGeometry([MoveTo(pathStart), CubicTo(c1, c2, pathEnd)]),
+    stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
+  ));
+  if (e.headTo != ArrowHead.none) {
+    children.addAll(_marker(e.headTo, end, endDir, style.markerColor));
+  }
+  if (e.headFrom != ArrowHead.none) {
+    children.addAll(_marker(e.headFrom, start, startDir, style.markerColor));
+  }
+  // Cubic apex (t = 0.5): (p0 + 3c1 + 3c2 + p3) / 8.
+  final apexX = (start.x + 3 * c1.x + 3 * c2.x + end.x) / 8;
+  final labelCenter = Point(
+    apexX + 6 + (labelSize?.width ?? 0) / 2,
+    (start.y + end.y) / 2,
+  );
+  return (children, labelCenter);
 }
 
 dagre.RankDir _rankDir(FlowDirection d) => switch (d) {
