@@ -165,6 +165,10 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   Journey draws score faces + actor legend; timeline stacks events under
   period boxes; quadrant has no text rotation (y labels sit left of plot).
   Frontmatter fences may be indented (detect.dart tolerates).
+- [x] **Comparison website** (`apps/website`, Jaspr static + `apps/flutter_embed`):
+  side-by-side mermaid.js (CDN) vs mermaid dart (embedded Flutter web view,
+  JS-interop bridge in web/embed_bridge.js + custom flutter_bootstrap.js
+  template). Build: `tool/build_website.sh` → apps/website/build/jaspr.
 - [ ] Mindmap (needs a radial/tidy-tree layout), C4, requirement, xychart.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
   into a shared edges util (3 copies now).
