@@ -210,6 +210,25 @@ classDiagram
     Duck "1" --> "*" Egg : lays
     note for Duck "can fly<br/>and swim"
 '''),
+  Sample('State machine', '''
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Connecting : connect
+    state check <<choice>>
+    Connecting --> check
+    check --> Connected : ok
+    check --> Backoff : failed
+    Backoff --> Connecting : retry
+    state Connected {
+        [*] --> Receiving
+        Receiving --> Processing : message
+        Processing --> Receiving : done
+    }
+    Connected --> Connected : heartbeat
+    Connected --> Closing : close
+    Closing --> [*]
+    note right of Backoff : exponential<br/>backoff
+'''),
 ];
 
 // ---------------------------------------------------------------------------
@@ -295,9 +314,22 @@ class _EditorPageState extends State<EditorPage> {
     });
   }
 
-  core.MermaidTheme get _mermaidTheme => widget.dark
+  /// Per-session theme overrides from the style editor; reset by the
+  /// light/dark toggle or the editor's reset button.
+  core.MermaidTheme? _themeOverride;
+
+  core.MermaidTheme get _baseTheme => widget.dark
       ? core.MermaidTheme.darkTheme
       : core.MermaidTheme.defaultTheme;
+
+  core.MermaidTheme get _mermaidTheme => _themeOverride ?? _baseTheme;
+
+  @override
+  void didUpdateWidget(EditorPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Light/dark switch resets style-editor overrides to the new base.
+    if (oldWidget.dark != widget.dark) _themeOverride = null;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -306,6 +338,16 @@ class _EditorPageState extends State<EditorPage> {
       appBar: AppBar(
         title: const Text('Mermaid Dart'),
         actions: [
+          Builder(
+            builder: (context) => IconButton(
+              tooltip: 'Edit diagram styles',
+              icon: Badge(
+                isLabelVisible: _themeOverride != null,
+                child: const Icon(Icons.palette_outlined),
+              ),
+              onPressed: () => Scaffold.of(context).openEndDrawer(),
+            ),
+          ),
           IconButton(
             tooltip:
                 widget.dark ? 'Switch to light theme' : 'Switch to dark theme',
@@ -314,6 +356,17 @@ class _EditorPageState extends State<EditorPage> {
           ),
           const SizedBox(width: 8),
         ],
+      ),
+      endDrawer: Drawer(
+        width: 340,
+        child: SafeArea(
+          child: ThemeEditor(
+            theme: _mermaidTheme,
+            modified: _themeOverride != null,
+            onChanged: (t) => setState(() => _themeOverride = t),
+            onReset: () => setState(() => _themeOverride = null),
+          ),
+        ),
       ),
       body: Row(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -473,6 +526,182 @@ class _ErrorBanner extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Style editor
+// ---------------------------------------------------------------------------
+
+/// Live editor for [core.MermaidTheme]: color swatches with hex fields plus a
+/// font-size slider. Every change re-renders the preview immediately.
+class ThemeEditor extends StatelessWidget {
+  const ThemeEditor({
+    super.key,
+    required this.theme,
+    required this.modified,
+    required this.onChanged,
+    required this.onReset,
+  });
+
+  final core.MermaidTheme theme;
+  final bool modified;
+  final ValueChanged<core.MermaidTheme> onChanged;
+  final VoidCallback onReset;
+
+  @override
+  Widget build(BuildContext context) {
+    final entries = <(String, core.Color, core.MermaidTheme Function(core.Color))>[
+      ('Node fill', theme.mainBkg, (c) => theme.copyWith(mainBkg: c)),
+      ('Node border', theme.nodeBorder, (c) => theme.copyWith(nodeBorder: c)),
+      ('Text', theme.textColor, (c) => theme.copyWith(textColor: c)),
+      ('Lines', theme.lineColor, (c) => theme.copyWith(lineColor: c)),
+      (
+        'Arrowheads',
+        theme.arrowheadColor,
+        (c) => theme.copyWith(arrowheadColor: c)
+      ),
+      ('Cluster fill', theme.clusterBkg, (c) => theme.copyWith(clusterBkg: c)),
+      (
+        'Cluster border',
+        theme.clusterBorder,
+        (c) => theme.copyWith(clusterBorder: c)
+      ),
+      (
+        'Edge label bg',
+        theme.edgeLabelBackground,
+        (c) => theme.copyWith(edgeLabelBackground: c)
+      ),
+      ('Title', theme.titleColor, (c) => theme.copyWith(titleColor: c)),
+      ('Background', theme.background, (c) => theme.copyWith(background: c)),
+    ];
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Row(
+          children: [
+            Text('Diagram styles',
+                style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: modified ? onReset : null,
+              icon: const Icon(Icons.restart_alt, size: 18),
+              label: const Text('Reset'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'Colors accept #RRGGBB or #AARRGGBB. Press enter to apply.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 12),
+        for (final (label, color, apply) in entries)
+          _ColorRow(
+            key: ValueKey('$label-${color.value}'),
+            label: label,
+            color: color,
+            onColor: (c) => onChanged(apply(c)),
+          ),
+        const SizedBox(height: 16),
+        Text('Font size: ${theme.fontSize.round()}',
+            style: Theme.of(context).textTheme.bodyMedium),
+        Slider(
+          value: theme.fontSize.clamp(10, 24),
+          min: 10,
+          max: 24,
+          divisions: 14,
+          onChanged: (v) => onChanged(theme.copyWith(fontSize: v)),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Tip: per-node styles work in the source itself — try classDef, '
+          'style and :::class statements.',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
+  }
+}
+
+class _ColorRow extends StatefulWidget {
+  const _ColorRow({
+    super.key,
+    required this.label,
+    required this.color,
+    required this.onColor,
+  });
+
+  final String label;
+  final core.Color color;
+  final ValueChanged<core.Color> onColor;
+
+  @override
+  State<_ColorRow> createState() => _ColorRowState();
+}
+
+class _ColorRowState extends State<_ColorRow> {
+  late final TextEditingController _controller =
+      TextEditingController(text: _hex(widget.color));
+  bool _invalid = false;
+
+  static String _hex(core.Color c) {
+    final v = c.value.toRadixString(16).padLeft(8, '0');
+    return c.alpha == 0xff ? '#${v.substring(2)}' : '#$v';
+  }
+
+  void _submit(String text) {
+    final parsed = core.Color.tryParse(text.trim());
+    if (parsed == null) {
+      setState(() => _invalid = true);
+      return;
+    }
+    setState(() => _invalid = false);
+    widget.onColor(parsed);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: Color(widget.color.value),
+              border: Border.all(color: Colors.black26),
+              borderRadius: BorderRadius.circular(4),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(child: Text(widget.label)),
+          SizedBox(
+            width: 110,
+            child: TextField(
+              controller: _controller,
+              onSubmitted: _submit,
+              style: const TextStyle(fontFamily: 'Menlo', fontSize: 12),
+              decoration: InputDecoration(
+                isDense: true,
+                errorText: _invalid ? 'invalid' : null,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                border: const OutlineInputBorder(),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

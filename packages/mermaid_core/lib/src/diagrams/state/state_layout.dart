@@ -82,15 +82,17 @@ class _StateLayout {
     }
 
     // --- dagre ----------------------------------------------------------------
+    // Order matters for the vendored compound support: member nodes first,
+    // cluster nodes after (mirrors flow_layout).
     final g = dagre.DagreGraph();
+    for (final p in placed.values) {
+      g.addNode(dagre.DagreNode(p.node.id,
+          width: p.width, height: p.height, parent: p.node.parent));
+    }
     for (final s in diagram.states.values) {
       if (s.kind == StateKind.composite) {
         g.addNode(dagre.DagreNode(s.id, parent: s.parent));
       }
-    }
-    for (final p in placed.values) {
-      g.addNode(dagre.DagreNode(p.node.id,
-          width: p.width, height: p.height, parent: p.node.parent));
     }
     noteBoxes.forEach((i, b) {
       g.addNode(dagre.DagreNode(b.node.id, width: b.width, height: b.height));
@@ -166,16 +168,32 @@ class _StateLayout {
     final stateNodes = <SceneNode>[];
 
     // Composite clusters, outermost-first (parents precede children in the
-    // map since composites register before their members).
+    // map since composites register before their members). The rect is the
+    // union of descendant boxes: dagre's own cluster position is unreliable
+    // when edges cross the cluster boundary.
+    Rect? descendantBounds(String id) {
+      Rect? acc;
+      for (final childId in diagram.states[id]?.children ?? const <String>[]) {
+        final b = placed[childId]?.rect ?? descendantBounds(childId);
+        if (b == null) continue;
+        acc = acc == null ? b : acc.union(b);
+      }
+      return acc;
+    }
+
     for (final s in diagram.states.values) {
       if (s.kind != StateKind.composite) continue;
-      final pos = result.graph.nodeMap[s.id]?.position;
+      final pos = descendantBounds(s.id);
       if (pos == null) continue;
       final titleSize = measurer.measure(s.label, baseStyle);
       final rect = Rect.fromLTRB(
-        pos.left - _clusterPadding,
+        math.min(pos.left,
+                pos.center.x - titleSize.width / 2 - _clusterPadding) -
+            _clusterPadding,
         pos.top - _clusterPadding - titleSize.height - 6,
-        pos.right + _clusterPadding,
+        math.max(pos.right,
+                pos.center.x + titleSize.width / 2 + _clusterPadding) +
+            _clusterPadding,
         pos.bottom + _clusterPadding,
       );
       clusterRects[s.id] = rect;

@@ -41,6 +41,83 @@ class MermaidTheme {
   final String fontFamily;
   final double fontSize;
 
+  MermaidTheme copyWith({
+    Color? background,
+    Color? primaryColor,
+    Color? primaryTextColor,
+    Color? primaryBorderColor,
+    Color? secondaryColor,
+    Color? lineColor,
+    Color? arrowheadColor,
+    Color? textColor,
+    Color? nodeBorder,
+    Color? mainBkg,
+    Color? clusterBkg,
+    Color? clusterBorder,
+    Color? titleColor,
+    Color? edgeLabelBackground,
+    String? fontFamily,
+    double? fontSize,
+  }) =>
+      MermaidTheme(
+        background: background ?? this.background,
+        primaryColor: primaryColor ?? this.primaryColor,
+        primaryTextColor: primaryTextColor ?? this.primaryTextColor,
+        primaryBorderColor: primaryBorderColor ?? this.primaryBorderColor,
+        secondaryColor: secondaryColor ?? this.secondaryColor,
+        lineColor: lineColor ?? this.lineColor,
+        arrowheadColor: arrowheadColor ?? this.arrowheadColor,
+        textColor: textColor ?? this.textColor,
+        nodeBorder: nodeBorder ?? this.nodeBorder,
+        mainBkg: mainBkg ?? this.mainBkg,
+        clusterBkg: clusterBkg ?? this.clusterBkg,
+        clusterBorder: clusterBorder ?? this.clusterBorder,
+        titleColor: titleColor ?? this.titleColor,
+        edgeLabelBackground: edgeLabelBackground ?? this.edgeLabelBackground,
+        fontFamily: fontFamily ?? this.fontFamily,
+        fontSize: fontSize ?? this.fontSize,
+      );
+
+  @override
+  bool operator ==(Object other) =>
+      other is MermaidTheme &&
+      other.background == background &&
+      other.primaryColor == primaryColor &&
+      other.primaryTextColor == primaryTextColor &&
+      other.primaryBorderColor == primaryBorderColor &&
+      other.secondaryColor == secondaryColor &&
+      other.lineColor == lineColor &&
+      other.arrowheadColor == arrowheadColor &&
+      other.textColor == textColor &&
+      other.nodeBorder == nodeBorder &&
+      other.mainBkg == mainBkg &&
+      other.clusterBkg == clusterBkg &&
+      other.clusterBorder == clusterBorder &&
+      other.titleColor == titleColor &&
+      other.edgeLabelBackground == edgeLabelBackground &&
+      other.fontFamily == fontFamily &&
+      other.fontSize == fontSize;
+
+  @override
+  int get hashCode => Object.hash(
+        background,
+        primaryColor,
+        primaryTextColor,
+        primaryBorderColor,
+        secondaryColor,
+        lineColor,
+        arrowheadColor,
+        textColor,
+        nodeBorder,
+        mainBkg,
+        clusterBkg,
+        clusterBorder,
+        titleColor,
+        edgeLabelBackground,
+        fontFamily,
+        fontSize,
+      );
+
   /// Values from upstream theme-default.js.
   static const MermaidTheme defaultTheme = MermaidTheme(
     background: Color(0xffffffff),

@@ -10,15 +10,18 @@ import 'scene_painter.dart';
 /// Renders a mermaid diagram from [source].
 ///
 /// The scene is built synchronously in [State.build] and memoized on
-/// `(source, theme)`; any error thrown while parsing or laying out the
-/// diagram is caught and rendered via [errorBuilder] (or a default
-/// red-tinted panel).
+/// `(source, theme)`. While the user is editing, a syntax error does not
+/// blank the diagram: the last successfully rendered scene stays visible
+/// (slightly dimmed) with a compact error overlay, so previews update in
+/// real time without flicker. Set [keepLastGoodSceneOnError] to false to
+/// always replace the diagram with [errorBuilder]'s widget instead.
 class MermaidDiagram extends StatefulWidget {
   const MermaidDiagram({
     super.key,
     required this.source,
     this.theme = core.MermaidTheme.defaultTheme,
     this.errorBuilder,
+    this.keepLastGoodSceneOnError = true,
   });
 
   /// Mermaid diagram source text.
@@ -27,9 +30,14 @@ class MermaidDiagram extends StatefulWidget {
   /// Resolved mermaid theme used for layout and painting.
   final core.MermaidTheme theme;
 
-  /// Builds the widget shown when rendering [source] fails. Receives the
+  /// Builds the widget shown when rendering fails and no previous good
+  /// scene exists (or [keepLastGoodSceneOnError] is false). Receives the
   /// thrown error (e.g. `MermaidParseException`, `UnsupportedError`).
   final Widget Function(BuildContext context, Object error)? errorBuilder;
+
+  /// Keep showing the last successful render (with an error overlay) when
+  /// the current source fails to parse or lay out.
+  final bool keepLastGoodSceneOnError;
 
   @override
   State<MermaidDiagram> createState() => _MermaidDiagramState();
@@ -54,8 +62,9 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       ).render(widget.source);
       _error = null;
     } catch (error) {
-      _scene = null;
+      // Keep _scene: the last good render stays visible during editing.
       _error = error;
+      if (!widget.keepLastGoodSceneOnError) _scene = null;
     }
   }
 
@@ -64,15 +73,16 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     _rebuildSceneIfNeeded();
 
     final error = _error;
-    if (error != null) {
+    final scene = _scene;
+    if (scene == null) {
       final builder = widget.errorBuilder;
+      if (error == null) return const SizedBox.shrink();
       if (builder != null) return builder(context, error);
       return _DefaultErrorPanel(error: error);
     }
 
-    final scene = _scene!;
     final background = scene.background;
-    return SizedBox(
+    Widget diagram = SizedBox(
       width: scene.size.width,
       height: scene.size.height,
       child: DecoratedBox(
@@ -83,6 +93,50 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
           painter: ScenePainter(scene),
           size: Size(scene.size.width, scene.size.height),
         ),
+      ),
+    );
+
+    if (error != null) {
+      // Stale render: dim it and pin a compact error chip on top.
+      diagram = Stack(
+        clipBehavior: Clip.none,
+        children: [
+          Opacity(opacity: 0.45, child: diagram),
+          Positioned(
+            left: 0,
+            top: 0,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                  maxWidth: scene.size.width.clamp(200.0, 460.0)),
+              child: _ErrorChip(error: error),
+            ),
+          ),
+        ],
+      );
+    }
+    return diagram;
+  }
+}
+
+class _ErrorChip extends StatelessWidget {
+  const _ErrorChip({required this.error});
+
+  final Object error;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: const Color(0xEEFFF1F1),
+        border: Border.all(color: const Color(0x88CC3333)),
+        borderRadius: BorderRadius.circular(5),
+      ),
+      child: Text(
+        '$error',
+        maxLines: 3,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(color: Color(0xFFB00020), fontSize: 11),
       ),
     );
   }

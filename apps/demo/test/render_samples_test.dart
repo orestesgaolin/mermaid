@@ -176,6 +176,25 @@ classDiagram
     Duck "1" --> "*" Egg : lays
     note for Duck "can fly<br/>and swim"
 ''',
+  'state_machine': '''
+stateDiagram-v2
+    [*] --> Idle
+    Idle --> Connecting : connect
+    state check <<choice>>
+    Connecting --> check
+    check --> Connected : ok
+    check --> Backoff : failed
+    Backoff --> Connecting : retry
+    state Connected {
+        [*] --> Receiving
+        Receiving --> Processing : message
+        Processing --> Receiving : done
+    }
+    Connected --> Connected : heartbeat
+    Connected --> Closing : close
+    Closing --> [*]
+    note right of Backoff : exponential<br/>backoff
+''',
 };
 
 void main() {
