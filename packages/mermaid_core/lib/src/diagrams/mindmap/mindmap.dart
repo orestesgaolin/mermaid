@@ -115,9 +115,9 @@ Mindmap parseMindmap(String source) {
 /// Section colors per first-level branch (mermaid default mindmap look:
 /// saturated pastel fills).
 const _branchColors = <Color>[
-  Color(0xfffff176),
-  Color(0xffaed581),
-  Color(0xffb39ddb),
+  Color(0xfffcfc62),
+  Color(0xffcbe65a),
+  Color(0xffb87df2),
   Color(0xff4fc3f7),
   Color(0xffff8a65),
   Color(0xfff06292),
@@ -163,12 +163,13 @@ RenderScene layoutMindmap(
   _PlacedMind measure(MindmapNode n) {
     final style = n.depth == 0 ? baseStyle.copyWith(fontWeight: 700) : baseStyle;
     final labelSize = measurer.measure(n.label, style, maxWidth: 170);
+    final circlePad = n.depth == 0 ? 52.0 : 30.0;
     final w = n.shape == MindmapShape.circle
-        ? math.max(labelSize.width, labelSize.height) + 30
-        : labelSize.width + 24;
+        ? math.max(labelSize.width, labelSize.height) + circlePad
+        : labelSize.width + 26;
     final h = n.shape == MindmapShape.circle
-        ? math.max(labelSize.width, labelSize.height) + 30
-        : labelSize.height + 16;
+        ? math.max(labelSize.width, labelSize.height) + circlePad
+        : labelSize.height + 18;
     final p = _PlacedMind(n, Size(w, h));
     placed[n] = p;
     var extent = 0.0;
@@ -197,10 +198,10 @@ RenderScene layoutMindmap(
     final p = placed[n]!;
     if (depth > 0) {
       final angle = (a0 + a1) / 2;
-      final r = 105.0 * depth + 25.0 * (depth - 1);
+      final r = 92.0 * depth + 15.0 * (depth - 1);
       // Wide labels need extra horizontal reach.
       p.center = Point(
-        math.cos(angle) * (r * 1.55 + p.size.width / 2),
+        math.cos(angle) * (r * 1.3 + p.size.width / 2),
         math.sin(angle) * r,
       );
     }
@@ -235,7 +236,7 @@ RenderScene layoutMindmap(
     for (final c in n.children) {
       final cp = placed[c]!;
       // Center-to-center; nodes paint on top, hiding the covered ends.
-      final width = math.max(2.5, 7.0 - cp.node.depth * 1.8);
+      final width = math.max(3.0, 11.0 - cp.node.depth * 2.8);
       nodes.add(SceneShape(
         geometry: PathGeometry([
           MoveTo(p.center),
@@ -270,6 +271,17 @@ RenderScene layoutMindmap(
         ? _rootFill
         : _lighten(p.color, ((n.depth - 1) * 0.18).clamp(0.0, 0.6));
     final children = <SceneNode>[];
+    // Upstream nodes carry a drop shadow rendered as a soft strip below.
+    if (!isRoot) {
+      children.add(SceneShape(
+        geometry: RectGeometry(
+            Rect.fromCenter(Point(p.center.x, p.center.y + 5),
+                p.size.width, p.size.height),
+            rx: 8,
+            ry: 8),
+        fill: const Fill(Color(0x3d6c6c9e)),
+      ));
+    }
     switch (n.shape) {
       case MindmapShape.circle:
         children.add(SceneShape(
@@ -312,7 +324,9 @@ RenderScene layoutMindmap(
       bounds:
           Rect.fromCenter(p.center, labelSize.width, labelSize.height),
       style: style,
-      color: _luminance(fill) < 0.62
+      // Text contrast follows the section base color, like upstream: the
+      // whole purple branch reads white even on lightened leaves.
+      color: _luminance(isRoot ? fill : p.color) < 0.66
           ? const Color(0xffffffff)
           : const Color(0xff1f1f1f),
     ));
