@@ -160,6 +160,56 @@ graph LR
     bus -.-> analytics[Analytics sink]
     linkStyle default stroke:#666
 '''),
+  Sample('Sequence', '''
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant W as Web App
+    participant S as Auth Service
+    U->>+W: Login request
+    W->>+S: Validate credentials
+    Note right of S: Check password hash
+    alt valid
+        S-->>W: Token
+        W-->>U: Welcome!
+    else invalid
+        S-->>-W: 401
+        W-->>-U: Try again
+    end
+    loop every 15 min
+        W->>S: Refresh token
+        S--)W: New token
+    end
+'''),
+  Sample('Class diagram', '''
+classDiagram
+    direction TB
+    class Animal {
+        <<abstract>>
+        +String name
+        +int age
+        +isMammal() bool
+        +mate()*
+    }
+    class Duck {
+        +String beakColor
+        +swim()
+        +quack()
+    }
+    class Fish {
+        -int sizeInFeet
+        -canEat() bool
+    }
+    class Zebra {
+        +bool is_wild
+        +run()
+    }
+    Animal <|-- Duck
+    Animal <|-- Fish
+    Animal <|-- Zebra
+    Duck "1" --> "*" Egg : lays
+    note for Duck "can fly<br/>and swim"
+'''),
 ];
 
 // ---------------------------------------------------------------------------

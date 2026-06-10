@@ -131,6 +131,51 @@ graph LR
     bus -.-> analytics[Analytics sink]
     linkStyle default stroke:#666
 ''',
+  'sequence': '''
+sequenceDiagram
+    autonumber
+    actor U as User
+    participant W as Web App
+    participant S as Auth Service
+    U->>+W: Login request
+    W->>+S: Validate credentials
+    Note right of S: Check password hash
+    alt valid
+        S-->>W: Token
+        W-->>U: Welcome!
+    else invalid
+        S-->>-W: 401
+        W-->>-U: Try again
+    end
+    loop every 15 min
+        W->>S: Refresh token
+        S--)W: New token
+    end
+''',
+  'class_diagram': '''
+classDiagram
+    direction TB
+    class Animal {
+        <<abstract>>
+        +String name
+        +int age
+        +isMammal() bool
+        +mate()*
+    }
+    class Duck {
+        +String beakColor
+        +swim()
+        +quack()
+    }
+    class Fish {
+        -int sizeInFeet
+        -canEat() bool
+    }
+    Animal <|-- Duck
+    Animal <|-- Fish
+    Duck "1" --> "*" Egg : lays
+    note for Duck "can fly<br/>and swim"
+''',
 };
 
 void main() {
