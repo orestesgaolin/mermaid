@@ -29,6 +29,7 @@ export 'src/geometry.dart';
 export 'src/ir/scene.dart';
 export 'src/mermaid.dart';
 export 'src/parse_error.dart';
+export 'src/render/svg_renderer.dart';
 export 'src/text/approximate_text_measurer.dart';
 export 'src/text/text_measurer.dart';
 export 'src/text/text_style.dart';
