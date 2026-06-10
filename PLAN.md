@@ -132,8 +132,18 @@ source text
   chip overlay (MermaidDiagram.keepLastGoodSceneOnError); style editor
   drawer (MermaidTheme.copyWith + ==) with per-color hex fields and font
   size, applied live.
-- [ ] ER, gantt (date lib decision — `package:intl` likely enough),
-  pie (trivial), journey/timeline.
+- [x] **ER diagram** (`diagrams/er/`) — 6/6 corpus. Entity tables
+  (type/name/keys/comment columns, row striping), crow's foot markers,
+  symbol + word-form cardinalities, identifying/non-identifying lines.
+- [x] **Pie chart** (`diagrams/pie/`) — slices via bezier arcs, in-slice
+  percentages, legend with showData. Palette approximates theme pie1..12.
+- [x] **Gantt** (`diagrams/gantt/`) — 9/9 corpus. Own mini date engine
+  (`gantt_dates.dart`: dayjs-style dateFormat parse, strftime-lite
+  axisFormat, durations) — no dayjs dependency. Sections/bands, tags
+  (done/active/crit/milestone), `after` deps, auto ticks. Gaps: excludes/
+  weekends, todayMarker, compact mode; lenient on unparseable metadata
+  (matches upstream demos which contain typos).
+- [ ] Journey/timeline, quadrant, mindmap (needs a tidy-tree/radial layout).
 - [ ] SVG backend in mermaid_core (scene → SVG string; enables golden
   diffs against upstream).
 - [ ] Publishing prep: hide vendored dagre from the public API, README,

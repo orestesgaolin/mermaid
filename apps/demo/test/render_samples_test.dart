@@ -195,6 +195,38 @@ stateDiagram-v2
     Closing --> [*]
     note right of Backoff : exponential<br/>backoff
 ''',
+  'er_diagram': '''
+erDiagram
+    CUSTOMER ||--o{ ORDER : places
+    ORDER ||--|{ LINE_ITEM : contains
+    PRODUCT }|..|{ LINE_ITEM : "ordered in"
+    CUSTOMER {
+        string name PK "full name"
+        string email UK
+        int loyaltyPoints
+    }
+''',
+  'gantt': '''
+gantt
+    dateFormat YYYY-MM-DD
+    title Release plan
+    section Design
+    Wireframes      : done, des1, 2024-03-01, 4d
+    Visual design   : active, des2, after des1, 5d
+    section Build
+    API             : crit, api1, 2024-03-04, 7d
+    Frontend        : fe1, after des2, 6d
+    section Launch
+    Beta            : milestone, 2024-03-20, 1d
+''',
+  'pie': '''
+pie showData title Browser share
+    "Chrome" : 64.7
+    "Safari" : 18.1
+    "Edge" : 5.4
+    "Firefox" : 3.1
+    "Other" : 8.7
+''',
 };
 
 void main() {

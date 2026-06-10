@@ -4,8 +4,14 @@ library;
 import 'detect.dart';
 import 'diagrams/class_diagram/class_layout.dart';
 import 'diagrams/class_diagram/class_parser.dart';
+import 'diagrams/er/er_layout.dart';
+import 'diagrams/er/er_parser.dart';
 import 'diagrams/flowchart/flow_layout.dart';
 import 'diagrams/flowchart/flow_parser.dart';
+import 'diagrams/gantt/gantt_layout.dart';
+import 'diagrams/gantt/gantt_parser.dart';
+import 'diagrams/pie/pie_layout.dart';
+import 'diagrams/pie/pie_parser.dart';
 import 'diagrams/sequence/sequence_layout.dart';
 import 'diagrams/sequence/sequence_parser.dart';
 import 'diagrams/state/state_layout.dart';
@@ -42,10 +48,19 @@ class Mermaid {
       case DiagramType.stateDiagram:
         return layoutStateDiagram(parseStateDiagram(source),
             measurer: measurer, theme: theme);
+      case DiagramType.er:
+        return layoutErDiagram(parseErDiagram(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.pie:
+        return layoutPieChart(parsePieChart(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.gantt:
+        return layoutGanttChart(parseGanttChart(source),
+            measurer: measurer, theme: theme);
       case DiagramType.unknown:
         throw UnsupportedError(
           'Unrecognized or not-yet-supported diagram type. Currently '
-          'supported: flowchart, sequenceDiagram, classDiagram, stateDiagram.',
+          'supported: flowchart, sequence, class, state, er, pie, gantt.',
         );
     }
   }
