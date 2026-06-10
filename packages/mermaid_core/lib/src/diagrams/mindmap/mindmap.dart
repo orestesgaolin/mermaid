@@ -2,8 +2,8 @@
 ///
 /// Reference: upstream mindmap langium grammar + mindmapRenderer. Upstream
 /// lays out with cytoscape cose-bilkent; this port uses a deterministic
-/// two-sided tidy tree (children fan out right and left of the root), which
-/// is the classic mindmap look.
+/// radial tree (angular sectors proportional to leaf count), which settles
+/// to roughly the same organic look without a force simulation.
 library;
 
 import 'dart:math' as math;
@@ -126,7 +126,11 @@ const _branchColors = <Color>[
 ];
 
 /// Root node fill (upstream renders a large filled circle).
-const _rootFill = Color(0xff283593);
+const _rootFill = Color(0xff1f1fd1);
+
+/// Perceived luminance, for choosing readable text on a fill.
+double _luminance(Color c) =>
+    (0.299 * c.red + 0.587 * c.green + 0.114 * c.blue) / 255;
 
 Color _lighten(Color c, double amount) => Color.fromARGB(
       255,
@@ -150,7 +154,6 @@ RenderScene layoutMindmap(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
-  const levelGap = 90.0;
   const siblingGap = 14.0;
   final baseStyle =
       TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
@@ -179,43 +182,40 @@ RenderScene layoutMindmap(
 
   measure(map.root);
 
-  // Split first-level branches: alternate right/left, balancing extents.
-  final right = <MindmapNode>[];
-  final left = <MindmapNode>[];
-  var rightExtent = 0.0, leftExtent = 0.0;
-  for (final c in map.root.children) {
-    if (rightExtent <= leftExtent) {
-      right.add(c);
-      rightExtent += placed[c]!.subtreeExtent + siblingGap;
-    } else {
-      left.add(c);
-      leftExtent += placed[c]!.subtreeExtent + siblingGap;
-    }
-  }
-
-  void position(MindmapNode n, int dir, double x, double top) {
-    final p = placed[n]!;
-    p.center = Point(x + dir * p.size.width / 2, top + p.subtreeExtent / 2);
-    var childTop = top;
-    for (final c in n.children) {
-      final cp = placed[c]!;
-      position(c, dir, x + dir * (p.size.width + levelGap - 30), childTop);
-      childTop += cp.subtreeExtent + siblingGap;
-    }
-  }
+  // Radial layout, like upstream's settled force simulation: each branch
+  // gets an angular sector proportional to its leaf count, nodes sit at a
+  // radius that grows with depth (stretched horizontally because labels
+  // are wide).
+  int leaves(MindmapNode n) => n.children.isEmpty
+      ? 1
+      : n.children.fold(0, (a, c) => a + leaves(c));
 
   final rootP = placed[map.root]!;
   rootP.center = Point.zero;
-  var top = -rightExtent / 2;
-  for (final c in right) {
-    position(c, 1, rootP.size.width / 2 + levelGap - 30, top);
-    top += placed[c]!.subtreeExtent + siblingGap;
+
+  void placeRadial(MindmapNode n, double a0, double a1, int depth) {
+    final p = placed[n]!;
+    if (depth > 0) {
+      final angle = (a0 + a1) / 2;
+      final r = 105.0 * depth + 25.0 * (depth - 1);
+      // Wide labels need extra horizontal reach.
+      p.center = Point(
+        math.cos(angle) * (r * 1.55 + p.size.width / 2),
+        math.sin(angle) * r,
+      );
+    }
+    final total = leaves(n);
+    var a = a0;
+    for (final c in n.children) {
+      final span = (a1 - a0) * leaves(c) / total;
+      placeRadial(c, a, a + span, depth + 1);
+      a += span;
+    }
   }
-  top = -leftExtent / 2;
-  for (final c in left) {
-    position(c, -1, -(rootP.size.width / 2 + levelGap - 30), top);
-    top += placed[c]!.subtreeExtent + siblingGap;
-  }
+
+  // Start at the upper right and walk clockwise, mirroring the typical
+  // upstream result.
+  placeRadial(map.root, -math.pi / 3, 2 * math.pi - math.pi / 3, 0);
 
   // Branch colors: each first-level child tints its subtree.
   void tint(MindmapNode n, Color color) {
@@ -234,17 +234,20 @@ RenderScene layoutMindmap(
     final p = placed[n]!;
     for (final c in n.children) {
       final cp = placed[c]!;
-      final dir = cp.center.x >= p.center.x ? 1 : -1;
-      final start = Point(p.center.x + dir * p.size.width / 2, p.center.y);
-      final end = Point(cp.center.x - dir * cp.size.width / 2, cp.center.y);
-      final mid = (end.x - start.x).abs() / 2;
+      // Center-to-center; nodes paint on top, hiding the covered ends.
+      final width = math.max(2.5, 7.0 - cp.node.depth * 1.8);
       nodes.add(SceneShape(
         geometry: PathGeometry([
-          MoveTo(start),
-          CubicTo(Point(start.x + dir * mid, start.y),
-              Point(end.x - dir * mid, end.y), end),
+          MoveTo(p.center),
+          CubicTo(
+            Point(p.center.x + (cp.center.x - p.center.x) * 0.55,
+                p.center.y + (cp.center.y - p.center.y) * 0.1),
+            Point(p.center.x + (cp.center.x - p.center.x) * 0.9,
+                p.center.y + (cp.center.y - p.center.y) * 0.85),
+            cp.center,
+          ),
         ]),
-        stroke: Stroke(color: cp.color, width: 3),
+        stroke: Stroke(color: cp.color, width: width),
       ));
       edges(c);
     }
@@ -309,7 +312,9 @@ RenderScene layoutMindmap(
       bounds:
           Rect.fromCenter(p.center, labelSize.width, labelSize.height),
       style: style,
-      color: isRoot ? const Color(0xffffffff) : const Color(0xff1f1f1f),
+      color: _luminance(fill) < 0.62
+          ? const Color(0xffffffff)
+          : const Color(0xff1f1f1f),
     ));
     nodes.add(SceneGroup(
         id: 'mind_${n.label}', semanticLabel: n.label, children: children));
