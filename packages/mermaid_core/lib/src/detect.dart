@@ -11,6 +11,9 @@ enum DiagramType {
   er,
   pie,
   gantt,
+  quadrant,
+  journey,
+  timeline,
   unknown,
 }
 
@@ -29,6 +32,9 @@ const _detectorSpecs = <(DiagramType, String)>[
   (DiagramType.er, r'^\s*erDiagram\b'),
   (DiagramType.pie, r'^\s*pie\b'),
   (DiagramType.gantt, r'^\s*gantt\b'),
+  (DiagramType.quadrant, r'^\s*quadrantChart\b'),
+  (DiagramType.journey, r'^\s*journey\b'),
+  (DiagramType.timeline, r'^\s*timeline\b'),
   (DiagramType.sequence, r'^\s*sequenceDiagram\b'),
   (DiagramType.flowchart, r'^\s*graph\b'),
   (DiagramType.flowchart, r'^\s*flowchart(-elk)?\b'),
@@ -43,7 +49,9 @@ final _detectors = [
 /// diagram keyword line.
 String stripMetadata(String source) {
   var text = source.replaceAll('\r\n', '\n');
-  final fm = RegExp(r'^\s*---\n[\s\S]*?\n---\n').firstMatch(text);
+  // Frontmatter fences may be indented (common in demo/docs sources).
+  final fm =
+      RegExp(r'^\s*---[ \t]*\n[\s\S]*?\n[ \t]*---[ \t]*\n').firstMatch(text);
   if (fm != null) text = text.substring(fm.end);
   text = text.replaceAll(RegExp(r'%%\{[\s\S]*?\}%%'), '');
   final lines = text.split('\n').where((l) {
@@ -56,8 +64,10 @@ String stripMetadata(String source) {
 /// Extracts `title:` from YAML frontmatter if present.
 String? frontmatterTitle(String source) {
   final text = source.replaceAll('\r\n', '\n');
-  final fm = RegExp(r'^\s*---\n([\s\S]*?)\n---\n').firstMatch(text);
+  final fm = RegExp(r'^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*\n')
+      .firstMatch(text);
   if (fm == null) return null;
-  final m = RegExp(r'^title:\s*(.+)$', multiLine: true).firstMatch(fm.group(1)!);
+  final m =
+      RegExp(r'^\s*title:\s*(.+)$', multiLine: true).firstMatch(fm.group(1)!);
   return m?.group(1)?.trim();
 }

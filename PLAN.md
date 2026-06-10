@@ -1,7 +1,7 @@
 # Mermaid → Dart port: plan & handoff
 
 A Flutter-first Dart port of [mermaid-js](https://github.com/mermaid-js/mermaid).
-**Read this before touching the code.** Updated: 2026-06-10.
+**Read this before touching the code.** Updated: 2026-06-10 (10 diagram types, SVG backend).
 
 ## Goal & priorities
 
@@ -143,7 +143,18 @@ source text
   (done/active/crit/milestone), `after` deps, auto ticks. Gaps: excludes/
   weekends, todayMarker, compact mode; lenient on unparseable metadata
   (matches upstream demos which contain typos).
-- [ ] Journey/timeline, quadrant, mindmap (needs a tidy-tree/radial layout).
+- [x] **SVG backend** (`src/render/svg_renderer.dart`) — renderSceneToSvg
+  for all diagram types from pure Dart; `dart run tool/render_svg.dart
+  file.mmd > out.svg`. Gap: soft-wrap points are not in the IR, so SVG
+  text wraps only at explicit \n (Flutter painter re-wraps correctly).
+- [x] **Quadrant / journey / timeline** (single-file diagrams under
+  `diagrams/<type>/<type>.dart`) — 2+1+3 corpus fixtures, 9 tests.
+  Journey draws score faces + actor legend; timeline stacks events under
+  period boxes; quadrant has no text rotation (y labels sit left of plot).
+  Frontmatter fences may be indented (detect.dart tolerates).
+- [ ] Mindmap (needs a radial/tidy-tree layout), C4, requirement, xychart.
+- [ ] Consolidate the per-diagram private copies of curveBasis/intersect
+  into a shared edges util (3 copies now).
 - [ ] SVG backend in mermaid_core (scene → SVG string; enables golden
   diffs against upstream).
 - [ ] Publishing prep: hide vendored dagre from the public API, README,
