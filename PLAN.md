@@ -105,33 +105,32 @@ source text
 
 ## Status / next steps (in order)
 
-- [x] Flowchart slice (see above) — 60/60 corpus.
-- [x] Demo auto-fit scaling.
-- [ ] **Edge→subgraph-id endpoints** (`a --> subgraphId`): for isolated
-  (direction-differing) clusters this already works (synthetic node). For
-  compound clusters: route dagre edge to a representative member node, then
-  clip the rendered path at the stored cluster rect, arrow on the border
-  (upstream does the same in mermaid-graphlib `adjustClustersAndEdges`).
-- [ ] **Sequence diagram** — biggest value. Upstream: jison 420 lines,
-  bespoke renderer 2150 lines. Subset for v1: participants/actors (order,
-  aliases, create/destroy later), all message arrows (solid/dotted ×
-  filled/open/cross/async, +/- activations), activation bars (stacked),
-  notes (left of/right of/over A,B), blocks: loop/alt+else/opt/par+and/
-  critical/break with nesting, autonumber, title. Layout: column per
-  participant (header boxes top + repeated bottom), x = max label widths;
-  y advances per event; self-messages bend right; block frames with
-  pentagon label tab.
-- [ ] **Class diagram** — jison 440 lines. Classes (fields/methods,
-  +-#~ visibility, static/abstract markers, generics `~T~`), relations
-  (`<|--`, `*--`, `o--`, `-->`, `..>`, `..|>`, `--`), labels + cardinality
-  strings, namespaces later. Layout: dagre with rect nodes of 3 compartments;
-  markers: hollow triangle, filled/hollow diamond, plain arrow.
-- [ ] State diagram (reuses much of class/flow machinery), ER, gantt
-  (needs a date lib decision — `package:intl` likely enough), pie (trivial).
-- [ ] SVG backend in mermaid_core (scene → SVG string; good for golden
-  diffs against upstream too).
-- [ ] Publishing prep: rename vendored dagre exports out of the public API,
-  README, licenses (NOTICE for dagre port), pub.dev scores.
+- [x] Flowchart slice — 60/60 corpus, incl. v11 `@{shape}`, self-loops,
+  per-subgraph direction (recursive fragments), edge→subgraph-id endpoints
+  (representative member + clip at cluster rect).
+- [x] Demo auto-fit scaling (FittedBox toggle vs InteractiveViewer).
+- [x] **Sequence diagram** (`diagrams/sequence/`) — 9/9 corpus, 61 tests.
+  Participants/actors, full arrow matrix, +/- and explicit activations
+  (nested bars), notes, loop/alt/opt/par/critical/break/rect with nesting,
+  autonumber badges, self-messages, mirrored actor boxes. Gaps: `box`
+  participant grouping parsed-but-ignored, create/destroy lifecycle,
+  message-x not offset by activation bar width, par_over.
+- [x] **Class diagram** (`diagrams/class_diagram/`) — 16/16 corpus, 51
+  tests. Members (visibility/static/abstract/generics incl. nesting), full
+  relation marker matrix, cardinalities, namespaces (nested, labeled),
+  notes, classDef/style. Gaps: static underline (IR has no underline),
+  lollipop is plain circle, interaction/links ignored.
+- [x] Shared scene helpers in `ir/scene_utils.dart` (bounds/translate) —
+  use them for new diagrams; flow_layout still has private copies.
+- [ ] **State diagram** next — reuses dagre + class machinery; jison 352
+  lines; v1: states, transitions, start/end markers, composite states,
+  choice/fork/join, notes.
+- [ ] ER, gantt (date lib decision — `package:intl` likely enough),
+  pie (trivial), journey/timeline.
+- [ ] SVG backend in mermaid_core (scene → SVG string; enables golden
+  diffs against upstream).
+- [ ] Publishing prep: hide vendored dagre from the public API, README,
+  NOTICE for the dagre port, pub.dev scores.
 
 ## Known gaps / quirks
 
