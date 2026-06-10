@@ -221,11 +221,18 @@ _Fragment _layoutGraph(
       absorbedBy.containsKey(e.from) &&
       absorbedBy[e.from] == absorbedBy[e.to];
 
+  final subgraphIndexById = <String, int>{
+    for (var i = 0; i < sgs.length; i++) sgs[i].id: i,
+  };
+
   // --- 1+2. Resolve styles, measure labels, compute shape boxes. -----------
   final placed = <String, _PlacedNode>{};
   final syntheticIds = <String>{};
   for (final node in graph.nodes.values) {
     if (absorbedBy.containsKey(node.id)) continue;
+    // An edge endpoint naming a subgraph makes the parser auto-create a
+    // phantom node with the subgraph's id; the cluster wins.
+    if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
     final labelSize =
         measurer.measure(node.label, baseStyle, maxWidth: _wrappingWidth);
@@ -285,6 +292,37 @@ _Fragment _layoutGraph(
     }
     g.addNode(dagre.DagreNode(sgs[i].id, parent: p != null ? sgs[p].id : null));
   }
+  // Dagre cannot target a compound cluster directly; edges to a (non-
+  // isolated) subgraph id are routed to a representative member node and the
+  // painted path is clipped back to the cluster rect (upstream does the same
+  // in mermaid-graphlib adjustClustersAndEdges).
+  String? representativeOf(int sgIndex) {
+    for (final id in sgs[sgIndex].nodeIds) {
+      final r = resolveId(id);
+      if (placed.containsKey(r)) return r;
+    }
+    for (var i = 0; i < sgs.length; i++) {
+      if (sgs[i].parentIndex == sgIndex) {
+        final r = representativeOf(i);
+        if (r != null) return r;
+      }
+    }
+    return null;
+  }
+
+  /// For edge endpoints that name a compound subgraph: (dagre node id,
+  /// cluster id to clip against).
+  (String, String?) resolveEndpoint(String rawId) {
+    final id = resolveId(rawId);
+    if (placed.containsKey(id)) return (id, null);
+    final sgIndex = subgraphIndexById[id];
+    if (sgIndex != null && !removedSubgraphs.contains(sgIndex)) {
+      final rep = representativeOf(sgIndex);
+      if (rep != null) return (rep, id);
+    }
+    return (id, null);
+  }
+
   final edgeLabelSizes = <int, Size>{};
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
@@ -295,11 +333,11 @@ _Fragment _layoutGraph(
       labelSize = measurer.measure(label, baseStyle, maxWidth: _wrappingWidth);
       edgeLabelSizes[i] = labelSize;
     }
-    final from = resolveId(e.from);
-    final to = resolveId(e.to);
+    final (from, clusterFrom) = resolveEndpoint(e.from);
+    final (to, clusterTo) = resolveEndpoint(e.to);
     // Self-loops are routed manually after layout (dagre would thread them
     // through a degenerate dummy chain).
-    if (from == to) continue;
+    if (from == to && clusterFrom == null && clusterTo == null) continue;
     g.addEdge(dagre.DagreEdge(
       from,
       to,
@@ -331,6 +369,7 @@ _Fragment _layoutGraph(
   final nodeGroups = <SceneNode>[];
 
   // Clusters, outermost first so nested ones paint on top.
+  final clusterRects = <String, Rect>{};
   final clusterTitleStyle = baseStyle.copyWith(fontWeight: 400);
   for (var sgIndex = 0; sgIndex < sgs.length; sgIndex++) {
     final sg = sgs[sgIndex];
@@ -351,6 +390,7 @@ _Fragment _layoutGraph(
       pos.right + _clusterPadding,
       pos.bottom + _clusterPadding,
     );
+    clusterRects[sg.id] = rect;
     clusterGroups.add(SceneGroup(
       id: sg.id,
       semanticLabel: sg.title.isEmpty ? null : sg.title,
@@ -427,13 +467,17 @@ _Fragment _layoutGraph(
       edgeGroups.add(SceneGroup(id: groupId, children: const []));
       continue;
     }
-    final fromId = resolveId(e.from);
-    final toId = resolveId(e.to);
-    final source = placed[fromId]!;
-    final target = placed[toId]!;
+    final (fromId, clusterFrom) = resolveEndpoint(e.from);
+    final (toId, clusterTo) = resolveEndpoint(e.to);
+    final source = clusterFrom != null
+        ? _clusterEndpointNode(clusterRects[clusterFrom]!)
+        : placed[fromId]!;
+    final target = clusterTo != null
+        ? _clusterEndpointNode(clusterRects[clusterTo]!)
+        : placed[toId]!;
     final style = _resolveEdgeStyle(e, theme);
 
-    if (fromId == toId) {
+    if (fromId == toId && clusterFrom == null && clusterTo == null) {
       final loopIndex = selfLoopCount[fromId] ?? 0;
       selfLoopCount[fromId] = loopIndex + 1;
       final (loopNodes, labelCenter) = _selfLoop(
@@ -453,6 +497,15 @@ _Fragment _layoutGraph(
     var points = List<Point>.from(dagreEdge.points);
     if (points.length < 2) {
       points = [source.center, target.center];
+    }
+    // Cluster endpoints: the dagre path runs to a representative node deep
+    // inside the cluster; cut it back so it meets the cluster border.
+    if (clusterTo != null) {
+      points = _dropInsideRect(points, clusterRects[clusterTo]!, fromEnd: true);
+    }
+    if (clusterFrom != null) {
+      points =
+          _dropInsideRect(points, clusterRects[clusterFrom]!, fromEnd: false);
     }
     // Clip ends to the actual shape boundary (dagre only clips to the
     // bounding rect).
@@ -560,6 +613,37 @@ SceneGroup _edgeLabelGroup(
       ),
     ],
   );
+}
+
+/// Pseudo placed-node standing in for a compound cluster at an edge
+/// endpoint, so boundary clipping can reuse the rect intersect.
+_PlacedNode _clusterEndpointNode(Rect rect) => _PlacedNode(
+      node: const FlowNode(id: '', label: ''),
+      style: _NodeStyle(
+        fill: Color.transparent,
+        stroke: Color.transparent,
+        strokeWidth: 0,
+        textColor: Color.transparent,
+      ),
+      labelSize: Size.zero,
+      shape: _RectShape(rect.width, rect.height),
+    )..center = rect.center;
+
+/// Removes the run of path points that lie inside [rect] at one end, leaving
+/// the last kept point ready for boundary-intersect clipping.
+List<Point> _dropInsideRect(List<Point> pts, Rect rect,
+    {required bool fromEnd}) {
+  final list = List<Point>.from(pts);
+  if (fromEnd) {
+    while (list.length > 2 && rect.contains(list[list.length - 2])) {
+      list.removeLast();
+    }
+  } else {
+    while (list.length > 2 && rect.contains(list[1])) {
+      list.removeAt(0);
+    }
+  }
+  return list;
 }
 
 /// Routes a self-edge as a compact loop on the right side of the node,

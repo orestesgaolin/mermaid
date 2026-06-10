@@ -122,6 +122,71 @@ void main() {
     });
   });
 
+  group('edges targeting subgraph ids', () {
+    FlowGraph clusterTarget({FlowDirection? sgDirection}) => FlowGraph(
+          direction: FlowDirection.tb,
+          nodes: {
+            for (final id in ['x', 'm1', 'm2', 's']) id: node(id),
+          },
+          edges: const [
+            FlowEdge(from: 'x', to: 's'),
+            FlowEdge(from: 'm1', to: 'm2'),
+          ],
+          subgraphs: [
+            FlowSubgraph(
+              id: 's',
+              title: 'Cluster',
+              nodeIds: const ['m1', 'm2'],
+              direction: sgDirection,
+            ),
+          ],
+        );
+
+    void expectStopsAtBorder(RenderScene scene) {
+      final edge = groupById(scene, 'edge_x_s_0');
+      final path = edge.children
+          .whereType<SceneShape>()
+          .firstWhere((s) => s.geometry is PathGeometry);
+      final endPoint = switch ((path.geometry as PathGeometry).commands.last) {
+        LineTo(:final p) => p,
+        CubicTo(:final p) => p,
+        MoveTo(:final p) => p,
+        _ => fail('unexpected trailing command'),
+      };
+      final cluster = groupBounds(groupById(scene, 's'));
+      expect((endPoint.y - cluster.top).abs(), lessThan(12),
+          reason: 'arrow should stop at the cluster border, got $endPoint '
+              'vs top ${cluster.top}');
+      final m1 = groupBounds(groupById(scene, 'm1'));
+      expect(endPoint.y, lessThan(m1.top));
+      // The phantom node `s` must not be rendered as a standalone node:
+      // every group named `s` is the cluster (contains the title text).
+      final sGroups = flatten(scene.nodes)
+          .map((e) => e.$2)
+          .whereType<SceneGroup>()
+          .where((g) => g.id == 's');
+      for (final g in sGroups) {
+        expect(
+          flatten(g.children)
+              .map((e) => e.$2)
+              .whereType<SceneText>()
+              .any((t) => t.text == 'Cluster'),
+          isTrue,
+          reason: 'group "s" should be the cluster, not a phantom node',
+        );
+      }
+    }
+
+    test('compound cluster endpoint clips at border', () {
+      expectStopsAtBorder(layout(clusterTarget()));
+    });
+
+    test('isolated-direction cluster endpoint clips at border', () {
+      expectStopsAtBorder(
+          layout(clusterTarget(sgDirection: FlowDirection.lr)));
+    });
+  });
+
   group('per-subgraph direction', () {
     FlowGraph mixed() => FlowGraph(
           direction: FlowDirection.tb,
