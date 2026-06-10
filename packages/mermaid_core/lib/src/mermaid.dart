@@ -22,6 +22,7 @@ import 'diagrams/sequence/sequence_parser.dart';
 import 'diagrams/state/state_layout.dart';
 import 'diagrams/timeline/timeline.dart';
 import 'diagrams/xychart/xychart.dart';
+import 'directives.dart';
 import 'diagrams/state/state_parser.dart';
 import 'ir/scene.dart';
 import 'parse_error.dart';
@@ -42,6 +43,9 @@ class Mermaid {
   /// Throws [MermaidParseException] on syntax errors and
   /// [UnsupportedError] for not-yet-ported diagram types.
   RenderScene render(String source) {
+    // %%{init}%% directives and frontmatter config.theme adjust the theme
+    // per diagram, like upstream.
+    final theme = resolveTheme(source, this.theme);
     switch (detectDiagramType(source)) {
       case DiagramType.flowchart:
         return layoutFlowchart(parseFlowchart(source),

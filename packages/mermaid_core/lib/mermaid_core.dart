@@ -4,6 +4,7 @@ library;
 
 export 'src/color.dart';
 export 'src/detect.dart';
+export 'src/directives.dart';
 export 'src/diagrams/c4/c4.dart';
 export 'src/diagrams/class_diagram/class_layout.dart';
 export 'src/diagrams/class_diagram/class_model.dart';

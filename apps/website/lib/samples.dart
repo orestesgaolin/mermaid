@@ -175,4 +175,54 @@ C4Context
     Rel(customer, banking, "Uses")
     BiRel(banking, mainframe, "Reads & writes")
 '''),
+  Sample('dark', 'Dark theme', '''
+%%{init: {'theme': 'dark'}}%%
+graph TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Ship it]
+    B -->|No| D[Debug]
+    D --> B
+    C --> E((Done))
+'''),
+  Sample('forest', 'Forest theme', '''
+%%{init: {'theme': 'forest'}}%%
+graph LR
+    seed([Seed]) --> sprout[Sprout]
+    sprout --> tree{Healthy?}
+    tree -->|yes| forest[[Forest]]
+    tree -->|no| compost[(Compost)]
+    subgraph Garden
+        sprout
+        tree
+    end
+'''),
+  Sample('custom', 'Custom colors', '''
+%%{init: {"theme": "base", "themeVariables": {
+    "primaryColor": "#ffd9e8",
+    "primaryBorderColor": "#c2185b",
+    "primaryTextColor": "#4a0e2a",
+    "lineColor": "#7b1fa2",
+    "clusterBkg": "#f3e5f5",
+    "clusterBorder": "#9c27b0",
+    "edgeLabelBackground": "#fce4ec"
+}}}%%
+graph TD
+    A[Custom themed] -->|styled edge| B(Rounded)
+    B --> C{Decision}
+    subgraph Cluster
+        C -->|yes| D[Yep]
+        C -->|no| E[Nope]
+    end
+'''),
+  Sample('styled', 'classDef styles', '''
+graph TD
+    classDef hot fill:#ffcccc,stroke:#cc0000,stroke-width:2px,color:#660000
+    classDef cool fill:#cce5ff,stroke:#0055aa,color:#003366
+    A[Normal node] --> B[Hot node]:::hot
+    A --> C[Cool node]:::cool
+    B --> D{Decision}
+    C --> D
+    style A fill:#ffffcc,stroke:#aaaa00,stroke-width:3px
+    linkStyle 1 stroke:#cc0000,stroke-width:3px
+'''),
 ];

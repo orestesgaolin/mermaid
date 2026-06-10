@@ -179,7 +179,14 @@ y-labels horizontal), class note placement, state self-loop label overlap.
 - [x] Website covers all 15 samples; per-chart visual comparison done
   against mermaid.js in-browser (fidelity pass #2). Embed app fix: FittedBox
   must not sit inside an unbounded scroll view or tall diagrams clip.
+- [x] **Theme directives** (`src/directives.dart`): `%%{init}%%` with
+  `theme` (default/dark/forest/neutral) + `themeVariables` (loose-JSON
+  tolerated), frontmatter `config.theme`. primaryColor drives mainBkg like
+  upstream theme-base. Dark theme paints no background (matches mermaid.js
+  on-page look). Styled comparison samples on the website (dark, forest,
+  custom variables, classDef).
 - [ ] Long tail: block, packet, kanban, sankey, radar, architecture.
+- [ ] Frontmatter `config.themeVariables` (nested YAML) not yet parsed.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
   into a shared edges util (3 copies now).
 - [ ] SVG backend in mermaid_core (scene → SVG string; enables golden

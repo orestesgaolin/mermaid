@@ -138,9 +138,10 @@ class MermaidTheme {
     fontSize: 16,
   );
 
-  /// Values from upstream theme-dark.js (approximate core subset).
+  /// Values from upstream theme-dark.js (approximate core subset). Like
+  /// upstream, the dark theme paints no background of its own.
   static const MermaidTheme darkTheme = MermaidTheme(
-    background: Color(0xff333333),
+    background: Color(0x00000000),
     primaryColor: Color(0xff1f2020),
     primaryTextColor: Color(0xffe0dfdf),
     primaryBorderColor: Color(0xff81b1db),
@@ -157,4 +158,52 @@ class MermaidTheme {
     fontFamily: '"trebuchet ms", verdana, arial, sans-serif',
     fontSize: 16,
   );
+
+  /// Values from upstream theme-forest.js.
+  static const MermaidTheme forestTheme = MermaidTheme(
+    background: Color(0xffffffff),
+    primaryColor: Color(0xffcde498),
+    primaryTextColor: Color(0xff333333),
+    primaryBorderColor: Color(0xff13540c),
+    secondaryColor: Color(0xffcdffb2),
+    lineColor: Color(0xff008000),
+    arrowheadColor: Color(0xff008000),
+    textColor: Color(0xff333333),
+    nodeBorder: Color(0xff13540c),
+    mainBkg: Color(0xffcde498),
+    clusterBkg: Color(0xffcdffb2),
+    clusterBorder: Color(0xff6eaa49),
+    titleColor: Color(0xff333333),
+    edgeLabelBackground: Color(0xcce8e8e8),
+    fontFamily: '"trebuchet ms", verdana, arial, sans-serif',
+    fontSize: 16,
+  );
+
+  /// Values from upstream theme-neutral.js.
+  static const MermaidTheme neutralTheme = MermaidTheme(
+    background: Color(0xffffffff),
+    primaryColor: Color(0xffeeeeee),
+    primaryTextColor: Color(0xff333333),
+    primaryBorderColor: Color(0xff999999),
+    secondaryColor: Color(0xfff4f4f4),
+    lineColor: Color(0xff666666),
+    arrowheadColor: Color(0xff333333),
+    textColor: Color(0xff333333),
+    nodeBorder: Color(0xff999999),
+    mainBkg: Color(0xffeeeeee),
+    clusterBkg: Color(0xfff6f6f6),
+    clusterBorder: Color(0xffaaaaaa),
+    titleColor: Color(0xff333333),
+    edgeLabelBackground: Color(0xccffffff),
+    fontFamily: '"trebuchet ms", verdana, arial, sans-serif',
+    fontSize: 16,
+  );
+
+  /// Theme by its mermaid name; unknown names return [defaultTheme].
+  static MermaidTheme named(String name) => switch (name) {
+        'dark' => darkTheme,
+        'forest' => forestTheme,
+        'neutral' => neutralTheme,
+        _ => defaultTheme,
+      };
 }
