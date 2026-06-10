@@ -29,39 +29,46 @@ List<Edge> dfsFAS(Graph g) {
   Map<String, bool> stack = {};
   Map<String, bool> visited = {};
 
-  // dfs(v) {
-  //   if (visited.containsKey(v)) {
-  //     return;
-  //   }
-  //   visited[v] = true;
-  //   stack[v] = true;
-  //   g.outEdges(v)?.forEach((e) {
-  //     if (stack.containsKey(e.w)) {
-  //       fas.add(e);
-  //     } else {
-  //       dfs(e.w);
-  //     }
-  //   });
-  //   stack.remove(v);
-  // }
-
+  // Vendored fix: the original port's iterative conversion of dagre.js
+  // acyclic.js dfsFAS was broken: it tested `visited.containsKey(v)` (the
+  // root argument) instead of the popped node, and it set `stack[v]` but
+  // removed `stack[curr]` immediately after expanding a node, so the
+  // "currently on the DFS path" set never contained any ancestors. As a
+  // result no back edge was ever detected and cycles survived into ranking
+  // (longestPath then crashed reading a rank that was never assigned).
+  // dagre.js keeps a node in `stack` for the duration of its subtree and
+  // records out-edges that point at an on-stack node as the feedback arc
+  // set. Replicate that with explicit pre/post entries: on pre-visit mark
+  // visited + on-stack and push a post-visit entry; on post-visit pop the
+  // node from the path. Children are pushed right-to-left so they are
+  // expanded in the same order dagre.js recurses.
   dfs(String v) {
-    List<String> s = [v];
+    if (visited.containsKey(v)) {
+      return;
+    }
+    List<List<dynamic>> s = [
+      [v, false]
+    ];
     while (s.isNotEmpty) {
       var curr = s.removeLast();
-      if (visited.containsKey(v)) {
+      String node = curr[0] as String;
+      if (curr[1] == true) {
+        stack.remove(node);
         continue;
       }
-      visited[curr] = true;
-      stack[v] = true;
-      g.outEdges(curr)?.eachRight((e, index) {
-        if (stack[e.w] == true) {
+      if (visited.containsKey(node)) {
+        continue;
+      }
+      visited[node] = true;
+      stack[node] = true;
+      s.add([node, true]);
+      g.outEdges(node)?.eachRight((e, index) {
+        if (stack.containsKey(e.w)) {
           fas.add(e);
         } else {
-          s.add(e.w);
+          s.add([e.w, false]);
         }
       });
-      stack.remove(curr);
     }
   }
   g.nodes.forEach(dfs);

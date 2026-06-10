@@ -254,9 +254,16 @@ class Graph {
     return _edgeObjs[e] != null;
   }
 
+  // Vendored fix: graphlib's inEdges returns undefined only when the node
+  // does not exist; for an existing node with no incoming edges `_in[v]` is
+  // an empty object (truthy), so it returns an empty array. The original
+  // port added an `isNotEmpty` check, returning null for source nodes. That
+  // made nodeEdges() drop a source node's out-edges entirely, so
+  // feasibleTree's tightTree could never expand through the nesting root —
+  // an infinite loop on graphs with multiple disconnected components.
   List<Edge>? inEdges(String v, [String? u]) {
     var inV = _in[v];
-    if (inV != null && inV.isNotEmpty) {
+    if (inV != null) {
       List<Edge> edges = List.from(inV.values);
       if (u == null) {
         return edges;

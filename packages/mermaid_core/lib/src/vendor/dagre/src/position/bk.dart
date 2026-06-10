@@ -24,7 +24,15 @@ Map<String, Map<String, bool>> _findType1Conflicts(Graph g, List<List<String>> l
           g.predecessors(scanNode)?.forEach((u) {
             var uLabel = g.node(u);
             var uPos = uLabel.getD(orderK);
-            if ((uPos < k0 || k1 < uPos) && uLabel.get(dummyK) != null && g.node(scanNode).get(dummyK) != null) {
+            // Vendored fix: dagre.js (position/bk.js findType1Conflicts) reads
+            // `uLabel.dummy` / `node.dummy` which is simply `undefined` (falsy)
+            // for regular nodes, and the condition is the NEGATION
+            // `!(uLabel.dummy && g.node(scanNode).dummy)` — a type-1 conflict is
+            // a NON-inner segment crossing an inner segment. The port used
+            // Props.get (which throws on absent keys) and dropped the negation.
+            // Use the null-tolerant operator[] and restore dagre's condition.
+            if ((uPos < k0 || k1 < uPos) &&
+                !(uLabel[dummyK] != null && g.node(scanNode)[dummyK] != null)) {
               _addConflict(conflicts, u, scanNode);
             }
           });
