@@ -1,7 +1,7 @@
-/// Runs the full parse → layout pipeline over the upstream demo corpus in
-/// test/fixtures/upstream_flowcharts and reports per-file pass/fail.
+/// Runs the full detect → parse → layout pipeline over every upstream demo
+/// corpus in test/fixtures/upstream_* and reports per-file pass/fail.
 ///
-/// Usage: dart run tool/validate_corpus.dart [-v]
+/// Usage: dart run tool/validate_corpus.dart [-v] [dir-substring]
 library;
 
 import 'dart:io';
@@ -10,38 +10,43 @@ import 'package:mermaid_core/mermaid_core.dart';
 
 void main(List<String> args) {
   final verbose = args.contains('-v');
-  final dir = Directory('test/fixtures/upstream_flowcharts');
-  final files = dir.listSync().whereType<File>().where((f) => f.path.endsWith('.mmd')).toList()
+  final filter = args.where((a) => a != '-v').firstOrNull;
+  final dirs = Directory('test/fixtures')
+      .listSync()
+      .whereType<Directory>()
+      .where((d) => d.uri.pathSegments[d.uri.pathSegments.length - 2]
+          .startsWith('upstream_'))
+      .where((d) => filter == null || d.path.contains(filter))
+      .toList()
     ..sort((a, b) => a.path.compareTo(b.path));
-  final mermaid = Mermaid(measurer: const ApproximateTextMeasurer());
+  final mermaid = const Mermaid(measurer: ApproximateTextMeasurer());
 
-  var parseFail = 0;
-  var layoutFail = 0;
+  var total = 0;
   final failures = <String>[];
-  for (final file in files) {
-    final name = file.uri.pathSegments.last;
-    final source = file.readAsStringSync();
-    try {
-      final graph = parseFlowchart(source);
+  for (final dir in dirs) {
+    final dirName = dir.uri.pathSegments[dir.uri.pathSegments.length - 2];
+    final files = dir
+        .listSync()
+        .whereType<File>()
+        .where((f) => f.path.endsWith('.mmd'))
+        .toList()
+      ..sort((a, b) => a.path.compareTo(b.path));
+    for (final file in files) {
+      total++;
+      final name = '$dirName/${file.uri.pathSegments.last}';
       try {
-        final scene = mermaid.render(source);
+        final scene = mermaid.render(file.readAsStringSync());
         if (verbose) {
-          stdout.writeln(
-              'PASS $name (${graph.nodes.length} nodes, ${graph.edges.length} edges, '
-              '${scene.size.width.round()}x${scene.size.height.round()})');
+          stdout.writeln('PASS $name '
+              '(${scene.size.width.round()}x${scene.size.height.round()})');
         }
       } catch (e) {
-        layoutFail++;
-        failures.add('LAYOUT $name: $e');
+        failures.add('FAIL $name: ${e.toString().split('\n').first}');
       }
-    } catch (e) {
-      parseFail++;
-      failures.add('PARSE  $name: ${e.toString().split('\n').first}');
     }
   }
-  stdout.writeln('\n${files.length} fixtures: '
-      '${files.length - parseFail - layoutFail} pass, '
-      '$parseFail parse failures, $layoutFail layout failures');
+  stdout.writeln(
+      '\n$total fixtures: ${total - failures.length} pass, ${failures.length} fail');
   failures.forEach(stdout.writeln);
   if (failures.isNotEmpty) exitCode = 1;
 }

@@ -1,0 +1,26 @@
+classDiagram
+      namespace Company.Engineering.Backend {
+        class Developer {
+          +writeCode()
+          +reviewPR()
+        }
+      }
+      namespace Company.Engineering.Frontend {
+        class Designer {
+          +createMockup()
+          +buildUI()
+        }
+      }
+      namespace Company.Engineering {
+        class TechLead {
+          +planSprint()
+        }
+      }
+      namespace Company {
+        class CEO {
+          +makeDecisions()
+        }
+      }
+      CEO --> TechLead : oversees
+      TechLead --> Developer : leads
+      TechLead --> Designer : leads

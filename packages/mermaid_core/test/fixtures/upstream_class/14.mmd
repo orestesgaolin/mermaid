@@ -1,0 +1,25 @@
+classDiagram
+      namespace Platform {
+        namespace Auth {
+          class UserService {
+            +login()
+            +logout()
+          }
+          class TokenManager {
+            +generateToken()
+            +validateToken()
+          }
+        }
+        namespace Data {
+          class Repository {
+            +find()
+            +save()
+          }
+        }
+        class Gateway {
+          +route()
+        }
+      }
+      UserService --> TokenManager : uses
+      Gateway --> UserService : delegates
+      Gateway --> Repository : delegates

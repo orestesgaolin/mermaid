@@ -1,0 +1,18 @@
+classDiagram
+      namespace App.Services {
+        namespace Billing {
+          class Invoice {
+            +calculate()
+          }
+        }
+        class Logger {
+          +log()
+        }
+      }
+      namespace App.Models {
+        class User {
+          +String name
+        }
+      }
+      Invoice --> Logger : logs to
+      Invoice --> User : bills

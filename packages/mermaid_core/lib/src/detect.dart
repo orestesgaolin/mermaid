@@ -3,7 +3,7 @@
 /// patterns in priority order.
 library;
 
-enum DiagramType { flowchart, unknown }
+enum DiagramType { flowchart, sequence, classDiagram, unknown }
 
 DiagramType detectDiagramType(String source) {
   final text = stripMetadata(source);
@@ -15,6 +15,8 @@ DiagramType detectDiagramType(String source) {
 
 /// Priority-ordered, as in upstream diagram-orchestration.ts.
 const _detectorSpecs = <(DiagramType, String)>[
+  (DiagramType.classDiagram, r'^\s*classDiagram(-v2)?\b'),
+  (DiagramType.sequence, r'^\s*sequenceDiagram\b'),
   (DiagramType.flowchart, r'^\s*graph\b'),
   (DiagramType.flowchart, r'^\s*flowchart(-elk)?\b'),
 ];

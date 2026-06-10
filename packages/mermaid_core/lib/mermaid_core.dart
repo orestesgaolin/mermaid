@@ -4,9 +4,15 @@ library;
 
 export 'src/color.dart';
 export 'src/detect.dart';
+export 'src/diagrams/class_diagram/class_layout.dart';
+export 'src/diagrams/class_diagram/class_model.dart';
+export 'src/diagrams/class_diagram/class_parser.dart';
 export 'src/diagrams/flowchart/flow_layout.dart';
 export 'src/diagrams/flowchart/flow_model.dart';
 export 'src/diagrams/flowchart/flow_parser.dart';
+export 'src/diagrams/sequence/sequence_layout.dart';
+export 'src/diagrams/sequence/sequence_model.dart';
+export 'src/diagrams/sequence/sequence_parser.dart';
 export 'src/geometry.dart';
 export 'src/ir/scene.dart';
 export 'src/mermaid.dart';

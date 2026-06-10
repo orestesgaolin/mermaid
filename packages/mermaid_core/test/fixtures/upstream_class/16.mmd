@@ -1,0 +1,18 @@
+classDiagram
+      namespace Auth["Authentication Service"] {
+        class UserService {
+          +login()
+          +logout()
+        }
+        class TokenManager {
+          +generate()
+        }
+      }
+      namespace Store["Data Store"] {
+        class Repository {
+          +find()
+          +save()
+        }
+      }
+      UserService --> TokenManager : uses
+      UserService --> Repository : reads from
