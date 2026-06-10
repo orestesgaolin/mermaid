@@ -14,6 +14,10 @@ enum DiagramType {
   quadrant,
   journey,
   timeline,
+  xychart,
+  mindmap,
+  requirement,
+  c4,
   unknown,
 }
 
@@ -35,6 +39,10 @@ const _detectorSpecs = <(DiagramType, String)>[
   (DiagramType.quadrant, r'^\s*quadrantChart\b'),
   (DiagramType.journey, r'^\s*journey\b'),
   (DiagramType.timeline, r'^\s*timeline\b'),
+  (DiagramType.xychart, r'^\s*xychart(-beta)?\b'),
+  (DiagramType.mindmap, r'^\s*mindmap\b'),
+  (DiagramType.requirement, r'^\s*requirementDiagram\b'),
+  (DiagramType.c4, r'^\s*C4(Context|Container|Component|Dynamic|Deployment)\b'),
   (DiagramType.sequence, r'^\s*sequenceDiagram\b'),
   (DiagramType.flowchart, r'^\s*graph\b'),
   (DiagramType.flowchart, r'^\s*flowchart(-elk)?\b'),

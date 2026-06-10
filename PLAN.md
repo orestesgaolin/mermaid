@@ -1,7 +1,7 @@
 # Mermaid → Dart port: plan & handoff
 
 A Flutter-first Dart port of [mermaid-js](https://github.com/mermaid-js/mermaid).
-**Read this before touching the code.** Updated: 2026-06-10 (10 diagram types, SVG backend).
+**Read this before touching the code.** Updated: 2026-06-10 (14 diagram types, SVG backend, comparison website).
 
 ## Goal & priorities
 
@@ -169,7 +169,17 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   side-by-side mermaid.js (CDN) vs mermaid dart (embedded Flutter web view,
   JS-interop bridge in web/embed_bridge.js + custom flutter_bootstrap.js
   template). Build: `tool/build_website.sh` → apps/website/build/jaspr.
-- [ ] Mindmap (needs a radial/tidy-tree layout), C4, requirement, xychart.
+- [x] **xychart / mindmap / requirement / C4** (single-file ports) —
+  21+2+2+5 corpus fixtures, 12 tests. xychart matches upstream palette
+  (pale lavender bars, grey line) and nice tick steps; mindmap uses a
+  deterministic two-sided tidy tree (upstream is force-directed — different
+  aesthetic, same structure); C4 boundaries via member-bounds dashed rects.
+  Gaps: xychart `horizontal` parsed-but-ignored, mindmap icons/classes
+  skipped, C4 UpdateRelStyle/Lay_* hints ignored.
+- [x] Website covers all 15 samples; per-chart visual comparison done
+  against mermaid.js in-browser (fidelity pass #2). Embed app fix: FittedBox
+  must not sit inside an unbounded scroll view or tall diagrams clip.
+- [ ] Long tail: block, packet, kanban, sankey, radar, architecture.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
   into a shared edges util (3 copies now).
 - [ ] SVG backend in mermaid_core (scene → SVG string; enables golden

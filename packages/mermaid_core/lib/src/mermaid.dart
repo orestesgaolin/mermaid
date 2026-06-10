@@ -2,6 +2,7 @@
 library;
 
 import 'detect.dart';
+import 'diagrams/c4/c4.dart';
 import 'diagrams/class_diagram/class_layout.dart';
 import 'diagrams/class_diagram/class_parser.dart';
 import 'diagrams/er/er_layout.dart';
@@ -10,14 +11,17 @@ import 'diagrams/flowchart/flow_layout.dart';
 import 'diagrams/flowchart/flow_parser.dart';
 import 'diagrams/gantt/gantt_layout.dart';
 import 'diagrams/journey/journey.dart';
+import 'diagrams/mindmap/mindmap.dart';
 import 'diagrams/gantt/gantt_parser.dart';
 import 'diagrams/pie/pie_layout.dart';
 import 'diagrams/quadrant/quadrant.dart';
+import 'diagrams/requirement/requirement.dart';
 import 'diagrams/pie/pie_parser.dart';
 import 'diagrams/sequence/sequence_layout.dart';
 import 'diagrams/sequence/sequence_parser.dart';
 import 'diagrams/state/state_layout.dart';
 import 'diagrams/timeline/timeline.dart';
+import 'diagrams/xychart/xychart.dart';
 import 'diagrams/state/state_parser.dart';
 import 'ir/scene.dart';
 import 'parse_error.dart';
@@ -69,11 +73,24 @@ class Mermaid {
       case DiagramType.timeline:
         return layoutTimeline(parseTimeline(source),
             measurer: measurer, theme: theme);
+      case DiagramType.xychart:
+        return layoutXyChart(parseXyChart(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.mindmap:
+        return layoutMindmap(parseMindmap(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.requirement:
+        return layoutRequirementDiagram(parseRequirementDiagram(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.c4:
+        return layoutC4Diagram(parseC4Diagram(source),
+            measurer: measurer, theme: theme);
       case DiagramType.unknown:
         throw UnsupportedError(
           'Unrecognized or not-yet-supported diagram type. Currently '
           'supported: flowchart, sequence, class, state, er, pie, gantt, '
-          'quadrantChart, journey, timeline.',
+          'quadrantChart, journey, timeline, xychart, mindmap, '
+          'requirementDiagram, C4.',
         );
     }
   }

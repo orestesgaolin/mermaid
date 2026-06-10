@@ -46,9 +46,11 @@ class _EmbedAppState extends State<_EmbedApp> {
       debugShowCheckedModeBanner: false,
       home: ColoredBox(
         color: Colors.white,
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.all(12),
+        // FittedBox directly under the (bounded) host element so tall
+        // diagrams scale down instead of being clipped.
+        child: Padding(
+          padding: const EdgeInsets.all(12),
+          child: Center(
             child: FittedBox(
               fit: BoxFit.scaleDown,
               // Errors replace the diagram so the comparison stays honest.
