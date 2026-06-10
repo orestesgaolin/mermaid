@@ -591,6 +591,11 @@ class ThemeEditor extends StatelessWidget {
               icon: const Icon(Icons.restart_alt, size: 18),
               label: const Text('Reset'),
             ),
+            IconButton(
+              tooltip: 'Close style editor',
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.of(context).pop(),
+            ),
           ],
         ),
         const SizedBox(height: 4),
@@ -689,6 +694,7 @@ class _ColorRowState extends State<_ColorRow> {
           SizedBox(
             width: 110,
             child: TextField(
+              key: ValueKey('hex-${widget.label}'),
               controller: _controller,
               onSubmitted: _submit,
               style: const TextStyle(fontFamily: 'Menlo', fontSize: 12),

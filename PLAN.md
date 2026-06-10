@@ -122,9 +122,16 @@ source text
   lollipop is plain circle, interaction/links ignored.
 - [x] Shared scene helpers in `ir/scene_utils.dart` (bounds/translate) —
   use them for new diagrams; flow_layout still has private copies.
-- [ ] **State diagram** next — reuses dagre + class machinery; jison 352
-  lines; v1: states, transitions, start/end markers, composite states,
-  choice/fork/join, notes.
+- [x] **State diagram** (`diagrams/state/`) — 8/8 corpus, 29 tests.
+  States/transitions, scoped `[*]` start/end, composites (nested, cluster
+  rect from descendant bounds — dagre's own cluster position is unreliable
+  with boundary-crossing edges), choice/fork/join, notes, self-transitions
+  on composites. Gaps: concurrency `--` regions laid out together (not
+  split), `:::` on states, history states.
+- [x] Demo polish: live editing keeps the last good scene with an error
+  chip overlay (MermaidDiagram.keepLastGoodSceneOnError); style editor
+  drawer (MermaidTheme.copyWith + ==) with per-color hex fields and font
+  size, applied live.
 - [ ] ER, gantt (date lib decision — `package:intl` likely enough),
   pie (trivial), journey/timeline.
 - [ ] SVG backend in mermaid_core (scene → SVG string; enables golden
