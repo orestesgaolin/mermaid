@@ -6,3 +6,5 @@ workspace:
   - packages/mermaid_core
   - packages/mermaid_flutter
   - apps/demo
+  - apps/flutter_embed
+  - apps/website

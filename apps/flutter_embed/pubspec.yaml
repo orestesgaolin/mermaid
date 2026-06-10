@@ -1,0 +1,21 @@
+name: mermaid_flutter_embed
+description: Minimal Flutter web build of the mermaid Dart renderer, embedded
+  into the Jaspr comparison website and driven via JS interop.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ^3.12.0
+resolution: workspace
+
+dependencies:
+  flutter:
+    sdk: flutter
+  mermaid_core: ^0.1.0
+  mermaid_flutter: ^0.1.0
+
+dev_dependencies:
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
