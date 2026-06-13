@@ -308,14 +308,17 @@ it alongside the theme.
   - Remaining gaps: inline mixed text+math in one label (only whole-`$$`
     labels), big-operator limits (`\sum_{i=1}^n` stacks over/under),
     `KaTeX_Size`/AMS glyphs (delimiters are drawn as paths instead).
-- [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
-  *Very high — the big rock.* Upstream registers pluggable layout loaders
-  (`rendering-util/render.ts registerLayoutLoaders`); elk is the
-  GWT-compiled elkjs, cose-bilkent a cytoscape extension — neither has a
-  Dart port. Realistic paths: port elkjs to Dart (months), a web-only
-  JS-interop bridge to elkjs (defeats pure-Dart goal), or write a simpler
-  layered alternative that won't match elk pixel-for-pixel. Recommend
-  deferring or doing a JS-bridge spike for the website only.
+- [x] **Alternate layout engines** (`layout: elk | tidy-tree`) — DONE for
+  flowcharts (`diagrams/flowchart/layout_engines.dart`, selected by
+  `resolveLayout`). **tidy-tree**: Reingold–Tilford-style tidy tree over a
+  BFS spanning forest (parents centered over children), straight edges;
+  falls back to dagre when subgraphs are present. **elk**: keeps the layered
+  dagre placement but routes edges orthogonally (Manhattan, linear segments)
+  — the characteristic ELK look; `flowchart-elk` keyword also selects it.
+  Not a port of elkjs/cose-bilkent (no Dart port exists) — these are
+  pure-Dart alternatives. Gaps vs real ELK: placement isn't elk's exact
+  layered algorithm (reuses dagre's), no port-side routing; cose-bilkent
+  isn't offered (mindmap already has its own radial layout).
 - [ ] **Architecture layout tuning** (v11.15.0: `{group}` placement, edge
   direction hints L/R/T/B, junctions). *Blocked on prerequisite.* These
   knobs belong to the **architecture** diagram, which isn't ported yet.
