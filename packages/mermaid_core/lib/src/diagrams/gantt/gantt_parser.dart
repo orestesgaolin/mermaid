@@ -27,6 +27,9 @@ class _GanttParser {
   final byId = <String, GanttTask>{};
   GanttTask? lastTask;
   var _autoId = 0;
+  final _excludeWeekdays = <int>{};
+  final _excludeDates = <DateTime>{};
+  var _todayMarkerOff = false;
 
   GanttChart parse() {
     title = frontTitle;
@@ -56,8 +59,16 @@ class _GanttParser {
       ],
       title: title,
       axisFormat: axisFormat,
+      excludeWeekdays: _excludeWeekdays,
+      excludeDates: _excludeDates,
+      todayMarkerOff: _todayMarkerOff,
     );
   }
+
+  static const _weekdayNames = {
+    'monday': 1, 'tuesday': 2, 'wednesday': 3, 'thursday': 4,
+    'friday': 5, 'saturday': 6, 'sunday': 7,
+  };
 
   void _parseStatement(String line, int n) {
     Match? m;
@@ -82,8 +93,28 @@ class _GanttParser {
       sections.add((m.group(1)!.trim(), []));
       return;
     }
+    m = RegExp(r'^excludes\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      for (final raw in m.group(1)!.split(RegExp(r'[\s,]+'))) {
+        final tok = raw.trim().toLowerCase();
+        if (tok == 'weekends') {
+          _excludeWeekdays.addAll({6, 7});
+        } else if (_weekdayNames.containsKey(tok)) {
+          _excludeWeekdays.add(_weekdayNames[tok]!);
+        } else {
+          final d = parseGanttDate(raw.trim(), dateFormat);
+          if (d != null) _excludeDates.add(DateTime(d.year, d.month, d.day));
+        }
+      }
+      return;
+    }
+    m = RegExp(r'^todayMarker\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      if (m.group(1)!.trim().toLowerCase() == 'off') _todayMarkerOff = true;
+      return;
+    }
     // Recognized-but-unsupported settings: parsed and ignored.
-    if (RegExp(r'^(excludes|includes|todayMarker|inclusiveEndDates|'
+    if (RegExp(r'^(includes|inclusiveEndDates|'
             r'topAxis|weekday|tickInterval|displayMode|compact|'
             r'click|link|call|acc(Title|Descr))\b')
         .hasMatch(line)) {

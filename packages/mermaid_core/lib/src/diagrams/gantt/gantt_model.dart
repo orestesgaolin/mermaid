@@ -7,6 +7,9 @@ class GanttChart {
     required this.sections,
     this.title,
     this.axisFormat,
+    this.excludeWeekdays = const {},
+    this.excludeDates = const {},
+    this.todayMarkerOff = false,
   });
 
   /// Tasks outside any `section` land in a section with an empty name.
@@ -15,6 +18,15 @@ class GanttChart {
 
   /// strftime-style axis label format (subset), e.g. `%m-%d`.
   final String? axisFormat;
+
+  /// Weekdays excluded via `excludes weekends` / `excludes monday` (1=Mon..7=Sun).
+  final Set<int> excludeWeekdays;
+
+  /// Specific `YYYY-MM-DD` dates excluded.
+  final Set<DateTime> excludeDates;
+
+  /// `todayMarker off` hides the current-date line.
+  final bool todayMarkerOff;
 
   Iterable<GanttTask> get tasks sync* {
     for (final s in sections) {

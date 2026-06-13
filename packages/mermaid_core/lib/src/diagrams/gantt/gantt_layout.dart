@@ -167,6 +167,40 @@ RenderScene layoutGanttChart(
   }
   final chartBottom = y;
 
+  // Excluded-day shading (weekends / specific dates), behind the translucent
+  // section bands. The today marker is a vertical line at the current date.
+  final overlays = <SceneNode>[];
+  if (chart.excludeWeekdays.isNotEmpty || chart.excludeDates.isNotEmpty) {
+    var day = DateTime(minDate.year, minDate.month, minDate.day);
+    while (!day.isAfter(maxDate)) {
+      final excluded = chart.excludeWeekdays.contains(day.weekday) ||
+          chart.excludeDates.contains(day);
+      if (excluded) {
+        final x1 = xOf(day);
+        final x2 = xOf(day.add(const Duration(days: 1)));
+        overlays.add(SceneShape(
+          geometry: RectGeometry(
+              Rect.fromLTWH(x1, chartTop - _rowGap / 2, x2 - x1,
+                  chartBottom - chartTop)),
+          fill: const Fill(Color(0x33999999)),
+        ));
+      }
+      day = day.add(const Duration(days: 1));
+    }
+  }
+  if (overlays.isNotEmpty) nodes.insertAll(0, overlays);
+  if (!chart.todayMarkerOff) {
+    final now = DateTime.now();
+    if (!now.isBefore(minDate) && !now.isAfter(maxDate)) {
+      final x = xOf(now);
+      nodes.add(SceneShape(
+        geometry: PathGeometry(
+            [MoveTo(Point(x, chartTop - _rowGap / 2)), LineTo(Point(x, chartBottom))]),
+        stroke: const Stroke(color: Color(0xffdd3333), width: 2),
+      ));
+    }
+  }
+
   // Axis ticks + grid. Every tick draws a grid line; labels thin out when
   // they would collide.
   final ticks = _ticks(minDate, maxDate);
