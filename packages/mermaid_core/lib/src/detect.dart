@@ -21,6 +21,11 @@ enum DiagramType {
   gitGraph,
   sankey,
   packet,
+  block,
+  radar,
+  treemap,
+  kanban,
+  architecture,
   unknown,
 }
 
@@ -49,6 +54,11 @@ const _detectorSpecs = <(DiagramType, String)>[
   (DiagramType.gitGraph, r'^\s*gitGraph\b'),
   (DiagramType.sankey, r'^\s*sankey(-beta)?\b'),
   (DiagramType.packet, r'^\s*packet(-beta)?\b'),
+  (DiagramType.block, r'^\s*block(-beta)?\b'),
+  (DiagramType.radar, r'^\s*radar(-beta)?\b'),
+  (DiagramType.treemap, r'^\s*treemap(-beta)?\b'),
+  (DiagramType.kanban, r'^\s*kanban\b'),
+  (DiagramType.architecture, r'^\s*architecture(-beta)?\b'),
   (DiagramType.sequence, r'^\s*sequenceDiagram\b'),
   (DiagramType.flowchart, r'^\s*graph\b'),
   (DiagramType.flowchart, r'^\s*flowchart(-elk)?\b'),

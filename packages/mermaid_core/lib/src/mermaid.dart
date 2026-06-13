@@ -2,7 +2,12 @@
 library;
 
 import 'detect.dart';
+import 'diagrams/architecture/architecture.dart';
+import 'diagrams/block/block.dart';
 import 'diagrams/c4/c4.dart';
+import 'diagrams/kanban/kanban.dart';
+import 'diagrams/radar/radar.dart';
+import 'diagrams/treemap/treemap.dart';
 import 'diagrams/class_diagram/class_layout.dart';
 import 'diagrams/class_diagram/class_parser.dart';
 import 'diagrams/er/er_layout.dart';
@@ -112,12 +117,28 @@ class Mermaid {
       case DiagramType.packet:
         return layoutPacket(parsePacket(source),
             measurer: measurer, theme: theme);
+      case DiagramType.block:
+        return layoutBlock(parseBlock(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.radar:
+        return layoutRadar(parseRadar(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.treemap:
+        return layoutTreemap(parseTreemap(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.kanban:
+        return layoutKanban(parseKanban(source),
+            measurer: measurer, theme: theme);
+      case DiagramType.architecture:
+        return layoutArchitecture(parseArchitecture(source),
+            measurer: measurer, theme: theme);
       case DiagramType.unknown:
         throw UnsupportedError(
           'Unrecognized or not-yet-supported diagram type. Currently '
           'supported: flowchart, sequence, class, state, er, pie, gantt, '
           'quadrantChart, journey, timeline, xychart, mindmap, '
-          'requirementDiagram, C4, gitGraph, sankey, packet.',
+          'requirementDiagram, C4, gitGraph, sankey, packet, block, radar, '
+          'treemap, kanban, architecture.',
         );
     }
   }
