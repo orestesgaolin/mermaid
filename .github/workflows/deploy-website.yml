@@ -1,0 +1,89 @@
+name: Deploy website to GitHub Pages
+
+# Builds the side-by-side comparison site (Flutter web embed + static Jaspr
+# site) and publishes apps/website/build/jaspr to GitHub Pages.
+#
+# Before the first run: in the repo Settings → Pages, set "Source" to
+# "GitHub Actions".
+
+on:
+  push:
+    branches: [main]
+    # Only rebuild when something that affects the site changes.
+    paths:
+      - 'apps/website/**'
+      - 'apps/flutter_embed/**'
+      - 'packages/**'
+      - 'pubspec.yaml'
+      - '.github/workflows/deploy-website.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Allow one concurrent deployment; cancel in-progress runs of this workflow.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.0
+          channel: stable
+          cache: true
+
+      - name: Resolve workspace dependencies
+        run: dart pub get
+
+      - name: Install Jaspr CLI
+        run: |
+          dart pub global activate jaspr_cli
+          echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
+
+      - name: Build Flutter web embed
+        working-directory: apps/flutter_embed
+        run: flutter build web --release --pwa-strategy=none -o ../website/web/flutter_embed
+
+      - name: Build static Jaspr site
+        working-directory: apps/website
+        run: jaspr build
+
+      - name: Set base href for project Pages subpath
+        run: |
+          # Project Pages serve from https://<owner>.github.io/<repo>/, so the
+          # page <base href> must be /<repo>/. The Flutter loader and
+          # embed_bridge.js resolve every asset relative to this base, so this
+          # is the only path rewrite required. (If you later use a custom
+          # domain or a <user>.github.io repo, change BASE to "/".)
+          BASE="/${GITHUB_REPOSITORY#*/}/"
+          echo "Rewriting <base href> to $BASE"
+          # Match only the href value so any trailing markup is preserved.
+          find apps/website/build/jaspr -name '*.html' -print0 \
+            | xargs -0 sed -i "s|<base href=\"/\"|<base href=\"$BASE\"|g"
+          # Disable Jekyll so files/dirs starting with _ are served as-is.
+          touch apps/website/build/jaspr/.nojekyll
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/website/build/jaspr
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
