@@ -202,11 +202,21 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   on-page look). Styled comparison samples on the website (dark, forest,
   custom variables, classDef).
 - [x] **Sankey** (`diagrams/sankey/sankey.dart`) — CSV parser, longest-path
-  layering into columns, flow-proportional node sizing + bezier-ribbon links.
-  3 demo fixtures, 5 tests.
-- [ ] Long tail still to port: block, packet, kanban, architecture, radar,
-  treemap, and niche ones (cynefin, eventmodeling, ishikawa, railroad,
-  swimlanes, venn, wardley, zenuml). gitGraph + sankey now done.
+  layering, flow-proportional nodes + **gradient** bezier-ribbon links
+  (source→target color via the new `SceneGradient` Fill). 3 fixtures, 5 tests.
+- [x] **Packet** (`diagrams/packet/packet.dart`) — bit-range parser
+  (start-end / single / `+count`), 32-bit-per-row grid of labelled blocks
+  with bit markers, wide fields split across rows. 3 fixtures, 5 tests.
+- [x] **IR gradients**: `Fill.gradient` (`SceneGradient`, linear, scene
+  coords) — SVG `<linearGradient>` + Flutter `ui.Gradient.linear`.
+- [x] gitGraph now draws continuous per-branch lane lines (was: only
+  parent→child edges, so lanes looked broken); cross-branch curves kept for
+  branch points + merges.
+- [x] flutter_embed uses `BoxFit.contain` (was scaleDown) so diagrams scale
+  up to fill the pane, matching mermaid.js's apparent size.
+- [ ] Long tail still to port: block, kanban, architecture, radar, treemap,
+  and niche ones (cynefin, eventmodeling, ishikawa, railroad, swimlanes,
+  venn, wardley, zenuml). gitGraph + sankey + packet now done.
 - [ ] Frontmatter `config.themeVariables` (nested YAML) not yet parsed.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
   into a shared edges util (3 copies now).
