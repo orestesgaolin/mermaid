@@ -225,17 +225,22 @@ GitGraph parseGitGraph(String source) {
   );
 }
 
-/// Default branch palette (mirrors upstream git0..git7 in the default theme).
+/// Default branch palette (git0..git7), sampled from upstream's default-theme
+/// gitGraph render: git0 blue, git1 yellow, then saturated hue rotations.
 const _branchColors = <Color>[
-  Color(0xff5e6ad2),
-  Color(0xffff5252),
-  Color(0xff00bcd4),
-  Color(0xffff9800),
-  Color(0xff9c27b0),
-  Color(0xff4caf50),
-  Color(0xffe91e63),
-  Color(0xff795548),
+  Color(0xff0000ec),
+  Color(0xffdede00),
+  Color(0xff00d6b3),
+  Color(0xff0076ec),
+  Color(0xff00ecec),
+  Color(0xff00ec76),
+  Color(0xffec00ec),
+  Color(0xffec0000),
 ];
+
+/// Perceived luminance, for readable label text on a branch fill.
+double _luminance(Color c) =>
+    (0.299 * c.red + 0.587 * c.green + 0.114 * c.blue) / 255;
 
 RenderScene layoutGitGraph(
   GitGraph graph, {
@@ -394,7 +399,9 @@ RenderScene layoutGitGraph(
       text: b,
       bounds: Rect.fromCenter(center, size.width, size.height),
       style: branchLabelStyle,
-      color: const Color(0xffffffff),
+      color: _luminance(color) < 0.6
+          ? const Color(0xffffffff)
+          : const Color(0xff000000),
     ));
   }
 

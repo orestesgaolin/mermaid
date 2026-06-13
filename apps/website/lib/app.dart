@@ -29,11 +29,33 @@ class App extends StatelessComponent {
           color: const Color('#555566'),
           margin: .only(top: .zero, bottom: 24.px),
         ),
+        css('.cat-label').styles(
+          textTransform: .upperCase,
+          fontSize: 0.72.rem,
+          fontWeight: .w700,
+          letterSpacing: 0.06.em,
+          color: const Color('#8a82a8'),
+          margin: .only(top: 12.px, bottom: 6.px),
+        ),
         css('.chips').styles(
           display: .flex,
           flexWrap: .wrap,
           gap: .all(8.px),
-          margin: .only(bottom: 16.px),
+          margin: .only(bottom: 8.px),
+        ),
+        css('.doc').styles(
+          margin: .only(top: 18.px, bottom: 6.px),
+        ),
+        css('.doc h2').styles(
+          fontSize: 1.5.rem,
+          margin: .only(bottom: 4.px),
+          color: const Color('#4a3a8a'),
+        ),
+        css('.doc-desc').styles(
+          margin: .only(top: .zero, bottom: 10.px),
+          color: const Color('#555566'),
+          fontSize: 1.02.rem,
+          maxWidth: 760.px,
         ),
         css('.chip').styles(
           padding: .symmetric(vertical: 6.px, horizontal: 14.px),

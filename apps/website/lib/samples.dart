@@ -1,16 +1,31 @@
-/// Comparison samples — one per supported diagram type.
+/// Comparison samples — one per supported diagram type, grouped into
+/// categories and annotated with a short "what it is / when to use it"
+/// description so the page reads like documentation.
 library;
 
 class Sample {
-  const Sample(this.id, this.name, this.source);
+  const Sample(this.id, this.name, this.category, this.description,
+      this.source);
 
   final String id;
   final String name;
+
+  /// Grouping shown as a section heading on the page.
+  final String category;
+
+  /// One-line explanation of the diagram type and when to reach for it.
+  final String description;
   final String source;
 }
 
+const cDiagrams = 'Diagrams';
+const cCharts = 'Charts & data';
+const cTheming = 'Theming & styles';
+
 const samples = <Sample>[
-  Sample('flowchart', 'Flowchart', '''
+  Sample('flowchart', 'Flowchart', cDiagrams,
+      'Nodes connected by edges for processes, decisions and flows — the '
+          'most common Mermaid diagram.', '''
 graph TD
     A[Start] --> B{Is it working?}
     B -->|Yes| C[Ship it]
@@ -18,7 +33,9 @@ graph TD
     D --> B
     C --> E[Celebrate]
 '''),
-  Sample('subgraphs', 'Subgraphs', '''
+  Sample('subgraphs', 'Subgraphs', cDiagrams,
+      'Group related nodes into labelled clusters; edges can cross freely '
+          'between them.', '''
 graph LR
     subgraph Stage One
         a1[Fetch] --> a2[Validate]
@@ -30,7 +47,9 @@ graph LR
     Start([Start]) --> a1
     b2 --> Done([Done])
 '''),
-  Sample('sequence', 'Sequence', '''
+  Sample('sequence', 'Sequence', cDiagrams,
+      'Interactions between participants over time: messages, activations '
+          'and alt/opt blocks.', '''
 sequenceDiagram
     autonumber
     actor U as User
@@ -47,7 +66,9 @@ sequenceDiagram
         W-->>-U: Try again
     end
 '''),
-  Sample('class', 'Class', '''
+  Sample('class', 'Class', cDiagrams,
+      'UML class diagrams: classes, members, visibility markers and '
+          'relationships.', '''
 classDiagram
     class Animal {
         <<abstract>>
@@ -59,7 +80,9 @@ classDiagram
     Animal <|-- Fish
     Duck "1" --> "*" Egg : lays
 '''),
-  Sample('state', 'State', '''
+  Sample('state', 'State', cDiagrams,
+      'Finite state machines: states, transitions, choice nodes and '
+          'start/end markers.', '''
 stateDiagram-v2
     [*] --> Idle
     Idle --> Connecting : connect
@@ -70,7 +93,9 @@ stateDiagram-v2
     Backoff --> Connecting : retry
     Connected --> [*]
 '''),
-  Sample('er', 'ER', '''
+  Sample('er', 'ER', cDiagrams,
+      'Entity-relationship diagrams: entities, attributes and the '
+          'cardinality between them.', '''
 erDiagram
     CUSTOMER ||--o{ ORDER : places
     ORDER ||--|{ LINE_ITEM : contains
@@ -79,79 +104,24 @@ erDiagram
         string email UK
     }
 '''),
-  Sample('gantt', 'Gantt', '''
-gantt
-    dateFormat YYYY-MM-DD
-    title Release plan
-    section Design
-    Wireframes      : done, des1, 2024-03-01, 4d
-    Visual design   : active, des2, after des1, 5d
-    section Build
-    API             : crit, api1, 2024-03-04, 7d
-    Frontend        : fe1, after des2, 6d
+  Sample('git', 'Git graph', cDiagrams,
+      'Git branching and merging visualised as commits flowing across '
+          'branches over time.', '''
+gitGraph
+   commit
+   commit id: "Normal" tag: "v1.0.0"
+   branch develop
+   checkout develop
+   commit
+   commit
+   checkout main
+   merge develop
+   commit type: HIGHLIGHT
+   commit type: REVERSE
 '''),
-  Sample('pie', 'Pie', '''
-pie showData title Browser share
-    "Chrome" : 64.7
-    "Safari" : 18.1
-    "Edge" : 5.4
-    "Other" : 11.8
-'''),
-  Sample('quadrant', 'Quadrant', '''
-quadrantChart
-    title Reach and engagement
-    x-axis Low Reach --> High Reach
-    y-axis Low Engagement --> High Engagement
-    quadrant-1 Expand
-    quadrant-2 Promote
-    quadrant-3 Re-evaluate
-    quadrant-4 Improve
-    Campaign A: [0.3, 0.6]
-    Campaign B: [0.45, 0.23]
-    Campaign C: [0.78, 0.34]
-'''),
-  Sample('journey', 'Journey', '''
-journey
-    title My working day
-    section Go to work
-      Make tea: 5: Me
-      Go upstairs: 3: Me
-      Do work: 1: Me, Cat
-    section Go home
-      Sit down: 5: Me
-'''),
-  Sample('timeline', 'Timeline', '''
-timeline
-    title History of Social Media
-    section Web 1.0
-    2002 : LinkedIn
-    2004 : Facebook : Google
-    section Web 2.0
-    2005 : YouTube
-    2006 : Twitter
-'''),
-  Sample('xychart', 'XY chart', '''
-xychart-beta
-    title "Sales Revenue"
-    x-axis [jan, feb, mar, apr, may, jun]
-    y-axis "Revenue (thousands)" 4000 --> 11000
-    bar [5000, 6000, 7500, 8200, 9500, 10500]
-    line [5000, 6000, 7500, 8200, 9500, 10500]
-'''),
-  Sample('mindmap', 'Mindmap', '''
-mindmap
-  root((mermaid))
-    Origins
-      Long history
-      Popularisation
-    Research
-      On effectiveness
-      On features
-    Tools
-      Pen and paper
-      Mermaid
-'''),
-  Sample('requirement', 'Requirement', '''
+  Sample('requirement', 'Requirement', cDiagrams,
+      'Requirements with their attributes, and how elements satisfy or '
+          'verify them.', '''
 requirementDiagram
     requirement test_req {
         id: 1
@@ -164,7 +134,9 @@ requirementDiagram
     }
     test_entity - satisfies -> test_req
 '''),
-  Sample('c4', 'C4', '''
+  Sample('c4', 'C4', cDiagrams,
+      'C4-model context diagrams: people, systems, boundaries and their '
+          'relationships.', '''
 C4Context
     title System Context diagram
     Person(customer, "Banking Customer", "A customer of the bank")
@@ -175,7 +147,92 @@ C4Context
     Rel(customer, banking, "Uses")
     BiRel(banking, mainframe, "Reads & writes")
 '''),
-  Sample('dark', 'Dark theme', '''
+  Sample('pie', 'Pie', cCharts,
+      'Proportional slices computed from labelled values, with optional '
+          'data labels.', '''
+pie showData title Browser share
+    "Chrome" : 64.7
+    "Safari" : 18.1
+    "Edge" : 5.4
+    "Other" : 11.8
+'''),
+  Sample('quadrant', 'Quadrant', cCharts,
+      'Plot items across two axes into four labelled quadrants for '
+          'prioritisation.', '''
+quadrantChart
+    title Reach and engagement
+    x-axis Low Reach --> High Reach
+    y-axis Low Engagement --> High Engagement
+    quadrant-1 Expand
+    quadrant-2 Promote
+    quadrant-3 Re-evaluate
+    quadrant-4 Improve
+    Campaign A: [0.3, 0.6]
+    Campaign B: [0.45, 0.23]
+    Campaign C: [0.78, 0.34]
+'''),
+  Sample('xychart', 'XY chart', cCharts,
+      'Bar and line series plotted over a shared category axis.', '''
+xychart-beta
+    title "Sales Revenue"
+    x-axis [jan, feb, mar, apr, may, jun]
+    y-axis "Revenue (thousands)" 4000 --> 11000
+    bar [5000, 6000, 7500, 8200, 9500, 10500]
+    line [5000, 6000, 7500, 8200, 9500, 10500]
+'''),
+  Sample('gantt', 'Gantt', cCharts,
+      'Project schedule: tasks, sections, dependencies and milestones laid '
+          'out over dates.', '''
+gantt
+    dateFormat YYYY-MM-DD
+    title Release plan
+    section Design
+    Wireframes      : done, des1, 2024-03-01, 4d
+    Visual design   : active, des2, after des1, 5d
+    section Build
+    API             : crit, api1, 2024-03-04, 7d
+    Frontend        : fe1, after des2, 6d
+'''),
+  Sample('journey', 'Journey', cCharts,
+      'User-journey stages scored by satisfaction and grouped into '
+          'sections.', '''
+journey
+    title My working day
+    section Go to work
+      Make tea: 5: Me
+      Go upstairs: 3: Me
+      Do work: 1: Me, Cat
+    section Go home
+      Sit down: 5: Me
+'''),
+  Sample('timeline', 'Timeline', cCharts,
+      'Chronological events grouped into time periods.', '''
+timeline
+    title History of Social Media
+    section Web 1.0
+    2002 : LinkedIn
+    2004 : Facebook : Google
+    section Web 2.0
+    2005 : YouTube
+    2006 : Twitter
+'''),
+  Sample('mindmap', 'Mindmap', cCharts,
+      'Hierarchical ideas radiating outward from a central root.', '''
+mindmap
+  root((mermaid))
+    Origins
+      Long history
+      Popularisation
+    Research
+      On effectiveness
+      On features
+    Tools
+      Pen and paper
+      Mermaid
+'''),
+  Sample('dark', 'Dark theme', cTheming,
+      'The same flowchart with the built-in dark theme, selected via an '
+          '%%{init}%% directive.', '''
 %%{init: {'theme': 'dark'}}%%
 graph TD
     A[Start] --> B{Is it working?}
@@ -184,7 +241,8 @@ graph TD
     D --> B
     C --> E((Done))
 '''),
-  Sample('forest', 'Forest theme', '''
+  Sample('forest', 'Forest theme', cTheming,
+      'The forest theme — a green palette — applied through a directive.', '''
 %%{init: {'theme': 'forest'}}%%
 graph LR
     seed([Seed]) --> sprout[Sprout]
@@ -196,7 +254,9 @@ graph LR
         tree
     end
 '''),
-  Sample('custom', 'Custom colors', '''
+  Sample('custom', 'Custom colors', cTheming,
+      'Override individual theme variables (primaryColor, lineColor…) with '
+          'themeVariables.', '''
 %%{init: {"theme": "base", "themeVariables": {
     "primaryColor": "#ffd9e8",
     "primaryBorderColor": "#c2185b",
@@ -214,7 +274,9 @@ graph TD
         C -->|no| E[Nope]
     end
 '''),
-  Sample('styled', 'classDef styles', '''
+  Sample('styled', 'classDef styles', cTheming,
+      'Per-node classDef classes, inline style, and linkStyle on a specific '
+          'edge.', '''
 graph TD
     classDef hot fill:#ffcccc,stroke:#cc0000,stroke-width:2px,color:#660000
     classDef cool fill:#cce5ff,stroke:#0055aa,color:#003366
@@ -226,3 +288,6 @@ graph TD
     linkStyle 1 stroke:#cc0000,stroke-width:3px
 '''),
 ];
+
+/// Categories in display order.
+const sampleCategories = <String>[cDiagrams, cCharts, cTheming];

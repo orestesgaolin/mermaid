@@ -71,13 +71,21 @@ class _CompareViewState extends State<CompareView> {
   @override
   Component build(BuildContext context) {
     return div(classes: 'compare', [
-      div(classes: 'chips', [
-        for (var i = 0; i < samples.length; i++)
-          button(
-            classes: i == _selected ? 'chip selected' : 'chip',
-            onClick: () => _select(i),
-            [.text(samples[i].name)],
-          ),
+      for (final category in sampleCategories) ...[
+        div(classes: 'cat-label', [.text(category)]),
+        div(classes: 'chips', [
+          for (var i = 0; i < samples.length; i++)
+            if (samples[i].category == category)
+              button(
+                classes: i == _selected ? 'chip selected' : 'chip',
+                onClick: () => _select(i),
+                [.text(samples[i].name)],
+              ),
+        ]),
+      ],
+      div(classes: 'doc', [
+        h2([.text(_sample.name)]),
+        p(classes: 'doc-desc', [.text(_sample.description)]),
       ]),
       pre(classes: 'source', [code([.text(_sample.source.trim())])]),
       div(classes: 'panes', [
