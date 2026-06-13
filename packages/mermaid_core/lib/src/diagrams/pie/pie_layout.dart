@@ -13,7 +13,8 @@ import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 import 'pie_model.dart';
 
-const double _radius = 130;
+// Matches upstream pieRenderer: min(pieWidth=450, height=450)/2 − MARGIN(40).
+const double _radius = 185;
 const double _diagramPadding = 12;
 
 /// Approximation of upstream theme-default pie1..pie12.

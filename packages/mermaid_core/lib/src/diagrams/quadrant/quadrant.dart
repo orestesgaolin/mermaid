@@ -130,7 +130,7 @@ RenderScene layoutQuadrantChart(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
-  const plot = 320.0;
+  const plot = 440.0; // ≈ upstream 500px chart minus padding/axis space
   final baseStyle = TextStyleSpec(
       fontFamily: theme.fontFamily, fontSize: theme.fontSize * 0.85);
   final nodes = <SceneNode>[];
