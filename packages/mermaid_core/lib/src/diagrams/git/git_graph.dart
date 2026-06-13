@@ -7,6 +7,8 @@
 /// order (temporal layout); each branch gets its own lane.
 library;
 
+import 'dart:math' as math;
+
 import '../../color.dart';
 import '../../detect.dart';
 import '../../geometry.dart';
@@ -277,16 +279,41 @@ RenderScene layoutGitGraph(
   };
 
   final nodes = <SceneNode>[];
+  final branchOf = {for (final c in graph.commits) c.id: c.branch};
 
-  // Edges (parent → commit) under the nodes.
+  // Branch lane lines: a solid horizontal (LR) / vertical (TB) line in the
+  // branch color spanning that branch's commits, like upstream's branch line.
+  for (final b in graph.branchOrder) {
+    final pts = [
+      for (final c in graph.commits)
+        if (c.branch == b) centers[c.id]!
+    ];
+    if (pts.isEmpty) continue;
+    final lane = laneBase + (laneOf[b] ?? 0) * laneGap;
+    final lo = pts.map((p) => lr ? p.x : p.y).reduce(math.min);
+    final hi = pts.map((p) => lr ? p.x : p.y).reduce(math.max);
+    nodes.add(SceneShape(
+      geometry: PathGeometry([
+        MoveTo(lr ? Point(lo, lane) : Point(lane, lo)),
+        LineTo(lr ? Point(hi, lane) : Point(lane, hi)),
+      ]),
+      stroke: Stroke(color: branchColor(b), width: 2.5),
+    ));
+  }
+
+  // Cross-branch connectors only: branch points (a commit whose parent is on
+  // another branch) and merges (the second parent). Same-branch parents are
+  // already covered by the lane line above.
   for (final c in graph.commits) {
     final to = centers[c.id]!;
     for (final pid in c.parents) {
       final from = centers[pid];
       if (from == null) continue;
-      final color = branchColor(c.isMerge && pid == c.parents.last
-          ? graph.commits.firstWhere((x) => x.id == pid).branch
-          : c.branch);
+      final parentBranch = branchOf[pid];
+      if (parentBranch == c.branch) continue; // covered by the lane line
+      // Branch point → child's color; merge → the merged (parent) branch.
+      final color = branchColor(
+          c.isMerge && pid == c.parents.last ? parentBranch! : c.branch);
       nodes.add(_edge(from, to, color, lr));
     }
   }

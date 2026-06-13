@@ -69,8 +69,24 @@ class SceneText extends SceneNode {
 enum TextAlignH { left, center, right }
 
 class Fill {
-  const Fill(this.color);
+  const Fill(this.color, {this.gradient});
+
+  /// Solid color; also the fallback if a backend ignores [gradient].
   final Color color;
+
+  /// Optional linear gradient (in absolute scene coordinates). When set,
+  /// backends fill with the gradient instead of [color].
+  final SceneGradient? gradient;
+}
+
+/// A linear gradient between two points, with evenly-spaced color stops.
+class SceneGradient {
+  const SceneGradient(this.from, this.to, this.colors);
+  final Point from;
+  final Point to;
+
+  /// Two or more stops, distributed evenly from [from] to [to].
+  final List<Color> colors;
 }
 
 class Stroke {

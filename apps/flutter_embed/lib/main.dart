@@ -46,13 +46,14 @@ class _EmbedAppState extends State<_EmbedApp> {
       debugShowCheckedModeBanner: false,
       home: ColoredBox(
         color: Colors.white,
-        // FittedBox directly under the (bounded) host element so tall
-        // diagrams scale down instead of being clipped.
+        // FittedBox directly under the (bounded) host element so diagrams
+        // scale to fill the pane (up or down) — matching mermaid.js, which
+        // also scales its SVG to the container, instead of sitting small.
         child: Padding(
           padding: const EdgeInsets.all(12),
           child: Center(
             child: FittedBox(
-              fit: BoxFit.scaleDown,
+              fit: BoxFit.contain,
               // Errors replace the diagram so the comparison stays honest.
               child: MermaidDiagram(
                 source: _source,

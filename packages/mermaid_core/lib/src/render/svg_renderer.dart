@@ -32,14 +32,20 @@ String renderSceneToSvg(RenderScene scene) {
   if (bg != null && bg.alpha > 0) {
     b.write('<rect width="100%" height="100%" fill="${_color(bg)}"/>');
   }
+  final ids = _IdGen();
   for (final node in scene.nodes) {
-    _writeNode(b, node);
+    _writeNode(b, node, ids);
   }
   b.write('</svg>');
   return b.toString();
 }
 
-void _writeNode(StringBuffer b, SceneNode node) {
+class _IdGen {
+  int _n = 0;
+  String next() => 'g${_n++}';
+}
+
+void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
   switch (node) {
     case SceneGroup(:final id, :final semanticLabel, :final children):
       b.write('<g');
@@ -49,15 +55,35 @@ void _writeNode(StringBuffer b, SceneNode node) {
       }
       b.write('>');
       for (final c in children) {
-        _writeNode(b, c);
+        _writeNode(b, c, ids);
       }
       b.write('</g>');
 
     case SceneShape(:final geometry, :final fill, :final stroke):
       final paint = StringBuffer();
-      paint.write(' fill="${fill != null ? _color(fill.color) : 'none'}"');
-      if (fill != null && fill.color.alpha < 255 && fill.color.alpha > 0) {
-        paint.write(' fill-opacity="${_num(fill.color.alpha / 255)}"');
+      final gradient = fill?.gradient;
+      if (gradient != null) {
+        final gid = ids.next();
+        b
+          ..write('<linearGradient id="$gid" gradientUnits="userSpaceOnUse" ')
+          ..write('x1="${_num(gradient.from.x)}" y1="${_num(gradient.from.y)}" ')
+          ..write('x2="${_num(gradient.to.x)}" y2="${_num(gradient.to.y)}">');
+        for (var i = 0; i < gradient.colors.length; i++) {
+          final c = gradient.colors[i];
+          final off = gradient.colors.length == 1
+              ? 0.0
+              : i / (gradient.colors.length - 1);
+          b.write('<stop offset="${_num(off)}" stop-color="${_color(c)}"');
+          if (c.alpha < 255) b.write(' stop-opacity="${_num(c.alpha / 255)}"');
+          b.write('/>');
+        }
+        b.write('</linearGradient>');
+        paint.write(' fill="url(#$gid)"');
+      } else {
+        paint.write(' fill="${fill != null ? _color(fill.color) : 'none'}"');
+        if (fill != null && fill.color.alpha < 255 && fill.color.alpha > 0) {
+          paint.write(' fill-opacity="${_num(fill.color.alpha / 255)}"');
+        }
       }
       if (stroke != null) {
         paint

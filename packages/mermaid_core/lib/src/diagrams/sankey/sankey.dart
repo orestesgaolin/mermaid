@@ -243,6 +243,8 @@ RenderScene layoutSankey(
       final x1 = t.x;
       final cx = (x0 + x1) / 2;
       // Filled band: top edge L→R, down the right, bottom edge R→L, close.
+      // Fill is a left→right gradient from the source to the target color
+      // (like d3-sankey / upstream).
       ribbons.add(SceneShape(
         geometry: PathGeometry([
           MoveTo(Point(x0, sy)),
@@ -251,7 +253,14 @@ RenderScene layoutSankey(
           CubicTo(Point(cx, ty + lh), Point(cx, sy + lh), Point(x0, sy + lh)),
           const ClosePath(),
         ]),
-        fill: Fill(s.color.withOpacity(0.4)),
+        fill: Fill(
+          s.color.withOpacity(0.4),
+          gradient: SceneGradient(
+            Point(x0, 0),
+            Point(x1, 0),
+            [s.color.withOpacity(0.45), t.color.withOpacity(0.45)],
+          ),
+        ),
       ));
     }
   }

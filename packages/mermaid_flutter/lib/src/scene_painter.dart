@@ -3,6 +3,8 @@
 /// mermaid_core; this only maps IR primitives to dart:ui.
 library;
 
+import 'dart:ui' as ui;
+
 import 'package:flutter/widgets.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 
@@ -48,13 +50,19 @@ class ScenePainter extends CustomPainter {
     final path = _pathFromGeometry(shape.geometry);
 
     final fill = shape.fill;
-    if (fill != null && fill.color.alpha != 0) {
-      canvas.drawPath(
-        path,
-        Paint()
-          ..style = PaintingStyle.fill
-          ..color = Color(fill.color.value),
-      );
+    if (fill != null && (fill.gradient != null || fill.color.alpha != 0)) {
+      final paint = Paint()..style = PaintingStyle.fill;
+      final g = fill.gradient;
+      if (g != null) {
+        paint.shader = ui.Gradient.linear(
+          Offset(g.from.x, g.from.y),
+          Offset(g.to.x, g.to.y),
+          [for (final c in g.colors) Color(c.value)],
+        );
+      } else {
+        paint.color = Color(fill.color.value);
+      }
+      canvas.drawPath(path, paint);
     }
 
     final stroke = shape.stroke;
