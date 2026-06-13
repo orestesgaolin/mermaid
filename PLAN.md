@@ -201,10 +201,12 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   upstream theme-base. Dark theme paints no background (matches mermaid.js
   on-page look). Styled comparison samples on the website (dark, forest,
   custom variables, classDef).
-- [ ] Long tail (upstream has these, not yet ported): sankey, block,
-  packet, kanban, architecture, radar, treemap, and niche ones (cynefin,
-  eventmodeling, ishikawa, railroad, swimlanes, venn, wardley, zenuml).
-  gitGraph (previously listed) is now done.
+- [x] **Sankey** (`diagrams/sankey/sankey.dart`) — CSV parser, longest-path
+  layering into columns, flow-proportional node sizing + bezier-ribbon links.
+  3 demo fixtures, 5 tests.
+- [ ] Long tail still to port: block, packet, kanban, architecture, radar,
+  treemap, and niche ones (cynefin, eventmodeling, ishikawa, railroad,
+  swimlanes, venn, wardley, zenuml). gitGraph + sankey now done.
 - [ ] Frontmatter `config.themeVariables` (nested YAML) not yet parsed.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
   into a shared edges util (3 copies now).
