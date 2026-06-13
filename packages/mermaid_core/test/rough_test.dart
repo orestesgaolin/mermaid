@@ -69,8 +69,11 @@ void main() {
           .whereType<SceneShape>()
           .where((s) => s.geometry is PathGeometry)
           .toList();
-      expect(paths.length, greaterThan(2));
+      // Filled + stroked rect → a hachure fill path + a sketchy outline path.
+      expect(paths.length, greaterThanOrEqualTo(2));
       expect(paths.every((s) => s.stroke != null), isTrue);
+      // No plain Fill rects survive — everything is stroked sketch.
+      expect(flat.whereType<SceneShape>().where((s) => s.fill != null), isEmpty);
     });
 
     test('is deterministic for a given seed', () {
