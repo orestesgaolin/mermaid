@@ -72,6 +72,45 @@ void main() {
           .join();
       expect(texts.contains('π'), isTrue);
     });
+
+    test(r'\text keeps literal spaces', () {
+      final ml = layoutMath(r'\text{if x}', style, measurer, black);
+      final texts =
+          flatten(ml.render(const Point(0, 0))).whereType<SceneText>();
+      expect(texts.map((t) => t.text), contains('if x'));
+    });
+
+    test(r'\begin{cases} renders rows, columns and a brace', () {
+      final ml = layoutMath(
+          r'\begin{cases} a &x \\ b &y \end{cases}', style, measurer, black);
+      final nodes = ml.render(const Point(0, 0));
+      final texts =
+          flatten(nodes).whereType<SceneText>().map((t) => t.text).toSet();
+      expect(texts.containsAll({'a', 'x', 'b', 'y'}), isTrue);
+      // The brace is a stroked path.
+      expect(
+          flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null),
+          isNotEmpty);
+    });
+
+    test(r'\begin{bmatrix} renders all cells', () {
+      final ml = layoutMath(
+          r'\begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}', style, measurer, black);
+      final texts = flatten(ml.render(const Point(0, 0)))
+          .whereType<SceneText>()
+          .map((t) => t.text)
+          .toSet();
+      expect(texts.containsAll({'1', '2', '3', '4'}), isTrue);
+    });
+
+    test(r'\overbrace composes with a ^ label', () {
+      final ml = layoutMath(
+          r'\overbrace{a+b}^{\text{sum}}', style, measurer, black);
+      final texts = flatten(ml.render(const Point(0, 0)))
+          .whereType<SceneText>()
+          .map((t) => t.text);
+      expect(texts, contains('sum'));
+    });
   });
 
   group('flowchart integration', () {

@@ -113,12 +113,14 @@ flowchart LR
     C --> D@{ icon: "icon:star", label: "Done" }
 '''),
   Sample('math', 'Math', cDiagrams,
-      'LaTeX math in labels with `\$\$...\$\$` — superscripts, fractions, '
-          'roots and symbols, laid out as scene primitives.', r'''
-graph LR
-    A["$$x^2$$"] --> B("$$\frac{1}{2}$$")
-    B --> C("$$\pi r^2$$")
-    C --> D["$$E = mc^2$$"]
+      'LaTeX math in node and edge labels with `\$\$...\$\$` — superscripts, '
+          'fractions, roots, braces, cases and matrices, all laid out as '
+          'scene primitives (no webview).', r'''
+graph TD
+    A["$$x^2$$"] -->|"$$\sqrt{x+3}$$"| B("$$\frac{1}{2}$$")
+    A -->|"$$\overbrace{a+b+c}^{\text{note}}$$"| C("$$\pi r^2$$")
+    B --> D("$$x = \begin{cases} a &\text{if } b \\ c &\text{if } d \end{cases}$$")
+    C --> E("$$\begin{bmatrix} -\cos t + \sin t \\ 2\cos t \end{bmatrix}$$")
 '''),
   Sample('git', 'Git graph', cDiagrams,
       'Git branching and merging visualised as commits flowing across '

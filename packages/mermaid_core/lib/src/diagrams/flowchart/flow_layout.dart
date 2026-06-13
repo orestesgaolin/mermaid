@@ -351,13 +351,22 @@ _Fragment _layoutGraph(
   }
 
   final edgeLabelSizes = <int, Size>{};
+  final edgeMath = <int, MathLayout>{};
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
     if (isAbsorbedEdge(e)) continue;
     Size? labelSize;
     final label = e.label;
     if (label != null && label.isNotEmpty) {
-      labelSize = measurer.measure(label, baseStyle, maxWidth: _wrappingWidth);
+      final mathSrc = wholeMath(label);
+      if (mathSrc != null) {
+        final ml = layoutMath(mathSrc, baseStyle, measurer, theme.textColor);
+        edgeMath[i] = ml;
+        labelSize = ml.size;
+      } else {
+        labelSize =
+            measurer.measure(label, baseStyle, maxWidth: _wrappingWidth);
+      }
       edgeLabelSizes[i] = labelSize;
     }
     final (from, clusterFrom) = resolveEndpoint(e.from);
@@ -514,7 +523,8 @@ _Fragment _layoutGraph(
       final labelSize = edgeLabelSizes[i];
       if (labelSize != null) {
         edgeLabelGroups.add(_edgeLabelGroup(
-            e, i, labelCenter, labelSize, baseStyle, theme));
+            e, i, labelCenter, labelSize, baseStyle, theme,
+            math: edgeMath[i]));
       }
       continue;
     }
@@ -573,8 +583,9 @@ _Fragment _layoutGraph(
       final labelCenter = (dagreEdge.labelX != null && dagreEdge.labelY != null)
           ? Point(dagreEdge.labelX!, dagreEdge.labelY!)
           : _pathMidpoint(points);
-      edgeLabelGroups.add(
-          _edgeLabelGroup(e, i, labelCenter, labelSize, baseStyle, theme));
+      edgeLabelGroups.add(_edgeLabelGroup(
+          e, i, labelCenter, labelSize, baseStyle, theme,
+          math: edgeMath[i]));
     }
   }
 
@@ -645,8 +656,9 @@ SceneGroup _edgeLabelGroup(
   Point labelCenter,
   Size labelSize,
   TextStyleSpec baseStyle,
-  MermaidTheme theme,
-) {
+  MermaidTheme theme, {
+  MathLayout? math,
+}) {
   const pad = 2.0;
   final bg = Rect.fromCenter(
       labelCenter, labelSize.width + 2 * pad, labelSize.height + 2 * pad);
@@ -657,12 +669,18 @@ SceneGroup _edgeLabelGroup(
         geometry: RectGeometry(bg, rx: 2, ry: 2),
         fill: Fill(theme.edgeLabelBackground),
       ),
-      SceneText(
-        text: e.label!,
-        bounds: Rect.fromCenter(labelCenter, labelSize.width, labelSize.height),
-        style: baseStyle,
-        color: theme.textColor,
-      ),
+      if (math != null)
+        ...math.render(Point(
+            labelCenter.x - math.size.width / 2,
+            labelCenter.y - math.size.height / 2))
+      else
+        SceneText(
+          text: e.label!,
+          bounds:
+              Rect.fromCenter(labelCenter, labelSize.width, labelSize.height),
+          style: baseStyle,
+          color: theme.textColor,
+        ),
     ],
   );
 }

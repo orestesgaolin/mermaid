@@ -189,9 +189,55 @@ _Box _atom(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
   if (tok == r'\sqrt') {
     return _sqrt(_atom(lx, style, m, color), style, m, color);
   }
+  if (tok == r'\text' || tok == r'\mathrm' || tok == r'\operatorname') {
+    return _glyph(_readRawBrace(lx), style, m, color);
+  }
+  if (tok == r'\overbrace') {
+    return _brace(_atom(lx, style, m, color), style, m, color, over: true);
+  }
+  if (tok == r'\underbrace') {
+    return _brace(_atom(lx, style, m, color), style, m, color, over: false);
+  }
+  if (tok == r'\vec' || tok == r'\hat' || tok == r'\bar' || tok == r'\overline') {
+    return _accent(_atom(lx, style, m, color), tok, style, color);
+  }
+  if (tok == r'\begin') {
+    return _parseEnv(lx, _readRawBrace(lx), style, m, color);
+  }
+  if (tok == r'\left' || tok == r'\right') {
+    // Consume the delimiter char; size-matching delimiters are approximated by
+    // their plain glyph (full \left\right auto-sizing is a known gap).
+    final d = lx.next();
+    if (d == '.') return _glyph('', style, m, color); // \left. = invisible
+    return _glyph(d.startsWith(r'\') ? (_symbols[d] ?? d.substring(1)) : d,
+        style, m, color);
+  }
   final sym = _symbols[tok];
   final text = sym ?? (tok.startsWith(r'\') ? tok.substring(1) : tok);
   return _glyph(text, style, m, color);
+}
+
+/// Reads a `{...}` group as a literal string (spaces preserved, braces
+/// balanced), or a single token if no brace follows. Used by `\text`.
+String _readRawBrace(_Lexer lx) {
+  while (lx.peek() == ' ') {
+    lx.next();
+  }
+  if (lx.peek() != '{') return lx.next();
+  lx.next(); // consume '{'
+  final sb = StringBuffer();
+  var depth = 1;
+  while (!lx.atEnd) {
+    final c = lx.s[lx.i++];
+    if (c == '{') {
+      depth++;
+    } else if (c == '}') {
+      depth--;
+      if (depth == 0) break;
+    }
+    sb.write(c);
+  }
+  return sb.toString();
 }
 
 TextStyleSpec _scriptStyle(TextStyleSpec s) =>
@@ -258,5 +304,263 @@ _Box _sqrt(_Box inner, TextStyleSpec style, TextMeasurer m, Color color) {
       stroke: Stroke(color: color, width: math.max(1, style.fontSize * 0.06)),
     ));
     inner.paint(ix, baseline, out);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Environments: \begin{matrix|bmatrix|pmatrix|vmatrix|Bmatrix|cases} ...
+// rows separated by `\\`, columns by `&`.
+// ---------------------------------------------------------------------------
+
+/// A row within an environment, stopping (without consuming) at `&`, `\\` or
+/// `\end`.
+_Box _cellRow(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
+  final atoms = <_Box>[];
+  while (!lx.atEnd) {
+    while (lx.peek() == ' ') {
+      lx.next();
+    }
+    final save = lx.i;
+    final tok = lx.next();
+    if (tok.isEmpty ||
+        tok == '&' ||
+        tok == r'\\' ||
+        tok == r'\end' ||
+        tok == '}') {
+      lx.i = save;
+      break;
+    }
+    if (tok == '^' || tok == '_') {
+      final script = _atom(lx, _scriptStyle(style), m, color);
+      final base =
+          atoms.isNotEmpty ? atoms.removeLast() : _glyph('', style, m, color);
+      atoms.add(
+          tok == '^' ? _superscript(base, script) : _subscript(base, script));
+      continue;
+    }
+    lx.i = save;
+    atoms.add(_atom(lx, style, m, color));
+  }
+  return _hbox(atoms);
+}
+
+_Box _parseEnv(
+    _Lexer lx, String env, TextStyleSpec style, TextMeasurer m, Color color) {
+  final rows = <List<_Box>>[<_Box>[]];
+  while (!lx.atEnd) {
+    rows.last.add(_cellRow(lx, style, m, color));
+    while (lx.peek() == ' ') {
+      lx.next();
+    }
+    final tok = lx.next();
+    if (tok == r'\end') {
+      _readRawBrace(lx);
+      break;
+    } else if (tok == r'\\') {
+      rows.add(<_Box>[]);
+    } else if (tok == '&') {
+      continue;
+    } else if (tok.isEmpty) {
+      break;
+    }
+  }
+  // Drop a trailing empty row (from a final `\\`).
+  if (rows.length > 1 && rows.last.length == 1 && rows.last.first.width == 0) {
+    rows.removeLast();
+  }
+  return _matrix(rows, env, style, color);
+}
+
+const _delims = <String, (String, String)>{
+  'bmatrix': ('[', ']'),
+  'pmatrix': ('(', ')'),
+  'vmatrix': ('|', '|'),
+  'Vmatrix': ('|', '|'),
+  'Bmatrix': ('{', '}'),
+  'matrix': ('', ''),
+  'array': ('', ''),
+  'cases': ('{', ''),
+};
+
+_Box _matrix(
+    List<List<_Box>> rows, String env, TextStyleSpec style, Color color) {
+  final (left, right) = _delims[env] ?? ('', '');
+  final leftAlign = env == 'cases';
+  final ncols = rows.fold(0, (a, r) => math.max(a, r.length));
+  final colW = List<double>.filled(ncols, 0);
+  for (final r in rows) {
+    for (var j = 0; j < r.length; j++) {
+      colW[j] = math.max(colW[j], r[j].width);
+    }
+  }
+  final rowAsc = [for (final r in rows) r.fold(0.0, (a, c) => math.max(a, c.ascent))];
+  final rowDesc =
+      [for (final r in rows) r.fold(0.0, (a, c) => math.max(a, c.descent))];
+  const colGap = 10.0;
+  const rowGap = 6.0;
+  final contentW =
+      colW.fold(0.0, (a, b) => a + b) + colGap * (ncols - 1).clamp(0, 1000);
+  var contentH = rowGap * (rows.length - 1).clamp(0, 1000);
+  for (var i = 0; i < rows.length; i++) {
+    contentH += rowAsc[i] + rowDesc[i];
+  }
+  final delimW = (left.isEmpty ? 0.0 : style.fontSize * 0.32) +
+      (right.isEmpty ? 0.0 : style.fontSize * 0.32);
+  const pad = 4.0;
+  final totalW = contentW + delimW + pad * 2;
+  final half = contentH / 2;
+
+  return _Box(totalW, half, half, (x, baseline, out) {
+    final top = baseline - half;
+    final leftDelimW = left.isEmpty ? 0.0 : style.fontSize * 0.32;
+    final contentX = x + leftDelimW + pad;
+    if (left.isNotEmpty) {
+      _drawDelim(left, x, top, leftDelimW, contentH, true, color, out);
+    }
+    if (right.isNotEmpty) {
+      final rdw = style.fontSize * 0.32;
+      _drawDelim(right, x + totalW - rdw, top, rdw, contentH, false, color, out);
+    }
+    var cy = top;
+    for (var i = 0; i < rows.length; i++) {
+      var cx = contentX;
+      final cellBaseline = cy + rowAsc[i];
+      for (var j = 0; j < ncols; j++) {
+        if (j < rows[i].length) {
+          final cell = rows[i][j];
+          final cellX = leftAlign ? cx : cx + (colW[j] - cell.width) / 2;
+          cell.paint(cellX, cellBaseline, out);
+        }
+        cx += colW[j] + colGap;
+      }
+      cy += rowAsc[i] + rowDesc[i] + rowGap;
+    }
+  });
+}
+
+/// Draws a sized delimiter (bracket/paren/bar/brace) into [out].
+void _drawDelim(String kind, double x, double top, double w, double h,
+    bool isLeft, Color color, List<SceneNode> out) {
+  final sw = 1.3;
+  final b = top + h;
+  void path(List<PathCommand> cmds) => out.add(SceneShape(
+      geometry: PathGeometry(cmds), stroke: Stroke(color: color, width: sw)));
+  switch (kind) {
+    case '[':
+      path([
+        MoveTo(Point(x + w, top)),
+        LineTo(Point(x + 1, top)),
+        LineTo(Point(x + 1, b)),
+        LineTo(Point(x + w, b)),
+      ]);
+    case ']':
+      path([
+        MoveTo(Point(x, top)),
+        LineTo(Point(x + w - 1, top)),
+        LineTo(Point(x + w - 1, b)),
+        LineTo(Point(x, b)),
+      ]);
+    case '|':
+      final cx = x + w / 2;
+      path([MoveTo(Point(cx, top)), LineTo(Point(cx, b))]);
+    case '(':
+      path([
+        MoveTo(Point(x + w, top)),
+        CubicTo(Point(x, top + h * 0.25), Point(x, top + h * 0.75),
+            Point(x + w, b)),
+      ]);
+    case ')':
+      path([
+        MoveTo(Point(x, top)),
+        CubicTo(Point(x + w, top + h * 0.25), Point(x + w, top + h * 0.75),
+            Point(x, b)),
+      ]);
+    case '{':
+      final mid = top + h / 2;
+      final r = x + w;
+      path([
+        MoveTo(Point(r, top)),
+        CubicTo(Point(x + w * 0.5, top + h * 0.1), Point(x + w * 0.5, mid - h * 0.1),
+            Point(x, mid)),
+        CubicTo(Point(x + w * 0.5, mid + h * 0.1), Point(x + w * 0.5, b - h * 0.1),
+            Point(r, b)),
+      ]);
+    case '}':
+      final mid = top + h / 2;
+      path([
+        MoveTo(Point(x, top)),
+        CubicTo(Point(x + w * 0.5, top + h * 0.1), Point(x + w * 0.5, mid - h * 0.1),
+            Point(x + w, mid)),
+        CubicTo(Point(x + w * 0.5, mid + h * 0.1), Point(x + w * 0.5, b - h * 0.1),
+            Point(x, b)),
+      ]);
+  }
+}
+
+/// A horizontal brace over/under [inner], with the body kept on the baseline.
+/// `^{label}` / `_{label}` then compose above/below via the row parser.
+_Box _brace(_Box inner, TextStyleSpec style, TextMeasurer m, Color color,
+    {required bool over}) {
+  final braceH = style.fontSize * 0.28;
+  const gap = 2.0;
+  final ascent = over ? inner.ascent + gap + braceH : inner.ascent;
+  final descent = over ? inner.descent : inner.descent + gap + braceH;
+  return _Box(inner.width, ascent, descent, (x, baseline, out) {
+    inner.paint(x, baseline, out);
+    final w = inner.width;
+    final mid = x + w / 2;
+    final y = over ? baseline - inner.ascent - gap : baseline + inner.descent + gap;
+    final tip = over ? y - braceH : y + braceH;
+    // Two curves meeting at a center tip — a horizontal curly brace.
+    out.add(SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(x, y)),
+        CubicTo(Point(x + w * 0.2, y), Point(mid - w * 0.1, tip),
+            Point(mid, tip)),
+        CubicTo(Point(mid + w * 0.1, tip), Point(x + w * 0.8, y),
+            Point(x + w, y)),
+      ]),
+      stroke: Stroke(color: color, width: math.max(1, style.fontSize * 0.05)),
+    ));
+  });
+}
+
+/// An accent (`\vec`, `\hat`, `\bar`, `\overline`) drawn above [inner].
+_Box _accent(_Box inner, String kind, TextStyleSpec style, Color color) {
+  const gap = 1.5;
+  final h = style.fontSize * 0.18;
+  return _Box(inner.width, inner.ascent + gap + h, inner.descent,
+      (x, baseline, out) {
+    inner.paint(x, baseline, out);
+    final y = baseline - inner.ascent - gap;
+    final w = inner.width;
+    final sw = math.max(1.0, style.fontSize * 0.06);
+    switch (kind) {
+      case r'\vec':
+        out.add(SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(x, y)),
+            LineTo(Point(x + w, y)),
+            LineTo(Point(x + w - 3, y - 2)),
+            MoveTo(Point(x + w, y)),
+            LineTo(Point(x + w - 3, y + 2)),
+          ]),
+          stroke: Stroke(color: color, width: sw),
+        ));
+      case r'\hat':
+        out.add(SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(x + w / 2 - 3, y + 2)),
+            LineTo(Point(x + w / 2, y - 2)),
+            LineTo(Point(x + w / 2 + 3, y + 2)),
+          ]),
+          stroke: Stroke(color: color, width: sw),
+        ));
+      default: // \bar, \overline
+        out.add(SceneShape(
+          geometry: PathGeometry([MoveTo(Point(x, y)), LineTo(Point(x + w, y))]),
+          stroke: Stroke(color: color, width: sw),
+        ));
+    }
   });
 }
