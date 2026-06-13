@@ -43,6 +43,9 @@ class C4Node {
     this.description = '',
     this.technology = '',
     this.boundary,
+    this.bgColor,
+    this.fontColor,
+    this.borderColor,
   });
 
   final String id;
@@ -51,6 +54,24 @@ class C4Node {
   final String description;
   final String technology;
   final String? boundary;
+
+  /// `UpdateElementStyle` overrides ($bgColor / $fontColor / $borderColor).
+  final Color? bgColor;
+  final Color? fontColor;
+  final Color? borderColor;
+
+  C4Node copyWith({Color? bgColor, Color? fontColor, Color? borderColor}) =>
+      C4Node(
+        id: id,
+        kind: kind,
+        label: label,
+        description: description,
+        technology: technology,
+        boundary: boundary,
+        bgColor: bgColor ?? this.bgColor,
+        fontColor: fontColor ?? this.fontColor,
+        borderColor: borderColor ?? this.borderColor,
+      );
 }
 
 class C4Boundary {
@@ -68,6 +89,8 @@ class C4Rel {
     required this.label,
     this.technology = '',
     this.bidirectional = false,
+    this.textColor,
+    this.lineColor,
   });
 
   final String from;
@@ -75,6 +98,20 @@ class C4Rel {
   final String label;
   final String technology;
   final bool bidirectional;
+
+  /// `UpdateRelStyle` overrides ($textColor / $lineColor).
+  final Color? textColor;
+  final Color? lineColor;
+
+  C4Rel copyWith({Color? textColor, Color? lineColor}) => C4Rel(
+        from: from,
+        to: to,
+        label: label,
+        technology: technology,
+        bidirectional: bidirectional,
+        textColor: textColor ?? this.textColor,
+        lineColor: lineColor ?? this.lineColor,
+      );
 }
 
 C4Diagram parseC4Diagram(String source) {
@@ -216,7 +253,34 @@ C4Diagram parseC4Diagram(String source) {
         ));
         continue;
       }
-      // UpdateRelStyle / UpdateElementStyle / LAYOUT hints: ignored.
+      // UpdateElementStyle(id, $bgColor=, $fontColor=, $borderColor=).
+      if (fn == 'UpdateElementStyle' && a.isNotEmpty) {
+        final kv = _styleArgs(a.skip(1));
+        final id = a[0];
+        final node = nodes[id];
+        if (node != null) {
+          nodes[id] = node.copyWith(
+            bgColor: Color.tryParse(kv['bgColor'] ?? ''),
+            fontColor: Color.tryParse(kv['fontColor'] ?? ''),
+            borderColor: Color.tryParse(kv['borderColor'] ?? ''),
+          );
+        }
+        continue;
+      }
+      // UpdateRelStyle(from, to, $textColor=, $lineColor=, ...).
+      if (fn == 'UpdateRelStyle' && a.length >= 2) {
+        final kv = _styleArgs(a.skip(2));
+        for (var r = 0; r < rels.length; r++) {
+          if (rels[r].from == a[0] && rels[r].to == a[1]) {
+            rels[r] = rels[r].copyWith(
+              textColor: Color.tryParse(kv['textColor'] ?? ''),
+              lineColor: Color.tryParse(kv['lineColor'] ?? ''),
+            );
+          }
+        }
+        continue;
+      }
+      // Other Update* / LAYOUT hints: ignored.
       if (fn.startsWith('Update') || fn.toUpperCase().startsWith('LAYOUT')) {
         continue;
       }
@@ -229,6 +293,23 @@ C4Diagram parseC4Diagram(String source) {
   }
   return C4Diagram(
       nodes: nodes, boundaries: boundaries, rels: rels, title: title);
+}
+
+/// Parses `$key="value"` / `$key=value` style args into a map (key without
+/// the leading `$`).
+Map<String, String> _styleArgs(Iterable<String> args) {
+  final out = <String, String>{};
+  for (final a in args) {
+    final m = RegExp(r'^\$?(\w+)\s*=\s*(.*)$').firstMatch(a.trim());
+    if (m != null) {
+      var v = m.group(2)!.trim();
+      if (v.length >= 2 && v.startsWith('"') && v.endsWith('"')) {
+        v = v.substring(1, v.length - 1);
+      }
+      out[m.group(1)!] = v;
+    }
+  }
+  return out;
 }
 
 // Upstream C4 default colors.
@@ -367,16 +448,17 @@ RenderScene layoutC4Diagram(
     final dir = _dir(pts[pts.length - 2], tip);
     pts[pts.length - 1] = tip - dir * 9;
     final perp = Point(-dir.y, dir.x);
+    final lineCol = r.lineColor ?? const Color(0xff666666);
     final children = <SceneNode>[
       SceneShape(
         geometry: PathGeometry(
             [MoveTo(pts.first), for (final p in pts.skip(1)) LineTo(p)]),
-        stroke: const Stroke(color: Color(0xff666666), width: 1.4, dash: [5, 3]),
+        stroke: Stroke(color: lineCol, width: 1.4, dash: const [5, 3]),
       ),
       SceneShape(
         geometry: PolygonGeometry(
             [tip, tip - dir * 10 + perp * 4.5, tip - dir * 10 - perp * 4.5]),
-        fill: const Fill(Color(0xff666666)),
+        fill: Fill(lineCol),
       ),
     ];
     if (r.bidirectional) {
@@ -388,7 +470,7 @@ RenderScene layoutC4Diagram(
           start - sdir * 10 + Point(-sdir.y, sdir.x) * 4.5,
           start - sdir * 10 - Point(-sdir.y, sdir.x) * 4.5,
         ]),
-        fill: const Fill(Color(0xff666666)),
+        fill: Fill(lineCol),
       ));
     }
     edgeNodes.add(SceneGroup(
@@ -406,7 +488,7 @@ RenderScene layoutC4Diagram(
           text: r.label,
           bounds: Rect.fromCenter(mid, size.width, size.height),
           style: descStyle,
-          color: const Color(0xff444444),
+          color: r.textColor ?? const Color(0xff444444),
         ),
       ]));
     }
@@ -415,13 +497,16 @@ RenderScene layoutC4Diagram(
   diagram.nodes.forEach((id, n) {
     final (size, labelSize, descSize) = boxes[id]!;
     final rect = Rect.fromCenter(centers[id]!, size.width, size.height);
-    final fill = switch (n.kind) {
-      C4Kind.person => _personFill,
-      C4Kind.personExt || C4Kind.systemExt => _extFill,
-      C4Kind.system || C4Kind.db || C4Kind.queue => _systemFill,
-      C4Kind.container => _containerFill,
-      C4Kind.component => _componentFill,
-    };
+    final fill = n.bgColor ??
+        switch (n.kind) {
+          C4Kind.person => _personFill,
+          C4Kind.personExt || C4Kind.systemExt => _extFill,
+          C4Kind.system || C4Kind.db || C4Kind.queue => _systemFill,
+          C4Kind.container => _containerFill,
+          C4Kind.component => _componentFill,
+        };
+    final border = n.borderColor ?? fill;
+    final labelColor = n.fontColor ?? _white;
     final isPerson = n.kind == C4Kind.person || n.kind == C4Kind.personExt;
     final bodyTop = rect.top + (isPerson ? 22.0 : 0.0);
     final children = <SceneNode>[
@@ -431,7 +516,7 @@ RenderScene layoutC4Diagram(
             rx: 8,
             ry: 8),
         fill: Fill(fill),
-        stroke: Stroke(color: fill, width: 1),
+        stroke: Stroke(color: border, width: 1),
       ),
       if (isPerson)
         SceneShape(
@@ -444,7 +529,7 @@ RenderScene layoutC4Diagram(
         bounds: Rect.fromLTWH(rect.center.x - labelSize.width / 2,
             bodyTop + 8, labelSize.width, labelSize.height),
         style: labelStyle,
-        color: _white,
+        color: labelColor,
       ),
       if (descSize.height > 0)
         SceneText(
