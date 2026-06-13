@@ -1,39 +1,67 @@
-<!--
-This README describes the package. If you publish this package to pub.dev,
-this README's contents appear on the landing page for your package.
+# mermaid_core
 
-For information about how to write a good package README, see the guide for
-[writing package pages](https://dart.dev/tools/pub/writing-package-pages).
+A **pure Dart** port of [mermaid.js](https://github.com/mermaid-js/mermaid):
+it detects, parses and lays out diagrams into a backend-agnostic *render
+scene*, then renders that scene to SVG. No Flutter dependency — pair it with
+`mermaid_flutter` for native Flutter painting, or use the built-in SVG
+renderer and CLI anywhere Dart runs.
 
-For general information about developing packages, see the Dart guide for
-[creating packages](https://dart.dev/tools/pub/create-packages)
-and the Flutter guide for
-[developing packages and plugins](https://flutter.dev/to/develop-packages).
--->
+## Supported diagrams (15)
 
-TODO: Put a short description of the package here that helps potential users
-know whether this package might be useful for them.
+flowchart · sequence · class · state · ER · pie · gantt · quadrant ·
+journey · timeline · xychart · mindmap · requirement · C4 · gitGraph
 
-## Features
+Plus: `%%{init}%%` / frontmatter theme directives (default/dark/forest/
+neutral + `themeVariables`), the hand-drawn `look: handDrawn` style (a
+faithful roughjs port), iconify-style **icons** on flowchart nodes
+(`@{ icon: "pack:name" }`), and **math** in labels (`$$...$$` — a TeX subset:
+super/subscripts, `\frac`, `\sqrt`, matrices, `cases`, braces, accents).
 
-TODO: List what your package can do. Maybe include images, gifs, or videos.
-
-## Getting started
-
-TODO: List prerequisites and provide or point to information on how to
-start using the package.
-
-## Usage
-
-TODO: Include short and useful examples for package users. Add longer examples
-to `/example` folder.
+## Library usage
 
 ```dart
-const like = 'sample';
+import 'package:mermaid_core/mermaid_core.dart';
+
+void main() {
+  const mermaid = Mermaid(measurer: ApproximateTextMeasurer());
+  final scene = mermaid.render('''
+graph TD
+  A[Start] --> B{Works?}
+  B -->|yes| C[Ship it]
+  B -->|no| A
+''');
+  print(renderSceneToSvg(scene)); // SVG string
+}
 ```
 
-## Additional information
+`render()` returns a `RenderScene` (groups of shapes/text in absolute
+coordinates). `renderSceneToSvg()` turns it into an SVG string; a Flutter
+backend can paint the same scene directly.
 
-TODO: Tell users more about the package: where to find more information, how to
-contribute to the package, how to file issues, what response they can expect
-from the package authors, and more.
+> **Text measurement.** `ApproximateTextMeasurer` uses Helvetica metrics —
+> good for SVG and tests. For pixel-accurate layout in a Flutter app, use the
+> `TextPainter`-backed measurer from `mermaid_flutter`.
+
+## Command-line tool
+
+```console
+$ dart pub global activate mermaid_core
+$ mermaid_dart diagram.mmd -o out.svg
+$ mermaid_dart diagram.mmd -o out.png        # format inferred from extension
+$ cat diagram.mmd | mermaid_dart --theme dark
+```
+
+PNG output pipes the SVG through the first rasterizer found on `PATH`
+(`rsvg-convert`, `resvg`, or ImageMagick `magick`/`convert`).
+
+## Fidelity
+
+Validated against 178 upstream mermaid demo fixtures, and compared
+side-by-side with mermaid.js in the browser. Known deltas are tracked in the
+project's `PLAN.md` (e.g. KaTeX math fonts, ELK layout engine).
+
+## Licensing
+
+MIT. This is a port of mermaid.js (MIT). It vendors a derivative of
+`dart_dagre` (Apache-2.0) under `lib/src/vendor/dagre/`, which keeps its own
+`LICENSE`.
