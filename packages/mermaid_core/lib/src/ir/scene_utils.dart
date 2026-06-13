@@ -66,7 +66,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
         ),
       SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
           geometry: translateGeometry(geometry, dx, dy),
-          fill: fill,
+          fill: _translateFill(fill, dx, dy),
           stroke: stroke,
         ),
       SceneText(
@@ -84,6 +84,20 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
           align: align,
         ),
     };
+
+/// Translates a fill's gradient coordinates (a solid fill is returned as-is).
+Fill? _translateFill(Fill? fill, double dx, double dy) {
+  final g = fill?.gradient;
+  if (fill == null || g == null) return fill;
+  return Fill(
+    fill.color,
+    gradient: SceneGradient(
+      Point(g.from.x + dx, g.from.y + dy),
+      Point(g.to.x + dx, g.to.y + dy),
+      g.colors,
+    ),
+  );
+}
 
 ShapeGeometry translateGeometry(ShapeGeometry g, double dx, double dy) {
   Point t(Point p) => Point(p.x + dx, p.y + dy);
