@@ -103,6 +103,26 @@ void main() {
       expect(texts.containsAll({'1', '2', '3', '4'}), isTrue);
     });
 
+    test(r'\left( ... \right) sizes delimiters (stroked paths)', () {
+      final ml =
+          layoutMath(r'\left(\frac{a}{b}\right)', style, measurer, black);
+      final nodes = ml.render(const Point(0, 0));
+      // Two delimiter paths (left paren + right paren) plus the frac rule.
+      final strokes =
+          flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null);
+      expect(strokes.length, greaterThanOrEqualTo(3));
+    });
+
+    test('function names render upright', () {
+      final ml = layoutMath(r'\sin t', style, measurer, black);
+      final texts =
+          flatten(ml.render(const Point(0, 0))).whereType<SceneText>();
+      // 'sin' is one upright (non-italic) run; 't' is italic.
+      final sin = texts.firstWhere((t) => t.text == 'sin');
+      expect(sin.style.italic, isFalse);
+      expect(texts.any((t) => t.text == 't' && t.style.italic), isTrue);
+    });
+
     test(r'\overbrace composes with a ^ label', () {
       final ml = layoutMath(
           r'\overbrace{a+b}^{\text{sum}}', style, measurer, black);

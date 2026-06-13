@@ -206,13 +206,15 @@ _Box _atom(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
   if (tok == r'\begin') {
     return _parseEnv(lx, _readRawBrace(lx), style, m, color);
   }
-  if (tok == r'\left' || tok == r'\right') {
-    // Consume the delimiter char; size-matching delimiters are approximated by
-    // their plain glyph (full \left\right auto-sizing is a known gap).
-    final d = lx.next();
-    if (d == '.') return _glyph('', style, m, color); // \left. = invisible
-    return _glyph(d.startsWith(r'\') ? (_symbols[d] ?? d.substring(1)) : d,
-        style, m, color);
+  if (tok == r'\left') {
+    return _leftRight(lx, style, m, color);
+  }
+  if (_functions.contains(tok)) {
+    // Function names render upright with a thin trailing space (KaTeX).
+    return _hbox([
+      _glyph(tok.substring(1), style, m, color),
+      _Box(style.fontSize * 0.16, 0, 0, (a, b, c) {}),
+    ]);
   }
   final sym = _symbols[tok];
   final text = sym ?? (tok.startsWith(r'\') ? tok.substring(1) : tok);
@@ -222,6 +224,70 @@ _Box _atom(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
       RegExp(r'[A-Za-zα-ω]').hasMatch(text) &&
       !(tok.startsWith(r'\') && sym == null);
   return _glyph(text, style, m, color, italic: isVar);
+}
+
+const _functions = {
+  r'\sin', r'\cos', r'\tan', r'\cot', r'\sec', r'\csc', r'\log', r'\ln',
+  r'\exp', r'\lim', r'\min', r'\max', r'\det', r'\gcd', r'\deg', r'\arg',
+  r'\sinh', r'\cosh', r'\tanh',
+};
+
+/// Maps a `\left`/`\right` delimiter token to the char `_drawDelim` knows;
+/// `.` is the null (invisible) delimiter.
+String _delimChar(String tok) => switch (tok) {
+      '.' => '',
+      r'\{' || r'\lbrace' => '{',
+      r'\}' || r'\rbrace' => '}',
+      r'\langle' => '(',
+      r'\rangle' => ')',
+      r'\lvert' || r'\vert' || r'\|' || r'\rvert' => '|',
+      _ => tok.startsWith(r'\') ? '' : tok,
+    };
+
+/// `\left<d> ... \right<d>`: content flanked by delimiters auto-sized to its
+/// height (drawn as paths via [_drawDelim]).
+_Box _leftRight(
+    _Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
+  final left = _delimChar(lx.next());
+  final atoms = <_Box>[];
+  var right = '';
+  while (!lx.atEnd) {
+    while (lx.peek() == ' ') {
+      lx.next();
+    }
+    final save = lx.i;
+    final tok = lx.next();
+    if (tok == r'\right') {
+      right = _delimChar(lx.next());
+      break;
+    }
+    if (tok.isEmpty) break;
+    if (tok == '^' || tok == '_') {
+      final script = _atom(lx, _scriptStyle(style), m, color);
+      final base =
+          atoms.isNotEmpty ? atoms.removeLast() : _glyph('', style, m, color);
+      atoms.add(
+          tok == '^' ? _superscript(base, script) : _subscript(base, script));
+      continue;
+    }
+    lx.i = save;
+    atoms.add(_atom(lx, style, m, color));
+  }
+  final inner = _hbox(atoms);
+  const padY = 2.0;
+  final dw = style.fontSize * 0.3;
+  final lw = left.isEmpty ? 0.0 : dw;
+  final rw = right.isEmpty ? 0.0 : dw;
+  final h = inner.ascent + inner.descent + padY * 2;
+  return _Box(inner.width + lw + rw, inner.ascent + padY, inner.descent + padY,
+      (x, baseline, out) {
+    final top = baseline - inner.ascent - padY;
+    if (left.isNotEmpty) _drawDelim(left, x, top, lw, h, true, color, out);
+    inner.paint(x + lw, baseline, out);
+    if (right.isNotEmpty) {
+      _drawDelim(right, x + lw + inner.width, top, rw, h, false, color, out);
+    }
+  });
 }
 
 /// Reads a `{...}` group as a literal string (spaces preserved, braces
