@@ -17,6 +17,7 @@ import '../../color.dart';
 import '../../geometry.dart';
 import '../../icons/icon_registry.dart';
 import '../../ir/scene.dart';
+import '../../math/tex_math.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
@@ -240,6 +241,19 @@ _Fragment _layoutGraph(
     // phantom node with the subgraph's id; the cluster wins.
     if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
+    // A label that is wholly `$$...$$` is laid out as math.
+    final mathSrc = wholeMath(node.label);
+    if (mathSrc != null) {
+      final ml = layoutMath(mathSrc, baseStyle, measurer, style.textColor);
+      placed[node.id] = _PlacedNode(
+        node: node,
+        style: style,
+        labelSize: ml.size,
+        math: ml,
+        shape: _Shape.forNode(node.shape, ml.size),
+      );
+      continue;
+    }
     final textSize =
         measurer.measure(node.label, baseStyle, maxWidth: _wrappingWidth);
     // An icon reserves a square area above the label; inflate the sizing box.
@@ -568,7 +582,13 @@ _Fragment _layoutGraph(
   for (final p in placed.values) {
     if (syntheticIds.contains(p.node.id)) continue;
     final children = <SceneNode>[...p.shape.build(p.center, p.style)];
-    if (p.textSize != null) {
+    if (p.math != null) {
+      // Math label: paint glyphs/rules centered in the node.
+      final lc = p.shape.labelCenter(p.center);
+      final origin = Point(
+          lc.x - p.math!.size.width / 2, lc.y - p.math!.size.height / 2);
+      children.addAll(p.math!.render(origin));
+    } else if (p.textSize != null) {
       // Icon node: glyph in the reserved top square, label beneath it.
       final lc = p.shape.labelCenter(p.center);
       final contentTop = lc.y - p.labelSize.height / 2;
@@ -850,6 +870,7 @@ class _PlacedNode {
     required this.labelSize,
     required this.shape,
     this.textSize,
+    this.math,
   });
 
   final FlowNode node;
@@ -861,6 +882,9 @@ class _PlacedNode {
   /// The label's own measured size; differs from [labelSize] only when an
   /// icon reserves space above the text. Null ⇒ same as [labelSize].
   final Size? textSize;
+
+  /// Set when the label is a `$$...$$` math span rendered with primitives.
+  final MathLayout? math;
   final _Shape shape;
   Point center = Point.zero;
 }
