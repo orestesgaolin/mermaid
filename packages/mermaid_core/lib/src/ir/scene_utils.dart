@@ -84,7 +84,8 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
         :final bounds,
         :final style,
         :final color,
-        :final align
+        :final align,
+        :final underline
       ) =>
         SceneText(
           text: text,
@@ -93,6 +94,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
           color: color,
           align: align,
           rotation: node.rotation,
+          underline: underline,
         ),
     };
 

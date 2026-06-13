@@ -88,7 +88,11 @@ class ScenePainter extends CustomPainter {
     final painter = TextPainter(
       text: TextSpan(
         text: text.text,
-        style: textStyleFromSpec(text.style, color: Color(text.color.value)),
+        style: textStyleFromSpec(text.style, color: Color(text.color.value))
+            .copyWith(
+          decoration:
+              text.underline ? TextDecoration.underline : TextDecoration.none,
+        ),
       ),
       textAlign: switch (text.align) {
         core.TextAlignH.left => TextAlign.left,

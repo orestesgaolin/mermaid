@@ -48,7 +48,7 @@ class _Box {
 
 class _BoxLine {
   _BoxLine(this.text, this.style, this.size, this.dy,
-      {this.centered = false, this.separatorAbove = false});
+      {this.centered = false, this.separatorAbove = false, this.underline = false});
 
   final String text;
   final TextStyleSpec style;
@@ -58,6 +58,7 @@ class _BoxLine {
   final double dy;
   final bool centered;
   final bool separatorAbove;
+  final bool underline;
 }
 
 class _ClassLayout {
@@ -339,10 +340,10 @@ class _ClassLayout {
     var width = 0.0;
 
     void add(String text, TextStyleSpec style,
-        {bool centered = false, bool separator = false}) {
+        {bool centered = false, bool separator = false, bool underline = false}) {
       final size = measurer.measure(text, style, maxWidth: 300);
       lines.add(_BoxLine(text, style, size, y,
-          centered: centered, separatorAbove: separator));
+          centered: centered, separatorAbove: separator, underline: underline));
       y += size.height + _memberGap;
       width = math.max(width, size.width);
     }
@@ -356,7 +357,7 @@ class _ClassLayout {
     var first = true;
     for (final m in node.attributes) {
       add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
-          separator: first);
+          separator: first, underline: m.isStatic);
       first = false;
     }
     if (node.attributes.isEmpty) {
@@ -369,7 +370,7 @@ class _ClassLayout {
     first = true;
     for (final m in node.methods) {
       add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
-          separator: first);
+          separator: first, underline: m.isStatic);
       first = false;
     }
     if (node.methods.isEmpty) {
@@ -426,6 +427,7 @@ class _ClassLayout {
         style: line.style,
         color: theme.textColor,
         align: line.centered ? TextAlignH.center : TextAlignH.left,
+        underline: line.underline,
       ));
     }
     return SceneGroup(

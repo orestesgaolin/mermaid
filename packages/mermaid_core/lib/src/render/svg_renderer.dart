@@ -140,7 +140,8 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
         :final style,
         :final color,
         :final align,
-        :final rotation
+        :final rotation,
+        :final underline
       ):
       final lines = text.split('\n');
       final lineHeight = bounds.height / lines.length;
@@ -161,6 +162,7 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
         b.write(' font-weight="${style.fontWeight}"');
       }
       if (style.italic) b.write(' font-style="italic"');
+      if (underline) b.write(' text-decoration="underline"');
       b.write(' fill="${_color(color)}">');
       for (var i = 0; i < lines.length; i++) {
         final y = bounds.top + lineHeight * i + lineHeight * 0.78;
