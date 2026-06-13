@@ -241,10 +241,9 @@ _Fragment _layoutGraph(
     // phantom node with the subgraph's id; the cluster wins.
     if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
-    // A label that is wholly `$$...$$` is laid out as math.
-    final mathSrc = wholeMath(node.label);
-    if (mathSrc != null) {
-      final ml = layoutMath(mathSrc, baseStyle, measurer, style.textColor);
+    // A label containing `$$...$$` is laid out as math (whole or inline-mixed).
+    final ml = layoutLabel(node.label, baseStyle, measurer, style.textColor);
+    if (ml != null) {
       placed[node.id] = _PlacedNode(
         node: node,
         style: style,
@@ -358,9 +357,8 @@ _Fragment _layoutGraph(
     Size? labelSize;
     final label = e.label;
     if (label != null && label.isNotEmpty) {
-      final mathSrc = wholeMath(label);
-      if (mathSrc != null) {
-        final ml = layoutMath(mathSrc, baseStyle, measurer, theme.textColor);
+      final ml = layoutLabel(label, baseStyle, measurer, theme.textColor);
+      if (ml != null) {
         edgeMath[i] = ml;
         labelSize = ml.size;
       } else {

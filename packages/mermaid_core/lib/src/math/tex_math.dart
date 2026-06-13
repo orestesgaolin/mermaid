@@ -47,6 +47,63 @@ class MathLayout {
   }
 }
 
+/// Returns a layout for [label] if it contains any `$$…$$` math, else null.
+/// Handles both a whole-math label and text with inline math spans.
+MathLayout? layoutLabel(
+    String label, TextStyleSpec style, TextMeasurer measurer, Color color) {
+  if (!hasMath(label)) return null;
+  final whole = wholeMath(label);
+  if (whole != null) return layoutMath(whole, style, measurer, color);
+  return _layoutInline(label, style, measurer, color);
+}
+
+/// Lays out a single line of mixed text and `$$…$$` math, sharing a baseline.
+MathLayout _layoutInline(
+    String label, TextStyleSpec style, TextMeasurer measurer, Color color) {
+  final parts = <({double w, double asc, double desc, void Function(Point, List<SceneNode>) paint})>[];
+  var last = 0;
+  void addText(String s) {
+    if (s.isEmpty) return;
+    final size = measurer.measure(s, style, maxWidth: 100000);
+    parts.add((
+      w: size.width,
+      asc: size.height * 0.8,
+      desc: size.height * 0.2,
+      paint: (o, out) => out.add(SceneText(
+            text: s,
+            bounds: Rect.fromLTWH(o.x, o.y, size.width, size.height),
+            style: style,
+            color: color,
+            align: TextAlignH.left,
+          )),
+    ));
+  }
+
+  for (final m in _mathRe.allMatches(label)) {
+    if (m.start > last) addText(label.substring(last, m.start));
+    final ml = layoutMath(m.group(1)!, style, measurer, color);
+    parts.add((
+      w: ml.size.width,
+      asc: ml.ascent,
+      desc: ml.size.height - ml.ascent,
+      paint: (o, out) => out.addAll(ml.render(o)),
+    ));
+    last = m.end;
+  }
+  if (last < label.length) addText(label.substring(last));
+
+  final width = parts.fold(0.0, (a, p) => a + p.w);
+  final asc = parts.fold(0.0, (a, p) => math.max(a, p.asc));
+  final desc = parts.fold(0.0, (a, p) => math.max(a, p.desc));
+  return MathLayout(Size(width, asc + desc), asc, (origin, out) {
+    var x = origin.x;
+    for (final p in parts) {
+      p.paint(Point(x, origin.y + (asc - p.asc)), out);
+      x += p.w;
+    }
+  });
+}
+
 /// Lays out [tex] at [style]'s size. Coordinates are relative to (0,0).
 MathLayout layoutMath(
     String tex, TextStyleSpec style, TextMeasurer measurer, Color color) {
