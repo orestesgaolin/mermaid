@@ -13,6 +13,7 @@ import '../../detect.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
+import '../../icons/icon_registry.dart';
 import '../../parse_error.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
@@ -31,6 +32,12 @@ class MindmapNode {
   final MindmapShape shape;
   final int depth;
   final children = <MindmapNode>[];
+
+  /// `::icon(...)` decoration — the icon reference (e.g. `icon:cog`), or null.
+  String? icon;
+
+  /// `:::className` decorations applied to this node.
+  final cssClasses = <String>[];
 }
 
 class Mindmap {
@@ -62,8 +69,19 @@ Mindmap parseMindmap(String source) {
     }
     final indent = line.length - line.trimLeft().length;
     final content = line.trim();
-    // Icon/class decorations attach to the previous node; not rendered yet.
-    if (content.startsWith('::icon') || content.startsWith(':::')) continue;
+    // Decorations attach to the most-recent node.
+    final iconM = RegExp(r'^::icon\(\s*(.+?)\s*\)$').firstMatch(content);
+    if (iconM != null) {
+      if (stack.isNotEmpty) stack.last.$2.icon = iconM.group(1);
+      continue;
+    }
+    if (content.startsWith(':::')) {
+      if (stack.isNotEmpty) {
+        stack.last.$2.cssClasses
+            .addAll(content.substring(3).trim().split(RegExp(r'\s+')));
+      }
+      continue;
+    }
 
     final (shape, label) = _parseNodeText(content, i + 1);
     if (root == null) {
@@ -330,6 +348,20 @@ RenderScene layoutMindmap(
           ? const Color(0xffffffff)
           : const Color(0xff1f1f1f),
     ));
+    // `::icon(...)` glyph above the node, if it resolves in a registered pack.
+    if (n.icon != null) {
+      ensureBuiltinIconPacks();
+      final textColor = _luminance(isRoot ? fill : p.color) < 0.66
+          ? const Color(0xffffffff)
+          : const Color(0xff1f1f1f);
+      final glyph = renderIcon(
+        n.icon!,
+        Rect.fromCenter(
+            Point(p.center.x, rect.top - 12), 20, 20),
+        textColor,
+      );
+      children.addAll(glyph);
+    }
     nodes.add(SceneGroup(
         id: 'mind_${n.label}', semanticLabel: n.label, children: children));
     n.children.forEach(draw);
