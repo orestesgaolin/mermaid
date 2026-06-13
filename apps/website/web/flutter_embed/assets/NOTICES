@@ -24894,6 +24894,12 @@ which is MIT licensed.
 It vendors a derivative of dart_dagre (Apache License 2.0) under
 lib/src/vendor/dagre/; that directory retains its original LICENSE.
 
+It also embeds the KaTeX fonts (KaTeX_Main-Regular, KaTeX_Math-Italic) for
+math rendering, base64-encoded in lib/src/math/katex_fonts.dart. The KaTeX
+fonts are licensed under the SIL Open Font License 1.1
+(https://github.com/KaTeX/KaTeX/blob/main/src/fonts/OFL.txt); "KaTeX" is a
+reserved font name.
+
 --------------------------------------------------------------------------------
 mermaid_flutter
 

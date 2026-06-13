@@ -266,13 +266,19 @@ it alongside the theme.
     `\vec/\hat/\bar/\overline`; spacing macros (`\,\:\;\quad`); ~90-symbol
     table (full greek, `\nabla \hbar \Psi \partial`, set/logic/arrow ops,
     dots). The Maxwell / Schrödinger / quadratic-formula examples render.
-  - `flutter_tex` rejected for IR use (MathJax+webview widget, no pure-Dart
-    TeX→SVG string); `flutter_math_fork` was the inspiration for the
-    path-drawn radical.
+  - **Renders in the real KaTeX fonts** (KaTeX_Main-Regular roman,
+    KaTeX_Math-Italic for variables; SIL OFL 1.1). `katex_fonts.dart` holds
+    the base64 TTFs, `katex_metrics.dart` the advance metrics. tex_math sets
+    glyph families; `ApproximateTextMeasurer` uses KaTeX advances for the
+    `KaTeX_*` families; the SVG renderer embeds `@font-face` (data-URI) when
+    math is present (self-contained, honored by rsvg/resvg); the Flutter apps
+    (flutter_embed, demo) register the fonts so TextPainter measures/paints
+    them. Verified side-by-side — near font-identical to mermaid.js.
+  - `flutter_tex` rejected for IR use (MathJax+webview widget); the
+    embed-fonts+metrics approach mirrors how `flutter_math_fork` works.
   - Remaining gaps: inline mixed text+math in one label (only whole-`$$`
-    labels), big-operator limits (`\sum_{i=1}^n` stacks), KaTeX's actual math
-    font (we italicize the label font). Font parity in the Flutter target
-    would want `flutter_math_fork` (paints widgets, not scene IR).
+    labels), big-operator limits (`\sum_{i=1}^n` stacks over/under),
+    `KaTeX_Size`/AMS glyphs (delimiters are drawn as paths instead).
 - [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
   *Very high — the big rock.* Upstream registers pluggable layout loaders
   (`rendering-util/render.ts registerLayoutLoaders`); elk is the
