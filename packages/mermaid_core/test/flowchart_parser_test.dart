@@ -520,8 +520,14 @@ end
       expect(g.nodes['A']!.shape, FlowNodeShape.rect);
       expect(g.nodes['A']!.label, 'new');
     });
-    test('valid-but-unported shape falls back to rect', () {
-      final g = parseFlowchart('flowchart TD\nA@{ shape: hourglass }');
+    test('v11 geometries map to their shape', () {
+      expect(parseFlowchart('flowchart TD\nA@{ shape: hourglass }')
+          .nodes['A']!.shape, FlowNodeShape.hourglass);
+      expect(parseFlowchart('flowchart TD\nA@{ shape: doc }')
+          .nodes['A']!.shape, FlowNodeShape.document);
+    });
+    test('valid-but-unported shape (image) falls back to rect', () {
+      final g = parseFlowchart('flowchart TD\nA@{ shape: image }');
       expect(g.nodes['A']!.shape, FlowNodeShape.rect);
     });
     test('unknown shape throws', () {

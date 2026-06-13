@@ -1029,6 +1029,104 @@ sealed class _Shape {
           Point(tw / 2, h / 2),
           Point(tw / 2, -h / 2),
         ]);
+      case FlowNodeShape.document:
+        return _DocumentShape(lw + 2 * p, lh + 2 * p + 6);
+      case FlowNodeShape.triangle:
+        final w = lw + 2 * p;
+        final h = lh + 2 * p;
+        return _PolygonShape(w, h, [
+          Point(0, -h / 2),
+          Point(w / 2, h / 2),
+          Point(-w / 2, h / 2),
+        ]);
+      case FlowNodeShape.flippedTriangle:
+        final w = lw + 2 * p;
+        final h = lh + 2 * p;
+        return _PolygonShape(w, h, [
+          Point(-w / 2, -h / 2),
+          Point(w / 2, -h / 2),
+          Point(0, h / 2),
+        ]);
+      case FlowNodeShape.slopedRect:
+        final w = lw + 2 * p;
+        final h = lh + 2 * p;
+        final s = h / 5;
+        return _PolygonShape(w, h, [
+          Point(-w / 2, -h / 2 + s),
+          Point(w / 2, -h / 2),
+          Point(w / 2, h / 2),
+          Point(-w / 2, h / 2),
+        ]);
+      case FlowNodeShape.card:
+        final w = lw + 2 * p;
+        final h = lh + 2 * p;
+        final n = h / 4;
+        return _PolygonShape(w, h, [
+          Point(-w / 2 + n, -h / 2),
+          Point(w / 2, -h / 2),
+          Point(w / 2, h / 2),
+          Point(-w / 2, h / 2),
+          Point(-w / 2, -h / 2 + n),
+        ]);
+      case FlowNodeShape.notchedPentagon:
+        final w = lw + 2 * p;
+        final h = lh + 2 * p;
+        final n = h / 4;
+        return _PolygonShape(w, h, [
+          Point(-w / 2 + n, -h / 2),
+          Point(w / 2 - n, -h / 2),
+          Point(w / 2, -h / 2 + n),
+          Point(w / 2, h / 2),
+          Point(-w / 2, h / 2),
+          Point(-w / 2, -h / 2 + n),
+        ]);
+      case FlowNodeShape.bolt:
+        final w = lw + 2 * p + 10;
+        final h = lh + 2 * p;
+        return _PolygonShape(w, h, [
+          Point(-w / 6, -h / 2),
+          Point(w / 2, -h / 6),
+          Point(w / 10, -h / 6),
+          Point(w / 6, h / 2),
+          Point(-w / 2, h / 6),
+          Point(-w / 10, h / 6),
+        ]);
+      case FlowNodeShape.hourglass:
+        // Bowtie: a 4-point self-crossing ring fills as two triangles.
+        final s = math.max(lw, lh) + 2 * p;
+        return _PolygonShape(s, s, [
+          Point(-s / 2, -s / 2),
+          Point(s / 2, -s / 2),
+          Point(-s / 2, s / 2),
+          Point(s / 2, s / 2),
+        ]);
+      case FlowNodeShape.linedRect:
+        // Vertical line a short way in from the left (lined/stacked process).
+        final w = lw + 2 * p + 8;
+        final h = lh + 2 * p;
+        return _DecoratedRectShape(w, h, [
+          [Point(-w / 2 + 8, -h / 2), Point(-w / 2 + 8, h / 2)],
+        ]);
+      case FlowNodeShape.dividedRect:
+        final w = lw + 2 * p;
+        final h = lh + 2 * p + 8;
+        return _DecoratedRectShape(w, h, [
+          [Point(-w / 2, -h / 2 + 12), Point(w / 2, -h / 2 + 12)],
+        ]);
+      case FlowNodeShape.windowPane:
+        final w = lw + 2 * p + 8;
+        final h = lh + 2 * p + 8;
+        return _DecoratedRectShape(w, h, [
+          [Point(-w / 2 + 10, -h / 2), Point(-w / 2 + 10, h / 2)],
+          [Point(-w / 2, -h / 2 + 10), Point(w / 2, -h / 2 + 10)],
+        ]);
+      case FlowNodeShape.crossedCircle:
+        return _CrossedCircleShape(math.max(lw, lh) / 2 + p);
+      case FlowNodeShape.forkJoin:
+        // A thin filled bar.
+        return _ForkJoinShape(math.max(lw + 2 * p, 70), 14);
+      case FlowNodeShape.textShape:
+        return _TextShape(lw + 2 * p, lh + 2 * p);
     }
   }
 }
@@ -1286,6 +1384,164 @@ class _PolygonShape implements _Shape {
   @override
   Point intersect(Point c, Point outside) =>
       _intersectPolygon(c, points, outside);
+
+  @override
+  Point labelCenter(Point c) => c;
+}
+
+/// A rectangle plus extra decoration line segments (relative to center).
+/// Used for lined/divided/window-pane v11 shapes.
+class _DecoratedRectShape implements _Shape {
+  _DecoratedRectShape(this.width, this.height, this.lines);
+
+  @override
+  final double width;
+  @override
+  final double height;
+
+  /// Each entry is a [start, end] pair relative to the shape center.
+  final List<List<Point>> lines;
+
+  @override
+  List<SceneNode> build(Point c, _NodeStyle style) => [
+        SceneShape(
+          geometry: RectGeometry(Rect.fromCenter(c, width, height)),
+          fill: Fill(style.fill),
+          stroke: style.sceneStroke,
+        ),
+        for (final seg in lines)
+          SceneShape(
+            geometry: PathGeometry([MoveTo(seg[0] + c), LineTo(seg[1] + c)]),
+            stroke: style.sceneStroke,
+          ),
+      ];
+
+  @override
+  Point intersect(Point c, Point outside) =>
+      _intersectRect(c, width, height, outside);
+
+  @override
+  Point labelCenter(Point c) => c;
+}
+
+/// A rectangle with a wavy bottom edge (v11 `document`).
+class _DocumentShape implements _Shape {
+  _DocumentShape(this.width, this.height);
+
+  @override
+  final double width;
+  @override
+  final double height;
+
+  @override
+  List<SceneNode> build(Point c, _NodeStyle style) {
+    final l = c.x - width / 2, r = c.x + width / 2;
+    final t = c.y - height / 2, b = c.y + height / 2;
+    final wave = height * 0.12;
+    return [
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(l, t)),
+          LineTo(Point(r, t)),
+          LineTo(Point(r, b - wave)),
+          CubicTo(Point(r - width / 4, b - wave * 2.5),
+              Point(l + width / 4, b + wave), Point(l, b - wave)),
+          const ClosePath(),
+        ]),
+        fill: Fill(style.fill),
+        stroke: style.sceneStroke,
+      ),
+    ];
+  }
+
+  @override
+  Point intersect(Point c, Point outside) =>
+      _intersectRect(c, width, height, outside);
+
+  @override
+  Point labelCenter(Point c) => Point(c.x, c.y - height * 0.05);
+}
+
+/// A circle with an inscribed X (v11 `crossed-circle` / `summary`).
+class _CrossedCircleShape implements _Shape {
+  _CrossedCircleShape(this.radius);
+
+  final double radius;
+  @override
+  double get width => radius * 2;
+  @override
+  double get height => radius * 2;
+
+  @override
+  List<SceneNode> build(Point c, _NodeStyle style) {
+    final d = radius * 0.7071;
+    return [
+      SceneShape(
+        geometry: CircleGeometry(c, radius),
+        fill: Fill(style.fill),
+        stroke: style.sceneStroke,
+      ),
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(c.x - d, c.y - d)),
+          LineTo(Point(c.x + d, c.y + d)),
+          MoveTo(Point(c.x + d, c.y - d)),
+          LineTo(Point(c.x - d, c.y + d)),
+        ]),
+        stroke: style.sceneStroke,
+      ),
+    ];
+  }
+
+  @override
+  Point intersect(Point c, Point outside) =>
+      _intersectEllipse(c, radius, radius, outside);
+
+  @override
+  Point labelCenter(Point c) => c;
+}
+
+/// A thin filled bar (v11 `fork` / `join`).
+class _ForkJoinShape implements _Shape {
+  _ForkJoinShape(this.width, this.height);
+
+  @override
+  final double width;
+  @override
+  final double height;
+
+  @override
+  List<SceneNode> build(Point c, _NodeStyle style) => [
+        SceneShape(
+          geometry: RectGeometry(Rect.fromCenter(c, width, height)),
+          fill: Fill(style.stroke), // filled bar
+          stroke: style.sceneStroke,
+        ),
+      ];
+
+  @override
+  Point intersect(Point c, Point outside) =>
+      _intersectRect(c, width, height, outside);
+
+  @override
+  Point labelCenter(Point c) => c;
+}
+
+/// Label only — no border or fill (v11 `text`).
+class _TextShape implements _Shape {
+  _TextShape(this.width, this.height);
+
+  @override
+  final double width;
+  @override
+  final double height;
+
+  @override
+  List<SceneNode> build(Point c, _NodeStyle style) => const [];
+
+  @override
+  Point intersect(Point c, Point outside) =>
+      _intersectRect(c, width, height, outside);
 
   @override
   Point labelCenter(Point c) => c;

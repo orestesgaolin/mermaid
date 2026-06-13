@@ -77,6 +77,50 @@ enum FlowNodeShape {
   /// `(-text-)`
   ellipse,
 
+  // --- v11 `@{ shape: ... }` geometries ---
+
+  /// `doc` / `document` — rectangle with a wavy bottom edge.
+  document,
+
+  /// `tri` / `triangle` / `extract`.
+  triangle,
+
+  /// `flip-tri` / `flipped-triangle` / `manual-file`.
+  flippedTriangle,
+
+  /// `sl-rect` / `sloped-rectangle` / `manual-input` — sloped top edge.
+  slopedRect,
+
+  /// `notch-rect` / `card` / `notched-rectangle` — folded top-left corner.
+  card,
+
+  /// `notch-pent` / `loop-limit` / `notched-pentagon`.
+  notchedPentagon,
+
+  /// `bolt` / `lightning-bolt` / `com-link`.
+  bolt,
+
+  /// `hourglass` / `collate` — bowtie.
+  hourglass,
+
+  /// `lin-rect` / `lined-rectangle` / `lined-process` / `shaded-process`.
+  linedRect,
+
+  /// `div-rect` / `divided-rectangle` / `div-proc`.
+  dividedRect,
+
+  /// `win-pane` / `internal-storage` / `window-pane`.
+  windowPane,
+
+  /// `cross-circ` / `crossed-circle` / `summary`.
+  crossedCircle,
+
+  /// `fork` / `join` — a thin filled bar.
+  forkJoin,
+
+  /// `text` — label only, no border or fill.
+  textShape,
+
   /// Default when a node is referenced without any shape brackets.
   plain,
 }
