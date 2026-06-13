@@ -18,6 +18,7 @@ enum DiagramType {
   mindmap,
   requirement,
   c4,
+  gitGraph,
   unknown,
 }
 
@@ -43,6 +44,7 @@ const _detectorSpecs = <(DiagramType, String)>[
   (DiagramType.mindmap, r'^\s*mindmap\b'),
   (DiagramType.requirement, r'^\s*requirementDiagram\b'),
   (DiagramType.c4, r'^\s*C4(Context|Container|Component|Dynamic|Deployment)\b'),
+  (DiagramType.gitGraph, r'^\s*gitGraph\b'),
   (DiagramType.sequence, r'^\s*sequenceDiagram\b'),
   (DiagramType.flowchart, r'^\s*graph\b'),
   (DiagramType.flowchart, r'^\s*flowchart(-elk)?\b'),
