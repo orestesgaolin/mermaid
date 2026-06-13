@@ -259,16 +259,20 @@ it alongside the theme.
   `&`, sized delimiters drawn as paths). Wired into whole-`$$` flowchart
   **node AND edge** labels. The full canonical mermaid math example renders;
   verified side-by-side. 10 tests.
-  - Single-letter variables render **italic** and function names (`\sin`,
-    `\cos`, …) upright+spaced, like KaTeX. `\left<d>…\right<d>` auto-sizes
-    paren/bracket/brace/bar delimiters to content height.
-  - `flutter_tex` was investigated and rejected for IR use (MathJax+webview
-    widget, no pure-Dart TeX→SVG string).
-  - Remaining gaps: inline mixed text+math within one label (only whole-`$$`
-    labels), KaTeX's actual math font (we use the label font, italicized).
-    Pixel-font parity in the Flutter target would want `flutter_math_fork`,
-    but that paints widgets not scene IR, so SVG/other backends keep this
-    engine.
+  - Italic single-letter variables; upright+spaced function names; `\sqrt`
+    drawn as a connected radical path (checkmark→overline, sized to the
+    radicand — like flutter_math/KaTeX, not a glyph); `\left<d>…\right<d>`
+    auto-sized delimiters; `\begin{array}{spec}` with column alignment;
+    `\vec/\hat/\bar/\overline`; spacing macros (`\,\:\;\quad`); ~90-symbol
+    table (full greek, `\nabla \hbar \Psi \partial`, set/logic/arrow ops,
+    dots). The Maxwell / Schrödinger / quadratic-formula examples render.
+  - `flutter_tex` rejected for IR use (MathJax+webview widget, no pure-Dart
+    TeX→SVG string); `flutter_math_fork` was the inspiration for the
+    path-drawn radical.
+  - Remaining gaps: inline mixed text+math in one label (only whole-`$$`
+    labels), big-operator limits (`\sum_{i=1}^n` stacks), KaTeX's actual math
+    font (we italicize the label font). Font parity in the Flutter target
+    would want `flutter_math_fork` (paints widgets, not scene IR).
 - [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
   *Very high — the big rock.* Upstream registers pluggable layout loaders
   (`rendering-util/render.ts registerLayoutLoaders`); elk is the
