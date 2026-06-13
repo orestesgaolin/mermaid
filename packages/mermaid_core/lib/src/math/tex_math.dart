@@ -315,9 +315,8 @@ _Box _leftRight(
   }
   final inner = _hbox(atoms);
   const padY = 2.0;
-  final dw = style.fontSize * 0.3;
-  final lw = left.isEmpty ? 0.0 : dw;
-  final rw = right.isEmpty ? 0.0 : dw;
+  final lw = _delimWidth(left, style.fontSize);
+  final rw = _delimWidth(right, style.fontSize);
   final h = inner.ascent + inner.descent + padY * 2;
   return _Box(inner.width + lw + rw, inner.ascent + padY, inner.descent + padY,
       (x, baseline, out) {
@@ -526,22 +525,22 @@ _Box _matrix(List<List<_Box>> rows, String env, String colSpec,
   for (var i = 0; i < rows.length; i++) {
     contentH += rowAsc[i] + rowDesc[i];
   }
-  final delimW = (left.isEmpty ? 0.0 : style.fontSize * 0.32) +
-      (right.isEmpty ? 0.0 : style.fontSize * 0.32);
+  final leftDelimW = _delimWidth(left, style.fontSize);
+  final rightDelimW = _delimWidth(right, style.fontSize);
   const pad = 4.0;
-  final totalW = contentW + delimW + pad * 2;
+  final totalW = contentW + leftDelimW + rightDelimW + pad * 2;
   final half = contentH / 2;
 
   return _Box(totalW, half, half, (x, baseline, out) {
     final top = baseline - half;
-    final leftDelimW = left.isEmpty ? 0.0 : style.fontSize * 0.32;
     final contentX = x + leftDelimW + pad;
     if (left.isNotEmpty) {
       _drawDelim(left, x, top, leftDelimW, contentH, true, color, out);
     }
     if (right.isNotEmpty) {
-      final rdw = style.fontSize * 0.32;
-      _drawDelim(right, x + totalW - rdw, top, rdw, contentH, false, color, out);
+      _drawDelim(
+          right, x + totalW - rightDelimW, top, rightDelimW, contentH, false,
+          color, out);
     }
     var cy = top;
     for (var i = 0; i < rows.length; i++) {
@@ -559,6 +558,15 @@ _Box _matrix(List<List<_Box>> rows, String env, String colSpec,
     }
   });
 }
+
+/// Allotted horizontal space for a delimiter; braces need more reach than
+/// brackets/bars so their cusp shows.
+double _delimWidth(String kind, double fontSize) => switch (kind) {
+      '' => 0,
+      '{' || '}' => fontSize * 0.45,
+      '(' || ')' => fontSize * 0.34,
+      _ => fontSize * 0.3,
+    };
 
 /// Draws a sized delimiter (bracket/paren/bar/brace) into [out].
 void _drawDelim(String kind, double x, double top, double w, double h,
@@ -598,23 +606,32 @@ void _drawDelim(String kind, double x, double top, double w, double h,
             Point(x, b)),
       ]);
     case '{':
+      // Proper curly brace: top/bottom tips curl to a vertical spine, with a
+      // sharp middle cusp pointing outward (left). Arms are straight.
       final mid = top + h / 2;
-      final r = x + w;
+      final sx = x + w * 0.62; // spine
+      final r = (h * 0.16).clamp(2.0, h / 4);
       path([
-        MoveTo(Point(r, top)),
-        CubicTo(Point(x + w * 0.5, top + h * 0.1), Point(x + w * 0.5, mid - h * 0.1),
-            Point(x, mid)),
-        CubicTo(Point(x + w * 0.5, mid + h * 0.1), Point(x + w * 0.5, b - h * 0.1),
-            Point(r, b)),
+        MoveTo(Point(x + w, top)),
+        QuadTo(Point(sx, top), Point(sx, top + r)),
+        LineTo(Point(sx, mid - r)),
+        QuadTo(Point(sx, mid), Point(x, mid)),
+        QuadTo(Point(sx, mid), Point(sx, mid + r)),
+        LineTo(Point(sx, b - r)),
+        QuadTo(Point(sx, b), Point(x + w, b)),
       ]);
     case '}':
       final mid = top + h / 2;
+      final sx = x + w * 0.38; // spine
+      final r = (h * 0.16).clamp(2.0, h / 4);
       path([
         MoveTo(Point(x, top)),
-        CubicTo(Point(x + w * 0.5, top + h * 0.1), Point(x + w * 0.5, mid - h * 0.1),
-            Point(x + w, mid)),
-        CubicTo(Point(x + w * 0.5, mid + h * 0.1), Point(x + w * 0.5, b - h * 0.1),
-            Point(x, b)),
+        QuadTo(Point(sx, top), Point(sx, top + r)),
+        LineTo(Point(sx, mid - r)),
+        QuadTo(Point(sx, mid), Point(x + w, mid)),
+        QuadTo(Point(sx, mid), Point(sx, mid + r)),
+        LineTo(Point(sx, b - r)),
+        QuadTo(Point(sx, b), Point(x, b)),
       ]);
   }
 }
