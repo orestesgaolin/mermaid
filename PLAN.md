@@ -222,13 +222,15 @@ shared groundwork is a **MermaidConfig** carrying `look`, `handDrawnSeed`,
 `layout`, `fontConfig`, `icons` — extend `src/directives.dart` to surface
 it alongside the theme.
 
-- [ ] **Hand-drawn look** (`look: 'handDrawn'`, `handDrawnSeed`). *Medium,
-  self-contained.* Upstream uses roughjs in the shape/edge drawers
-  (`rendering-elements/shapes/*.ts`, `edges.js` gate on `look==='handDrawn'`).
-  Our IR is shape-based, so add a deterministic scene→scene "roughen" pass:
-  seeded RNG perturbs rect/polygon/path edges into multi-segment jittered
-  strokes, doubles outlines, and fills with hachure line sets. No external
-  deps; fully verifiable on the site. Cleanest first build.
+- [x] **Hand-drawn look** (`look: 'handDrawn'`, `handDrawnSeed`) — DONE
+  (`src/render/rough.dart`). Deterministic scene→scene "roughen" pass: a
+  seeded LCG perturbs every filled/stroked shape into hachure fill lines
+  (−41°, gap 5.2, fillWeight 4) plus a doubled sketchy outline; beziers in
+  edge paths are flattened then re-sketched. Wired via `resolveLook()`
+  (init directive + frontmatter `look`/`handDrawnSeed`) and the render
+  facade post-process. Matches upstream roughjs defaults; verified
+  side-by-side on the website. 9 tests. Gap: rough's overshoot at corners
+  is approximated (single cubic per edge, not rough's 2-segment curve).
 - [ ] **Icons** (`registerIconPacks`, iconify packs; `@{ icon: "prefix:name" }`).
   *Medium-high.* Needs (a) an icon-pack registry taking iconify JSON
   (name → SVG body `d` + viewBox); (b) a small **SVG-path-string → PathCommand
@@ -237,15 +239,24 @@ it alongside the theme.
   (d) emit the icon path as a SceneShape at the node. Bundle one small pack
   (e.g. a logos subset) to verify per-icon parity. Reusable path parser is
   the valuable byproduct.
-- [ ] **Math** (`$$...$$`, KaTeX; `legacyMathML`). *High, parity-limited.*
-  No pure-Dart KaTeX exists. Plumbing is easy (detect `$$`, strip
-  delimiters, flag the run as math — see upstream `common/common.ts`), but
-  rendering is not: options are (a) Flutter-only via `flutter_math_fork`
-  — breaks the measurer/SVG abstraction so math wouldn't appear in the SVG
-  backend or core tests; (b) port a TeX subset (super/subscript, frac,
-  sqrt, common symbols) — will NOT match KaTeX on matrices/cases/overbrace.
-  Ship plumbing + subset, set expectations; full KaTeX parity is a separate
-  large effort.
+- [ ] **Math** (`$$...$$` in labels; upstream uses KaTeX, `legacyMathML`).
+  *Plan: use [`flutter_tex`](https://pub.dev/packages/flutter_tex).*
+  flutter_tex exposes **Math2SVG / TeXWidget** — a pure-Flutter, **no-webview**
+  LaTeX→SVG renderer (MathJax-based; Android/iOS/macOS/web) — plus a
+  webview `TeXView` fallback. Approach:
+  1. **Core** (`mermaid_core`): in `common`-style label handling, detect
+     `$$...$$` (and inline `$...$`), strip delimiters, and mark the run as
+     math on the model + emit a math placeholder in the scene IR (new
+     `SceneMath` node carrying the raw TeX + a reserved box). Keep the
+     pipeline synchronous by reserving an estimated box; the Flutter layer
+     can re-measure.
+  2. **Flutter backend** (`mermaid_flutter`): render `SceneMath` via
+     `TeXWidget`/`Math2SVG` (no webview, integrates with the painter/overlay).
+  Caveats for parity: flutter_tex is **MathJax**, mermaid is **KaTeX** —
+  visually equivalent for most expressions, not byte-identical; the SVG
+  string backend and pure-Dart core tests can't typeset math (emit raw TeX
+  or a placeholder there). Only flowchart + sequence labels support math
+  upstream, so scope to those first.
 - [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
   *Very high — the big rock.* Upstream registers pluggable layout loaders
   (`rendering-util/render.ts registerLayoutLoaders`); elk is the
