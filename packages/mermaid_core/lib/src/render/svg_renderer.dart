@@ -8,6 +8,7 @@ library;
 
 import '../color.dart';
 import '../ir/scene.dart';
+import '../math/katex_fonts.dart';
 import '../text/text_style.dart';
 
 String renderSceneToSvg(RenderScene scene) {
@@ -17,6 +18,16 @@ String renderSceneToSvg(RenderScene scene) {
     ..write('height="${_num(scene.size.height)}" ')
     ..write(
         'viewBox="0 0 ${_num(scene.size.width)} ${_num(scene.size.height)}">');
+  // Self-contained KaTeX math fonts: embed @font-face only when used.
+  if (_usesKatex(scene.nodes)) {
+    b
+      ..write('<defs><style>')
+      ..write('@font-face{font-family:"KaTeX_Main";src:url(data:font/ttf;'
+          'base64,$katexMainRegularTtfBase64) format("truetype");}')
+      ..write('@font-face{font-family:"KaTeX_Math";src:url(data:font/ttf;'
+          'base64,$katexMathItalicTtfBase64) format("truetype");}')
+      ..write('</style></defs>');
+  }
   final bg = scene.background;
   if (bg != null && bg.alpha > 0) {
     b.write('<rect width="100%" height="100%" fill="${_color(bg)}"/>');
@@ -132,6 +143,13 @@ void _writeNode(StringBuffer b, SceneNode node) {
 }
 
 String _svgFontFamily(TextStyleSpec style) => style.fontFamily;
+
+/// True if any text node uses a KaTeX math font (so we embed the @font-face).
+bool _usesKatex(List<SceneNode> nodes) => nodes.any((n) => switch (n) {
+      SceneGroup(:final children) => _usesKatex(children),
+      SceneText(:final style) => style.fontFamily.startsWith('KaTeX_'),
+      _ => false,
+    });
 
 String _num(double v) {
   if (v == v.roundToDouble()) return v.round().toString();

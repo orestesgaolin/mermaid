@@ -74,16 +74,19 @@ class _Box {
 }
 
 _Box _glyph(String text, TextStyleSpec style, TextMeasurer m, Color color,
-    {bool italic = false}) {
-  if (italic) style = style.copyWith(italic: true);
-  final size = m.measure(text, style, maxWidth: 100000);
+    {bool roman = true}) {
+  // Math sets in KaTeX fonts: roman (numbers/operators/text/functions) in
+  // KaTeX_Main, variables in the inherently-italic KaTeX_Math.
+  final kstyle = style.copyWith(
+      fontFamily: roman ? 'KaTeX_Main' : 'KaTeX_Math', italic: false);
+  final size = m.measure(text, kstyle, maxWidth: 100000);
   // Approximate baseline: ~80% of the line box is ascent.
   final ascent = size.height * 0.8;
   return _Box(size.width, ascent, size.height - ascent, (x, baseline, out) {
     out.add(SceneText(
       text: text,
       bounds: Rect.fromLTWH(x, baseline - ascent, size.width, size.height),
-      style: style,
+      style: kstyle,
       color: color,
       align: TextAlignH.left,
     ));
@@ -260,7 +263,7 @@ _Box _atom(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
   final isVar = text.length == 1 &&
       RegExp(r'[A-Za-zα-ω]').hasMatch(text) &&
       !(tok.startsWith(r'\') && sym == null);
-  return _glyph(text, style, m, color, italic: isVar);
+  return _glyph(text, style, m, color, roman: !isVar);
 }
 
 const _functions = {

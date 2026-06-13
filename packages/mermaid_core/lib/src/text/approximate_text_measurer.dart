@@ -8,6 +8,7 @@ library;
 import 'dart:math' as math;
 
 import '../geometry.dart';
+import '../math/katex_metrics.dart';
 import 'text_measurer.dart';
 import 'text_style.dart';
 
@@ -55,9 +56,18 @@ class ApproximateTextMeasurer implements TextMeasurer {
   }
 
   double _lineWidth(String line, TextStyleSpec style) {
+    // KaTeX math fonts have their own advance metrics; use them so math
+    // glyphs space like KaTeX rather than like Helvetica.
+    final fam = style.fontFamily;
+    final katex = fam == 'KaTeX_Math'
+        ? katexMathMetrics
+        : fam == 'KaTeX_Main'
+            ? katexMainMetrics
+            : null;
     var w = 0.0;
     for (final unit in line.codeUnits) {
-      w += _advance(unit);
+      final m = katex?[unit];
+      w += m != null ? m[0] : _advance(unit);
     }
     return w * style.fontSize;
   }

@@ -23,3 +23,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  fonts:
+    - family: KaTeX_Main
+      fonts:
+        - asset: fonts/KaTeX_Main-Regular.ttf
+    - family: KaTeX_Math
+      fonts:
+        - asset: fonts/KaTeX_Math-Italic.ttf

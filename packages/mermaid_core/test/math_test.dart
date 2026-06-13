@@ -152,14 +152,15 @@ void main() {
       expect(ml.size.width, greaterThan(0));
     });
 
-    test('function names render upright', () {
+    test('function names use the roman KaTeX font, variables the math font', () {
       final ml = layoutMath(r'\sin t', style, measurer, black);
       final texts =
           flatten(ml.render(const Point(0, 0))).whereType<SceneText>();
-      // 'sin' is one upright (non-italic) run; 't' is italic.
+      // 'sin' renders in KaTeX_Main (roman); the variable 't' in KaTeX_Math.
       final sin = texts.firstWhere((t) => t.text == 'sin');
-      expect(sin.style.italic, isFalse);
-      expect(texts.any((t) => t.text == 't' && t.style.italic), isTrue);
+      expect(sin.style.fontFamily, 'KaTeX_Main');
+      expect(texts.any((t) => t.text == 't' && t.style.fontFamily == 'KaTeX_Math'),
+          isTrue);
     });
 
     test(r'\overbrace composes with a ^ label', () {
