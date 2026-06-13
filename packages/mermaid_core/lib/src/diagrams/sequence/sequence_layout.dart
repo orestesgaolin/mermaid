@@ -102,6 +102,10 @@ class _SequenceLayout {
     final openActivations = <String, List<double>>{};
     final activationRects = <(String, double, double, int)>[];
     final openFrames = <_OpenFrame>[];
+    // `create`/`destroy`: top of a created participant's box, and the y where
+    // a destroyed participant's lifeline ends.
+    final createTop = <String, double>{};
+    final destroyY = <String, double>{};
     var autonumber = false;
     var autoValue = 0;
     var autoStep = 1;
@@ -164,6 +168,16 @@ class _SequenceLayout {
           final frame = openFrames.removeLast();
           _emitFrame(frame, y);
           y += _boxMargin;
+
+        case SeqCreate():
+          // The created participant's box sits at the current y; its lifeline
+          // starts below the box.
+          y += _boxMargin;
+          createTop[event.id] = y;
+          y += _actorHeight + _boxMargin;
+
+        case SeqDestroy():
+          destroyY[event.id] = y;
       }
     }
 
@@ -186,18 +200,71 @@ class _SequenceLayout {
       ));
     }
 
+    // Participant grouping boxes, drawn behind the lifelines.
+    for (final box in diagram.boxes) {
+      final xs = [
+        for (final m in box.members)
+          if (columns[m] != null) columns[m]!
+      ];
+      if (xs.isEmpty) continue;
+      var left = double.infinity, right = -double.infinity;
+      for (final c in xs) {
+        left = math.min(left, c.x - c.boxWidth / 2);
+        right = math.max(right, c.x + c.boxWidth / 2);
+      }
+      left -= _boxMargin;
+      right += _boxMargin;
+      final top = -_boxMargin - (box.label.isEmpty ? 0 : _blockLabelHeight);
+      backgrounds.add(SceneShape(
+        geometry: RectGeometry(
+            Rect.fromLTWH(left, top, right - left, bottomBoxTop - top + _boxMargin)),
+        fill: Fill((box.color != null ? Color.tryParse(box.color!) : null) ??
+            const Color(0x00000000)),
+        stroke: const Stroke(color: _activationBorder),
+      ));
+      if (box.label.isNotEmpty) {
+        final size = measurer.measure(box.label, baseStyle);
+        backgrounds.add(SceneText(
+          text: box.label,
+          bounds: Rect.fromLTWH((left + right) / 2 - size.width / 2,
+              top + 2, size.width, size.height),
+          style: baseStyle,
+          color: theme.textColor,
+        ));
+      }
+    }
+
     for (final id in order) {
       final col = columns[id]!;
+      final top = createTop[id] != null ? createTop[id]! + _actorHeight : topBoxBottom;
+      final bottom = destroyY[id] ?? bottomBoxTop;
       lifelines.add(SceneShape(
         geometry: PathGeometry([
-          MoveTo(Point(col.x, topBoxBottom)),
-          LineTo(Point(col.x, bottomBoxTop)),
+          MoveTo(Point(col.x, top)),
+          LineTo(Point(col.x, bottom)),
         ]),
         stroke: const Stroke(color: _lifelineColor, width: 1),
       ));
-      _actorBox(col, 0);
-      // mirrorActors: repeat the participant box at the bottom.
-      _actorBox(col, bottomBoxTop);
+      // Top box: at the create point for created participants, else the top.
+      _actorBox(col, createTop[id] ?? 0);
+      // mirrorActors: repeat at the bottom, unless the participant was
+      // destroyed before the end.
+      if (destroyY[id] == null) {
+        _actorBox(col, bottomBoxTop);
+      } else {
+        // ✗ marker where the lifeline ends.
+        final d = 6.0;
+        final yy = destroyY[id]!;
+        eventNodes.add(SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(col.x - d, yy - d)),
+            LineTo(Point(col.x + d, yy + d)),
+            MoveTo(Point(col.x + d, yy - d)),
+            LineTo(Point(col.x - d, yy + d)),
+          ]),
+          stroke: const Stroke(color: _activationBorder, width: 2),
+        ));
+      }
     }
 
     var nodes = <SceneNode>[

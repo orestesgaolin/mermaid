@@ -45,8 +45,11 @@ class _SequenceParser {
   /// matching upstream).
   final _activationDepth = <String, int>{};
 
-  /// `box ... end` groups are parsed and discarded; `end` closes them too.
-  var _openBoxes = 0;
+  /// Finished participant grouping boxes.
+  final _boxes = <SeqBox>[];
+
+  /// Stack of open boxes being filled (label, color, members).
+  final _openBoxStack = <({String label, String? color, List<String> members})>[];
 
   SequenceDiagram parse() {
     title = frontTitle;
@@ -81,6 +84,7 @@ class _SequenceParser {
       participants: participants,
       events: events,
       title: title,
+      boxes: _boxes,
     );
   }
 
@@ -93,14 +97,22 @@ class _SequenceParser {
       return;
     }
 
-    // `create participant X` / `create actor X` — treated as a declaration;
-    // `destroy X` is parsed and ignored (lifeline shortening not yet ported).
+    // `create participant X` / `create actor X`: declare + mark the lifeline
+    // to begin at this point.
     m = RegExp(r'^create\s+(participant|actor)\s+(.+)$').firstMatch(line);
     if (m != null) {
-      _declareParticipant(m.group(2)!.trim(), isActor: m.group(1) == 'actor');
+      final id =
+          _declareParticipant(m.group(2)!.trim(), isActor: m.group(1) == 'actor');
+      events.add(SeqCreate(id));
       return;
     }
-    if (RegExp(r'^destroy\s+').hasMatch(line)) return;
+    // `destroy X`: end the lifeline here with an ✗.
+    m = RegExp(r'^destroy\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      final id = _ensureParticipant(m.group(1)!.trim());
+      events.add(SeqDestroy(id));
+      return;
+    }
 
     m = RegExp(r'^(de)?activate\s+(.+)$').firstMatch(line);
     if (m != null) {
@@ -169,16 +181,27 @@ class _SequenceParser {
       return;
     }
 
-    if (RegExp(r'^box\b').hasMatch(line)) {
-      // Participant grouping boxes are not rendered yet; participants inside
-      // still register via their own statements.
-      _openBoxes++;
+    m = RegExp(r'^box\b\s*(.*)$').firstMatch(line);
+    if (m != null) {
+      var rest = m.group(1)!.trim();
+      String? color;
+      final cm = RegExp(
+              r'^(rgba?\([^)]*\)|#[0-9a-fA-F]+|transparent|[Aa]qua|[Ll]ightgreen|[Ll]ightblue|[Ll]ightyellow)\s+')
+          .firstMatch(rest);
+      if (cm != null) {
+        color = cm.group(1);
+        rest = rest.substring(cm.end).trim();
+      }
+      _openBoxStack.add((label: _normalizeText(rest), color: color, members: []));
       return;
     }
 
     if (line == 'end') {
-      if (_openBoxes > 0) {
-        _openBoxes--;
+      if (_openBoxStack.isNotEmpty) {
+        final b = _openBoxStack.removeLast();
+        if (b.members.isNotEmpty) {
+          _boxes.add(SeqBox(label: b.label, members: b.members, color: b.color));
+        }
         return;
       }
       if (_blockStack.isEmpty) {
@@ -278,7 +301,7 @@ class _SequenceParser {
     events.add(SeqActivation(id, active: active));
   }
 
-  void _declareParticipant(String decl, {required bool isActor}) {
+  String _declareParticipant(String decl, {required bool isActor}) {
     final asMatch = RegExp(r'^(.+?)\s+as\s+(.+)$').firstMatch(decl);
     final id = (asMatch != null ? asMatch.group(1)! : decl).trim();
     final label =
@@ -289,11 +312,22 @@ class _SequenceParser {
       label: label,
       isActor: isActor || (existing?.isActor ?? false),
     );
+    _addToOpenBox(id);
+    return id;
   }
 
-  void _ensureParticipant(String id) {
+  String _ensureParticipant(String id) {
+    final isNew = !participants.containsKey(id);
     participants.putIfAbsent(
         id, () => SeqParticipant(id: id, label: _normalizeText(id)));
+    if (isNew) _addToOpenBox(id);
+    return id;
+  }
+
+  void _addToOpenBox(String id) {
+    if (_openBoxStack.isEmpty) return;
+    final members = _openBoxStack.last.members;
+    if (!members.contains(id)) members.add(id);
   }
 
   String _normalizeText(String s) {

@@ -8,12 +8,27 @@ class SequenceDiagram {
     required this.participants,
     required this.events,
     this.title,
+    this.boxes = const [],
   });
 
   /// Declaration/first-mention order = column order, keyed by id.
   final Map<String, SeqParticipant> participants;
   final List<SeqEvent> events;
   final String? title;
+
+  /// `box ... end` participant groupings, drawn behind the lifelines.
+  final List<SeqBox> boxes;
+}
+
+/// A `box [color] [label] ... end` grouping of participants.
+class SeqBox {
+  const SeqBox({required this.label, required this.members, this.color});
+
+  final String label;
+  final List<String> members;
+
+  /// CSS color text, or null for transparent.
+  final String? color;
 }
 
 class SeqParticipant {
@@ -99,6 +114,19 @@ class SeqActivation extends SeqEvent {
 
   final String id;
   final bool active;
+}
+
+/// `create participant X` — the participant's box/lifeline begins here rather
+/// than at the top.
+class SeqCreate extends SeqEvent {
+  const SeqCreate(this.id);
+  final String id;
+}
+
+/// `destroy X` — the participant's lifeline ends here with an ✗.
+class SeqDestroy extends SeqEvent {
+  const SeqDestroy(this.id);
+  final String id;
 }
 
 enum NotePlacement { leftOf, rightOf, over }
