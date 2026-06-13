@@ -567,7 +567,7 @@ _Fragment _layoutGraph(
     }
 
     children.add(SceneShape(
-      geometry: PathGeometry(_curveBasis(points)),
+      geometry: PathGeometry(_edgeCurve(points, e.interpolate)),
       stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
     ));
     if (e.headTo != ArrowHead.none) {
@@ -1678,6 +1678,66 @@ List<SceneNode> _marker(ArrowHead head, Point tip, Point dir, Color color) {
     case ArrowHead.none:
       return const [];
   }
+}
+
+/// Dispatches to the d3 curve named by `linkStyle … interpolate` (basis is
+/// the default). Interpolating families (natural/cardinal/catmullRom/
+/// monotone/bump) are approximated by a Catmull-Rom spline through the points.
+List<PathCommand> _edgeCurve(List<Point> pts, String? interpolate) {
+  switch (interpolate) {
+    case 'linear':
+      return [MoveTo(pts.first), for (var i = 1; i < pts.length; i++) LineTo(pts[i])];
+    case 'step':
+    case 'stepAfter':
+      return _curveStep(pts, after: true);
+    case 'stepBefore':
+      return _curveStep(pts, after: false);
+    case 'natural':
+    case 'cardinal':
+    case 'catmullRom':
+    case 'monotoneX':
+    case 'monotoneY':
+    case 'bumpX':
+    case 'bumpY':
+      return _curveCatmullRom(pts);
+    default:
+      return _curveBasis(pts);
+  }
+}
+
+/// d3-shape curveStep: orthogonal segments stepping at each point.
+List<PathCommand> _curveStep(List<Point> pts, {required bool after}) {
+  if (pts.length < 2) return [MoveTo(pts.first)];
+  final cmds = <PathCommand>[MoveTo(pts.first)];
+  for (var i = 1; i < pts.length; i++) {
+    final a = pts[i - 1], b = pts[i];
+    if (after) {
+      cmds..add(LineTo(Point(b.x, a.y)))..add(LineTo(b));
+    } else {
+      cmds..add(LineTo(Point(a.x, b.y)))..add(LineTo(b));
+    }
+  }
+  return cmds;
+}
+
+/// Catmull-Rom spline passing through every point (tension 0).
+List<PathCommand> _curveCatmullRom(List<Point> pts) {
+  if (pts.length < 3) {
+    return [MoveTo(pts.first), for (var i = 1; i < pts.length; i++) LineTo(pts[i])];
+  }
+  final cmds = <PathCommand>[MoveTo(pts.first)];
+  for (var i = 0; i < pts.length - 1; i++) {
+    final p0 = pts[i == 0 ? 0 : i - 1];
+    final p1 = pts[i];
+    final p2 = pts[i + 1];
+    final p3 = pts[i + 2 < pts.length ? i + 2 : pts.length - 1];
+    cmds.add(CubicTo(
+      Point(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6),
+      Point(p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6),
+      p2,
+    ));
+  }
+  return cmds;
 }
 
 /// d3-shape curveBasis: cubic uniform B-spline with interpolated endpoints.

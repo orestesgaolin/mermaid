@@ -192,12 +192,17 @@ class FlowEdge {
     this.headTo = ArrowHead.point,
     this.minLen = 1,
     this.styles = const {},
+    this.interpolate,
   });
 
   final String from;
   final String to;
   final String? label;
   final EdgeStroke stroke;
+
+  /// Edge curve from `linkStyle … interpolate <curve>` (basis/linear/step/…).
+  /// Null ⇒ the diagram default (basis).
+  final String? interpolate;
 
   /// Arrow at the source end (for `<-->`, `x--x`, ...).
   final ArrowHead headFrom;
@@ -212,7 +217,8 @@ class FlowEdge {
   /// Inline styles from `linkStyle`.
   final Map<String, String> styles;
 
-  FlowEdge copyWith({Map<String, String>? styles}) => FlowEdge(
+  FlowEdge copyWith({Map<String, String>? styles, String? interpolate}) =>
+      FlowEdge(
         from: from,
         to: to,
         label: label,
@@ -221,6 +227,7 @@ class FlowEdge {
         headTo: headTo,
         minLen: minLen,
         styles: styles ?? this.styles,
+        interpolate: interpolate ?? this.interpolate,
       );
 }
 

@@ -99,12 +99,16 @@ class _FlowParser {
         'unclosed subgraph "${_openSubgraphs.last.title}"',
       );
     }
-    final finalEdges = _defaultLinkStyles.isEmpty
-        ? edges
-        : [
-            for (final e in edges)
-              e.copyWith(styles: {..._defaultLinkStyles, ...e.styles}),
-          ];
+    final finalEdges =
+        (_defaultLinkStyles.isEmpty && _defaultInterpolate == null)
+            ? edges
+            : [
+                for (final e in edges)
+                  e.copyWith(
+                    styles: {..._defaultLinkStyles, ...e.styles},
+                    interpolate: e.interpolate ?? _defaultInterpolate,
+                  ),
+              ];
     return FlowGraph(
       direction: direction,
       nodes: nodes,
@@ -364,17 +368,20 @@ class _FlowParser {
       throw MermaidParseException('malformed linkStyle statement', line: line);
     }
     var styleText = m.group(2)!.trim();
-    // `interpolate <curve>` is accepted and ignored (curve choice is a
-    // renderer concern; we always use curveBasis like upstream's default).
-    final interp = RegExp(r'^interpolate\s+\w+\s*').firstMatch(styleText);
-    if (interp != null) styleText = styleText.substring(interp.end).trim();
-    if (styleText.isEmpty) return;
-    final styles = _parseStyles(styleText);
+    // `interpolate <curve>` selects the edge curve (basis/linear/step/...).
+    String? curve;
+    final interp = RegExp(r'^interpolate\s+(\w+)\s*').firstMatch(styleText);
+    if (interp != null) {
+      curve = interp.group(1);
+      styleText = styleText.substring(interp.end).trim();
+    }
+    final styles = styleText.isEmpty ? <String, String>{} : _parseStyles(styleText);
     final indexText = m.group(1)!.trim();
     // `linkStyle default` applies to every edge; per-index styles override
     // it (merged at the end of parse()).
     if (indexText == 'default') {
       _defaultLinkStyles.addAll(styles);
+      if (curve != null) _defaultInterpolate = curve;
       return;
     }
     for (final part in indexText.split(',')) {
@@ -385,9 +392,12 @@ class _FlowParser {
           line: line,
         );
       }
-      edges[i] = edges[i].copyWith(styles: {...edges[i].styles, ...styles});
+      edges[i] = edges[i]
+          .copyWith(styles: {...edges[i].styles, ...styles}, interpolate: curve);
     }
   }
+
+  String? _defaultInterpolate;
 
   void _parseClick(String s, int line) {
     // click <id> href "url" ["tooltip"] | click <id> "url" ["tooltip"]

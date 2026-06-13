@@ -11,6 +11,7 @@ import 'package:mermaid_core/src/parse_error.dart';
 import 'package:test/test.dart';
 
 void main() {
+  _interpolateTests();
   group('header and direction', () {
     test('graph TD', () {
       expect(parseFlowchart('graph TD;A-->B;').direction, FlowDirection.tb);
@@ -608,6 +609,23 @@ end
     });
     test('empty source throws', () {
       expect(() => parseFlowchart(''), throwsA(isA<MermaidParseException>()));
+    });
+  });
+}
+
+void _interpolateTests() {
+  group('linkStyle interpolate', () {
+    test('per-index and default curves are captured', () {
+      final g = parseFlowchart('''
+flowchart LR
+  A --> B
+  C --> D
+  linkStyle 0 interpolate linear
+  linkStyle default interpolate stepAfter
+''');
+      expect(g.edges[0].interpolate, 'linear');
+      // default applies where no per-index curve set.
+      expect(g.edges[1].interpolate, 'stepAfter');
     });
   });
 }
