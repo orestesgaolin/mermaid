@@ -234,6 +234,17 @@ timeline
     2005 : YouTube
     2006 : Twitter
 '''),
+  Sample('sankey', 'Sankey', cCharts,
+      'Flow diagram: nodes in layered columns, links drawn as ribbons whose '
+          'width is proportional to the flow value.', '''
+sankey-beta
+Coal,Electricity,40
+Gas,Electricity,25
+Solar,Electricity,10
+Electricity,Homes,35
+Electricity,Industry,30
+Electricity,Losses,10
+'''),
   Sample('mindmap', 'Mindmap', cCharts,
       'Hierarchical ideas radiating outward from a central root.', '''
 mindmap

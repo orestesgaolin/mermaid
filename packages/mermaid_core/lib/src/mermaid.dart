@@ -16,6 +16,7 @@ import 'diagrams/mindmap/mindmap.dart';
 import 'diagrams/gantt/gantt_parser.dart';
 import 'diagrams/pie/pie_layout.dart';
 import 'diagrams/quadrant/quadrant.dart';
+import 'diagrams/sankey/sankey.dart';
 import 'diagrams/requirement/requirement.dart';
 import 'diagrams/pie/pie_parser.dart';
 import 'diagrams/sequence/sequence_layout.dart';
@@ -104,12 +105,15 @@ class Mermaid {
       case DiagramType.gitGraph:
         return layoutGitGraph(parseGitGraph(source),
             measurer: measurer, theme: theme);
+      case DiagramType.sankey:
+        return layoutSankey(parseSankey(source),
+            measurer: measurer, theme: theme);
       case DiagramType.unknown:
         throw UnsupportedError(
           'Unrecognized or not-yet-supported diagram type. Currently '
           'supported: flowchart, sequence, class, state, er, pie, gantt, '
           'quadrantChart, journey, timeline, xychart, mindmap, '
-          'requirementDiagram, C4, gitGraph.',
+          'requirementDiagram, C4, gitGraph, sankey.',
         );
     }
   }
