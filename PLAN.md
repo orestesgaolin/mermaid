@@ -241,22 +241,24 @@ it alongside the theme.
   the label. 7 tests. Gaps: architecture-diagram icons (needs that diagram);
   website side-by-side parity needs the mermaid.js embed to register the
   SAME pack (it ships none) — verified via standalone render instead.
-- [~] **Math** (`$$...$$` in labels; upstream uses KaTeX). PARTIAL —
-  `src/math/tex_math.dart` lays out a TeX subset with **low-level scene
-  primitives** (glyph SceneText + rule SceneShape), so it renders in every
-  backend incl. SVG — no widget/webview. Supports `^`/`_`, `\frac`,
-  `\sqrt`, grouping and a greek/operator symbol table; handles the
-  canonical examples (x^2, \frac{1}{2}, \sqrt{x+3}, \pi r^2). Wired into
-  whole-`$$` flowchart node labels. 6 tests.
-  - Investigated `flutter_tex`: MathJax-based, depends on flutter_svg +
-    webview, exposes only a **widget** (no pure-Dart TeX→SVG string), so it
-    can't feed our IR — the low-level route above is the right call.
-  - Gaps to full parity: edge-label math and inline mixed text+math (only
-    whole-label `$$...$$` is handled), matrices/cases/over-/underbrace,
-    proper KaTeX font metrics. For pixel-parity in the Flutter target,
-    `flutter_math_fork` (pure-Dart KaTeX-port, RenderObject-based) is the
-    path — but it paints widgets, not scene IR, so the SVG backend would
-    still use this subset.
+- [x] **Math** (`$$...$$` in labels; upstream uses KaTeX) — DONE for the
+  common+complex constructs. `src/math/tex_math.dart` lays out TeX with
+  **low-level scene primitives** (glyph SceneText + rule/bracket SceneShape),
+  so it renders in every backend incl. SVG — no widget/webview. Supports:
+  `^`/`_`, `\frac`, `\sqrt`, grouping, greek/operator symbols, `\text`/
+  `\mathrm`, `\overbrace`/`\underbrace` (compose with `^`/`_` labels),
+  `\vec`/`\hat`/`\bar`/`\overline` accents, and environments
+  `\begin{matrix|bmatrix|pmatrix|vmatrix|Bmatrix|cases}` (rows `\\`, cols
+  `&`, sized delimiters drawn as paths). Wired into whole-`$$` flowchart
+  **node AND edge** labels. The full canonical mermaid math example renders;
+  verified side-by-side. 10 tests.
+  - `flutter_tex` was investigated and rejected for IR use (MathJax+webview
+    widget, no pure-Dart TeX→SVG string).
+  - Gaps: `\left\right` auto-sizing (plain-glyph approx), inline mixed
+    text+math within one label (only whole-`$$` labels), KaTeX serif-italic
+    math font (uses the label font). Pixel-font parity in the Flutter target
+    would want `flutter_math_fork`, but that paints widgets not scene IR, so
+    SVG/other backends keep this engine.
 - [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
   *Very high — the big rock.* Upstream registers pluggable layout loaders
   (`rendering-util/render.ts registerLayoutLoaders`); elk is the
