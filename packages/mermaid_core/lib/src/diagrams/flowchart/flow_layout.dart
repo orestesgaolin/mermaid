@@ -15,6 +15,7 @@ import 'dart:math' as math;
 
 import '../../color.dart';
 import '../../geometry.dart';
+import '../../icons/icon_registry.dart';
 import '../../ir/scene.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
@@ -24,6 +25,10 @@ import 'flow_model.dart';
 
 /// Upstream flowchart defaults (defaultConfig.ts / flowchart schema).
 const double _nodePadding = 15;
+
+/// Icon glyph square + gap to the label below it, for `@{ icon: }` nodes.
+const double _iconSize = 36;
+const double _iconGap = 4;
 const double _diagramPadding = 8;
 const double _clusterPadding = 8;
 const double _wrappingWidth = 200;
@@ -37,6 +42,7 @@ RenderScene layoutFlowchart(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
+  ensureBuiltinIconPacks();
   final baseStyle = TextStyleSpec(
     fontFamily: theme.fontFamily,
     fontSize: theme.fontSize,
@@ -234,13 +240,20 @@ _Fragment _layoutGraph(
     // phantom node with the subgraph's id; the cluster wins.
     if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
-    final labelSize =
+    final textSize =
         measurer.measure(node.label, baseStyle, maxWidth: _wrappingWidth);
+    // An icon reserves a square area above the label; inflate the sizing box.
+    final hasIcon = node.icon != null && lookupIcon(node.icon!) != null;
+    final boxSize = hasIcon
+        ? Size(math.max(textSize.width, _iconSize + 8),
+            textSize.height + _iconSize + _iconGap)
+        : textSize;
     placed[node.id] = _PlacedNode(
       node: node,
       style: style,
-      labelSize: labelSize,
-      shape: _Shape.forNode(node.shape, labelSize),
+      labelSize: boxSize,
+      textSize: hasIcon ? textSize : null,
+      shape: _Shape.forNode(node.shape, boxSize),
     );
   }
   for (final cluster in isolatedClusters.values) {
@@ -554,9 +567,28 @@ _Fragment _layoutGraph(
   // Nodes.
   for (final p in placed.values) {
     if (syntheticIds.contains(p.node.id)) continue;
-    final children = <SceneNode>[
-      ...p.shape.build(p.center, p.style),
-      SceneText(
+    final children = <SceneNode>[...p.shape.build(p.center, p.style)];
+    if (p.textSize != null) {
+      // Icon node: glyph in the reserved top square, label beneath it.
+      final lc = p.shape.labelCenter(p.center);
+      final contentTop = lc.y - p.labelSize.height / 2;
+      children.addAll(renderIcon(
+        p.node.icon!,
+        Rect.fromLTWH(p.center.x - _iconSize / 2, contentTop, _iconSize, _iconSize),
+        p.style.textColor,
+      ));
+      children.add(SceneText(
+        text: p.node.label,
+        bounds: Rect.fromCenter(
+          Point(p.center.x, contentTop + _iconSize + _iconGap + p.textSize!.height / 2),
+          p.textSize!.width,
+          p.textSize!.height,
+        ),
+        style: baseStyle,
+        color: p.style.textColor,
+      ));
+    } else {
+      children.add(SceneText(
         text: p.node.label,
         bounds: Rect.fromCenter(
           p.shape.labelCenter(p.center),
@@ -565,8 +597,8 @@ _Fragment _layoutGraph(
         ),
         style: baseStyle,
         color: p.style.textColor,
-      ),
-    ];
+      ));
+    }
     nodeGroups.add(SceneGroup(
       id: p.node.id,
       semanticLabel: p.node.label,
@@ -817,11 +849,18 @@ class _PlacedNode {
     required this.style,
     required this.labelSize,
     required this.shape,
+    this.textSize,
   });
 
   final FlowNode node;
   final _NodeStyle style;
+
+  /// Box used to size the shape (inflated to include the icon when present).
   final Size labelSize;
+
+  /// The label's own measured size; differs from [labelSize] only when an
+  /// icon reserves space above the text. Null ⇒ same as [labelSize].
+  final Size? textSize;
   final _Shape shape;
   Point center = Point.zero;
 }

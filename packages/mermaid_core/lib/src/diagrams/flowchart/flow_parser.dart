@@ -536,6 +536,7 @@ class _FlowParser {
   void _parseNodeAttributes(String id, _Scanner sc) {
     String? shapeName;
     String? label;
+    String? icon;
     while (true) {
       sc.skipWs();
       if (sc.tryConsume('}')) break;
@@ -563,6 +564,8 @@ class _FlowParser {
           shapeName = value;
         case 'label':
           label = value;
+        case 'icon':
+          icon = value;
         default:
           break; // Recognized-but-unsupported attribute; ignored.
       }
@@ -581,6 +584,10 @@ class _FlowParser {
     if (label != null) {
       final normalized = _normalizeLabel(label);
       node = node.copyWith(label: normalized.isEmpty ? id : normalized);
+    }
+    if (icon != null) {
+      node = node.copyWith(
+          icon: icon, shape: shapeName == null ? FlowNodeShape.rounded : null);
     }
     nodes[id] = node;
   }

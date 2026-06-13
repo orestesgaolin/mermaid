@@ -90,6 +90,7 @@ class FlowNode {
     this.styles = const {},
     this.link,
     this.tooltip,
+    this.icon,
   });
 
   final String id;
@@ -98,6 +99,9 @@ class FlowNode {
   /// when the node never declared a label.
   final String label;
   final FlowNodeShape shape;
+
+  /// Iconify reference `"prefix:name"` from `@{ icon: ... }`, if any.
+  final String? icon;
 
   /// Class names assigned via `class a,b name` or `:::name`.
   final List<String> classes;
@@ -116,6 +120,7 @@ class FlowNode {
     Map<String, String>? styles,
     String? link,
     String? tooltip,
+    String? icon,
   }) =>
       FlowNode(
         id: id,
@@ -125,6 +130,7 @@ class FlowNode {
         styles: styles ?? this.styles,
         link: link ?? this.link,
         tooltip: tooltip ?? this.tooltip,
+        icon: icon ?? this.icon,
       );
 }
 
