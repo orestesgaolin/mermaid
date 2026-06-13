@@ -1,7 +1,7 @@
 # Mermaid → Dart port: plan & handoff
 
 A Flutter-first Dart port of [mermaid-js](https://github.com/mermaid-js/mermaid).
-**Read this before touching the code.** Updated: 2026-06-10 (14 diagram types, SVG backend, comparison website).
+**Read this before touching the code.** Updated: 2026-06-13 (15 diagram types incl. gitGraph, SVG backend, docs-style comparison website).
 
 ## Goal & priorities
 
@@ -172,20 +172,39 @@ y-labels horizontal), class note placement, state self-loop label overlap.
 - [x] **xychart / mindmap / requirement / C4** (single-file ports) —
   21+2+2+5 corpus fixtures, 12 tests. xychart matches upstream palette
   (pale lavender bars, grey line) and nice tick steps; mindmap uses a
-  deterministic two-sided tidy tree (upstream is force-directed — different
-  aesthetic, same structure); C4 boundaries via member-bounds dashed rects.
+  deterministic **radial** tree (angular sectors ∝ leaf count; upstream is
+  force-directed — same look without the simulation); C4 boundaries via
+  member-bounds dashed rects. Mindmap has visual parity with upstream:
+  saturated section palette sampled from the real render, depth-lightened
+  fills, drop-shadow strip, luminance-based label text, tapering edges.
   Gaps: xychart `horizontal` parsed-but-ignored, mindmap icons/classes
   skipped, C4 UpdateRelStyle/Lay_* hints ignored.
-- [x] Website covers all 15 samples; per-chart visual comparison done
-  against mermaid.js in-browser (fidelity pass #2). Embed app fix: FittedBox
-  must not sit inside an unbounded scroll view or tall diagrams clip.
+- [x] **gitGraph** (`diagrams/git/git_graph.dart`, single file) — 33/33
+  corpus fixtures (extracted from upstream demos/git.html), 7 tests.
+  commit (id/type/tag), branch, checkout/switch, merge (id/type/tag),
+  cherry-pick; LR (default) + TB direction; lane-per-branch temporal
+  layout (x = insertion seq); commit types normal/reverse(crossed)/
+  highlight(square); merge = hollow ring; branch-point + merge edges;
+  tag flags; branch labels with luminance-based text. Palette sampled
+  from upstream default-theme render (git0 #0000ec, git1 #dede00, …).
+  Gaps: parallelCommits/rotateCommitLabel/showCommitLabel config,
+  cherry-pick parent arrows, BT/RL treated as TB/LR.
+- [x] Website covers all samples; per-chart visual comparison done
+  against mermaid.js in-browser (fidelity passes #2–4). Embed app fix:
+  FittedBox must not sit inside an unbounded scroll view or tall diagrams
+  clip. Docs-style page: samples carry a category + one-line description;
+  chips grouped under Diagrams / Charts & data / Theming, with the diagram
+  name + description shown above the side-by-side panes.
 - [x] **Theme directives** (`src/directives.dart`): `%%{init}%%` with
   `theme` (default/dark/forest/neutral) + `themeVariables` (loose-JSON
   tolerated), frontmatter `config.theme`. primaryColor drives mainBkg like
   upstream theme-base. Dark theme paints no background (matches mermaid.js
   on-page look). Styled comparison samples on the website (dark, forest,
   custom variables, classDef).
-- [ ] Long tail: block, packet, kanban, sankey, radar, architecture.
+- [ ] Long tail (upstream has these, not yet ported): sankey, block,
+  packet, kanban, architecture, radar, treemap, and niche ones (cynefin,
+  eventmodeling, ishikawa, railroad, swimlanes, venn, wardley, zenuml).
+  gitGraph (previously listed) is now done.
 - [ ] Frontmatter `config.themeVariables` (nested YAML) not yet parsed.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
   into a shared edges util (3 copies now).
