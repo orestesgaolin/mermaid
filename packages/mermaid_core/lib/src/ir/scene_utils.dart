@@ -20,8 +20,18 @@ Rect? sceneBounds(Iterable<SceneNode> nodes) {
 Rect? sceneNodeBounds(SceneNode node) => switch (node) {
       SceneGroup(:final children) => sceneBounds(children),
       SceneShape(:final geometry) => geometryBounds(geometry),
-      SceneText(:final bounds) => bounds,
+      SceneText(:final bounds, :final rotation) =>
+        rotation == 0 ? bounds : _rotatedBounds(bounds, rotation),
     };
+
+/// Axis-aligned bounding box of [r] rotated [deg] degrees about its center.
+Rect _rotatedBounds(Rect r, double deg) {
+  final rad = deg * math.pi / 180;
+  final c = math.cos(rad).abs(), s = math.sin(rad).abs();
+  final w = r.width * c + r.height * s;
+  final h = r.width * s + r.height * c;
+  return Rect.fromCenter(r.center, w, h);
+}
 
 Rect geometryBounds(ShapeGeometry g) => switch (g) {
       RectGeometry(:final rect) => rect,
@@ -82,6 +92,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
           style: style,
           color: color,
           align: align,
+          rotation: node.rotation,
         ),
     };
 

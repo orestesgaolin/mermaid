@@ -78,6 +78,13 @@ Packet parsePacket(String source) {
     if (end < start) {
       throw MermaidParseException('packet field end < start', line: i + 1);
     }
+    // Blocks must be contiguous (no gaps/overlaps), like upstream.
+    if (start != prevEnd + 1) {
+      throw MermaidParseException(
+          'Packet block $start - $end is not contiguous. '
+          'It should start from ${prevEnd + 1}.',
+          line: i + 1);
+    }
     fields.add(PacketField(start, end, m.group(3)!));
     prevEnd = end;
   }

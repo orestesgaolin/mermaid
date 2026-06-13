@@ -190,7 +190,7 @@ RenderScene layoutQuadrantChart(
   }
 
   // Axis labels.
-  void axisLabel(String? text, Point center) {
+  void axisLabel(String? text, Point center, {double rotation = 0}) {
     if (text == null || text.isEmpty) return;
     final size = measurer.measure(text, baseStyle);
     nodes.add(SceneText(
@@ -198,22 +198,26 @@ RenderScene layoutQuadrantChart(
       bounds: Rect.fromCenter(center, size.width, size.height),
       style: baseStyle.copyWith(fontWeight: 700),
       color: theme.textColor,
+      rotation: rotation,
     ));
   }
 
   axisLabel(chart.xAxisLeft, Point(rect.left + plot / 4, rect.bottom + 16));
   axisLabel(chart.xAxisRight, Point(rect.right - plot / 4, rect.bottom + 16));
-  // The IR has no text rotation; y-axis labels sit left of the plot, low
-  // label beside the bottom half and high label beside the top half.
-  double yLabelX(String text) =>
-      rect.left - 12 - measurer.measure(text, baseStyle).width / 2;
+  // Y-axis labels are rotated −90° (reading bottom-to-top) just left of the
+  // plot, like upstream: low label beside the bottom half, high beside the top.
+  const yLabelGap = 16.0;
   if (chart.yAxisBottom != null) {
+    final h = measurer.measure(chart.yAxisBottom!, baseStyle).height;
     axisLabel(chart.yAxisBottom,
-        Point(yLabelX(chart.yAxisBottom!), rect.bottom - plot / 4));
+        Point(rect.left - yLabelGap - h / 2, rect.bottom - plot / 4),
+        rotation: -90);
   }
   if (chart.yAxisTop != null) {
-    axisLabel(
-        chart.yAxisTop, Point(yLabelX(chart.yAxisTop!), rect.top + plot / 4));
+    final h = measurer.measure(chart.yAxisTop!, baseStyle).height;
+    axisLabel(chart.yAxisTop,
+        Point(rect.left - yLabelGap - h / 2, rect.top + plot / 4),
+        rotation: -90);
   }
 
   var bounds = sceneBounds(nodes)!;

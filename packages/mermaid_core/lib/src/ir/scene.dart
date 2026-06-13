@@ -53,6 +53,7 @@ class SceneText extends SceneNode {
     required this.style,
     required this.color,
     this.align = TextAlignH.center,
+    this.rotation = 0,
   });
 
   /// May contain `\n`; backends wrap to [bounds].width using the same rules
@@ -64,6 +65,10 @@ class SceneText extends SceneNode {
   final TextStyleSpec style;
   final Color color;
   final TextAlignH align;
+
+  /// Rotation in degrees (clockwise) about the center of [bounds]. Used e.g.
+  /// for vertical axis labels. 0 ⇒ horizontal.
+  final double rotation;
 }
 
 enum TextAlignH { left, center, right }

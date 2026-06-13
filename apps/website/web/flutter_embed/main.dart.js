@@ -23805,31 +23805,31 @@ for(o=q===0,n=t.R,m=0;l=r.length,m<l;++m,p=h){k=r[m]
 j=o?0:k.b/q*2*3.141592653589793
 i=B.oa[B.e.aH(m,12)]
 h=p+j
-if(j>0){p=A.a([new A.ag(B.kx),new A.a9(new A.h(150+130*Math.cos(p),150+130*Math.sin(p)))],n)
-B.b.C(p,A.aGa(B.kx,130,a4.a,h))
+if(j>0){p=A.a([new A.ag(B.kx),new A.a9(new A.h(205+185*Math.cos(p),205+185*Math.sin(p)))],n)
+B.b.C(p,A.aGa(B.kx,185,a4.a,h))
 p.push(B.dE)
 p=A.a([new A.S(new A.aL(p),new A.an(i,a3),B.R2)],a5)
 if(j>0.15)p.push(new A.akQ(a4,k,q,a9,a7,B.kx,j).$0())
-s.push(new A.b6("slice_"+m,k.a,p))}a4.a=h}g=150-l*11
+s.push(new A.b6("slice_"+m,k.a,p))}a4.a=h}g=205-l*11
 for(p=b0.x,o=b0.w,n=a8.c,m=0;m<r.length;++m){k=r[m]
 f=k.a
 if(n){l=k.b
 l=l===B.d.kB(l)?""+B.d.ai(l):B.d.l(l)
 f=f+" ["+l+"]"}e=a9.bb(f,a7)
 l=e.b
-s.push(new A.b6("legend_"+m,a3,A.a([new A.S(new A.b4(new A.T(310,g,14,14),0,0),new A.an(B.oa[B.e.aH(m,12)],a3),new A.af(p,0.7,a3)),new A.ao(f,new A.T(330,g+7-l/2,e.a,l),a7,o,B.aG)],a5)))
+s.push(new A.b6("legend_"+m,a3,A.a([new A.S(new A.b4(new A.T(420,g,14,14),0,0),new A.an(B.oa[B.e.aH(m,12)],a3),new A.af(p,0.7,a3)),new A.ao(f,new A.T(440,g+7-l/2,e.a,l),a7,o,B.aG)],a5)))
 g+=22}d=a8.b
 if(d!=null&&d.length!==0){c=a6.dN(700)
 e=a9.bb(d,c)
 p=e.a
 o=e.b
 b=-10-o
-s.push(new A.ao(d,new A.T(150-p/2,b,p,o),c,b0.as,B.o))}else b=0
-for(a=280,m=0;m<r.length;++m){k=r[m]
+s.push(new A.ao(d,new A.T(205-p/2,b,p,o),c,b0.as,B.o))}else b=0
+for(a=390,m=0;m<r.length;++m){k=r[m]
 f=k.a
 if(n){p=k.b
 p=p===B.d.kB(p)?""+B.d.ai(p):B.d.l(p)
-f=f+" ["+p+"]"}a=Math.max(a,330+a9.bb(f,a7).a)}a0=Math.max(280,g)
+f=f+" ["+p+"]"}a=Math.max(a,440+a9.bb(f,a7).a)}a0=Math.max(390,g)
 a1=12-b
 a5=A.a([],a5)
 for(r=s.length,a2=0;a2<s.length;s.length===r||(0,A.k)(s),++a2)a5.push(A.eT(s[a2],12,a1))
@@ -23906,27 +23906,27 @@ continue}j=A.A("^acc(Title|Descr)\\s*[:{]",!0,!1,!1,!1)
 if(j.b.test(l))continue
 throw A.f(A.aD('unrecognized statement "'+l+'"',m+1))}if(!n)throw A.f(B.Lc)
 return new A.a3A(o,p,q,r,s,c,b)},
-aKB(a8,a9,b0){var s,r,q,p,o,n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0=null,a1=b0.ax,a2=b0.ay,a3=new A.bQ(a1,a2*0.85,400,!1),a4=t.D,a5=A.a([],a4),a6=new A.T(10,10,320,320),a7=[new A.T(a6.gad().a,10,160,160),new A.T(10,10,160,160),new A.T(10,a6.gad().b,160,160),new A.T(a6.gad().a,a6.gad().b,160,160)]
+aKB(a8,a9,b0){var s,r,q,p,o,n,m,l,k,j,i,h,g,f,e,d,c,b,a,a0=null,a1=b0.ax,a2=b0.ay,a3=new A.bQ(a1,a2*0.85,400,!1),a4=t.D,a5=A.a([],a4),a6=new A.T(10,10,440,440),a7=[new A.T(a6.gad().a,10,220,220),new A.T(10,10,220,220),new A.T(10,a6.gad().b,220,220),new A.T(a6.gad().a,a6.gad().b,220,220)]
 for(s=a8.f,r=b0.w,q=0;q<4;++q){p=a7[q]
 a5.push(new A.S(new A.b4(p,0,0),new A.an(B.IX[q],a0),a0))
 o=s[q]
-if(o!=null){n=a9.bV(o,a3,144)
+if(o!=null){n=a9.bV(o,a3,204)
 m=n.a
 a5.push(new A.ao(o,new A.T(p.a+p.c/2-m/2,p.b+8,m,n.b),a3,r,B.o))}}a5.push(new A.S(new A.b4(a6,0,0),a0,new A.af(b0.x,1,a0)))
 for(s=a8.r,p=s.length,l=0;l<s.length;s.length===p||(0,A.k)(s),++l){k=s[l]
-m=10+k.b*320
-j=330-k.c*320
+m=10+k.b*440
+j=450-k.c*440
 i=k.a
 n=a9.bb(i,a3)
 h=n.a
 a5.push(new A.b6("point_"+i,a0,A.a([new A.S(new A.bZ(new A.h(m,j),4),new A.an(r,a0),a0),new A.ao(i,new A.T(m-h/2,j+6,h,n.b),a3,r,B.o)],a4)))}g=new A.akR(a9,a3,a5,b0)
-g.$2(a8.b,new A.h(90,346))
-g.$2(a8.c,new A.h(250,346))
+g.$2(a8.b,new A.h(120,466))
+g.$2(a8.c,new A.h(340,466))
 f=new A.akS(a6,a9,a3)
 s=a8.d
-if(s!=null)g.$2(s,new A.h(f.$1(s),250))
+if(s!=null)g.$2(s,new A.h(f.$1(s),340))
 s=a8.e
-if(s!=null)g.$2(s,new A.h(f.$1(s),90))
+if(s!=null)g.$2(s,new A.h(f.$1(s),120))
 s=A.eS(a5)
 s.toString
 e=a8.a
@@ -77997,7 +77997,7 @@ $2(a,b){return a+b.b},
 $S:487}
 A.akQ.prototype={
 $0(){var s=this,r=""+B.d.ai(s.b.b/s.c*100)+"%",q=s.e,p=s.d.bb(r,q)
-return new A.ao(r,A.d0(A.aIf(s.f,80.6,s.a.a+s.r/2),p.a,p.b),q,B.c8,B.o)},
+return new A.ao(r,A.d0(A.aIf(s.f,114.7,s.a.a+s.r/2),p.a,p.b),q,B.c8,B.o)},
 $S:488}
 A.a2Y.prototype={}
 A.r4.prototype={}
@@ -85658,9 +85658,9 @@ B.dh=new A.h(0,1)
 B.Nl=new A.h(0,16)
 B.Nm=new A.h(0,82)
 B.Nn=new A.h(0,-16)
-B.kx=new A.h(150,150)
 B.No=new A.h(16,0)
 B.Np=new A.h(1,0)
+B.kx=new A.h(205,205)
 B.Nq=new A.h(-1,0.2)
 B.Nr=new A.h(-16,0)
 B.yc=new A.jT(0,"cancel")

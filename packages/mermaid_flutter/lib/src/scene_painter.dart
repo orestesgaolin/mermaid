@@ -98,7 +98,18 @@ class ScenePainter extends CustomPainter {
       textDirection: TextDirection.ltr,
       textScaler: TextScaler.noScaling,
     )..layout(minWidth: blockWidth, maxWidth: blockWidth);
-    painter.paint(canvas, Offset(text.bounds.left, text.bounds.top));
+    if (text.rotation != 0) {
+      final cx = text.bounds.center.x, cy = text.bounds.center.y;
+      canvas
+        ..save()
+        ..translate(cx, cy)
+        ..rotate(text.rotation * 3.141592653589793 / 180)
+        ..translate(-cx, -cy);
+      painter.paint(canvas, Offset(text.bounds.left, text.bounds.top));
+      canvas.restore();
+    } else {
+      painter.paint(canvas, Offset(text.bounds.left, text.bounds.top));
+    }
     painter.dispose();
   }
 

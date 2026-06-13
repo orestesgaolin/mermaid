@@ -139,7 +139,8 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
         :final bounds,
         :final style,
         :final color,
-        :final align
+        :final align,
+        :final rotation
       ):
       final lines = text.split('\n');
       final lineHeight = bounds.height / lines.length;
@@ -148,6 +149,10 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
         TextAlignH.center => ('middle', bounds.center.x),
         TextAlignH.right => ('end', bounds.right),
       };
+      if (rotation != 0) {
+        b.write('<g transform="rotate(${_num(rotation)} '
+            '${_num(bounds.center.x)} ${_num(bounds.center.y)})">');
+      }
       b
         ..write('<text text-anchor="$anchor" ')
         ..write('font-family="${_escapeAttr(_svgFontFamily(style))}" ')
@@ -165,6 +170,7 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
           ..write('</tspan>');
       }
       b.write('</text>');
+      if (rotation != 0) b.write('</g>');
   }
 }
 
