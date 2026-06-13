@@ -54,11 +54,13 @@ void main() {
       expect(texts, containsAll(['1', '2']));
     });
 
-    test(r'\sqrt renders the radical symbol + overline', () {
+    test(r'\sqrt draws a connected radical path over the radicand', () {
       final ml = layoutMath(r'\sqrt{x}', style, measurer, black);
       final nodes = ml.render(const Point(0, 0));
-      final texts = flatten(nodes).whereType<SceneText>().map((t) => t.text);
-      expect(texts, contains('√'));
+      // Radicand glyph present.
+      expect(flatten(nodes).whereType<SceneText>().map((t) => t.text),
+          contains('x'));
+      // The radical is a single stroked path (checkmark + overline), not a glyph.
       expect(
           flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null),
           isNotEmpty);
@@ -111,6 +113,43 @@ void main() {
       final strokes =
           flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null);
       expect(strokes.length, greaterThanOrEqualTo(3));
+    });
+
+    test('extended symbols (nabla, hbar, Psi, partial) map to unicode', () {
+      final ml = layoutMath(r'\nabla \hbar \Psi \partial', style, measurer, black);
+      final texts = flatten(ml.render(const Point(0, 0)))
+          .whereType<SceneText>()
+          .map((t) => t.text)
+          .join();
+      expect(texts.contains('∇'), isTrue);
+      expect(texts.contains('ℏ'), isTrue);
+      expect(texts.contains('Ψ'), isTrue);
+      expect(texts.contains('∂'), isTrue);
+    });
+
+    test(r'\begin{array}{l} with \left\{ ... \right. renders rows + brace', () {
+      final ml = layoutMath(
+          r'\left\{\begin{array}{l} a = 1 \\ b = 2 \end{array}\right.',
+          style, measurer, black);
+      final nodes = ml.render(const Point(0, 0));
+      final texts =
+          flatten(nodes).whereType<SceneText>().map((t) => t.text).toSet();
+      expect(texts.containsAll({'a', '1', 'b', '2'}), isTrue);
+      // The left brace is a stroked path.
+      expect(
+          flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null),
+          isNotEmpty);
+    });
+
+    test('the quadratic formula parses and renders without error', () {
+      final ml = layoutMath(
+          r'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}', style, measurer, black);
+      final texts = flatten(ml.render(const Point(0, 0)))
+          .whereType<SceneText>()
+          .map((t) => t.text)
+          .join();
+      expect(texts.contains('±'), isTrue);
+      expect(ml.size.width, greaterThan(0));
     });
 
     test('function names render upright', () {

@@ -133,16 +133,46 @@ class _Lexer {
 }
 
 const _symbols = <String, String>{
+  // Lowercase greek.
   r'\alpha': 'α', r'\beta': 'β', r'\gamma': 'γ', r'\delta': 'δ',
-  r'\epsilon': 'ε', r'\theta': 'θ', r'\lambda': 'λ', r'\mu': 'μ',
-  r'\pi': 'π', r'\rho': 'ρ', r'\sigma': 'σ', r'\tau': 'τ', r'\phi': 'φ',
-  r'\omega': 'ω', r'\Delta': 'Δ', r'\Sigma': 'Σ', r'\Omega': 'Ω',
+  r'\epsilon': 'ε', r'\varepsilon': 'ε', r'\zeta': 'ζ', r'\eta': 'η',
+  r'\theta': 'θ', r'\vartheta': 'ϑ', r'\iota': 'ι', r'\kappa': 'κ',
+  r'\lambda': 'λ', r'\mu': 'μ', r'\nu': 'ν', r'\xi': 'ξ', r'\pi': 'π',
+  r'\rho': 'ρ', r'\sigma': 'σ', r'\tau': 'τ', r'\upsilon': 'υ',
+  r'\phi': 'φ', r'\varphi': 'φ', r'\chi': 'χ', r'\psi': 'ψ', r'\omega': 'ω',
+  // Uppercase greek.
+  r'\Gamma': 'Γ', r'\Delta': 'Δ', r'\Theta': 'Θ', r'\Lambda': 'Λ',
+  r'\Xi': 'Ξ', r'\Pi': 'Π', r'\Sigma': 'Σ', r'\Upsilon': 'Υ',
+  r'\Phi': 'Φ', r'\Psi': 'Ψ', r'\Omega': 'Ω',
+  // Operators & relations.
   r'\times': '×', r'\cdot': '·', r'\div': '÷', r'\pm': '±', r'\mp': '∓',
+  r'\ast': '∗', r'\star': '⋆', r'\circ': '∘', r'\bullet': '•',
   r'\le': '≤', r'\leq': '≤', r'\ge': '≥', r'\geq': '≥', r'\ne': '≠',
-  r'\neq': '≠', r'\approx': '≈', r'\infty': '∞', r'\sum': '∑',
-  r'\int': '∫', r'\partial': '∂', r'\rightarrow': '→', r'\to': '→',
-  r'\leftarrow': '←', r'\Rightarrow': '⇒', r'\in': '∈', r'\cup': '∪',
-  r'\cap': '∩', r'\sqrt': '√',
+  r'\neq': '≠', r'\equiv': '≡', r'\approx': '≈', r'\cong': '≅',
+  r'\sim': '∼', r'\propto': '∝', r'\ll': '≪', r'\gg': '≫',
+  // Big operators & calculus.
+  r'\sum': '∑', r'\prod': '∏', r'\int': '∫', r'\oint': '∮',
+  r'\partial': '∂', r'\nabla': '∇', r'\infty': '∞',
+  // Sets & logic.
+  r'\in': '∈', r'\notin': '∉', r'\subset': '⊂', r'\supset': '⊃',
+  r'\subseteq': '⊆', r'\supseteq': '⊇', r'\cup': '∪', r'\cap': '∩',
+  r'\emptyset': '∅', r'\forall': '∀', r'\exists': '∃', r'\neg': '¬',
+  r'\wedge': '∧', r'\vee': '∨', r'\oplus': '⊕', r'\otimes': '⊗',
+  r'\perp': '⊥', r'\parallel': '∥', r'\angle': '∠',
+  // Arrows.
+  r'\rightarrow': '→', r'\to': '→', r'\leftarrow': '←',
+  r'\leftrightarrow': '↔', r'\Rightarrow': '⇒', r'\Leftarrow': '⇐',
+  r'\Leftrightarrow': '⇔', r'\uparrow': '↑', r'\downarrow': '↓', r'\mapsto': '↦',
+  // Misc letters/dots.
+  r'\hbar': 'ℏ', r'\ell': 'ℓ', r'\Re': 'ℜ', r'\Im': 'ℑ', r'\aleph': 'ℵ',
+  r'\sqrt': '√', r'\dots': '…', r'\ldots': '…',
+  r'\cdots': '⋯', r'\langle': '⟨', r'\rangle': '⟩', r'\degree': '°',
+};
+
+/// Spacing macros → fractional-em widths (negative = ignored / zero).
+const _spaces = <String, double>{
+  r'\,': 0.17, r'\:': 0.22, r'\;': 0.28, r'\ ': 0.25,
+  r'\!': 0.0, r'\quad': 1.0, r'\qquad': 2.0,
 };
 
 /// Builds a horizontal row from the lexer until end (or a closing brace when
@@ -204,10 +234,17 @@ _Box _atom(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
     return _accent(_atom(lx, style, m, color), tok, style, color);
   }
   if (tok == r'\begin') {
-    return _parseEnv(lx, _readRawBrace(lx), style, m, color);
+    final env = _readRawBrace(lx);
+    // `array` takes a column-alignment spec argument, e.g. {l|c r}.
+    final spec = env == 'array' ? _readRawBrace(lx) : '';
+    return _parseEnv(lx, env, spec, style, m, color);
   }
   if (tok == r'\left') {
     return _leftRight(lx, style, m, color);
+  }
+  final space = _spaces[tok];
+  if (space != null) {
+    return _Box(style.fontSize * space, 0, 0, (a, b, c) {});
   }
   if (_functions.contains(tok)) {
     // Function names render upright with a thin trailing space (KaTeX).
@@ -361,22 +398,28 @@ _Box _frac(_Box num, _Box den, TextStyleSpec style, Color color) {
 }
 
 _Box _sqrt(_Box inner, TextStyleSpec style, TextMeasurer m, Color color) {
-  final radical = _glyph('√', style, m, color);
-  final w = radical.width + inner.width + 4;
-  final ascent = math.max(radical.ascent, inner.ascent) + 2;
-  final descent = math.max(radical.descent, inner.descent);
+  // The radical is drawn as one connected path (checkmark up into the
+  // overline), sized to the radicand — like KaTeX/flutter_math, not a glyph.
+  final radW = style.fontSize * 0.55;
+  const padL = 3.0;
+  const padTop = 3.0;
+  final sw = math.max(1.0, style.fontSize * 0.07);
+  final w = radW + padL + inner.width + 3;
+  final ascent = inner.ascent + padTop + sw;
+  final descent = inner.descent;
   return _Box(w, ascent, descent, (x, baseline, out) {
-    radical.paint(x, baseline, out);
-    final ix = x + radical.width + 2;
-    // Overline across the radicand.
+    final top = baseline - inner.ascent - padTop;
+    final bot = baseline + inner.descent;
     out.add(SceneShape(
       geometry: PathGeometry([
-        MoveTo(Point(ix - 2, baseline - inner.ascent - 1)),
-        LineTo(Point(ix + inner.width + 2, baseline - inner.ascent - 1)),
+        MoveTo(Point(x, baseline - inner.ascent * 0.45)),
+        LineTo(Point(x + radW * 0.35, bot)),
+        LineTo(Point(x + radW * 0.7, top)),
+        LineTo(Point(x + w, top)),
       ]),
-      stroke: Stroke(color: color, width: math.max(1, style.fontSize * 0.06)),
+      stroke: Stroke(color: color, width: sw),
     ));
-    inner.paint(ix, baseline, out);
+    inner.paint(x + radW + padL, baseline, out);
   });
 }
 
@@ -417,8 +460,8 @@ _Box _cellRow(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
   return _hbox(atoms);
 }
 
-_Box _parseEnv(
-    _Lexer lx, String env, TextStyleSpec style, TextMeasurer m, Color color) {
+_Box _parseEnv(_Lexer lx, String env, String colSpec, TextStyleSpec style,
+    TextMeasurer m, Color color) {
   final rows = <List<_Box>>[<_Box>[]];
   while (!lx.atEnd) {
     rows.last.add(_cellRow(lx, style, m, color));
@@ -441,7 +484,7 @@ _Box _parseEnv(
   if (rows.length > 1 && rows.last.length == 1 && rows.last.first.width == 0) {
     rows.removeLast();
   }
-  return _matrix(rows, env, style, color);
+  return _matrix(rows, env, colSpec, style, color);
 }
 
 const _delims = <String, (String, String)>{
@@ -455,10 +498,13 @@ const _delims = <String, (String, String)>{
   'cases': ('{', ''),
 };
 
-_Box _matrix(
-    List<List<_Box>> rows, String env, TextStyleSpec style, Color color) {
+_Box _matrix(List<List<_Box>> rows, String env, String colSpec,
+    TextStyleSpec style, Color color) {
   final (left, right) = _delims[env] ?? ('', '');
-  final leftAlign = env == 'cases';
+  // cases is left-aligned; array follows its spec (left if it asks for `l`).
+  final spec = colSpec.replaceAll(RegExp(r'[^lcr]'), '');
+  final leftAlign = env == 'cases' ||
+      (env == 'array' && spec.isNotEmpty && !spec.contains(RegExp('[cr]')));
   final ncols = rows.fold(0, (a, r) => math.max(a, r.length));
   final colW = List<double>.filled(ncols, 0);
   for (final r in rows) {

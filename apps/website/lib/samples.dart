@@ -113,14 +113,14 @@ flowchart LR
     C --> D@{ icon: "icon:star", label: "Done" }
 '''),
   Sample('math', 'Math', cDiagrams,
-      'LaTeX math in node and edge labels with `\$\$...\$\$` — superscripts, '
-          'fractions, roots, braces, cases and matrices, all laid out as '
-          'scene primitives (no webview).', r'''
+      'LaTeX math in node and edge labels with `\$\$...\$\$` — fractions, '
+          'roots, arrays, sized delimiters, vectors and a full symbol table, '
+          'all laid out as scene primitives (no webview).', r'''
 graph TD
-    A["$$x^2$$"] -->|"$$\sqrt{x+3}$$"| B("$$\frac{1}{2}$$")
-    A -->|"$$\overbrace{a+b+c}^{\text{note}}$$"| C("$$\pi r^2$$")
-    B --> D("$$x = \begin{cases} a &\text{if } b \\ c &\text{if } d \end{cases}$$")
-    C --> E("$$\begin{bmatrix} -\cos t + \sin t \\ 2\cos t \end{bmatrix}$$")
+    Q["$$x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}$$"]
+    S["$$i\hbar\frac{\partial}{\partial t}\Psi = -\frac{\hbar}{2m}\nabla^2\Psi + V\Psi$$"]
+    M["$$\left\{ \begin{array}{l} \nabla\cdot\vec{E} = \rho \\ \nabla\times\vec{B} = \vec{J} \end{array} \right.$$"]
+    Q --> S --> M
 '''),
   Sample('git', 'Git graph', cDiagrams,
       'Git branching and merging visualised as commits flowing across '
