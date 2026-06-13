@@ -210,8 +210,15 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   into a shared edges util (3 copies now).
 - [ ] SVG backend in mermaid_core (scene → SVG string; enables golden
   diffs against upstream).
-- [ ] Publishing prep: hide vendored dagre from the public API, README,
-  NOTICE for the dagre port, pub.dev scores.
+- [x] **CLI** (`bin/mermaid.dart`, executable `mermaid_dart`): reads file or
+  stdin, writes SVG (native) or PNG (pipes the SVG through rsvg-convert/
+  resvg/ImageMagick on PATH), `--theme`, `-o`, `-f`.
+- [x] **Release prep for mermaid_core**: LICENSE (MIT + mermaid/dagre
+  attribution), real README, 0.1.0 CHANGELOG, example/, pubspec metadata
+  (description/repository/topics/executables, dropped `publish_to:none`).
+  `dart pub publish --dry-run` → **0 warnings**. NOTE: set the real
+  `repository` URL before publishing (placeholder `makevisible/mermaid_dart`).
+  `mermaid_flutter` can't publish until `mermaid_core` is on pub (path dep).
 
 ## Requested advanced features (2026-06-13) — scoped roadmap
 
@@ -252,13 +259,16 @@ it alongside the theme.
   `&`, sized delimiters drawn as paths). Wired into whole-`$$` flowchart
   **node AND edge** labels. The full canonical mermaid math example renders;
   verified side-by-side. 10 tests.
+  - Single-letter variables render **italic** and function names (`\sin`,
+    `\cos`, …) upright+spaced, like KaTeX. `\left<d>…\right<d>` auto-sizes
+    paren/bracket/brace/bar delimiters to content height.
   - `flutter_tex` was investigated and rejected for IR use (MathJax+webview
     widget, no pure-Dart TeX→SVG string).
-  - Gaps: `\left\right` auto-sizing (plain-glyph approx), inline mixed
-    text+math within one label (only whole-`$$` labels), KaTeX serif-italic
-    math font (uses the label font). Pixel-font parity in the Flutter target
-    would want `flutter_math_fork`, but that paints widgets not scene IR, so
-    SVG/other backends keep this engine.
+  - Remaining gaps: inline mixed text+math within one label (only whole-`$$`
+    labels), KaTeX's actual math font (we use the label font, italicized).
+    Pixel-font parity in the Flutter target would want `flutter_math_fork`,
+    but that paints widgets not scene IR, so SVG/other backends keep this
+    engine.
 - [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
   *Very high — the big rock.* Upstream registers pluggable layout loaders
   (`rendering-util/render.ts registerLayoutLoaders`); elk is the
