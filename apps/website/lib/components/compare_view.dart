@@ -32,8 +32,14 @@ class CompareView extends StatefulComponent {
 class _CompareViewState extends State<CompareView> {
   int _selected = 0;
   bool _flutterStarted = false;
+
+  /// Live editor contents; starts from the selected sample and is edited in
+  /// place. Both previews re-render from this, not from the sample.
+  String _source = samples[0].source.trim();
+  Timer? _debounce;
   final _jsPane = GlobalNodeKey<web.HTMLElement>();
   final _flutterPane = GlobalNodeKey<web.HTMLElement>();
+  final _editor = GlobalNodeKey<web.HTMLTextAreaElement>();
 
   Sample get _sample => samples[_selected];
 
@@ -45,26 +51,47 @@ class _CompareViewState extends State<CompareView> {
     }
   }
 
+  @override
+  void dispose() {
+    _debounce?.cancel();
+    super.dispose();
+  }
+
+  /// Picking a sample replaces the editor contents and re-renders.
   void _select(int index) {
-    setState(() => _selected = index);
+    setState(() {
+      _selected = index;
+      _source = samples[index].source.trim();
+    });
     if (kIsWeb) {
+      _editor.currentNode?.value = _source;
       Future.delayed(Duration.zero, _sync);
     }
+  }
+
+  /// Each keystroke updates [_source] and re-renders both panes after a short
+  /// debounce (no setState — that would reset the textarea caret).
+  void _onInput(web.Event event) {
+    final ta = event.target as web.HTMLTextAreaElement?;
+    if (ta == null) return;
+    _source = ta.value;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 250), _sync);
   }
 
   void _sync() {
     final jsPane = _jsPane.currentNode;
     if (jsPane != null) {
-      _renderMermaidJs(jsPane, _sample.source.toJS);
+      _renderMermaidJs(jsPane, _source.toJS);
     }
     if (!_flutterStarted) {
       final host = _flutterPane.currentNode;
       if (host != null) {
         _flutterStarted = true;
-        _loadMermaidDart(host, _sample.source.toJS);
+        _loadMermaidDart(host, _source.toJS);
       }
     } else {
-      _updateMermaidDart(_sample.source.toJS);
+      _updateMermaidDart(_source.toJS);
     }
   }
 
@@ -87,7 +114,14 @@ class _CompareViewState extends State<CompareView> {
         h2([.text(_sample.name)]),
         p(classes: 'doc-desc', [.text(_sample.description)]),
       ]),
-      pre(classes: 'source', [code([.text(_sample.source.trim())])]),
+      textarea(
+        key: _editor,
+        classes: 'source editor',
+        rows: 8,
+        attributes: {'spellcheck': 'false', 'autocomplete': 'off'},
+        events: {'input': _onInput},
+        [.text(_source)],
+      ),
       div(classes: 'panes', [
         div(classes: 'pane', [
           div(classes: 'pane-title', [.text('mermaid.js (browser)')]),

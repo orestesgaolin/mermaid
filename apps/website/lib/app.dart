@@ -78,6 +78,21 @@ class App extends StatelessComponent {
           maxHeight: 220.px,
           border: .all(style: BorderStyle.solid, color: const Color('#e3ddf5'), width: 1.px),
         ),
+        // Editable source box: full-width monospace textarea, edits both
+        // previews live.
+        css('.editor').styles(
+          display: .block,
+          width: 100.percent,
+          boxSizing: .borderBox,
+          fontFamily: .list([FontFamily('ui-monospace'), FontFamily('SFMono-Regular'), FontFamily('Menlo'), FontFamilies.monospace]),
+          lineHeight: 1.5.em,
+          color: const Color('#33335a'),
+          raw: {'resize': 'vertical'},
+        ),
+        css('.editor:focus').styles(
+          border: .all(style: BorderStyle.solid, color: const Color('#9b8fd6'), width: 1.px),
+          raw: {'outline': 'none'},
+        ),
         css('.panes').styles(
           display: .grid,
           gridTemplate: GridTemplate(columns: GridTracks([GridTrack(.fr(1)), GridTrack(.fr(1))])),
