@@ -245,6 +245,19 @@ Electricity,Homes,35
 Electricity,Industry,30
 Electricity,Losses,10
 '''),
+  Sample('packet', 'Packet', cCharts,
+      'Network-packet layout: bit ranges as labelled blocks on a 32-bit grid '
+          'with bit-index markers.', '''
+packet
+0-15: "Source Port"
+16-31: "Destination Port"
+32-63: "Sequence Number"
+96-99: "Data Offset"
+106: "URG"
+107: "ACK"
+108: "PSH"
+112-127: "Window"
+'''),
   Sample('mindmap', 'Mindmap', cCharts,
       'Hierarchical ideas radiating outward from a central root.', '''
 mindmap

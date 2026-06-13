@@ -20,6 +20,7 @@ enum DiagramType {
   c4,
   gitGraph,
   sankey,
+  packet,
   unknown,
 }
 
@@ -47,6 +48,7 @@ const _detectorSpecs = <(DiagramType, String)>[
   (DiagramType.c4, r'^\s*C4(Context|Container|Component|Dynamic|Deployment)\b'),
   (DiagramType.gitGraph, r'^\s*gitGraph\b'),
   (DiagramType.sankey, r'^\s*sankey(-beta)?\b'),
+  (DiagramType.packet, r'^\s*packet(-beta)?\b'),
   (DiagramType.sequence, r'^\s*sequenceDiagram\b'),
   (DiagramType.flowchart, r'^\s*graph\b'),
   (DiagramType.flowchart, r'^\s*flowchart(-elk)?\b'),

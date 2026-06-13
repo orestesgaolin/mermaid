@@ -25,6 +25,7 @@ export 'src/diagrams/pie/pie_model.dart';
 export 'src/diagrams/pie/pie_parser.dart';
 export 'src/diagrams/quadrant/quadrant.dart';
 export 'src/diagrams/requirement/requirement.dart';
+export 'src/diagrams/packet/packet.dart';
 export 'src/diagrams/sankey/sankey.dart';
 export 'src/diagrams/sequence/sequence_layout.dart';
 export 'src/diagrams/sequence/sequence_model.dart';
