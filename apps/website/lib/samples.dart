@@ -104,6 +104,22 @@ erDiagram
         string email UK
     }
 '''),
+  Sample('icons', 'Icons', cDiagrams,
+      'Iconify-style icons on flowchart nodes via `@{ icon: "pack:name" }`. '
+          '(mermaid.js needs the same pack registered to show them.)', '''
+flowchart LR
+    A@{ icon: "icon:cloud", label: "Cloud" } --> B@{ icon: "icon:database", label: "Store" }
+    B --> C@{ icon: "icon:cog", label: "Process" }
+    C --> D@{ icon: "icon:star", label: "Done" }
+'''),
+  Sample('math', 'Math', cDiagrams,
+      'LaTeX math in labels with `\$\$...\$\$` — superscripts, fractions, '
+          'roots and symbols, laid out as scene primitives.', r'''
+graph LR
+    A["$$x^2$$"] --> B("$$\frac{1}{2}$$")
+    B --> C("$$\pi r^2$$")
+    C --> D["$$E = mc^2$$"]
+'''),
   Sample('git', 'Git graph', cDiagrams,
       'Git branching and merging visualised as commits flowing across '
           'branches over time.', '''

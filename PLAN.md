@@ -231,32 +231,32 @@ it alongside the theme.
   facade post-process. Matches upstream roughjs defaults; verified
   side-by-side on the website. 9 tests. Gap: rough's overshoot at corners
   is approximated (single cubic per edge, not rough's 2-segment curve).
-- [ ] **Icons** (`registerIconPacks`, iconify packs; `@{ icon: "prefix:name" }`).
-  *Medium-high.* Needs (a) an icon-pack registry taking iconify JSON
-  (name → SVG body `d` + viewBox); (b) a small **SVG-path-string → PathCommand
-  parser** (we have none — PathGeometry is built programmatically today);
-  (c) `@{ icon: }` syntax in flowchart node attrs (and later architecture);
-  (d) emit the icon path as a SceneShape at the node. Bundle one small pack
-  (e.g. a logos subset) to verify per-icon parity. Reusable path parser is
-  the valuable byproduct.
-- [ ] **Math** (`$$...$$` in labels; upstream uses KaTeX, `legacyMathML`).
-  *Plan: use [`flutter_tex`](https://pub.dev/packages/flutter_tex).*
-  flutter_tex exposes **Math2SVG / TeXWidget** — a pure-Flutter, **no-webview**
-  LaTeX→SVG renderer (MathJax-based; Android/iOS/macOS/web) — plus a
-  webview `TeXView` fallback. Approach:
-  1. **Core** (`mermaid_core`): in `common`-style label handling, detect
-     `$$...$$` (and inline `$...$`), strip delimiters, and mark the run as
-     math on the model + emit a math placeholder in the scene IR (new
-     `SceneMath` node carrying the raw TeX + a reserved box). Keep the
-     pipeline synchronous by reserving an estimated box; the Flutter layer
-     can re-measure.
-  2. **Flutter backend** (`mermaid_flutter`): render `SceneMath` via
-     `TeXWidget`/`Math2SVG` (no webview, integrates with the painter/overlay).
-  Caveats for parity: flutter_tex is **MathJax**, mermaid is **KaTeX** —
-  visually equivalent for most expressions, not byte-identical; the SVG
-  string backend and pure-Dart core tests can't typeset math (emit raw TeX
-  or a placeholder there). Only flowchart + sequence labels support math
-  upstream, so scope to those first.
+- [x] **Icons** (`registerIconPacks`, iconify packs; `@{ icon: "prefix:name" }`)
+  — DONE for flowchart. `src/icons/svg_path.dart` parses SVG path `d`
+  strings via the `path_parsing` dep (arcs/quadratics → cubics);
+  `src/icons/icon_registry.dart` has `registerIconPack`/`lookupIcon`/
+  `renderIcon` (fit + center glyph, fill each `<path>`) + a built-in
+  `icon:` pack (cloud/database/star/heart/cog). Flowchart: `FlowNode.icon`,
+  parser captures `@{ icon: }`, layout reserves a 36px glyph square above
+  the label. 7 tests. Gaps: architecture-diagram icons (needs that diagram);
+  website side-by-side parity needs the mermaid.js embed to register the
+  SAME pack (it ships none) — verified via standalone render instead.
+- [~] **Math** (`$$...$$` in labels; upstream uses KaTeX). PARTIAL —
+  `src/math/tex_math.dart` lays out a TeX subset with **low-level scene
+  primitives** (glyph SceneText + rule SceneShape), so it renders in every
+  backend incl. SVG — no widget/webview. Supports `^`/`_`, `\frac`,
+  `\sqrt`, grouping and a greek/operator symbol table; handles the
+  canonical examples (x^2, \frac{1}{2}, \sqrt{x+3}, \pi r^2). Wired into
+  whole-`$$` flowchart node labels. 6 tests.
+  - Investigated `flutter_tex`: MathJax-based, depends on flutter_svg +
+    webview, exposes only a **widget** (no pure-Dart TeX→SVG string), so it
+    can't feed our IR — the low-level route above is the right call.
+  - Gaps to full parity: edge-label math and inline mixed text+math (only
+    whole-label `$$...$$` is handled), matrices/cases/over-/underbrace,
+    proper KaTeX font metrics. For pixel-parity in the Flutter target,
+    `flutter_math_fork` (pure-Dart KaTeX-port, RenderObject-based) is the
+    path — but it paints widgets, not scene IR, so the SVG backend would
+    still use this subset.
 - [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
   *Very high — the big rock.* Upstream registers pluggable layout loaders
   (`rendering-util/render.ts registerLayoutLoaders`); elk is the
