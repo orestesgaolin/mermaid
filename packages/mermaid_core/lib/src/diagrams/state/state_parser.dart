@@ -88,13 +88,20 @@ class _StateParser {
         throw MermaidParseException('"}" without open composite state',
             line: n);
       }
-      _scope.removeLast();
+      final closed = _scope.removeLast();
+      final groups = _regions.remove(closed);
+      if (groups != null && groups.length > 1) {
+        states[closed] = states[closed]!.copyWith(
+            regions: [for (final g in groups) if (g.isNotEmpty) g]);
+      }
       return;
     }
 
-    // Concurrency separator inside composite states: regions are not yet
-    // modeled; members simply lay out together.
-    if (line == '--' && _scope.length > 1) return;
+    // Concurrency separator inside a composite: start a new region group.
+    if (line == '--' && _scope.length > 1) {
+      _regions[_scope.last]?.add(<String>[]);
+      return;
+    }
 
     m = RegExp(r'^direction\s+(TB|TD|BT|LR|RL)\s*$').firstMatch(line);
     if (m != null) {
@@ -228,10 +235,27 @@ class _StateParser {
   void _openComposite(String id) {
     states[id] = states[id]!.copyWith(kind: StateKind.composite);
     _scope.add(id);
+    _regions[id] = [<String>[]];
   }
 
-  /// `[*]` is a per-scope start (as source) or end (as target) pseudo-state.
+  /// `[*]` is a per-scope start (as source) or end (as target) pseudo-state;
+  /// `[H]` / `[H*]` are per-scope shallow / deep history pseudo-states.
   String _resolvePseudo(String raw, {required bool isSource}) {
+    if (raw == '[H]' || raw == '[H*]') {
+      final scope = _scope.last;
+      final deep = raw == '[H*]';
+      final id = '__history_${deep ? 'deep_' : ''}$scope';
+      if (!states.containsKey(id)) {
+        states[id] = StateNode(
+          id: id,
+          label: '',
+          kind: deep ? StateKind.historyDeep : StateKind.history,
+          parent: scope.isEmpty ? null : scope,
+        );
+        _attachToScope(id);
+      }
+      return id;
+    }
     if (raw != '[*]') return _ensure(raw).id;
     final scope = _scope.last;
     final id = isSource ? '__start_$scope' : '__end_$scope';
@@ -260,11 +284,17 @@ class _StateParser {
     return node;
   }
 
+  /// Region groups per open composite scope; finalized into the node's
+  /// `regions` on close (only kept when more than one group exists).
+  final _regions = <String, List<List<String>>>{};
+
   void _attachToScope(String id) {
     final scope = _scope.last;
     if (scope.isEmpty) return;
     final parent = states[scope]!;
     states[scope] = parent.copyWith(children: [...parent.children, id]);
+    final groups = _regions[scope];
+    if (groups != null) groups.last.add(id);
   }
 
   String _normalize(String s) => s

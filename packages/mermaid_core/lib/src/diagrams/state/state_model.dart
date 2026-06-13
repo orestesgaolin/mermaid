@@ -24,7 +24,17 @@ class StateDiagram {
   final String? title;
 }
 
-enum StateKind { normal, start, end, choice, fork, join, composite }
+enum StateKind {
+  normal,
+  start,
+  end,
+  choice,
+  fork,
+  join,
+  composite,
+  history,
+  historyDeep,
+}
 
 class StateNode {
   const StateNode({
@@ -35,6 +45,7 @@ class StateNode {
     this.parent,
     this.cssClasses = const [],
     this.styles = const {},
+    this.regions = const [],
   });
 
   final String id;
@@ -52,6 +63,10 @@ class StateNode {
   final List<String> cssClasses;
   final Map<String, String> styles;
 
+  /// Concurrency regions (groups of child ids split by `--`). Empty unless the
+  /// composite contains a `--` separator.
+  final List<List<String>> regions;
+
   StateNode copyWith({
     String? label,
     StateKind? kind,
@@ -59,6 +74,7 @@ class StateNode {
     String? parent,
     List<String>? cssClasses,
     Map<String, String>? styles,
+    List<List<String>>? regions,
   }) =>
       StateNode(
         id: id,
@@ -68,6 +84,7 @@ class StateNode {
         parent: parent ?? this.parent,
         cssClasses: cssClasses ?? this.cssClasses,
         styles: styles ?? this.styles,
+        regions: regions ?? this.regions,
       );
 }
 

@@ -220,6 +220,52 @@ class _StateLayout {
           stroke: Stroke(color: theme.nodeBorder),
         ),
       ]));
+
+      // Concurrency regions: dashed dividers in the gaps between region groups.
+      if (s.regions.length > 1) {
+        Rect? regionBounds(List<String> ids) {
+          Rect? b;
+          for (final id in ids) {
+            final r = placed[id]?.rect;
+            if (r != null) b = b == null ? r : b.union(r);
+          }
+          return b;
+        }
+
+        final bands = <Rect>[];
+        for (final g in s.regions) {
+          final b = regionBounds(g);
+          if (b != null) bands.add(b);
+        }
+        for (var i = 1; i < bands.length; i++) {
+          final a = bands[i - 1], b = bands[i];
+          // Orient the divider by how dagre actually placed the two regions:
+          // a horizontal x-gap ⇒ vertical divider, else a horizontal one.
+          final xGap = b.left - a.right;
+          final yGap = b.top - a.bottom;
+          if (xGap >= yGap) {
+            final x = (a.right + b.left) / 2;
+            clusterNodes.add(SceneShape(
+              geometry: PathGeometry([
+                MoveTo(Point(x, titleY + titleSize.height + 4)),
+                LineTo(Point(x, rect.bottom)),
+              ]),
+              stroke: Stroke(
+                  color: theme.nodeBorder, width: 1, dash: const [4, 3]),
+            ));
+          } else {
+            final y = (a.bottom + b.top) / 2;
+            clusterNodes.add(SceneShape(
+              geometry: PathGeometry([
+                MoveTo(Point(rect.left, y)),
+                LineTo(Point(rect.right, y)),
+              ]),
+              stroke: Stroke(
+                  color: theme.nodeBorder, width: 1, dash: const [4, 3]),
+            ));
+          }
+        }
+      }
     }
 
     final selfLoopCount = <String, int>{};
@@ -419,6 +465,8 @@ class _StateLayout {
         return horizontal
             ? _Placed(s, 8, 60, Size.zero)
             : _Placed(s, 60, 8, Size.zero);
+      case StateKind.history || StateKind.historyDeep:
+        return _Placed(s, 26, 26, Size.zero);
       case StateKind.normal || StateKind.composite:
         final size = measurer.measure(s.label, baseStyle, maxWidth: 200);
         return _Placed(
@@ -476,6 +524,19 @@ class _StateLayout {
         children.add(SceneShape(
           geometry: RectGeometry(p.rect, rx: 3, ry: 3),
           fill: Fill(theme.lineColor),
+        ));
+      case StateKind.history || StateKind.historyDeep:
+        // A circle with "H" (shallow) or "H*" (deep), like upstream.
+        children.add(SceneShape(
+          geometry: CircleGeometry(p.center, 13),
+          fill: Fill(fill),
+          stroke: Stroke(color: stroke),
+        ));
+        children.add(SceneText(
+          text: s.kind == StateKind.historyDeep ? 'H*' : 'H',
+          bounds: Rect.fromCenter(p.center, 26, 18),
+          style: baseStyle,
+          color: theme.textColor,
         ));
       case StateKind.normal || StateKind.composite:
         children.addAll([
