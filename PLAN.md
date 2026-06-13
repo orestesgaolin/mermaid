@@ -213,6 +213,52 @@ y-labels horizontal), class note placement, state self-loop label overlap.
 - [ ] Publishing prep: hide vendored dagre from the public API, README,
   NOTICE for the dagre port, pub.dev scores.
 
+## Requested advanced features (2026-06-13) — scoped roadmap
+
+User asked for five v11-era rendering features, each verified for parity
+against mermaid.js. Difficulty/approach below; ordered easiest → hardest.
+All key off resolved config (`%%{init}%%` / frontmatter `config:`), so the
+shared groundwork is a **MermaidConfig** carrying `look`, `handDrawnSeed`,
+`layout`, `fontConfig`, `icons` — extend `src/directives.dart` to surface
+it alongside the theme.
+
+- [ ] **Hand-drawn look** (`look: 'handDrawn'`, `handDrawnSeed`). *Medium,
+  self-contained.* Upstream uses roughjs in the shape/edge drawers
+  (`rendering-elements/shapes/*.ts`, `edges.js` gate on `look==='handDrawn'`).
+  Our IR is shape-based, so add a deterministic scene→scene "roughen" pass:
+  seeded RNG perturbs rect/polygon/path edges into multi-segment jittered
+  strokes, doubles outlines, and fills with hachure line sets. No external
+  deps; fully verifiable on the site. Cleanest first build.
+- [ ] **Icons** (`registerIconPacks`, iconify packs; `@{ icon: "prefix:name" }`).
+  *Medium-high.* Needs (a) an icon-pack registry taking iconify JSON
+  (name → SVG body `d` + viewBox); (b) a small **SVG-path-string → PathCommand
+  parser** (we have none — PathGeometry is built programmatically today);
+  (c) `@{ icon: }` syntax in flowchart node attrs (and later architecture);
+  (d) emit the icon path as a SceneShape at the node. Bundle one small pack
+  (e.g. a logos subset) to verify per-icon parity. Reusable path parser is
+  the valuable byproduct.
+- [ ] **Math** (`$$...$$`, KaTeX; `legacyMathML`). *High, parity-limited.*
+  No pure-Dart KaTeX exists. Plumbing is easy (detect `$$`, strip
+  delimiters, flag the run as math — see upstream `common/common.ts`), but
+  rendering is not: options are (a) Flutter-only via `flutter_math_fork`
+  — breaks the measurer/SVG abstraction so math wouldn't appear in the SVG
+  backend or core tests; (b) port a TeX subset (super/subscript, frac,
+  sqrt, common symbols) — will NOT match KaTeX on matrices/cases/overbrace.
+  Ship plumbing + subset, set expectations; full KaTeX parity is a separate
+  large effort.
+- [ ] **Other layout engines** (`layout: 'elk' | 'tidy-tree' | 'cose-bilkent'`).
+  *Very high — the big rock.* Upstream registers pluggable layout loaders
+  (`rendering-util/render.ts registerLayoutLoaders`); elk is the
+  GWT-compiled elkjs, cose-bilkent a cytoscape extension — neither has a
+  Dart port. Realistic paths: port elkjs to Dart (months), a web-only
+  JS-interop bridge to elkjs (defeats pure-Dart goal), or write a simpler
+  layered alternative that won't match elk pixel-for-pixel. Recommend
+  deferring or doing a JS-bridge spike for the website only.
+- [ ] **Architecture layout tuning** (v11.15.0: `{group}` placement, edge
+  direction hints L/R/T/B, junctions). *Blocked on prerequisite.* These
+  knobs belong to the **architecture** diagram, which isn't ported yet.
+  Two steps: port architecture (`diagrams/architecture/`), then its tuning.
+
 ## Known gaps / quirks
 
 - Novel v11 geometries (doc, hourglass, braces, ...) render as rect
