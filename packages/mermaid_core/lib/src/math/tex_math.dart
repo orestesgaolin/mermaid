@@ -73,7 +73,9 @@ class _Box {
   final void Function(double x, double baseline, List<SceneNode> out) paint;
 }
 
-_Box _glyph(String text, TextStyleSpec style, TextMeasurer m, Color color) {
+_Box _glyph(String text, TextStyleSpec style, TextMeasurer m, Color color,
+    {bool italic = false}) {
+  if (italic) style = style.copyWith(italic: true);
   final size = m.measure(text, style, maxWidth: 100000);
   // Approximate baseline: ~80% of the line box is ascent.
   final ascent = size.height * 0.8;
@@ -214,7 +216,12 @@ _Box _atom(_Lexer lx, TextStyleSpec style, TextMeasurer m, Color color) {
   }
   final sym = _symbols[tok];
   final text = sym ?? (tok.startsWith(r'\') ? tok.substring(1) : tok);
-  return _glyph(text, style, m, color);
+  // KaTeX italicizes single-letter variables (and lowercase greek); numbers,
+  // operators, multi-letter function names and `\text` stay upright.
+  final isVar = text.length == 1 &&
+      RegExp(r'[A-Za-zα-ω]').hasMatch(text) &&
+      !(tok.startsWith(r'\') && sym == null);
+  return _glyph(text, style, m, color, italic: isVar);
 }
 
 /// Reads a `{...}` group as a literal string (spaces preserved, braces
