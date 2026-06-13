@@ -44,6 +44,49 @@ MermaidTheme resolveTheme(String source, MermaidTheme base) {
   return theme;
 }
 
+/// Rendering options resolved from `%%{init}%%` / frontmatter `config:`
+/// that are not part of the theme: the visual [look] and its sketch seed.
+class LookConfig {
+  const LookConfig({this.look = 'classic', this.handDrawnSeed = 0});
+
+  final String look;
+  final int handDrawnSeed;
+
+  bool get isHandDrawn => look == 'handDrawn';
+}
+
+/// Extracts `look` / `handDrawnSeed` from an `%%{init}%%` directive or
+/// frontmatter `config:` block in [source].
+LookConfig resolveLook(String source) {
+  var look = 'classic';
+  var seed = 0;
+
+  final text = source.replaceAll('\r\n', '\n');
+  final fm = RegExp(r'^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*\n')
+      .firstMatch(text);
+  if (fm != null) {
+    final body = fm.group(1)!;
+    final lm =
+        RegExp(r'^\s*look:\s*(\w+)\s*$', multiLine: true).firstMatch(body);
+    if (lm != null) look = lm.group(1)!;
+    final sm = RegExp(r'^\s*handDrawnSeed:\s*(\d+)\s*$', multiLine: true)
+        .firstMatch(body);
+    if (sm != null) seed = int.tryParse(sm.group(1)!) ?? 0;
+  }
+
+  final directive =
+      RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%').firstMatch(text);
+  if (directive != null) {
+    final config = _looseJson(directive.group(1)!);
+    if (config is Map) {
+      if (config['look'] is String) look = config['look'] as String;
+      final s = config['handDrawnSeed'];
+      if (s is num) seed = s.toInt();
+    }
+  }
+  return LookConfig(look: look, handDrawnSeed: seed);
+}
+
 /// Mermaid directives use loose JSON (single quotes, bare keys); normalize
 /// before decoding. Returns null when it still cannot be parsed.
 Object? _looseJson(String text) {

@@ -27,6 +27,7 @@ import 'directives.dart';
 import 'diagrams/state/state_parser.dart';
 import 'ir/scene.dart';
 import 'parse_error.dart';
+import 'render/rough.dart';
 import 'text/text_measurer.dart';
 import 'theme/theme.dart';
 
@@ -44,6 +45,16 @@ class Mermaid {
   /// Throws [MermaidParseException] on syntax errors and
   /// [UnsupportedError] for not-yet-ported diagram types.
   RenderScene render(String source) {
+    final scene = _layout(source);
+    // `look: 'handDrawn'` re-renders the scene in a sketchy style.
+    final look = resolveLook(source);
+    if (look.isHandDrawn) {
+      return roughenScene(scene, seed: look.handDrawnSeed);
+    }
+    return scene;
+  }
+
+  RenderScene _layout(String source) {
     // %%{init}%% directives and frontmatter config.theme adjust the theme
     // per diagram, like upstream.
     final theme = resolveTheme(source, this.theme);

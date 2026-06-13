@@ -274,6 +274,17 @@ graph TD
         C -->|no| E[Nope]
     end
 '''),
+  Sample('handdrawn', 'Hand-drawn', cTheming,
+      'The sketchy `look: handDrawn` style — wobbly double-stroked borders '
+          'and hachure fills, seeded for stable output.', '''
+%%{init: {'look': 'handDrawn'}}%%
+graph TD
+    A[Start] --> B{Is it working?}
+    B -->|Yes| C[Ship it]
+    B -->|No| D[Debug]
+    D --> B
+    C --> E[Celebrate]
+'''),
   Sample('styled', 'classDef styles', cTheming,
       'Per-node classDef classes, inline style, and linkStyle on a specific '
           'edge.', '''
