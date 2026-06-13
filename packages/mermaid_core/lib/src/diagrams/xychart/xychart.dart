@@ -203,38 +203,53 @@ RenderScene layoutXyChart(
         size: const Size(200, 60), background: theme.background, nodes: const []);
   }
 
+  final horizontal = chart.horizontal;
   final plot = Rect.fromLTWH(0, 0, plotW, plotH);
-  double yOf(double v) => plot.bottom - (v - minV) / (maxV - minV) * plotH;
-  final band = plotW / pointCount;
-  double xCenter(int i) => plot.left + band * (i + 0.5);
 
-  // Y grid + labels at "nice" steps (1/2/5 x 10^n).
+  // Value axis runs along x (horizontal charts) or y (vertical, default).
+  double valPix(double v) {
+    final t = (v - minV) / (maxV - minV);
+    return horizontal ? plot.left + t * plotW : plot.bottom - t * plotH;
+  }
+
+  // Category axis runs along y (horizontal) or x (vertical).
+  final catExtent = horizontal ? plotH : plotW;
+  final band = catExtent / pointCount;
+  double catPix(int i) =>
+      (horizontal ? plot.top : plot.left) + band * (i + 0.5);
+
+  final baseVal = valPix(math.max(0, minV));
+
+  // Value grid + labels at "nice" steps (1/2/5 x 10^n).
   final rawStep = (maxV - minV) / 5;
   final mag = math.pow(10, (math.log(rawStep) / math.ln10).floor()).toDouble();
   final norm = rawStep / mag;
   final step = (norm <= 1 ? 1 : (norm <= 2 ? 2 : (norm <= 5 ? 5 : 10))) * mag;
   for (var v = (minV / step).ceil() * step; v <= maxV + 1e-9; v += step) {
-    final y = yOf(v);
+    final p = valPix(v);
     nodes.add(SceneShape(
-      geometry: PathGeometry(
-          [MoveTo(Point(plot.left, y)), LineTo(Point(plot.right, y))]),
+      geometry: PathGeometry(horizontal
+          ? [MoveTo(Point(p, plot.top)), LineTo(Point(p, plot.bottom))]
+          : [MoveTo(Point(plot.left, p)), LineTo(Point(plot.right, p))]),
       stroke: const Stroke(color: Color(0xffdddddd), width: 1),
     ));
-    final label = v == v.roundToDouble()
-        ? '${v.round()}'
-        : v.toStringAsFixed(1);
+    final label =
+        v == v.roundToDouble() ? '${v.round()}' : v.toStringAsFixed(1);
     final size = measurer.measure(label, baseStyle);
     nodes.add(SceneText(
       text: label,
-      bounds: Rect.fromLTWH(plot.left - size.width - 8, y - size.height / 2,
-          size.width, size.height),
+      bounds: horizontal
+          ? Rect.fromLTWH(
+              p - size.width / 2, plot.bottom + 6, size.width, size.height)
+          : Rect.fromLTWH(plot.left - size.width - 8, p - size.height / 2,
+              size.width, size.height),
       style: baseStyle,
       color: theme.textColor,
-      align: TextAlignH.right,
+      align: horizontal ? TextAlignH.center : TextAlignH.right,
     ));
   }
 
-  // Bars first (lines draw on top), bars grouped side by side.
+  // Bars first (lines draw on top), grouped side by side along the cat axis.
   final barSeries =
       chart.series.where((s) => s.kind == XySeriesKind.bar).toList();
   for (var b = 0; b < barSeries.length; b++) {
@@ -243,11 +258,13 @@ RenderScene layoutXyChart(
     final groupW = band * 0.7;
     final barW = groupW / barSeries.length;
     for (var i = 0; i < s.values.length && i < pointCount; i++) {
-      final x = xCenter(i) - groupW / 2 + b * barW;
-      final y = yOf(s.values[i]);
+      final c = catPix(i) - groupW / 2 + b * barW + barW / 2;
+      final p = valPix(s.values[i]);
+      final lo = c - (barW - 2) / 2, hi = c + (barW - 2) / 2;
       nodes.add(SceneShape(
-        geometry:
-            RectGeometry(Rect.fromLTRB(x, y, x + barW - 2, yOf(math.max(0, minV)))),
+        geometry: RectGeometry(horizontal
+            ? Rect.fromLTRB(math.min(baseVal, p), lo, math.max(baseVal, p), hi)
+            : Rect.fromLTRB(lo, math.min(baseVal, p), hi, math.max(baseVal, p))),
         fill: Fill(color),
       ));
     }
@@ -257,7 +274,9 @@ RenderScene layoutXyChart(
     final color = _plotPalette[chart.series.indexOf(s) % _plotPalette.length];
     final pts = [
       for (var i = 0; i < s.values.length && i < pointCount; i++)
-        Point(xCenter(i), yOf(s.values[i])),
+        horizontal
+            ? Point(valPix(s.values[i]), catPix(i))
+            : Point(catPix(i), valPix(s.values[i])),
     ];
     if (pts.length < 2) continue;
     nodes.add(SceneShape(
@@ -269,7 +288,7 @@ RenderScene layoutXyChart(
     ));
   }
 
-  // Axes.
+  // Axes: an L from the shared origin at bottom-left.
   nodes.add(SceneShape(
     geometry: PathGeometry([
       MoveTo(Point(plot.left, plot.top)),
@@ -279,8 +298,8 @@ RenderScene layoutXyChart(
     stroke: Stroke(color: theme.lineColor, width: 1.2),
   ));
 
-  // X labels: categories or numeric range endpoints.
-  final xLabels = chart.categories.isNotEmpty
+  // Category labels: categories or numeric range endpoints.
+  final catLabels = chart.categories.isNotEmpty
       ? chart.categories
       : [
           for (var i = 0; i < pointCount; i++)
@@ -288,21 +307,25 @@ RenderScene layoutXyChart(
         ];
   // Thin labels if they would collide.
   var labelEvery = 1;
-  if (xLabels.isNotEmpty) {
-    final widest = xLabels
+  if (catLabels.isNotEmpty) {
+    final widest = catLabels
         .map((l) => measurer.measure(l, baseStyle).width)
         .reduce(math.max);
     labelEvery = math.max(1, ((widest + 10) / band).ceil());
   }
-  for (var i = 0; i < pointCount && i < xLabels.length; i++) {
+  for (var i = 0; i < pointCount && i < catLabels.length; i++) {
     if (i % labelEvery != 0) continue;
-    final size = measurer.measure(xLabels[i], baseStyle);
+    final size = measurer.measure(catLabels[i], baseStyle);
     nodes.add(SceneText(
-      text: xLabels[i],
-      bounds: Rect.fromLTWH(xCenter(i) - size.width / 2, plot.bottom + 6,
-          size.width, size.height),
+      text: catLabels[i],
+      bounds: horizontal
+          ? Rect.fromLTWH(plot.left - size.width - 8,
+              catPix(i) - size.height / 2, size.width, size.height)
+          : Rect.fromLTWH(catPix(i) - size.width / 2, plot.bottom + 6,
+              size.width, size.height),
       style: baseStyle,
       color: theme.textColor,
+      align: horizontal ? TextAlignH.right : TextAlignH.center,
     ));
   }
 
@@ -317,9 +340,14 @@ RenderScene layoutXyChart(
     ));
   }
 
-  axisTitle(chart.xAxisTitle, Point(plot.center.x, plot.bottom + 34));
-  // No text rotation in the IR: the y-axis title sits above the axis.
-  axisTitle(chart.yAxisTitle, Point(plot.left, plot.top - 16));
+  // x-axis title labels the category axis; y-axis title the value axis.
+  if (horizontal) {
+    axisTitle(chart.xAxisTitle, Point(plot.left, plot.top - 16));
+    axisTitle(chart.yAxisTitle, Point(plot.center.x, plot.bottom + 34));
+  } else {
+    axisTitle(chart.xAxisTitle, Point(plot.center.x, plot.bottom + 34));
+    axisTitle(chart.yAxisTitle, Point(plot.left, plot.top - 16));
+  }
 
   var bounds = sceneBounds(nodes)!;
   if (chart.title != null && chart.title!.isNotEmpty) {
