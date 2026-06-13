@@ -74,7 +74,7 @@ class Mermaid {
     switch (detectDiagramType(source)) {
       case DiagramType.flowchart:
         return layoutFlowchart(parseFlowchart(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer, theme: theme, engine: resolveLayout(source));
       case DiagramType.sequence:
         return layoutSequence(parseSequence(source),
             measurer: measurer, theme: theme);

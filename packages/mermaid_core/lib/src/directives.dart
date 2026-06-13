@@ -87,6 +87,32 @@ LookConfig resolveLook(String source) {
   return LookConfig(look: look, handDrawnSeed: seed);
 }
 
+/// Resolves the layout engine name (`dagre` default, or `elk` / `tidy-tree`)
+/// from `layout:` in an `%%{init}%%` directive or frontmatter `config:`. Also
+/// recognizes the `flowchart-elk` diagram keyword (handled by the caller).
+String resolveLayout(String source) {
+  var layout = 'dagre';
+  final text = source.replaceAll('\r\n', '\n');
+  // The `flowchart-elk` keyword selects the elk engine.
+  if (RegExp(r'(?:^|\n)\s*flowchart-elk\b').hasMatch(text)) layout = 'elk';
+  final fm = RegExp(r'^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*\n')
+      .firstMatch(text);
+  if (fm != null) {
+    final lm = RegExp(r'^\s*layout:\s*([\w-]+)\s*$', multiLine: true)
+        .firstMatch(fm.group(1)!);
+    if (lm != null) layout = lm.group(1)!;
+  }
+  final directive =
+      RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%').firstMatch(text);
+  if (directive != null) {
+    final config = _looseJson(directive.group(1)!);
+    if (config is Map && config['layout'] is String) {
+      layout = config['layout'] as String;
+    }
+  }
+  return layout;
+}
+
 /// Mermaid directives use loose JSON (single quotes, bare keys); normalize
 /// before decoding. Returns null when it still cannot be parsed.
 Object? _looseJson(String text) {

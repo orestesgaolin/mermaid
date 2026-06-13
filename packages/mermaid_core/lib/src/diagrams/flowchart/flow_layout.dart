@@ -23,6 +23,7 @@ import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 import '../../vendor/dagre/dart_dagre.dart' as dagre;
 import 'flow_model.dart';
+import 'layout_engines.dart';
 
 /// Upstream flowchart defaults (defaultConfig.ts / flowchart schema).
 const double _nodePadding = 15;
@@ -42,13 +43,14 @@ RenderScene layoutFlowchart(
   FlowGraph graph, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  String engine = 'dagre',
 }) {
   ensureBuiltinIconPacks();
   final baseStyle = TextStyleSpec(
     fontFamily: theme.fontFamily,
     fontSize: theme.fontSize,
   );
-  final fragment = _layoutGraph(graph, measurer, theme, baseStyle);
+  final fragment = _layoutGraph(graph, measurer, theme, baseStyle, engine);
   var sceneNodes = fragment.nodes;
   var bounds = fragment.bounds;
 
@@ -121,6 +123,7 @@ _Fragment _layoutGraph(
   TextMeasurer measurer,
   MermaidTheme theme,
   TextStyleSpec baseStyle,
+  String engine,
 ) {
   // --- 0. Subgraphs with their own direction become recursive fragments. ---
   // dagre has no per-cluster rankdir, so (like upstream mermaid) such a
@@ -201,6 +204,8 @@ _Fragment _layoutGraph(
       measurer,
       theme,
       baseStyle,
+      // Sub-fragments always use dagre; alternate engines apply to the top.
+      'dagre',
     );
     final titleSize = sgs[root].title.isEmpty
         ? Size.zero
@@ -396,6 +401,36 @@ _Fragment _layoutGraph(
     p.center = result.graph.nodeMap[p.node.id]!.position!.center;
   }
 
+  // Alternate engine: tidy-tree replaces the dagre placement when there are no
+  // clusters (which it doesn't model). elk keeps the layered placement but
+  // routes edges orthogonally (handled in the edge loop below).
+  final useTidyTree = engine == 'tidy-tree' && sgs.isEmpty;
+  if (useTidyTree) {
+    final ids = [
+      for (final p in placed.values)
+        if (!syntheticIds.contains(p.node.id)) p.node.id
+    ];
+    final sizes = {
+      for (final p in placed.values)
+        p.node.id: Size(p.shape.width, p.shape.height)
+    };
+    final tEdges = [
+      for (final e in graph.edges)
+        if (placed.containsKey(e.from) && placed.containsKey(e.to))
+          (e.from, e.to)
+    ];
+    final flow = switch (graph.direction) {
+      FlowDirection.bt => TreeFlow.bottomTop,
+      FlowDirection.lr => TreeFlow.leftRight,
+      FlowDirection.rl => TreeFlow.rightLeft,
+      _ => TreeFlow.topBottom,
+    };
+    final centers = tidyTreeLayout(ids, sizes, tEdges,
+        flow: flow, siblingGap: _nodeSpacing, levelGap: _rankSpacing);
+    centers.forEach((id, c) => placed[id]?.center = c);
+  }
+  final orthogonalEdges = engine == 'elk';
+
   // --- 5. Emit scene nodes (in dagre coordinate space; translated later). ---
   final clusterGroups = <SceneNode>[];
   final edgeGroups = <SceneNode>[];
@@ -533,6 +568,14 @@ _Fragment _layoutGraph(
     if (points.length < 2) {
       points = [source.center, target.center];
     }
+    // Alternate engines route their own edges from the recomputed centers.
+    if (useTidyTree) {
+      points = [source.center, target.center];
+    } else if (orthogonalEdges) {
+      final vertical = graph.direction == FlowDirection.tb ||
+          graph.direction == FlowDirection.bt;
+      points = orthogonalRoute(source.center, target.center, vertical: vertical);
+    }
     // Cluster endpoints: the dagre path runs to a representative node deep
     // inside the cluster; cut it back so it meets the cluster border.
     if (clusterTo != null) {
@@ -565,7 +608,8 @@ _Fragment _layoutGraph(
     }
 
     children.add(SceneShape(
-      geometry: PathGeometry(_edgeCurve(points, e.interpolate)),
+      geometry: PathGeometry(
+          _edgeCurve(points, orthogonalEdges ? 'linear' : e.interpolate)),
       stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
     ));
     if (e.headTo != ArrowHead.none) {
