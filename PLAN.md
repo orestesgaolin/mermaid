@@ -1,7 +1,20 @@
 # Mermaid → Dart port: plan & handoff
 
 A Flutter-first Dart port of [mermaid-js](https://github.com/mermaid-js/mermaid).
-**Read this before touching the code.** Updated: 2026-06-13 (15 diagram types incl. gitGraph, SVG backend, docs-style comparison website).
+**Read this before touching the code.** Updated: 2026-06-14 (28 diagram types — full upstream type parity; Tier-2 fidelity fixes + Tier-3 top-5 done; SVG backend; docs-style comparison website).
+
+## 2026-06-14 parity push (Tier 2 + Tier 3 top 5, all done)
+- Tier 2: class static-member underline (SceneText.underline); flowchart v11
+  shapes (document/card/hourglass/bolt/triangle/lined/divided/window-pane/
+  crossed-circle/fork-join/text + nearest-shape mappings); linkStyle
+  interpolate (linear/step/catmull-rom curves); sequence box grouping +
+  create/destroy lifelines; state concurrency-region dividers + history
+  states ([H]/[H*]).
+- Tier 3 top 5: gantt excludes shading + todayMarker; C4 UpdateElementStyle/
+  UpdateRelStyle; xychart horizontal; inline mixed text+math labels; mindmap
+  ::icon / :::class.
+- Full type parity: added block, radar, treemap, kanban, architecture,
+  cynefin, venn, ishikawa, wardley, eventmodeling, railroad.
 
 ## Goal & priorities
 
@@ -214,9 +227,13 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   branch points + merges.
 - [x] flutter_embed uses `BoxFit.contain` (was scaleDown) so diagrams scale
   up to fill the pane, matching mermaid.js's apparent size.
-- [ ] Long tail still to port: block, kanban, architecture, radar, treemap,
-  and niche ones (cynefin, eventmodeling, ishikawa, railroad, swimlanes,
-  venn, wardley, zenuml). gitGraph + sankey + packet now done.
+- [x] **Full type parity — 28 diagram types.** All documented/registered
+  upstream types are ported: flowchart, sequence, class, state, er, pie,
+  gantt, quadrant, journey, timeline, xychart, mindmap, requirement, c4,
+  gitGraph, sankey, packet, block, radar, treemap, kanban, architecture,
+  cynefin, venn, ishikawa, wardley, eventmodeling, railroad. Not ported:
+  `zenuml` (external plugin / alternate sequence engine), `info` (version
+  stamp), and `swimlanes` (a flowchart layout algorithm, not a type).
 - [ ] Frontmatter `config.themeVariables` (nested YAML) not yet parsed.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
   into a shared edges util (3 copies now).
