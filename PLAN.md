@@ -163,7 +163,7 @@ y-labels horizontal), class note placement, state self-loop label overlap.
 - [x] **Quadrant / journey / timeline** (single-file diagrams under
   `diagrams/<type>/<type>.dart`) — 2+1+3 corpus fixtures, 9 tests.
   Journey draws score faces + actor legend; timeline stacks events under
-  period boxes; quadrant has no text rotation (y labels sit left of plot).
+  period boxes; quadrant y-labels rotated via SceneText.rotation (y labels sit left of plot).
   Frontmatter fences may be indented (detect.dart tolerates).
 - [x] **Comparison website** (`apps/website`, Jaspr static + `apps/flutter_embed`):
   side-by-side mermaid.js (CDN) vs mermaid dart (embedded Flutter web view,
