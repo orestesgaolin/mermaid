@@ -452,8 +452,10 @@ RenderScene layoutArchitecture(
 /// built-in pack; unknown names fall back to a generic box glyph.
 String _iconRef(String name) => switch (name) {
       'database' || 'db' => 'icon:database',
-      'cloud' || 'internet' => 'icon:cloud',
-      'disk' || 'server' => 'icon:database',
+      'cloud' => 'icon:cloud',
+      'internet' => 'icon:internet',
+      'disk' => 'icon:disk',
+      'server' => 'icon:server',
       _ => 'icon:cog',
     };
 
