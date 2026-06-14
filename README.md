@@ -43,8 +43,7 @@ subset), and the **`elk` / `tidy-tree`** alternate layout engines.
 | App | What it is |
 |---|---|
 | [`apps/demo`](apps/demo) | macOS desktop app: a live source editor with a preview pane and a theme editor, showcasing all 28 types. |
-| [`apps/website`](apps/website) | Static [Jaspr](https://jaspr.site) site rendering mermaid.js (CDN) and this port **side by side** for visual parity comparison. |
-| [`apps/flutter_embed`](apps/flutter_embed) | The Flutter web build embedded by the website. |
+| [`apps/website`](apps/website) | Static [Jaspr](https://jaspr.site) site rendering mermaid.js (CDN) and this port **side by side** for visual parity comparison — **[live demo](https://roszkowski.dev/mermaid/)**. The Dart renderer is embedded with [`jaspr_flutter_embed`](https://pub.dev/packages/jaspr_flutter_embed), so a single `jaspr build` produces the whole site (Flutter web build included). |
 
 ## Architecture
 
