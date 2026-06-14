@@ -136,3 +136,16 @@ Notes / minor residual gaps:
 - `4ex` title size is approximated as `2*taskFontSize`; exact ex-height depends on font metrics we don't resolve here.
 - Mouth crescent is a stroked cubic approximation (no ring-arc fill primitive in the IR); visually close, not pixel-identical.
 - taskFontFamily upstream is `"Open Sans", sans-serif`; we keep the theme font family for measurement consistency (no new theme field added).
+
+## Implementation log (P7 — task drop-line reaches boundary)
+- Symptom: actor/task vertical drop-lines stopped at the face/icon.
+- Upstream `svgDraw.drawTask` draws the dashed `task-line` from `y1 = task.y`
+  (task box top, 140) to `y2 = maxHeight = 300 + 5 * 30 = 450` — the bottom
+  descender boundary used by `bounds.insert(..., 300 + 5 * 30)`. The line runs
+  past every face (faces sit at `cy = 300 + (5 - score) * 30`, i.e. 300..420).
+- Verified our renderer already draws the line to `maxHeight` (`const maxHeight
+  = 300.0 + 5 * 30.0; // 450`, used as `LineTo(Point(cx, maxHeight))` at the
+  task group). This is the correct boundary endpoint and matches upstream
+  exactly; the earlier buggy `LineTo(Point(cx, faceY - 17))` (line stopping at
+  the face) was already replaced in the parity audit pass. No further code
+  change required — geometry confirmed against upstream constants.

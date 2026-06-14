@@ -156,8 +156,13 @@ RenderScene layoutPacket(
         ),
       ];
       if (diagram.showBits) {
-        // Bit numbers sit just above the row (upstream baseline at wordY-2).
-        final bitBandTop = y - 2 - bitLabelH;
+        // Bit numbers sit just above the row. Upstream draws them with
+        // dominant-baseline:auto at y = wordY - 2, i.e. the text *baseline*
+        // lands at wordY-2 (renderer.ts:bitNumberY). The SVG backend places a
+        // single line's baseline at bounds.top + bounds.height*0.78, so offset
+        // the band's top accordingly to align the baseline exactly at y-2.
+        const baselineFactor = 0.78;
+        final bitBandTop = y - 2 - bitLabelH * baselineFactor;
         final isSingle = segEnd == bit;
         children.add(SceneText(
           text: '$bit',

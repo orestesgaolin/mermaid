@@ -568,24 +568,23 @@ RenderScene layoutArchitecture(
       ));
     }
     if (s.icon != null) {
+      // The architecture pack glyph paints its own #087ebf box + white line
+      // art, so no separate border is drawn (matches upstream `getIconSVG`).
       nodes.addAll(renderIcon(
           _iconRef(s.icon!), iconRect, theme.textColor));
     } else if (s.iconText != null) {
-      // Blank icon box with centered (white-on-fill) text. We draw a filled
-      // rounded box and center the text, approximating upstream's `blank` icon
-      // + HTML overlay.
-      nodes.add(SceneShape(
-        geometry: RectGeometry(iconRect, rx: 5, ry: 5),
-        fill: Fill(theme.mainBkg),
-        stroke: Stroke(color: theme.primaryBorderColor),
-      ));
+      // Upstream renders the `blank` architecture glyph (the filled #087ebf
+      // box) and overlays the centered text in white (`.node-icon-text > div`
+      // uses `color: #fff`).
+      nodes.addAll(renderIcon(
+          'mermaid-architecture:blank', iconRect, theme.textColor));
       final it = s.iconText!;
       final its = measurer.measure(it, baseStyle, maxWidth: _iconSize - 4);
       nodes.add(SceneText(
         text: it,
         bounds: Rect.fromCenter(iconRect.center, its.width, its.height),
         style: baseStyle,
-        color: theme.textColor,
+        color: Color.white,
         align: TextAlignH.center,
       ));
     }
@@ -613,20 +612,22 @@ RenderScene layoutArchitecture(
   );
 }
 
-/// Architecture icon names mapped to our built-in pack. Upstream ships a small
-/// architecture pack (cloud/database/disk/internet/server/blank) plus iconify
-/// fallback for arbitrary `prefix:name` refs. We honour an explicit `prefix:`
-/// ref as-is, map the architecture pack names plus common aliases, and fall
-/// back to a generic cog for unknown names.
+/// Architecture icon names mapped to the upstream `mermaid-architecture` pack
+/// (the default `#087ebf` box + white glyph). Upstream ships exactly
+/// cloud/database/disk/internet/server/blank; an unqualified name that is not
+/// one of those falls back to the pack's `unknown`-style blank box (matching
+/// upstream's `fallbackPrefix` behaviour). An explicit `prefix:name` ref is
+/// honoured as-is so registered iconify packs keep working.
 String _iconRef(String name) {
   if (name.contains(':')) return name; // already a pack-qualified ref
+  const arch = 'mermaid-architecture:';
   return switch (name.toLowerCase()) {
-    'database' || 'db' || 'sql' || 'postgresql' || 'mysql' => 'icon:database',
-    'cloud' => 'icon:cloud',
-    'internet' || 'web' || 'globe' => 'icon:internet',
-    'disk' || 'storage' || 'drive' => 'icon:disk',
-    'server' || 'compute' || 'vm' || 'host' => 'icon:server',
-    _ => 'icon:cog',
+    'database' || 'db' || 'sql' || 'postgresql' || 'mysql' => '${arch}database',
+    'cloud' => '${arch}cloud',
+    'internet' || 'web' || 'globe' => '${arch}internet',
+    'disk' || 'storage' || 'drive' => '${arch}disk',
+    'server' || 'compute' || 'vm' || 'host' => '${arch}server',
+    _ => '${arch}blank',
   };
 }
 

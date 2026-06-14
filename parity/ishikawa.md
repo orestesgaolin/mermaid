@@ -132,3 +132,24 @@ semi-transparent fills/strokes (all fills are solid `mainBkg`, strokes solid
 Status raised to full-parity: matches mermaid.js under the default theme and
 adapts correctly to other themes via the shared palette; only the noted
 bbox/anchoring approximations remain (niche, non-color).
+
+### Ticket P1 re-verification (angle / arrowheads / mirror)
+Re-audited `ishikawa.dart` against upstream `ishikawaRenderer.ts` for the three
+reported symptoms. All three are ALREADY correct in the current
+(`df63e10`-era) port; the symptoms describe the pre-fix implementation, not the
+current code:
+- Branch/bone ANGLE: uses the exact `82 * pi / 180` constant with
+  `dx = -cosA*len`, `dy = sinA*len*direction`, and `diagonalX = -cosA` /
+  `diagonalY = sinA*direction` — byte-for-byte the upstream geometry
+  (renderer lines 357-358, 389-390). No ad-hoc offsets remain.
+- Arrowheads: `_drawArrow` is emitted on every top-level branch
+  (start, dir `startX-endX, startY-endY`), every horizontal sub-branch
+  (`bx0, y, 1, 0`), and every diagonal sub-branch (`bx0, by0, bx0-bx1,
+  by0-y`) — matching upstream's `marker-start` / `drawArrowMarker` calls
+  (renderer lines 364, 410, 421). Bones are NOT missing arrowheads.
+- Spine side / mirror: head wedge tip points +x via `Q x + w*2.4 0 ...`,
+  branches extend left (`dx` negative), spine runs horizontally from the
+  leftmost bone to `x=0`; even-index causes go up (`dir=-1`), odd-index down
+  (`dir=+1`); `spineY = max(upperLen, SPINE_BASE_LENGTH)`. Identical
+  composition to upstream — not mirrored.
+No code change required; `dart analyze` clean.

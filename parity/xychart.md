@@ -73,6 +73,26 @@
 
 ## Implementation log
 
+### P5 — y-axis title rotation (verified already correct)
+Ticket symptom: y-axis title drawn horizontally on top; upstream draws it
+rotated -90° (270° clockwise) along the left edge.
+
+Confirmed against upstream `baseAxis.ts` `getDrawableElementsForLeftAxis`
+(title `rotation: 270`, anchor `x = boundingX + titlePadding`,
+`y = boundingY + boundingH/2`, `verticalPos:'top'`, `horizontalPos:'center'`)
+and `xychartRenderer.ts` (`translate(x,y) rotate(rotation)`).
+
+The current `xychart.dart` `_drawAxis` left-axis branch already emits the title
+with `rotation: 270`. Because our IR rotates about the bounds **center**
+(not the upstream text anchor), the center is offset by `+size.height/2` in x
+from the upstream anchor (SVG `rotate(270)` maps the pre-rotation box center
+`(0, h/2)` to `(h/2, 0)`), so `bounds` center is
+`(boundingX + titlePadding + size.height/2, boundingY + boundingH/2)` — which
+is what the code does. Rendered SVG of a default vertical chart confirms the
+y-axis title is wrapped in `transform="rotate(270 …)"` and the x-axis (bottom)
+title stays horizontal (rotation 0). No code change required; the defect was
+fixed in the file rewrite (commit df63e10) after the original parity audit.
+
 ### Theme-wiring pass (palette fields)
 Reviewed every color in `xychart.dart` against the shared `MermaidTheme`
 palette. The semantically-themed colors were already wired and are confirmed

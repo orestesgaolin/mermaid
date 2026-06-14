@@ -144,3 +144,21 @@ Status raised to **full-parity**: default render matches mermaid.js and the
 diagram now adapts to all themes. Only the D3 `treemap` config block and custom
 `valueFormat` strings remain (config/niche plumbing absent port-wide), which do
 not affect the default visual.
+
+### P11 — section border stroke (verification)
+
+Verified the section/group border against upstream `renderer.ts:198-217`: each
+branch (section) body rect carries `stroke = colorScalePeer(name)`,
+`stroke-width = 2.0`, `stroke-opacity = 0.4`. Our `layout()` already emits this
+in the section branch via `Stroke(color: peer.withOpacity(0.4), width: 2)`
+(fallback when no `classDef` stroke override), where `peer = peerScale[label]`
+resolves to `cScalePeer0..11` (e.g. first real section → `#3a3aff`; the
+synthetic root takes the leading `transparent` slot, so no real section gets a
+transparent border). Confirmed by rendering a nested sample through
+`tool/render_svg.dart`: section rects emit
+`stroke="#3a3aff" stroke-width="2" stroke-opacity="0.4"` (and `#b9ff20`,
+`#ff3a3a` for sibling sections), matching upstream's exact constants. The border
+is thin/faint by design (0.4 opacity, 2px), exactly as upstream draws it. The
+earlier "no section body stroke" state (discrepancy #2) was fixed in the
+section-coloring pass; P11 is a no-op re-verification — the section border is
+present and uses the upstream `cScalePeer` color.

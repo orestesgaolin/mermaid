@@ -178,9 +178,12 @@ RenderScene layoutSankey(
   Sankey diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
-  // Upstream `SankeyDiagramConfig` defaults (config.schema.yaml).
+  // Upstream `SankeyDiagramConfig` defaults (config.schema.yaml). Note
+  // sankeyRenderer.ts uses `height ?? defaultSankeyConfig.width`, so the
+  // default canvas is square (600×600) — matching that keeps our aspect ratio
+  // identical to mermaid.js so a contain-fit embed renders at the same width.
   double width = 600,
-  double height = 400,
+  double height = 600,
   double nodeWidth = 10,
   double nodePadding = 12,
   String nodeAlignment = 'justify',
@@ -239,11 +242,25 @@ RenderScene layoutSankey(
 
   final maxDepth = nodeList.fold(0, (a, n) => math.max(a, n.depth));
   final maxHeight = nodeList.fold(0, (a, n) => math.max(a, n.height));
-  final kx = maxDepth > 0 ? (width - nodeWidth) / maxDepth : 0.0;
+  // d3-sankey computeNodeLayers: the number of columns is `max(depth) + 1`,
+  // and the horizontal scale spreads those columns across the full extent so
+  // the last column's right edge lands on `width`:
+  //   const x  = max(nodes, d => d.depth) + 1;
+  //   const kx = (x1 - x0 - dx) / (x - 1);
+  // Dividing by `columnCount - 1` (== maxDepth) makes a node placed in the
+  // final column sit at `(columnCount - 1) * kx == width - nodeWidth`, so the
+  // diagram occupies the full configured width — not ~half of it.
+  final columnCount = maxDepth + 1;
+  final kx = columnCount > 1 ? (width - nodeWidth) / (columnCount - 1) : 0.0;
 
   // --- d3-sankey: nodeAlign + x assignment ------------------------------
+  // Clamp the resolved column into `[0, columnCount - 1]` exactly as upstream
+  // (`Math.max(0, Math.min(x - 1, Math.floor(align(...))))`), so every
+  // alignment (left/right/center/justify) keeps the rightmost column flush
+  // with the right edge.
   for (final n in nodeList) {
-    final col = _alignLayer(n, align, maxDepth, maxHeight);
+    final col = _alignLayer(n, align, maxDepth, maxHeight)
+        .clamp(0, columnCount - 1);
     n.layer = col;
     n.x0 = col * kx;
     n.x1 = n.x0 + nodeWidth;

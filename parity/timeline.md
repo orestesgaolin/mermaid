@@ -86,3 +86,18 @@ Notes:
 - No remaining default-render gap; status raised to full-parity. Residual items are
   config/niche only (parsed-but-unused `timeline LR/TD` direction — upstream renders
   columnar regardless — and the `4ex` title-size unit approximation).
+
+### P6 — vertical divider lines must reach the content boundary
+- Bug: the per-task dashed vertical connector was guarded by
+  `if (period.events.isNotEmpty)`, so a period/section box with no events drew no
+  divider at all — the line "stopped at the icon" (period box bottom). Upstream
+  (`timelineRenderer.ts:drawTasks`) draws the connector for EVERY task: its guard is
+  `if (task.events)`, and per `timelineDb.addTask` `events` is always an array
+  (`event ? [event] : []`), so the guard is always truthy. The end Y uses the GLOBAL
+  `maxEventLineLength` (`y2 = masterY + maxTaskHeight + 100 + maxEventLineLength + 100`),
+  so every divider extends to the same full-height boundary irrespective of per-task
+  event count.
+- Fix: hoisted the dashed connector out of the `events.isNotEmpty` block in
+  `layoutTimeline`/`drawTasks` so it is always emitted (unchanged geometry: width 2,
+  dash [5,5], end Y `taskY + maxTaskHeight + 100 + maxEventLineLength + 100`). Only the
+  event-box stacking remains conditional on having events. No constants changed.

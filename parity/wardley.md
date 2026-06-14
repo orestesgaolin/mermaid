@@ -92,3 +92,10 @@ Applied 2026-06-14 (theme-wiring + opacity pass). All edits confined to `wardley
   - `annotationFill` is declared in upstream's theme type but never applied — the annotation circles and box use a literal `'white'` in the renderer regardless of theme. Our `_white` annotation fills correctly mirror that; left as-is.
 
 No new theme fields added, no shared files touched. Status set to **full-parity**: default render matches mermaid.js and the scene background now adapts across themes; the only theme-derived residual (`#222` text vs `primaryTextColor`) cannot be wired without breaking the default-pixel-identical rule because our `primaryTextColor` default value differs from upstream's wardley literal.
+
+Ticket P13 re-verification 2026-06-14. Re-checked the four reported symptoms against `upstream/.../wardleyRenderer.ts`; all four were already fixed in the prior parity pass and remain correct — no code change needed:
+1. Stage dividers ARE dashed: `Stroke(... dash: const [5, 5])` (`wardley.dart:607-608`) == upstream `stroke-dasharray '5 5'` at opacity 0.8 (renderer L256-257).
+2. Evolve/trend arrow HAS a red arrowhead: `_arrowHead(end, dx, dy, _evolutionStroke, 6)` (`wardley.dart:744`) draws a filled `PolygonGeometry` triangle with `Fill(_evolutionStroke)` where `_evolutionStroke = Color(0xffdc3545)` == `#dc3545`, mirroring the upstream red `marker arrow-${id}` (renderer L95-108, L582).
+3. Y-axis label IS rotated: `SceneText(... rotation: -90)` (`wardley.dart:574`) == upstream `rotate(-90 …)` (renderer L208-211).
+4. Bottom "Evolution" x-axis label IS present: `xLabel = map.xLabel ?? 'Evolution'` rendered as bottom-center `SceneText` (`wardley.dart:557, 560-566`) == upstream `xLabel ?? 'Evolution'` (renderer L186, L189-198).
+`dart analyze` on `wardley.dart`: no errors.

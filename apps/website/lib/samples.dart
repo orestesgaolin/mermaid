@@ -230,10 +230,10 @@ ishikawa-beta
       'Event-modeling timeline: UI, commands, events and read models placed '
           'along a horizontal flow.', '''
 eventmodeling
-    tf 01 ui Order Page
-    tf 02 cmd Place Order
-    tf 03 evt Order Placed
-    tf 04 view Order List
+    tf 01 ui OrderPage
+    tf 02 cmd PlaceOrder
+    tf 03 evt OrderPlaced
+    tf 04 rmo OrderList
 '''),
   Sample('railroad', 'Railroad', cDiagrams,
       'Syntax (railroad) diagram: grammar rules drawn as branching tracks.',
@@ -379,9 +379,9 @@ treemap-beta
       'Overlapping sets with their intersections and unions highlighted.', '''
 venn-beta
     title Skills overlap
-    set frontend ["UI", "CSS"]
-    set backend ["API", "DB"]
-    union ["frontend", "backend"]
+    set Frontend
+    set Backend
+    union Frontend,Backend["Full-stack"]
 '''),
   Sample('wardley', 'Wardley map', cCharts,
       'Value-chain map: components placed by visibility and evolution, with '

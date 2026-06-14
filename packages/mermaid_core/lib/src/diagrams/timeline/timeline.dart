@@ -268,20 +268,24 @@ RenderScene layoutTimeline(
         idPrefix: 'period',
       ));
 
-      if (period.events.isNotEmpty) {
-        // Vertical dashed connector from the task bottom down past the events.
-        final lineX = x + _nodeWidth / 2;
-        final lineEnd =
-            taskY + maxTaskHeight + 100 + maxEventLineLength + 100;
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(lineX, taskY + maxTaskHeight)),
-            LineTo(Point(lineX, lineEnd)),
-          ]),
-          stroke: Stroke(color: Color.black, width: 2, dash: const [5, 5]),
-        ));
+      // Vertical dashed connector from the task bottom down to the content
+      // boundary. Upstream draws this for EVERY task (timelineRenderer.ts
+      // `if (task.events)` — `task.events` is always an array per timelineDb,
+      // so the guard is always truthy), and the end Y uses the GLOBAL
+      // `maxEventLineLength` so every divider reaches the same full-height
+      // boundary regardless of how many events the task has.
+      final lineX = x + _nodeWidth / 2;
+      final lineEnd = taskY + maxTaskHeight + 100 + maxEventLineLength + 100;
+      nodes.add(SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(lineX, taskY + maxTaskHeight)),
+          LineTo(Point(lineX, lineEnd)),
+        ]),
+        stroke: Stroke(color: Color.black, width: 2, dash: const [5, 5]),
+      ));
 
-        // Events stacked vertically below the task (+200 from task top).
+      // Events stacked vertically below the task (+200 from task top).
+      if (period.events.isNotEmpty) {
         var ey = taskY + 200;
         for (final event in period.events) {
           final h = math.max(virtualHeight(event), _eventMaxHeight);

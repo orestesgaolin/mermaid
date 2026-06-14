@@ -538,6 +538,17 @@ _Fragment _layoutGraph(
 
   // Edges and their labels.
   final selfLoopCount = <String, int>{};
+  // Group edges by unordered endpoint pair so straight-line engines (tidy-tree)
+  // can fan out parallel/antiparallel edges instead of overlapping them into a
+  // single line with arrowheads at both ends.
+  String pairKey(String a, String b) =>
+      a.compareTo(b) <= 0 ? '$a $b' : '$b $a';
+  final pairEdges = <String, List<int>>{};
+  for (var i = 0; i < graph.edges.length; i++) {
+    final e = graph.edges[i];
+    if (isAbsorbedEdge(e) || e.from == e.to) continue;
+    (pairEdges[pairKey(e.from, e.to)] ??= []).add(i);
+  }
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
     if (isAbsorbedEdge(e)) continue; // Rendered inside the cluster fragment.
@@ -583,6 +594,21 @@ _Fragment _layoutGraph(
     // Alternate engines route their own edges from the recomputed centers.
     if (useTidyTree) {
       points = [source.center, target.center];
+      // Fan out edges that share an endpoint pair (e.g. B-->D and D-->B) by
+      // bending each one perpendicular to the center line, so they render as
+      // distinct curves instead of overlapping into a single segment.
+      final group = pairEdges[pairKey(e.from, e.to)];
+      if (group != null && group.length > 1) {
+        final pos = group.indexOf(i);
+        final spread = pos - (group.length - 1) / 2.0;
+        if (spread != 0) {
+          final dir = _direction(source.center, target.center);
+          final perp = Point(-dir.y, dir.x);
+          final mid = Point((source.center.x + target.center.x) / 2,
+              (source.center.y + target.center.y) / 2);
+          points = [source.center, mid + perp * (spread * 24.0), target.center];
+        }
+      }
     }
     // Cluster endpoints: the dagre path runs to a representative node deep
     // inside the cluster; cut it back so it meets the cluster border.

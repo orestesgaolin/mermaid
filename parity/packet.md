@@ -63,3 +63,13 @@ All fixes applied in `packet.dart:layoutPacket` (+ `Packet` gained a `showBits` 
 8. (low) Single-bit start number centered — Done. When `segEnd == bit`, emit one center-anchored start number spanning the block width; multi-bit keeps left start + right end.
 
 Note: `measurer` parameter retained in `layoutPacket` signature (public API) though no longer used internally — title sizing now uses a fixed band like upstream.
+
+### P9 follow-up (bit-number baseline alignment)
+Verified against renderer.ts: horizontal `paddingX` gap was already correct
+(`x = colStart*bitWidth + 1`, `w = bits*bitWidth - paddingX`, paddingX=5),
+matching upstream `drawWord`. Remaining defect was the bit-number *vertical*
+alignment: upstream draws bit numbers with `dominant-baseline:auto` at
+`y = wordY - 2`, so the text baseline (not its center) lands at `wordY-2`.
+Our SVG backend puts a single line's baseline at `bounds.top + bounds.height*0.78`,
+so the band top is now `y - 2 - bitLabelH*0.78` (was `y - 2 - bitLabelH`),
+landing the baseline exactly at `wordY-2` instead of ~3px too high.
