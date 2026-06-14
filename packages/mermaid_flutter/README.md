@@ -10,6 +10,9 @@ no SVG, no WebView, no platform views.
 
 - **`MermaidDiagram` widget** — give it a source string, it parses, lays out
   and paints the diagram.
+- **`MermaidView` widget** — an interactive viewer around it: pan & zoom, a
+  directional arrow pad, zoom in/out, reset-to-fit, a pan/zoom lock toggle and
+  a fullscreen popup — like mermaid.js on the web.
 - **Exact text metrics** via `FlutterTextMeasurer` (matches the painter), so
   layout is correct for whatever fonts your app uses.
 - **Live-editing friendly** — keeps the last good render on screen with an
@@ -45,6 +48,19 @@ The widget sizes itself to the diagram. To fit it into a box, wrap it:
 ```dart
 FittedBox(child: MermaidDiagram(source: src))                 // scale to fit
 InteractiveViewer(child: MermaidDiagram(source: src))         // pan / zoom
+```
+
+### Interactive viewer
+
+For the full pan/zoom experience (and a fullscreen popup), drop in
+`MermaidView` instead — it fits the diagram to its box and adds on-canvas
+controls:
+
+```dart
+SizedBox(
+  height: 480,
+  child: MermaidView(source: src),   // pan, zoom, arrows, reset, popup
+)
 ```
 
 ### Theming and errors

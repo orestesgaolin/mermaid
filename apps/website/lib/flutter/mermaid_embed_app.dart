@@ -52,22 +52,16 @@ class _MermaidEmbedAppState extends State<MermaidEmbedApp> {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      home: ColoredBox(
+      home: Material(
         color: Colors.white,
-        // FittedBox under the bounded host so diagrams scale to fill the pane
-        // (up or down), matching how mermaid.js scales its SVG to the container.
-        child: Padding(
-          padding: const EdgeInsets.all(12),
-          child: Center(
-            child: FittedBox(
-              fit: BoxFit.contain,
-              // Errors replace the diagram so the comparison stays honest.
-              child: MermaidDiagram(
-                source: _source,
-                keepLastGoodSceneOnError: false,
-              ),
-            ),
-          ),
+        // Interactive viewer (pan/zoom, arrows, reset, fullscreen) — the same
+        // way mermaid.js presents a diagram on the web. It fits the diagram to
+        // the pane on load and re-frames it when the source changes.
+        child: MermaidView(
+          source: _source,
+          backgroundColor: Colors.white,
+          // Errors replace the diagram so the comparison stays honest.
+          keepLastGoodSceneOnError: false,
         ),
       ),
     );
