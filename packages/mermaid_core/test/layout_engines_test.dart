@@ -31,6 +31,14 @@ void main() {
     test('flowchart-elk keyword selects elk', () {
       expect(resolveLayout('flowchart-elk TD\nA-->B'), 'elk');
     });
+    test('reads layout from a separate init directive alongside look', () {
+      // The website emits layout and look as two separate %%{init}%% lines;
+      // all init directives must be merged, not just the first.
+      const src = "%%{init: {'look': 'handDrawn'}}%%\n"
+          "%%{init: {'layout': 'elk'}}%%\ngraph TD\nA-->B";
+      expect(resolveLayout(src), 'elk');
+      expect(resolveLook(src).isHandDrawn, isTrue);
+    });
   });
 
   group('tidyTreeLayout', () {

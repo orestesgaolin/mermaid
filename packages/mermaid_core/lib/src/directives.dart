@@ -76,10 +76,11 @@ LookConfig resolveLook(String source) {
     if (sm != null) seed = int.tryParse(sm.group(1)!) ?? 0;
   }
 
-  final directive =
-      RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%').firstMatch(text);
-  if (directive != null) {
-    final config = _looseJson(directive.group(1)!);
+  // Merge every `%%{init}%%` directive (mermaid.js merges them too), so a
+  // look directive is honoured even alongside a separate layout/theme one.
+  for (final m in RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%')
+      .allMatches(text)) {
+    final config = _looseJson(m.group(1)!);
     if (config is Map) {
       if (config['look'] is String) look = config['look'] as String;
       final s = config['handDrawnSeed'];
@@ -104,10 +105,9 @@ String resolveLayout(String source) {
         .firstMatch(fm.group(1)!);
     if (lm != null) layout = lm.group(1)!;
   }
-  final directive =
-      RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%').firstMatch(text);
-  if (directive != null) {
-    final config = _looseJson(directive.group(1)!);
+  for (final m in RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%')
+      .allMatches(text)) {
+    final config = _looseJson(m.group(1)!);
     if (config is Map && config['layout'] is String) {
       layout = config['layout'] as String;
     }
