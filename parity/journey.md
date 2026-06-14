@@ -1,5 +1,5 @@
 # journey — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -35,10 +35,8 @@
    - Upstream `getActors()` sorts the actor set; legend order AND colour index follow sorted order. Ours assigns by first appearance — different legend order and per-actor colours for the same input.
 2. `[open] (high)` Actor colour palette wrong
    - Upstream `actorColours = ['#8FBC8F','#7CFC00','#00FFFF','#20B2AA','#B0E0E6','#FFFFE0']`. We use a different 6-colour set (`#8a90dd`…). Dots and legend swatches are the wrong colours.
-3. `[open] (high)` Section fill palette wrong (light pastels vs dark)
-   - Upstream `sectionFills = ['#191970','#8B008B',…]` (dark, navy/purple) with WHITE text. We use light pastels (`#ececff`…) with dark `theme.textColor` text. Both section headers and task boxes look completely different.
-4. `[open] (high)` Section/task text colour
-   - Upstream text colour = `sectionColours` (`#fff`) on the dark fills. We use `theme.textColor` (dark). On the correct dark fills our text would be unreadable; tied to fix 3.
+3. `[resolved]` Section fill — corrected to `theme.fillType[n]`. The dark `sectionFills` inline attribute is overridden by the `.section-type-n` CSS class (`fill: fillType<n>`), so the true render is the light pastels; we now use `theme.fillType` (theme-adaptive). See theme-wiring log.
+4. `[resolved]` Section/task text colour — the `#fff` text attribute is likewise overridden by the same class CSS, so the rendered text colour is also `theme.fillType[n]`; matched. See theme-wiring log.
 5. `[open] (high)` Face fill is score-coloured instead of uniform cornsilk
    - Upstream face fill is uniform `#FFF8DC` (`.face` CSS) with stroke `#999` for every score. We colour-code red/yellow/green. Visually very different (mood is conveyed only by the mouth upstream).
 6. `[open] (high)` Faces are above-axis in ours vs below the activity line layout upstream; vertical geometry differs
@@ -103,6 +101,36 @@
 15. Done(approx) — mouth rendered as a thicker crescent via cubic curves with a wide stroke (no ArcTo IR primitive, so the d3 ring-arc fill is approximated rather than reproduced exactly).
 16. Done — drop-line dash `[4,2]`, colour `#666`, width 1.
 17. Done — `parseJourney` now skips the multi-line `accDescr { ... }` block until the closing `}`.
+
+## Implementation log (theme wiring pass)
+CSS-cascade correction — the earlier pass reproduced the SVG *presentation
+attributes*, but several of those are overridden by element/class CSS rules in
+`styles.js`, so they were never the actually-rendered colours. Fixed by driving
+them from the theme:
+- Section/task rect fill AND text colour: upstream sets the inline rect fill to
+  the dark `sectionFills[n]` and the text `fill="#fff"`, but both rect and text
+  carry class `section-type-n`/`task-type-n`, and `styles.js` emits
+  `.section-type-n { fill: fillType<n> }` (active whenever `fillType0` is set —
+  always, in every theme). A class fill beats a presentation attribute, so the
+  rendered fill = `theme.fillType[n]` (default light pastels `#ececff`…) for
+  the rect, and the same colour for the text (its `#fff` attribute is also
+  overridden). Removed the dead `_sectionFills`/`_sectionTextColor` constants;
+  both now read `theme.fillType[n]` with `n = sectionIndex % 7`. This also
+  closes the prior "dark fills + white text" default-render mismatch
+  (discrepancies 3 & 4) — our default now matches mermaid's true output, and it
+  adapts under dark/forest/neutral.
+- Drop line + activity line stroke: drawn upstream as `<line>` with stroke
+  `#666`/`black`, but the `line { stroke: textColor }` element rule overrides
+  the attribute → switched both to `theme.textColor` (default `#333`).
+- Legend label colour: `labelData.fill = '#666'` is never applied by
+  `svgDrawCommon.drawText` (it only sets class `legend`); the sole fill source
+  is `.legend { fill: textColor }` → switched from `#666` to `theme.textColor`.
+- Left inlined (genuinely hardcoded upstream, no theme var): legend circle
+  stroke `#000`, actor-dot stroke `#000`, arrowhead marker fill (SVG default
+  black, no class), face eye/mouth `#666`, face stroke `#999`, face fill
+  `#FFF8DC` (`faceColor` theme var unset by default and not in the shared
+  palette). Actor swatch palette stays the upstream `actorColours`
+  (`#8FBC8F`…) — also no shared theme field.
 
 Notes / minor residual gaps:
 - `4ex` title size is approximated as `2*taskFontSize`; exact ex-height depends on font metrics we don't resolve here.

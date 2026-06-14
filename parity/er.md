@@ -89,3 +89,9 @@
 13. No change — corner radius already 0 (parity OK).
 
 All fixes applied; no deferrals. `dart analyze` clean, existing ER tests pass.
+
+### Theme-wiring pass (palette fields)
+- Replaced the inlined content-row banding constants `_rowOddFill (0xffffffff)` / `_rowEvenFill (0xfff1f1ff)` with `theme.rowOdd` / `theme.rowEven`. Default-theme values are identical, so default render is pixel-identical; dark/forest/neutral now band correctly (dark: rowOdd #2c2d2d / rowEven #060606; forest rowEven #f4f9e9; neutral rowEven #f4f4f4).
+- `_tertiaryColor (#f9ffec)` for the relationship-label box is NOT a MermaidTheme palette field (no `tertiaryColor` exposed), so it stays inlined.
+- Opacity: edge-label box already correctly uses `_tertiaryColor.withOpacity(0.7)` (applied in the earlier pass); marker circles fill opaque white per upstream `.marker` (not a theme var). No further opacity deferrals were open.
+- No other hardcoded default-theme palette colors remain: mainBkg, nodeBorder, lineColor, textColor, titleColor, background are all read from `theme`.

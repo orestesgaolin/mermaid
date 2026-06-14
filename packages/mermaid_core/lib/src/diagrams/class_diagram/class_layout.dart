@@ -30,9 +30,6 @@ const double _classFontSize = 10;
 /// Upstream `svgDraw.js` draws cardinality labels at `font-size: 6`.
 const double _cardinalityFontSize = 6;
 
-const _noteBkg = Color(0xfffff5ad);
-const _noteBorder = Color(0xffaaaa33);
-
 RenderScene layoutClassDiagram(
   ClassDiagram diagram, {
   required TextMeasurer measurer,
@@ -288,16 +285,16 @@ class _ClassLayout {
       boxNodes.add(SceneGroup(id: '__note$i', children: [
         SceneShape(
           geometry: RectGeometry(rect),
-          fill: const Fill(_noteBkg),
-          stroke: const Stroke(color: _noteBorder),
+          // Upstream classDb sets `fill: noteBkgColor; stroke: noteBorderColor`.
+          fill: Fill(theme.noteBkgColor),
+          stroke: Stroke(color: theme.noteBorderColor),
         ),
         SceneText(
           text: diagram.notes[i].text,
           bounds: rect.inflate(-_padding),
           style: baseStyle,
-          // Upstream `.noteLabel .nodeLabel { color: noteTextColor }`;
-          // noteTextColor defaults to actorTextColor (#333) == textColor.
-          color: theme.textColor,
+          // Upstream `.noteLabel .nodeLabel { color: noteTextColor }`.
+          color: theme.noteTextColor,
         ),
       ]));
     }

@@ -1,5 +1,5 @@
 # sequence — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 **Last fixed:** 2026-06-14 (color/stroke parity, stickman, frame title centering, margin model)
 
@@ -90,3 +90,17 @@
 - **#11 Frame tab notch — Done.** Pentagon notch 6→7px with diagonal x offset `cut*1.2`=8.4 to match `genPoints(…,7)`.
 - **#12 mirrorActors/bottomMarginAdj config — Deferred.** Requires threading sequence config (not yet exposed); default behavior (always mirror) matches default config.
 - **#13 Activation stack offset — Done.** Nested activation rects now positioned at left = `center + depth*activationWidth/2`, width `activationWidth`, matching upstream `(stackedSize-1)*activationWidth/2`. Message `edge()` offset updated to the same constant.
+
+### 2026-06-14 — theme wiring (closes deferred #4)
+- **#4 Theme-driven sequence colors — Done.** The new `MermaidTheme` sequence palette fields now exist, so all previously-inlined sequence constants were removed and replaced with `theme.<field>` (default-theme values equal the old constants, so non-default themes — dark/forest/neutral — now adapt):
+  - Lifeline stroke + destroy ✗ marker → `theme.actorLineColor` (was `_lifelineColor` / `_activationBorder`).
+  - Frame (`.loopLine`) rect + divider strokes + label-tab border → `theme.labelBoxBorderColor` (was `_frameBorder`); label-tab fill → `theme.labelBoxBkgColor` (was `theme.mainBkg`).
+  - Activation rect fill/stroke → `theme.activationBkgColor` / `theme.activationBorderColor` (was `_activationBkg` / `_activationBorder`).
+  - Note rect fill/stroke/text → `theme.noteBkgColor` / `theme.noteBorderColor` / `theme.noteTextColor` (was `_noteBkg` / `_noteBorder` / `Color.black`).
+  - Actor box rect + stickman: fill → `theme.actorBkg` (was `theme.mainBkg`), stroke → `theme.actorBorder` (was `theme.nodeBorder`).
+- **Default-render corrections matching upstream CSS classes (styles.js):**
+  - Actor label text → `theme.actorTextColor` (`.actor` fill = `actorTextColor` = #000); was generic `theme.textColor` (#333).
+  - Message text → `theme.signalTextColor`; message + self-message line color → `theme.signalColor` (`.messageText`/`.messageLine0/1`); were `theme.textColor`/`theme.lineColor`. Default value identical (#333) — now tracks the correct field.
+  - Frame keyword (`.labelText`) → `theme.labelTextColor` (#000); block title and section/divider labels (`.loopText`) → `theme.loopTextColor` (#000); were `theme.textColor` (#333).
+- Box-grouping title text and arrowhead/sequence-number colors left on the generic theme fields (no dedicated sequence palette field upstream; `sequenceNumberColor` not exposed). These are not default-render gaps.
+- All sequence colors are now theme-driven; no diagram-specific hardcoded color constants remain.

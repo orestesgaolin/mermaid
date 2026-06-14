@@ -1,5 +1,5 @@
 # timeline — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -72,3 +72,17 @@
 Notes:
 - Title `font-size:4ex` approximated as `fontSize*2` (4ex ≈ 2em for typical fonts) — no `ex` unit support in the IR; close enough visually.
 - Arrowhead markers are drawn as explicit path triangles (no shared SVG marker primitive in the IR), matching upstream's `M0,0 V4 L6,2 Z` shape.
+
+### Theme wiring (palette pass)
+- Replaced the inlined `_cScale` and `_cScaleInv` constant arrays with the shared
+  `theme.cScale` / `theme.cScaleInv` palette getters in `drawNode`. The default-theme
+  values of those theme fields are byte-identical to the old inlined hexes (verified
+  against theme.dart lines 25-48), so default rendering is pixel-identical, while
+  dark/forest/neutral now drive correct section/task/event fills and bottom-underline
+  strokes. Section/event index is still `colorIndex % 12` (THEME_COLOR_LIMIT).
+- Opacity check: upstream timeline `styles.js` has no `fill-opacity`/transparency —
+  only `.eventWrapper { filter: brightness(120%) }`, which we already implement via
+  `_brightness(fill, 1.2)`. No opacity fix needed.
+- No remaining default-render gap; status raised to full-parity. Residual items are
+  config/niche only (parsed-but-unused `timeline LR/TD` direction — upstream renders
+  columnar regardless — and the `4ex` title-size unit approximation).

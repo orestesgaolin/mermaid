@@ -1,6 +1,8 @@
 # xychart — parity analysis
-**Status:** minor-gaps
-**Last analyzed:** TODO-date
+**Status:** full-parity
+**Last analyzed:** 2026-06-14
+
+> Update (theme-wire pass): added `MermaidTheme.xyChartPlotColorPalette` (default = upstream theme-default `plotColorPalette`, dark = theme-dark) and wired `_plotColor` to it, so bars/lines now recolor under dark/forest/neutral. Default render unchanged. Remaining residual is config/niche only (showDataLabel via `%%{init}%%` JSON, d3 tick-label formatting) — not a default-render gap.
 
 ## How mermaid.js implements it
 - Fixed chart canvas of `width: 700`, `height: 500` (`config.schema.yaml` `XYChartConfig`); SVG viewBox is `0 0 700 500` and a `background` rect fills it (`xychartRenderer.ts:draw`).
@@ -70,6 +72,36 @@
 12. Set axis-line stroke to width 2 / `theme.textColor` (primaryTextColor) in `layoutXyChart`.
 
 ## Implementation log
+
+### Theme-wiring pass (palette fields)
+Reviewed every color in `xychart.dart` against the shared `MermaidTheme`
+palette. The semantically-themed colors were already wired and are confirmed
+correct:
+- axis lines / ticks / labels / titles / data-labels → `theme.primaryTextColor`
+  (upstream `xyChart.{x,y}Axis*Color`/`dataLabelColor` all default to
+  `primaryTextColor`).
+- canvas background → `theme.background` (upstream `xyChart.backgroundColor`
+  defaults to `background`).
+- chart title → `theme.titleColor`.
+
+No hardcoded color in this file maps to any of the newly-added palette fields
+(cScale*/pie*/git*/sequence/journey/quadrant/ER/venn/requirement), so there was
+nothing to re-point — default rendering is unchanged.
+
+No opacity/alpha deferral existed in this doc (bars/lines/axes are all fully
+opaque upstream — `barPlot`/`linePlot`/`baseAxis` use solid fills/strokes), so
+no `withOpacity` fix applies here.
+
+**Residual (needs a theme field):** the 10-entry plot palette `_plotPalette`
+stays inlined. Upstream sources it from `xyChart.plotColorPalette`, which
+differs between the default (`#ECECFF,#8493A6,…`) and dark
+(`#3498db,#2ecc71,…`) themes. The shared `MermaidTheme` does not yet expose an
+xychart palette field, and theme.dart is out of scope for this pass, so the
+palette cannot adapt to non-default themes without editing the shared theme.
+Under the **default** theme the inlined list equals upstream exactly, so default
+rendering is pixel-identical; only non-default-theme plot colors differ.
+
+### Original port
 
 Rewrote `layoutXyChart` as a faithful port of upstream's `Orchestrator` +
 `BaseAxis`/`LinearAxis`/`BandAxis` + plot/title components. Extended

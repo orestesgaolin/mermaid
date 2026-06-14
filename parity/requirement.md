@@ -1,5 +1,5 @@
 # requirement — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -78,3 +78,30 @@
 12. classDef/class/style support — **Deferred.** Parser now tolerates (skips) `classDef`/`class`/`style`/`click`/`callback`/`link` instead of throwing, but per-node cssStyles + colorIndex color cycling are not applied. Full styling needs broader work; upstream's default theme has no `borderColorArray`, so the no-explicit-style common case is unaffected.
 
 NOTE: existing test `test/xychart_mindmap_req_c4_test.dart` (layout test, ~line 141) asserts the OLD raw type label `«requirement»`. It now renders `«Requirement»` (the parity fix). That assertion is outside my editable scope and must be updated to `«Requirement»` to reflect correct behavior.
+
+(applied 2026-06-14 — theme wiring)
+
+Wired the previously-inlined base-theme colors to the dedicated requirement
+palette fields exposed on `MermaidTheme`, so non-default themes (dark/forest/
+neutral) now adapt correctly:
+- Node fill `theme.mainBkg` → `theme.requirementBackground`. (Default values are
+  equal, `0xffececff`, so default render is pixel-identical.)
+- Node border + divider `theme.primaryBorderColor` → `theme.requirementBorderColor`.
+  Upstream defines `requirementBorderColor = primaryBorderColor`; in our
+  `theme.dart` the dedicated field carries the true `mkBorder(primaryColor)`
+  output (`0xffc7c7f1`) whereas the generic `primaryBorderColor` is approximated
+  as `0xff9370db`. Wiring to the dedicated field matches upstream semantics and
+  yields the correct mermaid default border, and adapts per theme.
+- Node text `theme.textColor` → `theme.requirementTextColor`.
+- All relation strokes (line, contains circle + crosshair, open arrowhead)
+  `theme.lineColor` → `theme.relationColor`. (Default `0xff333333` either way.)
+- Relation label background literal `Color(0xccE8E8E8)` → `theme.relationLabelBackground`
+  (default `0xcce8e8e8`, semi-transparent alpha preserved — backend honors it).
+- Relation label text `Color.black` → `theme.relationLabelColor` (default `0xff000000`).
+- Dropped the now-unused `color.dart` import (no direct `Color` literals remain).
+
+No opacity item was deferred for this diagram; the relation-label background
+already carried its `0xcc` alpha and remains a live `Color` (now theme-sourced).
+classDef/class/style per-node colorIndex cycling stays deferred (issue 12) — a
+parser/IR feature, not a default-render gap; upstream's default theme has no
+`borderColorArray`, so the common case is unaffected.

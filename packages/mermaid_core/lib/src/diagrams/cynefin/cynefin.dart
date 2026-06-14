@@ -274,8 +274,10 @@ RenderScene layoutCynefin(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
-  // Theme-default cynefin block values (inlined defaults).
-  const labelColor = Color(0xff333333); // primaryTextColor (default invert)
+  // Theme-default cynefin block values. Upstream maps cynefin.labelColor to
+  // primaryTextColor (invert of primaryColor → #131300 in the default theme),
+  // cynefin.textColor/boundaryColor/arrowColor to textColor/lineColor.
+  final labelColor = theme.primaryTextColor;
   final textColor = theme.textColor;
   final boundaryColor = theme.lineColor;
   const cliffColor = Color(0xff8B0000);

@@ -1,5 +1,5 @@
 # gitGraph — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -98,4 +98,14 @@ Applied (all edits confined to `git/git_graph.dart`):
 Deferred:
 - **`parallelCommits` mode (#10)** and **`showBranches`/`showCommitLabel` toggles (#15)** — these read from the gitGraph diagram config, which the `layoutGitGraph(graph, measurer, theme)` signature does not receive. Wiring them would require changing the public layout API / registry call (forbidden outside git/). Defaults (`rotateCommitLabel`/`showCommitLabel` true, non-parallel) are used.
 - **RL direction (#14)** — left as LR; a true right-to-left mirror would need a horizontal-flip pass; low value, kept simple.
-- **Commit-label background opacity (#6)** — the scene IR `Fill` carries only an opaque color (no separate opacity), so the 50%-opacity `commit-label-bkg` is approximated with the solid `#ffffde` background rather than a semi-transparent overlay. A faithful match needs a Fill alpha/opacity primitive (shared IR change).
+- **Commit-label background opacity (#6)** — RESOLVED below; the IR `Color` is ARGB and both backends honor alpha, so the 0.5 opacity is now applied directly.
+
+## Implementation log (theme wiring + opacity pass)
+All edits confined to `git/git_graph.dart`; default-theme output is unchanged (every theme field's default equals the constant it replaced).
+
+- **Theme palette wired.** Removed the module-level `_gitColors` / `_gitInvColors` / `_gitBranchLabelColors` constants and now read `theme.git`, `theme.gitInv`, `theme.gitBranchLabel` inside `layoutGitGraph`. Branch/commit/arrow colors (`branchColor`/`branchIndex`), the highlight outer-rect fill (`gitInv{i}`), and the branch-label text color (`gitBranchLabel{i}`) all source the theme now, so the diagram adapts under dark/forest/neutral instead of being pinned to the default palette.
+- **Commit-label colors wired + opacity fix (#6 resolved).** Commit-label text now uses `theme.commitLabelColor` (was inlined `#000021`) and the background rect uses `theme.commitLabelBackground.withOpacity(0.5)` — matching upstream `.commit-label-bkg { fill: commitLabelBackground; opacity: 0.5 }`. The earlier "Fill has no alpha, approximated with solid `#ffffde`" deferral was wrong; the ARGB `Color` + alpha-aware backends make the true 50%-opacity overlay possible.
+- **Tag colors wired.** Tag flag fill → `theme.tagLabelBackground` (was `theme.primaryColor`), flag stroke → `theme.tagLabelBorder` (was `theme.primaryBorderColor`), tag text → `theme.tagLabelColor` (was inlined `#131300`), in both the LR and TB branches. These equal the old values under the default theme but track the dedicated tag theme vars elsewhere. The `tag-hole` circle stays `theme.textColor` (upstream `.tag-hole { fill: textColor }`).
+- **Left as primaryColor (correct, not git-specific):** merge inner circle, reverse cross, and highlight inner rect use `theme.primaryColor` directly, exactly as upstream `.commit-merge` / `.commit-reverse` / `.commit-highlight-inner` reference `options.primaryColor`.
+
+Result: default render is pixel-identical (now with a genuinely semi-transparent commit-label background); non-default themes recolor correctly. Remaining open items are config/niche only (`parallelCommits`, `showBranches`/`showCommitLabel` toggles — gated by the layout API not receiving the diagram config — and RL mirroring), not default-render gaps.

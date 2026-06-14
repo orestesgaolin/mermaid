@@ -22,9 +22,6 @@ const double _nodeSpacing = 50;
 const double _rankSpacing = 50;
 const double _clusterPadding = 10;
 
-const _noteBkg = Color(0xfffff5ad);
-const _noteBorder = Color(0xffaaaa33);
-
 RenderScene layoutStateDiagram(
   StateDiagram diagram, {
   required TextMeasurer measurer,
@@ -412,14 +409,14 @@ class _StateLayout {
       stateNodes.add(SceneGroup(id: '__note$i', children: [
         SceneShape(
           geometry: RectGeometry(b.rect),
-          fill: const Fill(_noteBkg),
-          stroke: const Stroke(color: _noteBorder),
+          fill: Fill(theme.noteBkgColor),
+          stroke: Stroke(color: theme.noteBorderColor),
         ),
         SceneText(
           text: diagram.notes[i].text,
           bounds: b.rect.inflate(-_padding),
           style: baseStyle,
-          color: theme.textColor,
+          color: theme.noteTextColor,
         ),
       ]));
     }

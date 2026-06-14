@@ -251,29 +251,79 @@ const _labelPadY = 10.0;
 // Default minimum label height upstream seeds `maxLabelHeight` with.
 const _minLabelHeight = 25.0;
 
-/// Section fill colors, default mermaid theme. Upstream paints `.section-N`
-/// (section `N`, 0-indexed) with `adjuster(cScale[N+2], 10)` where in light
-/// mode `adjuster = lighten(_, 10)` and each `cScale` is already
-/// `darken(adjust(primaryColor, {h}), 10)`. Values precomputed from khroma.
-/// Index 0 here is section 0 → `cScale2` (tertiaryColor), matching the
-/// `.section-${i-1}` offset in `styles.ts`.
-const _sectionFills = <Color>[
-  Color(0xfff9ffec), // section 0 -> cScale2  (tertiaryColor)
-  Color(0xfff6ecff), // section 1 -> cScale3  adjust h+30
-  Color(0xffffecff), // section 2 -> cScale4  adjust h+60
-  Color(0xffffecf6), // section 3 -> cScale5  adjust h+90
-  Color(0xffffecec), // section 4 -> cScale6  adjust h+120
-  Color(0xfffff6ec), // section 5 -> cScale7  adjust h+150
-  Color(0xfff6ffec), // section 6 -> cScale8  adjust h+210
-  Color(0xffecfff6), // section 7 -> cScale9  adjust h+270
-  Color(0xffecffff), // section 8 -> cScale10 adjust h+300
-  Color(0xffecf6ff), // section 9 -> cScale11 adjust h+330
-  Color(0xffececff), // section 10 -> cScale0 (primaryColor)
-  Color(0xffffffde), // section 11 -> cScale1 (secondaryColor)
-];
+/// Section fill color for section index `s`. Upstream `styles.ts:genSections`
+/// paints `.section-${i-1} rect` with `adjuster(cScale[i], 10)` where in light
+/// mode `adjuster = lighten(_, 10)`. The `.section-${i-1}` offset means section
+/// `s` uses loop `i = s + 1`, i.e. `cScale[(s + 1) % 12 ... ]` — section 0 maps
+/// to `cScale2` (tertiaryColor). Sourced from the theme so non-default palettes
+/// (dark/forest/neutral) adapt; the default theme is pixel-identical to the
+/// previously-inlined constants (verified against khroma `lighten`).
+Color _sectionFill(MermaidTheme theme, int s) {
+  // section s -> loop i = s + 1; styles.ts paints class `.section-(i-1)` with
+  // cScale[i]. Section 0 -> cScale[2]; wrap within the 12-entry palette.
+  final cScale = theme.cScale;
+  final color = cScale[(s + 2) % cScale.length];
+  return _lighten(color, 10);
+}
 
-/// Section title text color = `cScaleLabel<i>`; for sections (`i >= 1`) the
-/// default theme resolves this to `labelTextColor` = `#333333`.
+/// khroma `lighten(color, amount)`: HSL lightness += amount/100, clamped to
+/// [0, 1]. Preserves alpha.
+Color _lighten(Color c, double amount) {
+  final hsl = _rgbToHsl(c.red, c.green, c.blue);
+  final l = (hsl[2] + amount / 100).clamp(0.0, 1.0);
+  final rgb = _hslToRgb(hsl[0], hsl[1], l);
+  return Color.fromARGB(c.alpha, rgb[0], rgb[1], rgb[2]);
+}
+
+List<double> _rgbToHsl(int r, int g, int b) {
+  final rr = r / 255, gg = g / 255, bb = b / 255;
+  final mx = math.max(rr, math.max(gg, bb));
+  final mn = math.min(rr, math.min(gg, bb));
+  var h = 0.0, s = 0.0;
+  final l = (mx + mn) / 2;
+  if (mx != mn) {
+    final d = mx - mn;
+    s = l > 0.5 ? d / (2 - mx - mn) : d / (mx + mn);
+    if (mx == rr) {
+      h = (gg - bb) / d + (gg < bb ? 6 : 0);
+    } else if (mx == gg) {
+      h = (bb - rr) / d + 2;
+    } else {
+      h = (rr - gg) / d + 4;
+    }
+    h /= 6;
+  }
+  return [h, s, l];
+}
+
+List<int> _hslToRgb(double h, double s, double l) {
+  double r, g, b;
+  if (s == 0) {
+    r = g = b = l;
+  } else {
+    final q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+    final p = 2 * l - q;
+    r = _hue2rgb(p, q, h + 1 / 3);
+    g = _hue2rgb(p, q, h);
+    b = _hue2rgb(p, q, h - 1 / 3);
+  }
+  return [(r * 255).round(), (g * 255).round(), (b * 255).round()];
+}
+
+double _hue2rgb(double p, double q, double t) {
+  if (t < 0) t += 1;
+  if (t > 1) t -= 1;
+  if (t < 1 / 6) return p + (q - p) * 6 * t;
+  if (t < 1 / 2) return q;
+  if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+  return p;
+}
+
+/// Section title text color. Upstream `.section-${i-1} text { fill:
+/// cScaleLabel${i} }`; for default-theme sections this resolves to
+/// `labelTextColor` = `#333333`. (The shared `theme.cScaleLabel` defaults to
+/// pure black for these indices rather than `#333`, so sourcing it would change
+/// the default render; kept inlined to preserve pixel-identity.)
 const _sectionTextColor = Color(0xff333333);
 
 RenderScene layoutKanban(
@@ -302,7 +352,7 @@ RenderScene layoutKanban(
 
   for (var ci = 0; ci < board.columns.length; ci++) {
     final col = board.columns[ci];
-    final fill = _sectionFills[ci % _sectionFills.length];
+    final fill = _sectionFill(theme, ci);
 
     // Horizontal placement mirrors upstream `section.x = WIDTH*cnt +
     // (cnt-1)*padding/2` (cnt = ci+1): step = WIDTH + padding/2.

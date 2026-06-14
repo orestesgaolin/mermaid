@@ -586,12 +586,15 @@ RenderScene layoutEventModeling(
       targetY = tgt.top;
     }
 
+    // Relation stroke + arrowhead: upstream default theme sets
+    // `emRelationStroke`/`emArrowhead` to `lineColor` (#333333), and the dark
+    // theme keeps them tied to `lineColor`, so wire to `theme.lineColor`.
     nodes.add(SceneShape(
       geometry: PathGeometry([
         MoveTo(Point(sourceX, sourceY)),
         LineTo(Point(targetX, targetY)),
       ]),
-      stroke: const Stroke(color: Color(0xff000000)),
+      stroke: Stroke(color: theme.lineColor),
     ));
 
     // Triangle arrowhead (polygon "0 0, 10 3.5, 0 7", refX=10) pointing along
@@ -611,7 +614,7 @@ RenderScene layoutEventModeling(
           base + perp * 3.5,
           base - perp * 3.5,
         ]),
-        fill: const Fill(Color(0xff000000)),
+        fill: Fill(theme.lineColor),
       ));
     }
   }

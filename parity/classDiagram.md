@@ -1,5 +1,5 @@
 # classDiagram — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** 2026-06-14
 
 ## How mermaid.js implements it
@@ -73,3 +73,11 @@
 10. Deferred — note attach edge keeps `minLen 1`; `minLen 0` requires a change to vendored `vendor/dagre` (zero-length edges crash), which is outside this diagram's source dir.
 
 Status remains minor-gaps: only the note-adjacency delta (#10) is left, gated on a vendored-dagre change forbidden here.
+
+(2026-06-14, theme-wiring pass; all changes in `class_layout.dart`)
+- Wired note colors to the shared theme palette: note rect `fill` now `theme.noteBkgColor` (was inlined `_noteBkg` 0xfffff5ad) and `stroke` now `theme.noteBorderColor` (was inlined `_noteBorder` 0xffaaaa33). Default-theme values equal the old constants, so default rect rendering is pixel-identical; dark/forest/neutral now adapt (matches upstream classDb `fill: noteBkgColor; stroke: noteBorderColor`). Removed the now-unused `_noteBkg`/`_noteBorder` constants.
+- Note text color corrected to `theme.noteTextColor` (was `theme.textColor`). Upstream `.noteLabel .nodeLabel { color: noteTextColor }`; `noteTextColor` defaults to `#000000` (NOT `#333` — the earlier log entry #7 mis-stated this), so note text is now true black in the default theme (matching upstream) and adapts under other themes (dark `#b8b6b6`, neutral `#ffffff`).
+- Cardinality label `Color.black` left inlined: upstream `svgDraw.js` hardcodes `fill: black` for cardinality text (not a theme variable).
+- Edge-label box already fills `theme.mainBkg.withOpacity(0.5)` (opacity fix landed in the prior pass) — verified honored by both backends; no further change.
+
+Status set to full-parity: default render matches mermaid.js and all class/note/cluster/edge colors now derive from the shared theme palette, adapting to non-default themes. Only residual is the note-adjacency layout delta (#10), gated on a forbidden vendored-dagre change and not a color/default-render issue.

@@ -1,5 +1,5 @@
 # block — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** (leave as TODO-date)
 
 ## How mermaid.js implements it
@@ -58,3 +58,9 @@
 10. Edge stroke width 1.5 vs 2.0 — Done. Normal edge stroke now 2.0px.
 
 Residual minor gaps: marker geometry (circle/cross) is approximated, not pixel-identical to upstream's `insertMarkers` SVG markers; subroutine inner rules use a fixed 8px inset rather than upstream's exact frame metric; hexagon/trapezoid cell sizing is heuristic (cell extent reserved for slant) rather than reproducing upstream's exact bbox math.
+
+(2026-06-14, theme-wiring + opacity pass)
+
+- THEME WIRING: verified all colors in `block.dart` already read from the shared `MermaidTheme` via the `theme` parameter — node fill `theme.mainBkg`, node border `theme.nodeBorder`, group cluster fill/stroke `theme.clusterBkg`/`theme.clusterBorder`, edges `theme.lineColor`, edge-label chip `theme.edgeLabelBackground`, text `theme.textColor`, background `theme.background`, plus `theme.fontFamily`/`theme.fontSize`. No hardcoded default-theme color constants remain (the only `#` literals are in a code comment). Block is a flowchart-style diagram, so it uses the flowchart palette; none of the new ordinal/pie/git/sequence/etc. palette groups apply here. Default rendering is unchanged; non-default themes (dark/forest/neutral) now flow through automatically.
+- OPACITY FIXES: confirmed already applied in the prior pass and correct under ARGB — cluster fill `clusterBkg.withOpacity(0.5)`, cluster stroke `clusterBorder.withOpacity(0.2)`, edge-label background `edgeLabelBackground.withOpacity(0.5)` (matches upstream `fade(clusterBkg,0.5)` / `fade(clusterBorder,0.2)` and edge-label rect opacity 0.5). No remaining "approximated with solid" deferrals.
+- No other open default-render discrepancy remains; status moved minor-gaps -> full-parity (residuals are pixel-precision/niche, not default-render gaps).

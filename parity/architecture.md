@@ -1,5 +1,5 @@
 # architecture — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -90,3 +90,8 @@
 13. Group padding 40 / icon padding*0.75 — **Done**. `pad=_padding` (40), group icon size `padding*0.75` (30), label vertically centered against icon.
 14. Limited icon set — **Deferred** (partial). Expanded `_iconRef` aliases and now honour explicit `prefix:name` refs, but shipping the full architecture/iconify packs needs new icon-pack assets registered outside this dir — kept cog as last-resort fallback.
 15. Service / group fill:none — **Done**. Plain service shape is border-only; group fill removed.
+
+### Theme-wiring pass (MermaidTheme palette)
+- Reviewed all colors used by `layoutArchitecture`: edges/arrows use `theme.lineColor`, group/service borders use `theme.primaryBorderColor`, labels/icons use `theme.textColor`, iconText box uses `theme.mainBkg`, scene background uses `theme.background`. Upstream's architecture-specific theme vars resolve to exactly these (`archEdgeColor = archEdgeArrowColor = lineColor`, `archGroupBorderColor = primaryBorderColor`; `theme-default.js:223`, `architectureStyles.ts`). So the diagram was already fully theme-driven — there were **no hardcoded default-theme color constants left to replace** (a `grep` for `0x`/`Color(`/`#`/hex literals in `architecture.dart` returns nothing). Default rendering is unchanged; non-default themes already flow through correctly via these existing theme fields.
+- Opacity fixes: none applicable. Upstream architecture uses no semi-transparent fills — every shape is either `fill:none` (groups, plain services, edges) or a solid color. The only `fill-opacity:0` upstream is the invisible junction anchor, which we already render as a no-op (no glyph). Nothing to convert to `withOpacity`.
+- iconText `#fff` overlay: upstream draws white text over a `blank` (fully transparent) icon, which would be invisible on the default light background; we instead draw a `mainBkg`-filled box with `textColor` text (readable, theme-adaptive). Kept our pragmatic rendering — matching upstream's literal white-on-transparent would be a regression, not a parity gain. Niche `(("text"))` form only.

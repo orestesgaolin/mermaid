@@ -269,47 +269,6 @@ GitGraph parseGitGraph(String source) {
   );
 }
 
-// Default-theme gitGraph palette (git0..git7), matching upstream
-// theme-default.js: git0=darken(primaryColor #ECECFF,25), git1=darken(
-// secondaryColor #ffffde,25), git2=darken(tertiaryColor,25), and git3..7 are
-// hue-rotations of primaryColor, all darkened by 25 (HSL lightness). Branch /
-// commit / arrow colors all source these.
-const _gitColors = <Color>[
-  Color(0xff6c6cff), // git0
-  Color(0xffffff5e), // git1
-  Color(0xffceff6c), // git2
-  Color(0xff6cb6ff), // git3
-  Color(0xff6cffff), // git4
-  Color(0xff6cffb6), // git5
-  Color(0xffff6cff), // git6
-  Color(0xffff6c6c), // git7
-];
-
-// gitInv{i} = invert(git{i}); used as the highlight outer-rect fill.
-const _gitInvColors = <Color>[
-  Color(0xff131300), // gitInv0 = darken(invert(git0),25)
-  Color(0xff0000a1), // gitInv1
-  Color(0xff310093), // gitInv2
-  Color(0xff934900), // gitInv3
-  Color(0xff930000), // gitInv4
-  Color(0xff930049), // gitInv5
-  Color(0xff009300), // gitInv6
-  Color(0xff009393), // gitInv7
-];
-
-// gitBranchLabel{i}: text color for the branch-label chip. label0/label3 use
-// invert(labelTextColor #000) = white, all others use labelTextColor (#000).
-const _gitBranchLabelColors = <Color>[
-  Color(0xffffffff), // 0
-  Color(0xff000000), // 1
-  Color(0xff000000), // 2
-  Color(0xffffffff), // 3
-  Color(0xff000000), // 4
-  Color(0xff000000), // 5
-  Color(0xff000000), // 6
-  Color(0xff000000), // 7
-];
-
 RenderScene layoutGitGraph(
   GitGraph graph, {
   required TextMeasurer measurer,
@@ -336,12 +295,19 @@ RenderScene layoutGitGraph(
   final branchLabelStyle = TextStyleSpec(
       fontFamily: theme.fontFamily, fontSize: 12, fontWeight: 700);
 
+  // gitGraph palette (git0..git7) and the matching highlight / branch-label
+  // colors come from the theme; the default-theme values equal upstream
+  // theme-default.js (git0=darken(primaryColor,25), …).
+  final gitColors = theme.git;
+  final gitInvColors = theme.gitInv;
+  final gitBranchLabelColors = theme.gitBranchLabel;
+
   final laneOf = <String, int>{
     for (var i = 0; i < graph.branchOrder.length; i++) graph.branchOrder[i]: i,
   };
   Color branchColor(String b) =>
-      _gitColors[(laneOf[b] ?? 0) % _gitColors.length];
-  int branchIndex(String b) => (laneOf[b] ?? 0) % _gitColors.length;
+      gitColors[(laneOf[b] ?? 0) % gitColors.length];
+  int branchIndex(String b) => (laneOf[b] ?? 0) % gitColors.length;
 
   // Lane spine coordinate (perpendicular to the time axis) for a branch.
   double laneCoord(String b) => (laneOf[b] ?? 0) * laneGap;
@@ -458,8 +424,8 @@ RenderScene layoutGitGraph(
         // with primaryColor.
         children.add(SceneShape(
           geometry: RectGeometry(Rect.fromCenter(center, 20, 20)),
-          fill: Fill(_gitInvColors[idx]),
-          stroke: Stroke(color: _gitInvColors[idx], width: 1),
+          fill: Fill(gitInvColors[idx]),
+          stroke: Stroke(color: gitInvColors[idx], width: 1),
         ));
         children.add(SceneShape(
           geometry: RectGeometry(Rect.fromCenter(center, 12, 12)),
@@ -525,8 +491,9 @@ RenderScene layoutGitGraph(
 
     // Commit id label. Shown for every commit except cherry-picks and
     // non-custom-id merges, when showCommitLabel (default true). Font 10px,
-    // commitLabelColor (#000021) on a 50%-opacity commitLabelBackground rect
-    // (#ffffde). Rotated −45° for LR (rotateCommitLabel defaults true).
+    // commitLabelColor on a 50%-opacity commitLabelBackground rect (upstream
+    // `.commit-label-bkg { opacity: 0.5 }`). Rotated −45° for LR
+    // (rotateCommitLabel defaults true).
     final showLabel =
         !c.isCherryPick && (c.customId || !c.isMerge);
     if (showLabel) {
@@ -538,13 +505,13 @@ RenderScene layoutGitGraph(
       children.add(SceneShape(
         geometry: RectGeometry(Rect.fromCenter(
             lblCenter, size.width + 2 * py, size.height + 2 * py)),
-        fill: const Fill(Color(0xffffffde)),
+        fill: Fill(theme.commitLabelBackground.withOpacity(0.5)),
       ));
       children.add(SceneText(
         text: c.id,
         bounds: Rect.fromCenter(lblCenter, size.width, size.height),
         style: commitLabelStyle,
-        color: const Color(0xff000021),
+        color: theme.commitLabelColor,
         rotation: lr ? -45 : 0,
       ));
     }
@@ -574,8 +541,8 @@ RenderScene layoutGitGraph(
               Point(cx + w / 2 + px, cy + h2 + py),
               Point(cx - w / 2 - px, cy + h2 + py),
             ]),
-            fill: Fill(theme.primaryColor),
-            stroke: Stroke(color: theme.primaryBorderColor, width: 1),
+            fill: Fill(theme.tagLabelBackground),
+            stroke: Stroke(color: theme.tagLabelBorder, width: 1),
           ));
           children.add(SceneShape(
             geometry: CircleGeometry(Point(notchX + px / 2, cy), 1.5),
@@ -585,7 +552,7 @@ RenderScene layoutGitGraph(
             text: tag,
             bounds: Rect.fromCenter(Point(cx, cy), w, h),
             style: tagLabelStyle,
-            color: const Color(0xff131300),
+            color: theme.tagLabelColor,
           ));
         } else {
           final cx = center.x - commitR - 10 - tagOffset;
@@ -601,8 +568,8 @@ RenderScene layoutGitGraph(
               Point(cx - w2, cy - h2),
               Point(cx + w2, cy - h2),
             ]),
-            fill: Fill(theme.primaryColor),
-            stroke: Stroke(color: theme.primaryBorderColor, width: 1),
+            fill: Fill(theme.tagLabelBackground),
+            stroke: Stroke(color: theme.tagLabelBorder, width: 1),
           ));
           children.add(SceneShape(
             geometry: CircleGeometry(Point(cx + w2 + 5, cy), 1.5),
@@ -612,7 +579,7 @@ RenderScene layoutGitGraph(
             text: tag,
             bounds: Rect.fromCenter(Point(cx, cy), w, h),
             style: tagLabelStyle,
-            color: const Color(0xff131300),
+            color: theme.tagLabelColor,
           ));
         }
         tagOffset += 20;
@@ -629,7 +596,7 @@ RenderScene layoutGitGraph(
     final hasCommit = graph.commits.any((c) => c.branch == b);
     if (!hasCommit && b != 'main') continue;
     final idx = branchIndex(b);
-    final color = _gitColors[idx];
+    final color = gitColors[idx];
     final size = measurer.measure(b, branchLabelStyle, maxWidth: 200);
     final spine = laneCoord(b);
     final Point center;
@@ -650,7 +617,7 @@ RenderScene layoutGitGraph(
       text: b,
       bounds: Rect.fromCenter(center, size.width, size.height),
       style: branchLabelStyle,
-      color: _gitBranchLabelColors[idx],
+      color: gitBranchLabelColors[idx],
     ));
   }
 

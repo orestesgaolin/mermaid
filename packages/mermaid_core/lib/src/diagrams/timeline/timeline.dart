@@ -132,43 +132,11 @@ String _normalize(String s) => s
     .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
     .trim();
 
-// Section/task/event fills are upstream's `cScale<i>` for the DEFAULT theme:
-// cScale0..2 = darken(primary/secondary/tertiary, 10), cScale3..11 =
-// darken(adjust(primary, {h:...}), 10). See themes/theme-default.js
-// updateColors() and styles.js genSections (`.section-<i> {rect,path,circle}
-// fill: cScale<i>`). THEME_COLOR_LIMIT = 12; index used is `section % 12`.
-const _cScale = [
-  Color(0xffb9b9ff), // cScale0  darken(#ECECFF,10)
-  Color(0xffffffab), // cScale1  darken(#ffffde,10)
-  Color(0xffe9ffb9), // cScale2  darken(tertiary,10)
-  Color(0xffdeb9ff), // cScale3
-  Color(0xffffb9ff), // cScale4
-  Color(0xffffb9de), // cScale5
-  Color(0xffffb9b9), // cScale6
-  Color(0xffffdeb9), // cScale7
-  Color(0xffdeffb9), // cScale8
-  Color(0xffb9ffde), // cScale9
-  Color(0xffb9ffff), // cScale10
-  Color(0xffb9deff), // cScale11
-];
-
-// `cScaleInv<i> = adjust(cScale<i>, {h:180})`. Used for the per-node bottom
-// underline (`.section-<i> line { stroke: cScaleInv<i>; stroke-width: 3 }`).
-const _cScaleInv = [
-  Color(0xffffffb9),
-  Color(0xffababff),
-  Color(0xffcfb9ff),
-  Color(0xffdaffb9),
-  Color(0xffb9ffb9),
-  Color(0xffb9ffda),
-  Color(0xffb9ffff),
-  Color(0xffb9daff),
-  Color(0xffdab9ff),
-  Color(0xffffb9da),
-  Color(0xffffb9b9),
-  Color(0xffffdab9),
-];
-
+// Section/task/event fills are upstream's `cScale<i>` and the per-node bottom
+// underline uses `cScaleInv<i>` (`.section-<i> {rect,path,circle} fill:
+// cScale<i>` and `.section-<i> line { stroke: cScaleInv<i> }`). Both come from
+// the shared theme palette (default theme: darken(primary/secondary/..., 10)),
+// so they adapt to dark/forest/neutral. THEME_COLOR_LIMIT = 12; index `% 12`.
 const _themeColorLimit = 12;
 
 /// CSS `filter: brightness(120%)` — multiply each RGB channel by 1.2, clamped.
@@ -249,7 +217,7 @@ RenderScene layoutTimeline(
     bool event = false,
   }) {
     final ci = colorIndex % _themeColorLimit;
-    var fill = _cScale[ci];
+    var fill = theme.cScale[ci];
     if (event) fill = _brightness(fill, 1.2);
     final size = measurer.measure(text, labelStyle, maxWidth: width);
     return SceneGroup(id: '${idPrefix}_${x.round()}_${y.round()}', children: [
@@ -265,7 +233,7 @@ RenderScene layoutTimeline(
           MoveTo(Point(x, y + height)),
           LineTo(Point(x + width, y + height)),
         ]),
-        stroke: Stroke(color: _cScaleInv[ci], width: 3),
+        stroke: Stroke(color: theme.cScaleInv[ci], width: 3),
       ),
       SceneText(
         text: text,

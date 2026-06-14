@@ -26,20 +26,6 @@ const double _messageMargin = 35;
 const double _activationWidth = 10;
 const double _blockLabelHeight = 24;
 
-// theme-default sequence colors. These mirror mermaid's default theme exactly
-// (theme-default.js): noteBkgColor=#fff5ad, noteBorderColor=border2=#aaaa33,
-// activationBkgColor=#f4f4f4, activationBorderColor=#666, actorLineColor=
-// actorBorder=border1=#9370DB, labelBoxBorderColor=actorBorder=#9370DB.
-const _noteBkg = Color(0xfffff5ad);
-const _noteBorder = Color(0xffaaaa33);
-const _activationBkg = Color(0xfff4f4f4);
-const _activationBorder = Color(0xff666666);
-// `.actor-line` CSS color (actorLineColor) wins over the inline #999 presentation
-// attribute, so lifelines render in actorBorder (#9370DB) at width 0.5.
-const _lifelineColor = Color(0xff9370DB);
-// Upstream .loopLine / labelBox border = labelBoxBorderColor = actorBorder.
-const _frameBorder = Color(0xff9370DB);
-
 RenderScene layoutSequence(
   SequenceDiagram diagram, {
   required TextMeasurer measurer,
@@ -203,8 +189,8 @@ class _SequenceLayout {
       activationNodes.add(SceneShape(
         geometry: RectGeometry(Rect.fromLTWH(
             left, startY, _activationWidth, endY - startY)),
-        fill: const Fill(_activationBkg),
-        stroke: const Stroke(color: _activationBorder),
+        fill: Fill(theme.activationBkgColor),
+        stroke: Stroke(color: theme.activationBorderColor),
       ));
     }
 
@@ -250,7 +236,7 @@ class _SequenceLayout {
           MoveTo(Point(col.x, top)),
           LineTo(Point(col.x, bottom)),
         ]),
-        stroke: const Stroke(color: _lifelineColor, width: 0.5),
+        stroke: Stroke(color: theme.actorLineColor, width: 0.5),
       ));
       // Top box: at the create point for created participants, else the top.
       _actorBox(col, createTop[id] ?? 0);
@@ -269,7 +255,7 @@ class _SequenceLayout {
             MoveTo(Point(col.x + d, yy - d)),
             LineTo(Point(col.x - d, yy + d)),
           ]),
-          stroke: const Stroke(color: _activationBorder, width: 2),
+          stroke: Stroke(color: theme.actorLineColor, width: 2),
         ));
       }
     }
@@ -429,34 +415,34 @@ class _SequenceLayout {
             MoveTo(Point(cx, top + 45)),
             LineTo(Point(cx + halfArm - 2, top + 60)),
           ]),
-          stroke: Stroke(color: theme.nodeBorder, width: 2),
+          stroke: Stroke(color: theme.actorBorder, width: 2),
         ),
         SceneShape(
           geometry: CircleGeometry(Point(cx, top + 10), 15),
-          stroke: Stroke(color: theme.nodeBorder, width: 2),
-          fill: Fill(theme.mainBkg),
+          stroke: Stroke(color: theme.actorBorder, width: 2),
+          fill: Fill(theme.actorBkg),
         ),
         SceneText(
           text: p.label,
           bounds: Rect.fromLTWH(col.x - col.labelSize.width / 2,
               top + 64, col.labelSize.width, col.labelSize.height),
           style: baseStyle,
-          color: theme.textColor,
+          color: theme.actorTextColor,
         ),
       ]);
     } else {
       children.addAll([
         SceneShape(
           geometry: RectGeometry(rect, rx: 3, ry: 3),
-          fill: Fill(theme.mainBkg),
-          stroke: Stroke(color: theme.nodeBorder),
+          fill: Fill(theme.actorBkg),
+          stroke: Stroke(color: theme.actorBorder),
         ),
         SceneText(
           text: p.label,
           bounds: Rect.fromCenter(
               rect.center, col.labelSize.width, col.labelSize.height),
           style: baseStyle,
-          color: theme.textColor,
+          color: theme.actorTextColor,
         ),
       ]);
     }
@@ -494,14 +480,14 @@ class _SequenceLayout {
         bounds: Rect.fromLTWH((x1 + x2) / 2 - textSize.width / 2,
             y - textSize.height - 4, textSize.width, textSize.height),
         style: baseStyle,
-        color: theme.textColor,
+        color: theme.signalTextColor,
       ));
     }
 
     children.add(SceneShape(
       geometry: PathGeometry([MoveTo(Point(x1, y)), LineTo(Point(x2, y))]),
       stroke: Stroke(
-        color: theme.lineColor,
+        color: theme.signalColor,
         width: 1.5,
         dash: msg.arrow.dotted ? const [2, 2] : null,
       ),
@@ -542,7 +528,7 @@ class _SequenceLayout {
               Point(x + 4, y + h)),
         ]),
         stroke: Stroke(
-          color: theme.lineColor,
+          color: theme.signalColor,
           width: 1.5,
           dash: msg.arrow.dotted ? const [2, 2] : null,
         ),
@@ -554,7 +540,7 @@ class _SequenceLayout {
           bounds: Rect.fromLTWH(x + out * 0.85, y + h / 2 - textSize.height / 2,
               textSize.width, textSize.height),
           style: baseStyle,
-          color: theme.textColor,
+          color: theme.signalTextColor,
           align: TextAlignH.left,
         ),
       if (number != null) ..._numberBadge(number, Point(x, y)),
@@ -670,15 +656,15 @@ class _SequenceLayout {
       children: [
         SceneShape(
           geometry: RectGeometry(Rect.fromLTWH(left, y, width, h)),
-          fill: const Fill(_noteBkg),
-          stroke: const Stroke(color: _noteBorder),
+          fill: Fill(theme.noteBkgColor),
+          stroke: Stroke(color: theme.noteBorderColor),
         ),
         SceneText(
           text: note.text,
           bounds: Rect.fromLTWH(left + (width - textSize.width) / 2,
               y + _noteMargin, textSize.width, textSize.height),
           style: baseStyle,
-          color: Color.black,
+          color: theme.noteTextColor,
         ),
       ],
     ));
@@ -724,13 +710,13 @@ class _SequenceLayout {
       SceneShape(
         geometry: RectGeometry(rect),
         // Upstream .loopLine: stroke-width 2, dash 2,2, labelBoxBorderColor.
-        stroke: const Stroke(color: _frameBorder, width: 2, dash: [2, 2]),
+        stroke: Stroke(color: theme.labelBoxBorderColor, width: 2, dash: const [2, 2]),
       ),
       for (final (dy, _) in frame.dividers)
         SceneShape(
           geometry: PathGeometry(
               [MoveTo(Point(rect.left, dy)), LineTo(Point(rect.right, dy))]),
-          stroke: const Stroke(color: _frameBorder, width: 2, dash: [2, 2]),
+          stroke: Stroke(color: theme.labelBoxBorderColor, width: 2, dash: const [2, 2]),
         ),
     ]));
     // Tab and labels paint above everything (activation bars would occlude
@@ -747,15 +733,15 @@ class _SequenceLayout {
           Point(rect.left + tabW - 8.4, rect.top + tabH),
           Point(rect.left, rect.top + tabH),
         ]),
-        fill: Fill(theme.mainBkg),
-        stroke: const Stroke(color: _frameBorder),
+        fill: Fill(theme.labelBoxBkgColor),
+        stroke: Stroke(color: theme.labelBoxBorderColor),
       ),
       SceneText(
         text: keyword,
         bounds: Rect.fromLTWH(rect.left + _boxTextMargin, rect.top + 2,
             kwSize.width, kwSize.height),
         style: keywordStyle,
-        color: theme.textColor,
+        color: theme.labelTextColor,
         align: TextAlignH.left,
       ),
     ];
@@ -772,7 +758,7 @@ class _SequenceLayout {
         bounds: Rect.fromLTWH(cx - size.width / 2,
             rect.top + _boxMargin + _boxTextMargin, size.width, size.height),
         style: baseStyle,
-        color: theme.textColor,
+        color: theme.loopTextColor,
         align: TextAlignH.center,
       ));
     }
@@ -803,7 +789,7 @@ class _SequenceLayout {
       bounds: Rect.fromLTWH(centered ? topLeft.x - size.width / 2 : topLeft.x,
           topLeft.y, size.width, size.height),
       style: baseStyle,
-      color: theme.textColor,
+      color: theme.loopTextColor,
       align: centered ? TextAlignH.center : TextAlignH.left,
     );
   }

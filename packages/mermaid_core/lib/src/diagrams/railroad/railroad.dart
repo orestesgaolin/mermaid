@@ -419,16 +419,19 @@ const _strokeWidth = 2.0;
 // Terminal corner radius is a fixed 10px (not a full pill).
 const _terminalRadius = 10.0;
 
-// Upstream theme defaults (default theme): terminalFill #FFFFC0,
-// nonTerminalFill #FFFFFF, lineColor/markerFill #000000, ruleNameColor #000066.
-const _terminalFill = Color(0xffffffc0);
-const _nonTerminalFill = Color(0xffffffff);
-const _lineColor = Color(0xff000000);
-const _ruleNameColor = Color(0xff000066);
-const _boxStroke = Color(0xff000000);
-const _boxTextColor = Color(0xff000000);
-
-// Special sequence styling (default theme): fill #F0E0FF, stroke #8800CC.
+// Railroad colors are theme-derived. Upstream `styles.ts:buildThemeDefaults`
+// maps the railroad palette onto shared theme variables (the hex constants in
+// DEFAULT_RAILROAD_CONFIG are only fallbacks when a theme variable is absent):
+//   terminalFill        <- secondBkg ?? secondaryColor   (theme.secondaryColor)
+//   terminalTextColor   <- secondaryTextColor ?? textColor (theme.textColor)
+//   nonTerminalFill     <- mainBkg ?? background          (theme.mainBkg)
+//   nonTerminalStroke   <- primaryBorderColor ?? lineColor (theme.nodeBorder)
+//   nonTerminalTextColor<- primaryTextColor ?? textColor  (theme.primaryTextColor)
+//   lineColor/markerFill<- lineColor                      (theme.lineColor)
+//   ruleNameColor       <- titleColor ?? textColor        (theme.titleColor)
+// `specialFill`/`specialStroke` derive from tertiaryColor/tertiaryBorderColor,
+// which the shared theme does not expose, so they stay inlined (diagram-specific
+// fallbacks #F0E0FF / #8800CC from DEFAULT_RAILROAD_CONFIG).
 const _specialFill = Color(0xfff0e0ff);
 const _specialStroke = Color(0xff8800cc);
 
@@ -464,7 +467,7 @@ class _Layouter {
   final MermaidTheme theme;
   final TextStyleSpec baseStyle;
 
-  Stroke get _rail => const Stroke(color: _lineColor, width: _strokeWidth);
+  Stroke get _rail => Stroke(color: theme.lineColor, width: _strokeWidth);
 
   List<SceneNode> _hLine(double x1, double x2, double y) => [
         SceneShape(
@@ -485,18 +488,24 @@ class _Layouter {
     final mid = bh / 2;
     // Terminal: rounded rect (rx=ry=10). Non-terminal: plain rect (square).
     final radius = terminal ? _terminalRadius : 0.0;
+    // Theme-derived: terminal uses secondBkg/secondaryColor + secondary text;
+    // non-terminal uses mainBkg + primaryBorder + primary text (see comment at
+    // top of file mirroring upstream buildThemeDefaults).
+    final fill = terminal ? theme.secondaryColor : theme.mainBkg;
+    final stroke = terminal ? theme.lineColor : theme.nodeBorder;
+    final textColor = terminal ? theme.textColor : theme.primaryTextColor;
     return _Frag(
       nodes: [
         SceneShape(
           geometry: RectGeometry(rect, rx: radius, ry: radius),
-          fill: Fill(terminal ? _terminalFill : _nonTerminalFill),
-          stroke: const Stroke(color: _boxStroke, width: _strokeWidth),
+          fill: Fill(fill),
+          stroke: Stroke(color: stroke, width: _strokeWidth),
         ),
         SceneText(
           text: label,
           bounds: Rect.fromCenter(rect.center, ts.width, ts.height),
           style: baseStyle,
-          color: _boxTextColor,
+          color: textColor,
         ),
       ],
       width: bw,
@@ -529,7 +538,8 @@ class _Layouter {
           text: label,
           bounds: Rect.fromCenter(rect.center, ts.width, ts.height),
           style: baseStyle,
-          color: _boxTextColor,
+          // Upstream `.railroad-special text` uses nonTerminalTextColor.
+          color: theme.primaryTextColor,
         ),
       ],
       width: bw,
@@ -832,7 +842,10 @@ RenderScene layoutRailroad(
   final nodes = <SceneNode>[];
   var y = 0.0;
 
-  const rail = Stroke(color: _lineColor, width: _strokeWidth);
+  // Rail / marker color is theme.lineColor; rule-name color is theme.titleColor
+  // (upstream lineColor / titleColor; see buildThemeDefaults).
+  final rail = Stroke(color: theme.lineColor, width: _strokeWidth);
+  final markerFill = Fill(theme.lineColor);
 
   for (final rule in d.rules) {
     // Upstream: name label is "<name> =" on the rail baseline, to the left.
@@ -856,14 +869,14 @@ RenderScene layoutRailroad(
       text: ruleName,
       bounds: Rect.fromLTWH(0, baselineY - ns.height / 2, ns.width, ns.height),
       style: nameStyle,
-      color: _ruleNameColor,
+      color: theme.titleColor,
       align: TextAlignH.left,
     ));
 
     // Start marker (filled circle) + line into the definition.
     children.add(SceneShape(
       geometry: CircleGeometry(Point(nameWidth, baselineY), _markerRadius),
-      fill: const Fill(_lineColor),
+      fill: markerFill,
     ));
     children.add(SceneShape(
       geometry: PathGeometry([
@@ -884,7 +897,7 @@ RenderScene layoutRailroad(
     ));
     children.add(SceneShape(
       geometry: CircleGeometry(Point(endX, baselineY), _markerRadius),
-      fill: const Fill(_lineColor),
+      fill: markerFill,
     ));
 
     nodes.add(SceneGroup(id: rule.name, children: children));

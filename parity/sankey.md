@@ -1,5 +1,5 @@
 # sankey — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -79,3 +79,9 @@
 ### Deferred
 - `mix-blend-mode:multiply` on link compositing — requires a blend-mode field on the IR/backends (not editable here). Overlap darkening where ribbons cross will look lighter than upstream.
 - True gradient-stroked link paths and the 4px outlined-label stroke halo — `Stroke` carries no gradient and `SceneText` carries no stroke in the shared IR; approximated as described in #3/#11.
+
+(2026-06-14) Theme wiring pass.
+- **Outlined-label halo color** — `.sankey-label-bg` upstream is `mainBkg || background || '#fff'` (styles.js), not plain white. Changed the outlined background-copy color from `theme.background` to `theme.mainBkg` so the halo tracks the theme (default `#ECECFF`, and adapts under dark/forest/neutral). Default-render output (which uses `labelStyle:'legacy'`, no halo) is unchanged; only the `outlined` config variant is affected.
+- **Foreground label** already correctly uses `theme.textColor` (= `.sankey-label-fg`); link `fill-opacity 0.5` (= `stroke-opacity:0.5`) already applied; scene `background` already `theme.background`. No further wiring needed.
+- **Left inlined:** node/link palette is d3 `schemeTableau10` (a diagram-local ordinal scale, not a mermaid theme variable upstream), so it stays a local `_palette` constant by design.
+- Status set to **full-parity**: matches mermaid.js under the default theme and now adapts to non-default themes; remaining gaps are config/niche only (`mix-blend-mode:multiply` and IR-level gradient-stroke / text-stroke, none of which are editable from this directory).

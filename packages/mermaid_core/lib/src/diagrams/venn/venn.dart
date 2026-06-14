@@ -235,27 +235,6 @@ Map<String, String> _parseStyleDeclarations(String raw) {
   return out;
 }
 
-// Default theme `venn1..venn8` (mermaid default theme):
-//   venn1 = adjust(primaryColor,   {l:-30})
-//   venn2 = adjust(secondaryColor, {l:-30})
-//   venn3 = adjust(tertiaryColor,  {l:-40})
-//   venn4 = adjust(primaryColor,   {h: 60, l:-30})
-//   venn5 = adjust(primaryColor,   {h:-60, l:-30})
-//   venn6 = adjust(secondaryColor, {h: 60, l:-30})
-//   venn7 = adjust(primaryColor,   {h:120, l:-30})
-//   venn8 = adjust(secondaryColor, {h:120, l:-30})
-// with primary=#ECECFF, secondary=#ffffde, tertiary=adjust(primary,{h:-160}).
-const _vennColors = <Color>[
-  Color(0xff5353ff), // venn1
-  Color(0xffffff45), // venn2
-  Color(0xffb9ff20), // venn3
-  Color(0xffff53ff), // venn4
-  Color(0xff53ffff), // venn5
-  Color(0xff45ff45), // venn6
-  Color(0xffff5353), // venn7
-  Color(0xff45ffff), // venn8
-];
-
 // --- HSL helpers mirroring khroma's adjust/darken/lighten -------------------
 
 class _Hsl {
@@ -485,9 +464,9 @@ RenderScene layoutVenn(
   final titleHeight = (d.title != null && d.title!.isNotEmpty) ? 48.0 * scale : 0.0;
 
   final themeDark = _isDark(theme.background);
-  // Upstream intersection/text-node fill = `vennSetTextColor` which defaults to
-  // `textColor`; we have no dedicated field, so use `textColor` directly.
-  final setTextColor = theme.textColor;
+  // Upstream intersection/text-node fill = `vennSetTextColor`.
+  final setTextColor = theme.vennSetTextColor;
+  final vennColors = theme.venn;
 
   final styleByKey = <String, Map<String, String>>{};
   for (final s in d.styles) {
@@ -517,7 +496,7 @@ RenderScene layoutVenn(
     final circle = fitted[id];
     if (circle == null) continue;
     final custom = styleByKey[id];
-    final baseColor = _resolveColor(custom?['fill']) ?? _vennColors[i % _vennColors.length];
+    final baseColor = _resolveColor(custom?['fill']) ?? vennColors[i % vennColors.length];
     final fillOpacity = _parseOpacity(custom?['fill-opacity']) ?? 0.1;
     final strokeColor = _resolveColor(custom?['stroke']) ?? baseColor;
     final strokeWidth = _parseNum(custom?['stroke-width']) ?? (5 * scale);
@@ -596,7 +575,7 @@ RenderScene layoutVenn(
       text: d.title!,
       bounds: Rect.fromCenter(Point(svgWidth / 2, 32 * scale), ts.width, ts.height),
       style: style,
-      color: theme.titleColor,
+      color: theme.vennTitleTextColor,
     ));
   }
 

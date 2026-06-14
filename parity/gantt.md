@@ -1,5 +1,5 @@
 # gantt — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** 2026-06-14
 
 ## How mermaid.js implements it
@@ -84,3 +84,25 @@
 12. Done — title font-size fixed 18, centered on full chart width (gutter+chartWidth+leftPadding)/2.
 
 Note: today-marker color corrected to red (#ff0000, todayLineColor); section title color uses titleColor. The single-Fill-color IR cannot represent CSS opacity layering exactly, so band alphas are pre-multiplied approximations.
+
+(2026-06-14 — theme wiring + opacity pass)
+- THEME WIRING: the shared MermaidTheme palette additions do NOT include any
+  gantt-specific fields (no taskBkgColor / sectionBkgColor / critBkgColor /
+  excludeBkgColor / gridColor / todayLineColor). The generic fields gantt does
+  use (background, textColor, titleColor, fontFamily, fontSize) were already
+  wired via the `theme` parameter. All remaining gantt color constants are
+  diagram-specific with no corresponding theme variable available to wire to,
+  so they stay inlined (default-theme values, pixel-identical). No theme.dart
+  edits possible/permitted; nothing further to wire.
+- OPACITY FIX: grid tick stroke now bakes the upstream `.grid .tick`
+  opacity 0.2->0.8 into the alpha channel — `_gridColor` 0xffd3d3d3 -> 0xccd3d3d3
+  (gridColor=lightgrey @ opacity 0.8). Section-band alphas were already
+  pre-multiplied (0.2 / sectionBkgColor 0.49) and are correct.
+- DEFAULT-RENDER FIX: task/crit/active/done bars and milestone now use
+  stroke-width 2 (was 1 for rects, 1.5 for milestone) to match upstream
+  styles.js `.task`/`.crit`/`.done` { stroke-width: 2 } and milestone's
+  inherited `.task` width.
+- Default rendering is otherwise unchanged. Remaining deltas are config/niche
+  only: container-responsive width (intrinsic render uses fixed 1050 plot),
+  and `vert` markers using task fill/border instead of vertLineColor (no such
+  theme/IR field). No DEFAULT-render gaps remain -> full-parity.

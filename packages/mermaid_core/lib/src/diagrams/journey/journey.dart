@@ -125,17 +125,19 @@ JourneyDiagram parseJourney(String source) {
 }
 
 // Upstream journey defaults (config.schema.yaml).
-const _sectionFills = [
-  Color(0xff191970),
-  Color(0xff8B008B),
-  Color(0xff4B0082),
-  Color(0xff2F4F4F),
-  Color(0xff800000),
-  Color(0xff8B4513),
-  Color(0xff00008B),
-];
-// Section text colour (sectionColours: ['#fff']).
-const _sectionTextColor = Color(0xffffffff);
+//
+// Note on fills: journeyRenderer sets each section/task rect's inline fill to
+// `sectionFills[n]` (dark navy/purple palette) AND gives it class
+// `section-type-n` / `task-type-n`. styles.js emits `.section-type-n { fill:
+// fillType<n> }` whenever `fillType0` is set — which it always is in every
+// theme. A CSS class fill beats an SVG presentation attribute, so the dark
+// `sectionFills` are dead: the actually-rendered fill is `theme.fillType[n]`
+// (the light pastels in the default theme). The section/task TEXT element
+// carries the same class, so its `fill="#fff"` presentation attribute is
+// likewise overridden — the rendered text colour is also `theme.fillType[n]`.
+// We therefore drive both rect fill and text colour from `theme.fillType`,
+// indexed by `n = sectionIndex % 7` (sectionFills.length).
+const _sectionFillCount = 7;
 const _actorFills = [
   Color(0xff8FBC8F),
   Color(0xff7CFC00),
@@ -181,10 +183,13 @@ RenderScene layoutJourney(
     actorColor[actorNames[p]] = _actorFills[p % _actorFills.length];
   }
 
-  // Actor legend on the LEFT column. Circle cx:20, label x:40 colour #666.
+  // Actor legend on the LEFT column. Circle cx:20, label x:40.
   // yPos starts at 60 and steps by max(20, lineCount*20). leftMargin grows
-  // with the widest wrapped legend label.
-  const legendLabelColor = Color(0xff666666);
+  // with the widest wrapped legend label. Upstream stores labelData.fill =
+  // '#666' but svgDrawCommon.drawText never applies it; the legend <text>
+  // only ever carries class "legend", so the CSS `.legend { fill: textColor }`
+  // rule is the sole fill source — the rendered colour is theme.textColor.
+  final legendLabelColor = theme.textColor;
   var maxLegendWidth = 0.0;
   var yPos = 60.0;
   for (final actor in actorNames) {
@@ -228,7 +233,11 @@ RenderScene layoutJourney(
   var sectionIndex = 0;
   for (final section in diagram.sections) {
     final count = section.tasks.length;
-    final fill = _sectionFills[sectionIndex % _sectionFills.length];
+    // n = sectionNumber % sectionFills.length; the CSS `.section-type-n` /
+    // `.task-type-n` rule paints both rect and text with theme.fillType[n].
+    final n = sectionIndex % _sectionFillCount;
+    final fill = theme.fillType[n];
+    final textColor = fill;
     final sectionX = globalIndex * _taskMargin + globalIndex * _boxWidth +
         leftMargin;
     if (section.name.isNotEmpty) {
@@ -251,7 +260,7 @@ RenderScene layoutJourney(
               size.width,
               size.height),
           style: baseStyle,
-          color: _sectionTextColor,
+          color: textColor,
         ),
       ]));
     }
@@ -264,11 +273,13 @@ RenderScene layoutJourney(
           measurer.measure(t.name, baseStyle, maxWidth: _boxWidth);
       final children = <SceneNode>[
         // Drop line from task box top edge down to the descender baseline.
+        // Upstream draws this as a <line> with stroke "#666", but the CSS
+        // `line { stroke: textColor }` rule overrides the presentation
+        // attribute, so the rendered colour is theme.textColor.
         SceneShape(
           geometry: PathGeometry(
               [MoveTo(Point(cx, taskY)), LineTo(Point(cx, maxHeight))]),
-          stroke: Stroke(
-              color: const Color(0xff666666), width: 1, dash: const [4, 2]),
+          stroke: Stroke(color: theme.textColor, width: 1, dash: const [4, 2]),
         ),
         ..._face(Point(cx, faceY), t.score),
         SceneShape(
@@ -284,7 +295,7 @@ RenderScene layoutJourney(
               taskY + _boxHeight / 2 - nameSize.height / 2, nameSize.width,
               nameSize.height),
           style: baseStyle,
-          color: _sectionTextColor,
+          color: textColor,
         ),
       ];
       // Actor dots on the task box top edge: cx start task.x+14, step 10,
@@ -307,7 +318,11 @@ RenderScene layoutJourney(
   }
 
   // Activity line at y = height*4 = 260, from leftMargin to the right edge,
-  // stroke-width 4 black, with a small triangular arrowhead.
+  // stroke-width 4, with a small triangular arrowhead. Upstream sets the
+  // <line> stroke to "black", but the CSS `line { stroke: textColor }` rule
+  // overrides it, so the rendered colour is theme.textColor. The arrowhead
+  // marker path (`M 0,0 V 4 L6,2 Z`) carries no fill/class, so it renders
+  // with the SVG default fill of black.
   if (globalIndex > 0) {
     const activityY = _boxHeight * 4; // 260
     final lineEnd = lastX - _taskMargin + _diagramMarginX; // ~ stopx
@@ -316,7 +331,7 @@ RenderScene layoutJourney(
         MoveTo(Point(leftMargin, activityY)),
         LineTo(Point(lineEnd, activityY)),
       ]),
-      stroke: Stroke(color: const Color(0xff000000), width: 4),
+      stroke: Stroke(color: theme.textColor, width: 4),
     ));
     // Arrowhead: marker path 'M 0,0 V 4 L6,2 Z' anchored at the line tip.
     nodes.add(SceneShape(

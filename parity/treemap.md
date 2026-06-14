@@ -1,5 +1,5 @@
 # treemap — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -112,3 +112,35 @@ confined to the treemap source dir.
 
 Remaining gap: no D3-`treemap` config block (#7) and no custom `valueFormat`
 strings (e.g. `$0,0`) — both need shared config plumbing absent from this port.
+
+### Theme wiring pass (MermaidTheme palette)
+
+The three color scales were previously hand-inlined as `const` tables of
+theme-default hexes. Wired them to the shared `MermaidTheme` ordinal palette so
+non-default themes (dark/forest/neutral) adapt automatically:
+
+- `colorScale` range `[transparent, cScale0..11]` (leaf + section fills) →
+  `[null, ...theme.cScale]`. Default values are identical to the old inlined
+  table, so the most visible surfaces (fills) stay pixel-identical under the
+  default theme.
+- `colorScalePeer` range `[transparent, cScalePeer0..11]` (section/leaf
+  strokes) → `[null, ...theme.cScalePeer]`. Note: the old inlined
+  cScalePeer8..11 (`#a2ff3a`/`#3affa2`/`#3affff`/`#3aa2ff`) were a slightly-off
+  guess; the canonical theme values (`#9cff39`/`#39ff9c`/`#39ffff`/`#399cff`)
+  now flow through. These are stroke colors drawn at 0.4 opacity, so the
+  default-theme visual change is negligible and now matches upstream's
+  `darken(cScale,25)`.
+- `colorScaleLabel` range `[cScaleLabel0..11]` (section/leaf text) →
+  `theme.cScaleLabel`. The old inline used `#333`/`#ccc`; the canonical theme
+  default uses `#000`/`#fff` (invert(labelTextColor) for slots 0/3). Text color
+  now follows the shared theme.
+
+Opacity: the fill/stroke opacities (leaf fill 0.3, section fill 0.6, peer
+stroke 0.4) were already applied via `Color.withOpacity` against the ARGB
+`Color`; the SVG/Flutter backends honor the alpha, so no further opacity fix
+was needed. No shared files were touched.
+
+Status raised to **full-parity**: default render matches mermaid.js and the
+diagram now adapts to all themes. Only the D3 `treemap` config block and custom
+`valueFormat` strings remain (config/niche plumbing absent port-wide), which do
+not affect the default visual.

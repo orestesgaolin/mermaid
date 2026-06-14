@@ -4,7 +4,6 @@ library;
 
 import 'dart:math' as math;
 
-import '../../color.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -35,40 +34,21 @@ const double _sectionTextSize = 17;
 const double _legendTextSize = 17;
 const double _titleTextSize = 25;
 
-// Upstream pieStrokeColor / pieOuterStrokeColor (theme-default: black).
-const Color _strokeColor = Color(0xff000000);
-
-// Upstream pieSectionTextColor = textColor (theme-default '#333').
-const Color _sectionTextColor = Color(0xff333333);
-
-// Upstream pieLegendTextColor / pieTitleTextColor = taskTextDarkColor
-// (theme-default 'black').
-const Color _legendTextColor = Color(0xff000000);
-const Color _titleTextColor = Color(0xff000000);
-
-// Upstream theme-default pie1..pie12 (default theme: primary #ECECFF,
-// secondary #ffffde, tertiary = adjust(primary, h:-160); remaining derived
-// via HSL adjust). Values precomputed to the default-theme hex constants.
-const _palette = <Color>[
-  Color(0xffececff), // pie1  = primaryColor
-  Color(0xffffffde), // pie2  = secondaryColor
-  Color(0xffb9ff20), // pie3  = adjust(tertiary, l:-40)
-  Color(0xffb9b9ff), // pie4  = adjust(primary,  l:-10)
-  Color(0xffffff45), // pie5  = adjust(secondary,l:-30)
-  Color(0xffd9ff86), // pie6  = adjust(tertiary, l:-20)
-  Color(0xffff86ff), // pie7  = adjust(primary, h:+60,l:-20)
-  Color(0xff20ffff), // pie8  = adjust(primary, h:-60,l:-40)
-  Color(0xffff2020), // pie9  = adjust(primary, h:120,l:-40)
-  Color(0xffff20ff), // pie10 = adjust(primary, h:+60,l:-40)
-  Color(0xff20ff90), // pie11 = adjust(primary, h:-90,l:-40)
-  Color(0xffff5353), // pie12 = adjust(primary, h:120,l:-30)
-];
-
 RenderScene layoutPieChart(
   PieChart chart, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
+  // Upstream pieStrokeColor / pieOuterStrokeColor (theme-default: black).
+  final strokeColor = theme.pieStrokeColor;
+  final outerStrokeColor = theme.pieOuterStrokeColor;
+  // Upstream pieSectionTextColor / pieLegendTextColor / pieTitleTextColor.
+  final sectionTextColor = theme.pieSectionTextColor;
+  final legendTextColor = theme.pieLegendTextColor;
+  final titleTextColor = theme.pieTitleTextColor;
+  // Upstream pie1..pie12 ordinal scale (theme-derived; default theme equals the
+  // precomputed default-theme hex). 1-indexed list of 12.
+  final palette = theme.pie;
   final sectionStyle =
       TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _sectionTextSize);
   final legendStyle =
@@ -95,7 +75,7 @@ RenderScene layoutPieChart(
   // Outer ring (pieOuterCircle): radius + outerStrokeWidth/2, black 2px, no fill.
   nodes.add(SceneShape(
     geometry: CircleGeometry(center, _radius + _outerStrokeWidth / 2),
-    stroke: const Stroke(color: _strokeColor, width: _outerStrokeWidth),
+    stroke: Stroke(color: outerStrokeColor, width: _outerStrokeWidth),
   ));
 
   // Slices, clockwise from 12 o'clock (upstream d3.pie default, sort=null).
@@ -103,7 +83,7 @@ RenderScene layoutPieChart(
   for (final i in drawn) {
     final slice = chart.slices[i];
     final sweep = slice.value / total * 2 * math.pi;
-    final color = _palette[i % _palette.length];
+    final color = palette[i % palette.length];
     final end = angle + sweep;
     final pct = '${(slice.value / total * 100).round()}%';
     final size = measurer.measure(pct, sectionStyle);
@@ -120,13 +100,13 @@ RenderScene layoutPieChart(
             const ClosePath(),
           ]),
           fill: Fill(color.withOpacity(_pieOpacity)),
-          stroke: const Stroke(color: _strokeColor, width: 2),
+          stroke: Stroke(color: strokeColor, width: 2),
         ),
         SceneText(
           text: pct,
           bounds: Rect.fromCenter(pos, size.width, size.height),
           style: sectionStyle,
-          color: _sectionTextColor,
+          color: sectionTextColor,
         ),
       ],
     ));
@@ -146,7 +126,7 @@ RenderScene layoutPieChart(
         : slice.label;
     final size = measurer.measure(text, legendStyle);
     final legendY = center.y + i * legendHeight - legendOffset;
-    final color = _palette[i % _palette.length];
+    final color = palette[i % palette.length];
     nodes.add(SceneGroup(id: 'legend_$i', children: [
       SceneShape(
         geometry: RectGeometry(
@@ -163,7 +143,7 @@ RenderScene layoutPieChart(
             size.width,
             size.height),
         style: legendStyle,
-        color: _legendTextColor,
+        color: legendTextColor,
         align: TextAlignH.left,
       ),
     ]));
@@ -183,7 +163,7 @@ RenderScene layoutPieChart(
           center.x - size.width / 2, titleY - size.height / 2, size.width,
           size.height),
       style: style,
-      color: _titleTextColor,
+      color: titleTextColor,
     ));
     top = titleY - size.height / 2;
   }

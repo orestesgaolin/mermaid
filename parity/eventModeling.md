@@ -1,5 +1,5 @@
 # eventModeling — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -69,6 +69,11 @@
 - 9. Font weight/size — **Done.** Box name rendered bold (700) at 16px; data body in a monospace style.
 - 10. Diagram padding — **Done.** Scene margin changed from 16 to 30 (upstream `config.padding ?? 30`).
 - 11. Lane label text — **Done.** Labels are now "UI/Automation", "Command/Read Model", "Events" with namespace prefixes "UI/A: ", "C/RM: ", "Stream: ".
+
+### Theme-wiring pass (palette fields)
+- **Relation stroke + arrowhead color — fixed default-render bug + wired.** Upstream's default theme sets `emRelationStroke`/`emArrowhead` to `lineColor` (`#333333`), and the dark theme keeps them tied to `lineColor`; the renderer's `?? '#000000'` fallback is dead code because every shipped theme assigns these. Our port had hardcoded `#000000` for both the relation `PathGeometry` stroke and the triangle arrowhead `PolygonGeometry` fill — a real default-render discrepancy (black vs `#333`). Both now read `theme.lineColor`, fixing the default color and adapting under dark/forest/neutral.
+- **Entity fills/strokes + swimlane band colors — left inlined (no matching theme field).** Upstream exposes these as `emUiFill`/`emProcessorFill`/`emReadModelFill`/`emCommandFill`/`emEventFill` (+ matching strokes) and `emSwimlaneBackgroundOdd`/`emSwimlaneBackgroundStroke`. These `em*` fields are NOT part of the shared `MermaidTheme` palette added in this pass, and theme.dart is out of scope to edit. The inlined default-theme constants (ui white/`#dbdada`, pcr `#edb3f6`/`#b88cbf`, rmo `#d3f1a2`/`#a3b732`, cmd `#bcd6fe`/`#679ac3`, evt `#ffb778`/`#c19a0f`; band `rgb(250,250,250)`/`rgb(240,240,240)`) match upstream's default/forest/neutral exactly, so default + those three themes render identically. Only the dark theme (which lightens the entity fills and swimlane background) differs — this is the lone residual, and it can only be closed by adding the `em*` fields to the shared theme.
+- **Opacity:** no semi-transparent fills in upstream eventModeling (entity fills, bands, relations, arrowheads are all opaque); nothing to apply.
 
 Notes / residual gaps (minor):
 - Upstream renders box content via an HTML `foreignObject` with `<b>`/`<code>` and `wrapLabel`/`calculateTextDimensions`; our port approximates this with two `SceneText` nodes and the shared `TextMeasurer`. Exact wrap points and the upstream `width/3` heuristic for data boxes are not replicated, so box sizes for data-bearing frames may differ slightly.

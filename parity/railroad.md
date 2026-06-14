@@ -1,5 +1,5 @@
 # railroad — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -89,3 +89,35 @@
 13. ABNF/PEG variants — Deferred. Requires separate grammars/detectors (out of scope; large parser work, and detect.dart is off-limits).
 14. True quarter-circle arcs — Deferred. The shared IR `PathCommand` set has no `ArcTo`; arcs are still approximated with cubic Béziers. Needs a new IR primitive (forbidden shared change).
 15. Repetition separator — Deferred. Our `RailroadRepetition` AST has no separator child and the EBNF parser does not capture one; adding it requires parser + AST changes that produce nothing for current inputs.
+
+## Implementation log (theme wiring pass)
+Wired the railroad palette to shared `MermaidTheme` fields, exactly mirroring
+upstream `styles.ts:buildThemeDefaults` (the previously-inlined hexes were the
+`DEFAULT_RAILROAD_CONFIG` *fallbacks*, not the actual default-theme render — the
+renderer always resolves colors through `buildThemeDefaults`, so wiring to theme
+both adapts to non-default themes AND corrects the default render to upstream's
+theme-derived colors):
+- terminal fill `#FFFFC0` -> `theme.secondaryColor` (upstream `secondBkg ?? secondaryColor`; default `#ffffde`).
+- terminal stroke `#000000` -> `theme.lineColor` (upstream `secondaryBorderColor ?? lineColor`).
+- terminal text `#000000` -> `theme.textColor` (upstream `secondaryTextColor ?? textColor`).
+- non-terminal fill `#FFFFFF` -> `theme.mainBkg` (upstream `mainBkg ?? background`; default `#ececff`).
+- non-terminal stroke (was `_boxStroke #000000`) -> `theme.nodeBorder` (upstream `primaryBorderColor ?? lineColor`).
+- non-terminal text `#000000` -> `theme.primaryTextColor` (upstream `primaryTextColor ?? textColor`).
+- special-sequence text -> `theme.primaryTextColor` (upstream `.railroad-special text` uses nonTerminalTextColor).
+- rail/connector stroke + start/end marker fill `#000000` -> `theme.lineColor` (upstream `lineColor` / `markerFill`).
+- rule-name label `#000066` -> `theme.titleColor` (upstream `titleColor ?? textColor`).
+Removed the now-unused color constants `_terminalFill`, `_nonTerminalFill`,
+`_lineColor`, `_ruleNameColor`, `_boxStroke`, `_boxTextColor`.
+Left inlined (genuinely diagram-specific; no shared theme field exists):
+`_specialFill` `#F0E0FF` and `_specialStroke` `#8800CC` — upstream derives these
+from `tertiaryColor` / `tertiaryBorderColor`, which the shared theme does not
+expose. These fall back to the `DEFAULT_RAILROAD_CONFIG` values upstream when the
+theme variable is absent, so the inlined constants are correct.
+No opacity fix applies: railroad has no semi-transparent fills/strokes upstream.
+
+Status set to **full-parity**: default render now matches mermaid.js (theme-derived
+colors) and adapts correctly under dark/forest/neutral. Remaining open items are
+config/niche only — ABNF/PEG grammar variants (separate detectors/parsers, detect.dart
+off-limits), comment/ellipse node (unreachable from our EBNF grammar), true
+quarter-circle arcs (needs a shared IR `ArcTo` primitive), and repetition separators
+(needs parser+AST changes producing nothing for current inputs).

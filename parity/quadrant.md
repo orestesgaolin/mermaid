@@ -82,3 +82,26 @@ calculateSpace, scaleLinear point mapping, anchor/baseline-aware text placement)
 Deferred: none. Note: bare-trailing `x-axis a -->` (no right text) does not
 append the upstream `⟶` glyph to the left label — pre-existing behavior, not a
 listed discrepancy.
+
+### Theme wiring pass (MermaidTheme palette)
+Replaced all inlined quadrant color constants with the shared `MermaidTheme`
+palette fields so the diagram now adapts to dark/forest/neutral themes while
+keeping default-theme output identical (the field defaults equal the old
+inlined constants):
+- Quadrant region fills `_quadrant1Fill.._quadrant4Fill` → `theme.quadrant1Fill
+  ..quadrant4Fill` (deleted the four `const` declarations).
+- Quadrant label text fills `_quadrant1TextFill.._quadrant4TextFill` →
+  `theme.quadrant1TextFill..quadrant4TextFill` (deleted the four constants).
+- Point default fill / stroke `_quadrantPointFill` → `theme.quadrantPointFill`
+  (deleted the constant; inline `color`/`stroke-color` still override).
+- Point label color `theme.primaryTextColor` → `theme.quadrantPointTextFill`.
+- X-axis label color → `theme.quadrantXAxisTextFill`; Y-axis label color →
+  `theme.quadrantYAxisTextFill`; title color → `theme.quadrantTitleFill`.
+- Borders: external/internal stroke `theme.primaryBorderColor` →
+  `theme.quadrantExternalBorderStrokeFill` / `quadrantInternalBorderStrokeFill`.
+  Default-render correction: upstream resolves these via
+  `mkBorder(primaryColor) = adjust(#ECECFF, {s:-40, l:-10}) = #c7c7f1`, which is
+  what `theme-default.js` overrides them to — NOT the raw `primaryBorderColor`
+  (`#9370db`) the old code used. So the default border color changes from
+  `#9370db` to the correct `#c7c7f1`, closing discrepancy #9 properly.
+No opacity items were deferred for this diagram (all fills are opaque upstream).

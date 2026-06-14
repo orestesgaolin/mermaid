@@ -1,5 +1,5 @@
 # venn — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -102,3 +102,11 @@ Notes / known minor gaps:
 - The ≥3-set packing is a relaxation heuristic, not venn.js' exact solver, so precise positions for 3+ sets can differ.
 - Intersection text-node `foreignObject` HTML auto-wrap is approximated with single-line `SceneText` per node (no IR for nested HTML/foreignObject).
 - A styled intersection region is approximated by a small circle at the centroid rather than the true lens/path (no boolean-geometry primitive).
+
+### Theme wiring pass (applied 2026-06-14, `venn/venn.dart` only)
+- **Circle colors** — replaced the inlined `_vennColors` 8-hex constant with `theme.venn` (the new MermaidTheme `venn1..venn8` palette getter). Default-theme values are byte-identical to the old constants, so default render is unchanged; dark/forest/neutral now use their own venn palettes. Removed the now-dead `_vennColors` const + its derivation comment.
+- **Set / intersection / text-node text color** — `setTextColor` now reads `theme.vennSetTextColor` (was `theme.textColor`). Default `vennSetTextColor` (#333333) equals the default `textColor`, so default render is unchanged; dark/forest/neutral now use their dedicated set-text colors (e.g. #cccccc dark, #000000 forest/neutral).
+- **Title color** — title now uses `theme.vennTitleTextColor` (was `theme.titleColor`). Upstream is `vennTitleTextColor || titleColor`; default `vennTitleTextColor` (#333333) equals default `titleColor`, so default render is unchanged.
+- **Opacity** — no change needed: fill-opacity 0.1 and stroke alpha 0.95 were already applied via `withOpacity` on ARGB colors (the deferred "no opacity field" concern was already worked around by folding alpha into the color, which the backends honor).
+
+Discrepancies 7 and 16 are now fully theme-driven (not approximated). The remaining open items (area-proportional venn.js packing exactness for ≥3 sets, foreignObject HTML auto-wrap, true lens-path styled fill, hand-drawn look) are layout-engine / IR-primitive limitations, not default-render color gaps — default render now matches mermaid.js and adapts across themes.

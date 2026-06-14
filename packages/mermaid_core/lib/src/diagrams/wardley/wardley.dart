@@ -603,7 +603,9 @@ RenderScene layoutWardley(
           MoveTo(Point(startX, padding)),
           LineTo(Point(startX, height - padding)),
         ]),
-        stroke: const Stroke(color: _axisColor, width: 1, dash: [5, 5]),
+        // Upstream draws dividers at opacity 0.8 (wardleyRenderer.ts).
+        stroke: Stroke(
+            color: _axisColor.withOpacity(0.8), width: 1, dash: const [5, 5]),
       ));
     }
     final ss = measurer.measure(stages[i], stageStyle);
@@ -925,7 +927,10 @@ RenderScene layoutWardley(
 
   return RenderScene(
     size: Size(width, height),
-    background: _white,
+    // Upstream: themeVariables.wardley?.backgroundColor ?? background ?? '#fff'.
+    // Default theme background is #fff (pixel-identical); dark/forest/neutral
+    // follow the theme background.
+    background: theme.background,
     nodes: nodes,
   );
 }

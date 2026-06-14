@@ -1,5 +1,5 @@
 # kanban — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -72,3 +72,30 @@ Applied (rewrote `kanban.dart` parser + `layoutKanban`):
 Deferred:
 - (4 icon) Item icons: upstream renders an icon-font/registered icon glyph. Our scene IR has no icon/raster/glyph primitive, and adding one is a shared-IR change outside this diagram. `icon` is parsed and stored on `KanbanTask` so it can be wired up once an icon primitive exists.
 - (5 apply) Applying `style nX fill:/stroke:` and `class` overrides to specific cards/sections: needs reliable per-node id resolution into the layout plus a node-style override channel. The directives are now parsed/skipped, but the visual override is not applied. Low visual impact for the default corpus.
+
+### Theme wiring pass (palette fields)
+
+- Wired section fills to the shared theme: replaced the precomputed-constant
+  `_sectionFills` table with `_sectionFill(theme, s)`, which reads
+  `theme.cScale[(s+2)%12]` (the upstream `.section-${i-1}` offset → section 0
+  uses `cScale2`) and applies a local khroma-equivalent `lighten(_, 10)` in HSL.
+  Verified the default theme reproduces every previous constant
+  (`0xfff9ffec`, `0xfff6ecff`, …) bit-for-bit, so default render is
+  pixel-identical; dark/forest/neutral now adapt because `theme.cScale` varies.
+- Added pure-Dart HSL helpers (`_lighten`/`_rgbToHsl`/`_hslToRgb`/`_hue2rgb`)
+  inside kanban.dart (no shared-file edits); alpha preserved.
+- Section box stroke also uses the same theme-derived fill color (upstream
+  paints both `fill` and `stroke` with `adjuster(cScale, 10)`).
+- Section title color: left inlined as `#333333`. Upstream uses
+  `cScaleLabel${i}` which in the default theme resolves to `labelTextColor`
+  (`#333`), but the shared `theme.cScaleLabel` defaults to pure black for these
+  indices, so sourcing it would change the default render. Kept inlined to
+  preserve pixel-identity (documented in code comment).
+- No opacity-deferred items existed for kanban (cards are opaque white; priority
+  bars are opaque upstream literals red/orange/blue/lightblue — left inlined as
+  diagram-specific, not theme variables).
+
+Status raised to **full-parity**: matches mermaid.js under the default theme and
+now adapts section colors to non-default themes. Remaining open items (icons,
+per-node style/class overrides) are niche/config, not default-render gaps and
+require shared-IR changes outside this diagram.

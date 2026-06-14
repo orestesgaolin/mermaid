@@ -242,19 +242,6 @@ QuadrantChart parseQuadrantChart(String source) {
   );
 }
 
-// Upstream default theme constants (theme-default.js). primaryColor=#ECECFF;
-// quadrant fills lighten +5/+10/+15 per channel; text fills = invert(primary)
-// with −5/−10/−15 nudges; point fill = darken(primary).
-const _quadrant1Fill = Color(0xffececff);
-const _quadrant2Fill = Color(0xfff1f1ff);
-const _quadrant3Fill = Color(0xfff6f6ff);
-const _quadrant4Fill = Color(0xfffbfbff);
-const _quadrant1TextFill = Color(0xff131300);
-const _quadrant2TextFill = Color(0xff0e0e00);
-const _quadrant3TextFill = Color(0xff090900);
-const _quadrant4TextFill = Color(0xff040400);
-const _quadrantPointFill = Color(0xffb9b9ff); // darken(#ECECFF)
-
 // Upstream QuadrantBuilder default config (quadrantBuilder.ts).
 const _chartWidth = 500.0;
 const _chartHeight = 500.0;
@@ -349,17 +336,17 @@ RenderScene layoutQuadrantChart(
     Rect.fromLTWH(quadrantLeft + quadrantHalfWidth,
         quadrantTop + quadrantHalfHeight, quadrantHalfWidth, quadrantHalfHeight),
   ];
-  const quadrantFills = [
-    _quadrant1Fill,
-    _quadrant2Fill,
-    _quadrant3Fill,
-    _quadrant4Fill
+  final quadrantFills = [
+    theme.quadrant1Fill,
+    theme.quadrant2Fill,
+    theme.quadrant3Fill,
+    theme.quadrant4Fill
   ];
-  const quadrantTextFills = [
-    _quadrant1TextFill,
-    _quadrant2TextFill,
-    _quadrant3TextFill,
-    _quadrant4TextFill
+  final quadrantTextFills = [
+    theme.quadrant1TextFill,
+    theme.quadrant2TextFill,
+    theme.quadrant3TextFill,
+    theme.quadrant4TextFill
   ];
   final quadrantStyle = TextStyleSpec(
       fontFamily: theme.fontFamily, fontSize: _quadrantLabelFontSize);
@@ -395,9 +382,11 @@ RenderScene layoutQuadrantChart(
   // Borders: 4 external (width 2) + 2 internal divider lines (width 1).
   const halfExt = _externalBorderStrokeWidth / 2;
   final extStroke = Stroke(
-      color: theme.primaryBorderColor, width: _externalBorderStrokeWidth);
+      color: theme.quadrantExternalBorderStrokeFill,
+      width: _externalBorderStrokeWidth);
   final intStroke = Stroke(
-      color: theme.primaryBorderColor, width: _internalBorderStrokeWidth);
+      color: theme.quadrantInternalBorderStrokeFill,
+      width: _internalBorderStrokeWidth);
   void line(double x1, double y1, double x2, double y2, Stroke stroke) {
     nodes.add(SceneShape(
       geometry: PolygonGeometry([Point(x1, y1), Point(x2, y2)]),
@@ -434,8 +423,8 @@ RenderScene layoutQuadrantChart(
     final px = quadrantLeft + p.x * quadrantWidth;
     final py = quadrantTop + quadrantHeight - p.y * quadrantHeight;
     final radius = style.radius ?? _pointRadius;
-    final fill = style.color ?? _quadrantPointFill;
-    final strokeColor = style.strokeColor ?? _quadrantPointFill;
+    final fill = style.color ?? theme.quadrantPointFill;
+    final strokeColor = style.strokeColor ?? theme.quadrantPointFill;
     final strokeWidth = style.strokeWidth ?? 0;
     final size = measurer.measure(p.label, pointStyle);
     nodes.add(SceneGroup(id: 'point_${p.label}', children: [
@@ -452,7 +441,7 @@ RenderScene layoutQuadrantChart(
         y: py + _pointTextPadding,
         size: size,
         style: pointStyle,
-        color: theme.primaryTextColor,
+        color: theme.quadrantPointTextFill,
         left: false,
         top: true,
       ),
@@ -481,7 +470,7 @@ RenderScene layoutQuadrantChart(
       y: xAxisY,
       size: size,
       style: axisStyle,
-      color: theme.primaryTextColor,
+      color: theme.quadrantXAxisTextFill,
       left: !drawXMiddle,
       top: true,
     ));
@@ -500,7 +489,7 @@ RenderScene layoutQuadrantChart(
       y: anchorY,
       size: size,
       style: yAxisStyle,
-      color: theme.primaryTextColor,
+      color: theme.quadrantYAxisTextFill,
       left: !drawYMiddle,
       top: true,
       rotation: -90,
@@ -528,7 +517,7 @@ RenderScene layoutQuadrantChart(
       y: _titlePadding,
       size: size,
       style: style,
-      color: theme.primaryTextColor,
+      color: theme.quadrantTitleFill,
       left: false,
       top: true,
     ));

@@ -45,7 +45,9 @@ const _sectionBands = <Color>[
   Color(0x33fff400),
   Color(0x33ffffff),
 ];
-const _gridColor = Color(0xffd3d3d3);
+// Grid tick stroke = gridColor (lightgrey) with `.grid .tick` opacity 0.8
+// baked into the alpha channel (upstream styles.js).
+const _gridColor = Color(0xccd3d3d3);
 
 RenderScene layoutGanttChart(
   GanttChart chart, {
@@ -153,7 +155,8 @@ RenderScene layoutGanttChart(
             Point(cx - r, cy),
           ]),
           fill: Fill(fill),
-          stroke: Stroke(color: border, width: 1.5),
+          // Milestone inherits `.task` stroke-width 2 (upstream styles.js).
+          stroke: Stroke(color: border, width: 2),
         ));
       } else {
         children.add(SceneShape(
@@ -162,7 +165,8 @@ RenderScene layoutGanttChart(
               rx: 3,
               ry: 3),
           fill: Fill(fill),
-          stroke: Stroke(color: border),
+          // Task bars use stroke-width 2 (upstream `.task`/`.crit`/`.done`).
+          stroke: Stroke(color: border, width: 2),
         ));
       }
       final size = measurer.measure(t.name, baseStyle);

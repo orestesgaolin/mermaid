@@ -89,3 +89,7 @@
 13. (low) Square legend swatch — Done. Dropped `rx/ry` on the legend rect.
 14. (low) Font sizes — Done. Axis/legend labels fixed 12px; title `theme.fontSize` non-bold.
 15. (low) Header keyword — Deferred (lenient alias). Kept `radar` accepted alongside `radar-beta` to preserve existing behavior/tests per hard rule 4; upstream-strict would reject bare `radar` but that is a non-harmful leniency, not a visual discrepancy.
+
+### Theme-field wiring pass (2026-06-14)
+16. Curve/legend colors now read `theme.cScale` (the shared `cScale0..11` palette) instead of the local `const _cScale` table. The removed `_cScale` constant had values identical to the default-theme `cScale` defaults, so default rendering is pixel-identical; non-default themes (dark/forest/neutral) now drive radar curve and legend colors correctly. Both the curve loop and legend loop use the single `final cScale = theme.cScale` lookup. The deferred-in-spirit item 3 ("No new theme field added") is now fully wired to the shared theme.
+17. Opacity: graticule fill (`#DEDEDE` @ 0.3) and curve fills (cScale color @ 0.5) already use real ARGB alpha via `withOpacity` — confirmed honored by both backends; no change needed. The `#DEDEDE` graticule color is diagram-specific (`.radarGraticule` CSS, not a theme variable upstream) so it stays inlined.

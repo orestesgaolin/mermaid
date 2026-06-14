@@ -5,7 +5,6 @@ library;
 
 import 'dart:math' as math;
 
-import '../../color.dart';
 import '../../detect.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -320,11 +319,11 @@ RenderScene layoutRequirementDiagram(
           MoveTo(pts.first),
           for (final p in pts.skip(1)) LineTo(p),
         ]),
-        stroke: Stroke(color: theme.lineColor, width: 1.3, dash: dash),
+        stroke: Stroke(color: theme.relationColor, width: 1.3, dash: dash),
       ));
       children.add(SceneShape(
         geometry: CircleGeometry(start, 9),
-        stroke: Stroke(color: theme.lineColor, width: 1),
+        stroke: Stroke(color: theme.relationColor, width: 1),
       ));
       // Crosshair: one line along the edge direction, one perpendicular.
       children.add(SceneShape(
@@ -332,14 +331,14 @@ RenderScene layoutRequirementDiagram(
           MoveTo(start - sdir * 9),
           LineTo(start + sdir * 9),
         ]),
-        stroke: Stroke(color: theme.lineColor, width: 1),
+        stroke: Stroke(color: theme.relationColor, width: 1),
       ));
       children.add(SceneShape(
         geometry: PathGeometry([
           MoveTo(start - perp * 9),
           LineTo(start + perp * 9),
         ]),
-        stroke: Stroke(color: theme.lineColor, width: 1),
+        stroke: Stroke(color: theme.relationColor, width: 1),
       ));
     } else {
       // Non-contains: dashed line ending in an open `>` arrow (two strokes,
@@ -353,7 +352,7 @@ RenderScene layoutRequirementDiagram(
           MoveTo(pts.first),
           for (final p in pts.skip(1)) LineTo(p),
         ]),
-        stroke: Stroke(color: theme.lineColor, width: 1.3, dash: dash),
+        stroke: Stroke(color: theme.relationColor, width: 1.3, dash: dash),
       ));
       children.add(SceneShape(
         geometry: PathGeometry([
@@ -361,26 +360,26 @@ RenderScene layoutRequirementDiagram(
           LineTo(tip),
           LineTo(tip - dir * 11 - perp * 5),
         ]),
-        stroke: Stroke(color: theme.lineColor, width: 1.3),
+        stroke: Stroke(color: theme.relationColor, width: 1.3),
       ));
     }
     nodes.add(
         SceneGroup(id: 'rel_$i', semanticLabel: r.label, children: children));
     final size = labelSizes[i]!;
     final mid = pts[pts.length ~/ 2];
-    // Upstream label: `relationLabelColor` (=actorTextColor='black') on
+    // Upstream label: `relationLabelColor` (=actorTextColor) on
     // `relationLabelBackground` (=labelBackground='rgba(232,232,232,0.8)').
     nodes.add(SceneGroup(id: 'rellabel_$i', children: [
       SceneShape(
         geometry: RectGeometry(
             Rect.fromCenter(mid, size.width + 4, size.height + 2)),
-        fill: const Fill(Color(0xccE8E8E8)),
+        fill: Fill(theme.relationLabelBackground),
       ),
       SceneText(
         text: '«${r.label}»',
         bounds: Rect.fromCenter(mid, size.width, size.height),
         style: baseStyle,
-        color: Color.black,
+        color: theme.relationLabelColor,
       ),
     ]));
   }
@@ -389,13 +388,13 @@ RenderScene layoutRequirementDiagram(
     final (size, lines) = boxes[id]!;
     final rect = Rect.fromCenter(centers[id]!, size.width, size.height);
     // Upstream draws square corners (no rx/ry), `requirementBackground`
-    // (=primaryColor/mainBkg) for both requirements and elements, and a
-    // border in `requirementBorderColor` (=primaryBorderColor) width 1.
+    // (=primaryColor) for both requirements and elements, and a border in
+    // `requirementBorderColor` width `requirementBorderSize` (1).
     final children = <SceneNode>[
       SceneShape(
         geometry: RectGeometry(rect),
-        fill: Fill(theme.mainBkg),
-        stroke: Stroke(color: theme.primaryBorderColor, width: 1),
+        fill: Fill(theme.requirementBackground),
+        stroke: Stroke(color: theme.requirementBorderColor, width: 1),
       ),
     ];
     var y = rect.top + boxPadding / 2;
@@ -410,7 +409,7 @@ RenderScene layoutRequirementDiagram(
             ? Rect.fromLTWH(rect.center.x - s.width / 2, y, s.width, s.height)
             : Rect.fromLTWH(rect.left + boxPadding / 2, y, s.width, s.height),
         style: style,
-        color: theme.textColor,
+        color: theme.requirementTextColor,
         align: li < 2 ? TextAlignH.center : TextAlignH.left,
       ));
       y += s.height + 4;
@@ -422,7 +421,7 @@ RenderScene layoutRequirementDiagram(
               MoveTo(Point(rect.left, y - 2)),
               LineTo(Point(rect.right, y - 2)),
             ]),
-            stroke: Stroke(color: theme.primaryBorderColor, width: 1),
+            stroke: Stroke(color: theme.requirementBorderColor, width: 1),
           ));
         }
         y += gap;

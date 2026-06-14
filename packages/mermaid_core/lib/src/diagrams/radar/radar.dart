@@ -200,23 +200,6 @@ RadarChart parseRadar(String source) {
   );
 }
 
-/// Curve / legend colors = default theme `cScale0..11`
-/// (`darken(primary/secondary/tertiary or hue-rotated primary, 10)`).
-const _cScale = <Color>[
-  Color(0xffb9b9ff), // cScale0  darken(primaryColor #ECECFF)
-  Color(0xffffffab), // cScale1  darken(secondaryColor #ffffde)
-  Color(0xffe9ffb9), // cScale2  darken(tertiaryColor)
-  Color(0xffdeb9ff), // cScale3  adjust h+30
-  Color(0xffffb9ff), // cScale4  adjust h+60
-  Color(0xffffb9de), // cScale5  adjust h+90
-  Color(0xffffb9b9), // cScale6  adjust h+120
-  Color(0xffffdeb9), // cScale7  adjust h+150
-  Color(0xffdeffb9), // cScale8  adjust h+210
-  Color(0xffb9ffde), // cScale9  adjust h+270
-  Color(0xffb9ffff), // cScale10 adjust h+300
-  Color(0xffb9deff), // cScale11 adjust h+330
-];
-
 /// Catmull-Rom spline tension (upstream `curveTension` default).
 const _curveTension = 0.17;
 
@@ -317,12 +300,15 @@ RenderScene layoutRadar(
     ));
   }
 
+  // Curve / legend colors = theme ordinal scale (`cScale0..11`).
+  final cScale = theme.cScale;
+
   // Curves. Skip any whose entry count != axis count (upstream behavior).
   final span = chart.max - chart.min == 0 ? 1 : chart.max - chart.min;
   for (var ci = 0; ci < chart.curves.length; ci++) {
     final cu = chart.curves[ci];
     if (cu.values.length != n) continue;
-    final color = _cScale[ci % _cScale.length];
+    final color = cScale[ci % cScale.length];
     final pts = [
       for (var i = 0; i < n; i++)
         at(i, (cu.values[i].clamp(chart.min, chart.max) - chart.min) / span),
@@ -348,7 +334,7 @@ RenderScene layoutRadar(
     const legendX = (300.0 + 50.0) * 3 / 4; // 262.5
     var ly = -(300.0 + 50.0) * 3 / 4; // -262.5
     for (var ci = 0; ci < chart.curves.length; ci++) {
-      final color = _cScale[ci % _cScale.length];
+      final color = cScale[ci % cScale.length];
       nodes.add(SceneShape(
         geometry: RectGeometry(Rect.fromLTWH(legendX, ly, 12, 12)),
         fill: Fill(color),

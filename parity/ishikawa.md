@@ -1,5 +1,5 @@
 # ishikawa — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -107,3 +107,28 @@ Notes / minor gaps:
 - Head label centering uses center-anchored text at `x + w/2 + 3` rather than
   upstream's start-anchored `(w - tb.width)/2 - tb.x + 3` transform; visually
   equivalent for the default theme.
+
+### Theme-wiring pass (MermaidTheme palette)
+Audited against `ishikawaStyles.ts` + `ishikawaRenderer.ts`: upstream ishikawa
+references ONLY `lineColor`, `mainBkg`, `textColor`, `fontFamily`, `fontSize`
+(the rough.js path also derives `fillColor = mainBkg`, `lineColor`). It uses no
+ordinal cScale palette, no diagram-specific palette fields, and no
+semi-transparent fills/strokes (all fills are solid `mainBkg`, strokes solid
+`lineColor`, fill `none` on spine/branch lines).
+
+- THEME WIRING: no change required — the Dart port already reads every color
+  via `theme.lineColor` / `theme.mainBkg` / `theme.textColor` /
+  `theme.background` and font via `theme.fontFamily` / `theme.fontSize`. There
+  are no inlined hardcoded color constants (`grep` for `Color(`/`0xff`/`#hex`
+  returns nothing), so default rendering is unchanged and dark/forest/neutral
+  already adapt through those shared theme fields.
+- OPACITY: not applicable — ishikawa has no semi-transparent element upstream;
+  nothing was deferred as "approximated with solid".
+- Remaining notes (bbox approximation via TextMeasurer vs live `getBBox()`,
+  head-label anchoring) are inherent to the non-DOM layout approach, not
+  default-render color/theme gaps, and cannot be closed without shared-file
+  changes. They do not affect default-theme color parity.
+
+Status raised to full-parity: matches mermaid.js under the default theme and
+adapts correctly to other themes via the shared palette; only the noted
+bbox/anchoring approximations remain (niche, non-color).

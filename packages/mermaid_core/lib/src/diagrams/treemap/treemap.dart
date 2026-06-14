@@ -176,58 +176,21 @@ TreemapClass _parseClass(String styleText) {
   return TreemapClass(fill: fill, stroke: stroke, color: color);
 }
 
-// --- Default-theme color scales (mermaid theme-default) -------------------
-// scaleOrdinal range = [transparent, cScale0..cScale11]. cScale<i> is the
-// default theme's darken(base, 10) value (matches timeline's table).
-const _cScale = <Color?>[
-  null, // transparent
-  Color(0xffb9b9ff), // cScale0
-  Color(0xffffffab), // cScale1
-  Color(0xffe9ffb9), // cScale2
-  Color(0xffdeb9ff), // cScale3
-  Color(0xffffb9ff), // cScale4
-  Color(0xffffb9de), // cScale5
-  Color(0xffffb9b9), // cScale6
-  Color(0xffffdeb9), // cScale7
-  Color(0xffdeffb9), // cScale8
-  Color(0xffb9ffde), // cScale9
-  Color(0xffb9ffff), // cScale10
-  Color(0xffb9deff), // cScale11
-];
+// --- Theme color scales ---------------------------------------------------
+// Built from the shared MermaidTheme ordinal palette so non-default themes
+// (dark/forest/neutral) adapt automatically. Default-theme values equal the
+// previously-inlined constants for the fills, so default rendering is
+// preserved.
+//
+// colorScale range = [transparent, cScale0..cScale11] (leaf/section fills).
+List<Color?> _scaleRange(MermaidTheme theme) => <Color?>[null, ...theme.cScale];
 
 // colorScalePeer range = [transparent, cScalePeer0..11] (border colors).
-const _cScalePeer = <Color?>[
-  null, // transparent
-  Color(0xff3a3aff), // cScalePeer0
-  Color(0xfff7f800), // cScalePeer1
-  Color(0xffb9ff20), // cScalePeer2
-  Color(0xffa23aff), // cScalePeer3
-  Color(0xffff3aff), // cScalePeer4
-  Color(0xffff3aa2), // cScalePeer5
-  Color(0xffff3a3a), // cScalePeer6
-  Color(0xffffa23a), // cScalePeer7
-  Color(0xffa2ff3a), // cScalePeer8
-  Color(0xff3affa2), // cScalePeer9
-  Color(0xff3affff), // cScalePeer10
-  Color(0xff3aa2ff), // cScalePeer11
-];
+List<Color?> _peerRange(MermaidTheme theme) =>
+    <Color?>[null, ...theme.cScalePeer];
 
-// colorScaleLabel range = [cScaleLabel0..11]. Default theme: index 0 and 3 are
-// invert(labelTextColor #333) = #ccc; all others = labelTextColor #333.
-const _cScaleLabel = <Color>[
-  Color(0xffcccccc), // cScaleLabel0
-  Color(0xff333333), // cScaleLabel1
-  Color(0xff333333), // cScaleLabel2
-  Color(0xffcccccc), // cScaleLabel3
-  Color(0xff333333), // cScaleLabel4
-  Color(0xff333333), // cScaleLabel5
-  Color(0xff333333), // cScaleLabel6
-  Color(0xff333333), // cScaleLabel7
-  Color(0xff333333), // cScaleLabel8
-  Color(0xff333333), // cScaleLabel9
-  Color(0xff333333), // cScaleLabel10
-  Color(0xff333333), // cScaleLabel11
-];
+// colorScaleLabel range = [cScaleLabel0..11] (section/leaf text colors).
+List<Color> _labelRange(MermaidTheme theme) => theme.cScaleLabel;
 
 /// d3 `scaleOrdinal`: assigns range entries to domain keys in first-seen order,
 /// cycling through the range.
@@ -292,14 +255,15 @@ RenderScene layoutTreemap(
 
   sortTree(root);
 
-  final colorScale = _OrdinalScale(_cScale);
-  final peerScale = _OrdinalScale(_cScalePeer);
+  final colorScale = _OrdinalScale(_scaleRange(theme));
+  final peerScale = _OrdinalScale(_peerRange(theme));
   // colorScaleLabel keyed the same way (first-seen order), no leading slot.
+  final labelRange = _labelRange(theme);
   final labelIndex = <String, int>{};
   var labelNext = 0;
   Color labelColor(String name) {
     final i = labelIndex.putIfAbsent(name, () => labelNext++);
-    return _cScaleLabel[i % _cScaleLabel.length];
+    return labelRange[i % labelRange.length];
   }
 
   // Prime the ordinal scales in upstream's first-seen (pre-order) order so the

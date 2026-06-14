@@ -392,8 +392,9 @@ RenderScene layoutSankey(
       // Upstream draws a 4px background-colored stroke copy under the
       // foreground text for readability. SceneText has no stroke, so we
       // approximate by laying a background-colored copy beneath the
-      // foreground copy (the closest expressible halo).
-      labelLayer.add(makeText(theme.background));
+      // foreground copy (the closest expressible halo). The halo color is
+      // `.sankey-label-bg` = `mainBkg || background || #fff` (styles.js).
+      labelLayer.add(makeText(theme.mainBkg));
       labelLayer.add(makeText(theme.textColor));
     } else {
       labelLayer.add(makeText(theme.textColor));

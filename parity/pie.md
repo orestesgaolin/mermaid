@@ -1,5 +1,5 @@
 # pie — parity analysis
-**Status:** full-parity (default theme); minor-gaps for custom themes (theme-derived palette) and unsupported config (donutHole/legendPosition/highlightSlice)
+**Status:** full-parity (default theme adapts to dark/forest/neutral via theme palette); only unsupported config remains (donutHole/legendPosition/highlightSlice)
 **Last analyzed:** TODO-date
 **Last implemented:** 2026-06-14
 
@@ -82,3 +82,8 @@
 11. Legend value formatting — Done (kept `_fmt`: integers without decimal, fractions as-is; matches JS number stringification for the common cases).
 12. Legend horizontal offset / canvas size — Done. Legend offset = `12*LEGEND_RECT_SIZE` from center, vertical `index*legendHeight − legendHeight*n/2`, legendHeight = rect+spacing; title placed at y=-200 like upstream and included in the bounding box.
 13. donutHole / legendPosition / highlightSlice — Deferred. Requires plumbing PieDiagramConfig through the model/parser; defaults (donutHole=0, legendPosition='right', no highlight) are what we render, which matches upstream defaults.
+
+(2026-06-14) Theme wiring — closes discrepancy #8 (was [partial]).
+- Removed the hardcoded module-level `_palette` (12 ARGB constants) and the inline `_strokeColor`/`_sectionTextColor`/`_legendTextColor`/`_titleTextColor` constants from `pie_layout.dart`.
+- `layoutPieChart` now reads `theme.pie` (pie1..pie12 ordinal list), `theme.pieStrokeColor`, `theme.pieOuterStrokeColor`, `theme.pieSectionTextColor`, `theme.pieLegendTextColor`, `theme.pieTitleTextColor`. Default-theme values of these fields equal the old inlined constants, so default rendering is pixel-identical; dark/forest/neutral now recolor slices, strokes, and text correctly.
+- Slice fill opacity (0.7), stroke widths, outer ring, label positions, font sizes, and legend geometry were already correct; no other default-render gap remained. Discrepancy #8 is now [done]; status raised to full-parity.

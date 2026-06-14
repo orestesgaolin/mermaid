@@ -1,5 +1,5 @@
 # cynefin — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -69,3 +69,11 @@ Full rewrite of `cynefin.dart` to match upstream geometry (800×600, padding 40)
 12. Done — domain rects no longer stroked (stroke omitted; boundaries are the wavy paths).
 
 Minor remaining gaps: arrowhead is an explicit filled triangle (no shared marker primitive) rather than an SVG `marker`; seed uses a fixed string ('cynefin') since no svg id is plumbed into layout, so boundary waviness is deterministic but not id-derived.
+
+### Theme-wiring pass (palette fields)
+- Wired the domain **label color** to `theme.primaryTextColor`. Upstream `cynefin.labelColor` defaults to `this.primaryTextColor` (= `invert(primaryColor)` = `#131300` under the default theme). The previous inlined `Color(0xff333333)` was a slight mismatch with upstream's default and was static; using `theme.primaryTextColor` corrects the default color and makes it adapt under dark/forest/neutral.
+- Confirmed `boundaryColor`/`arrowColor` (→ `theme.lineColor`) and the subtitle/item/transition `textColor` (→ `theme.textColor`) were already theme-wired.
+- The per-domain background fills (`complexBg` `#E8F5E9`, `complicatedBg` `#E3F2FD`, `chaoticBg` `#FBE9E7`, `clearBg` `#FFF8E1`, `confusionBg` `#F3E5F5`) and `cliffColor` (`#8B0000`) live in upstream's `theme.cynefin.*` sub-block, which has no counterpart in the shared `MermaidTheme` palette. They are genuinely diagram-specific, so they stay inlined (left unchanged).
+- Opacity: no deferred "approximated with solid" items existed — fill/stroke alpha was already honored (rect bgs `0.4`, confusion ellipse `0.5`, item badges `0.95`, overflow badge `0.6`, dashed strokes).
+
+Status set to **full-parity**: matches mermaid.js under the default theme and the label color now adapts to other themes. Remaining items are config/niche (per-domain bg + cliff color are theme.cynefin sub-block overrides not exposed in the shared palette; arrowhead/seed notes above are non-visual-default niceties).

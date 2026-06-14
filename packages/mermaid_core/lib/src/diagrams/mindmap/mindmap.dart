@@ -178,53 +178,29 @@ String _resolveIconRef(String ref) {
   };
 }
 
-/// Section fill colors (`cScale1..11` cycling), default mermaid theme.
-///
-/// Upstream `styles.genSections` paints `.section-<i>` with `cScale<i+1>`; the
-/// default theme derives these from `primaryColor #ECECFF` (hue-rotated) and
-/// then darkens every entry by 10% — yielding pale/pastel fills, not the
-/// saturated palette we used before. Section index = `branchIndex % 11`
-/// (`MAX_SECTIONS - 1`). Index 0 here corresponds to upstream `cScale1`.
-/// Values precomputed from khroma (`darken(adjust(primaryColor,{h}), 10)`).
-const _sectionFills = <Color>[
-  Color(0xffffffab), // cScale1 (secondaryColor #ffffde)
-  Color(0xffe9ffb9), // cScale2 (tertiaryColor)
-  Color(0xffdeb9ff), // cScale3  adjust h+30
-  Color(0xffffb9ff), // cScale4  adjust h+60
-  Color(0xffffb9de), // cScale5  adjust h+90
-  Color(0xffffb9b9), // cScale6  adjust h+120
-  Color(0xffffdeb9), // cScale7  adjust h+150
-  Color(0xffdeffb9), // cScale8  adjust h+210
-  Color(0xffb9ffde), // cScale9  adjust h+270
-  Color(0xffb9ffff), // cScale10 adjust h+300
-  Color(0xffb9deff), // cScale11 adjust h+330
-];
+/// Section fill colors come from the theme's ordinal scale. Upstream
+/// `styles.genSections` paints each section with `cScale[i+1]`; section index
+/// = `branchIndex % 11` (`MAX_SECTIONS - 1`), so local section 0 maps to
+/// `cScale[1]`. Sourced from [MermaidTheme.cScale] so non-default themes
+/// (dark/forest/neutral) recolor correctly; the default theme equals the old
+/// pastel constants. The underline stroke uses [MermaidTheme.cScaleInv]
+/// (stroke-width 3) and section text uses [MermaidTheme.cScaleLabel] — both
+/// 1-indexed per section, mirroring the upstream `.section-i` CSS rules.
+Color _sectionFill(MermaidTheme theme, int section) {
+  // cScale is 0-indexed with 12 entries; section 0 → cScale1, cycling 1..11.
+  final scale = theme.cScale;
+  return scale[1 + (section % (scale.length - 1))];
+}
 
-/// Underline / section-line stroke colors (`cScaleInv1..11`), default theme.
-/// Upstream `.section-<i> line { stroke: cScaleInv<i+1>; stroke-width: 3 }`.
-const _sectionLines = <Color>[
-  Color(0xffababff), // cScaleInv1
-  Color(0xffcfb9ff), // cScaleInv2
-  Color(0xffdaffb9), // cScaleInv3
-  Color(0xffb9ffb9), // cScaleInv4
-  Color(0xffb9ffda), // cScaleInv5
-  Color(0xffb9ffff), // cScaleInv6
-  Color(0xffb9daff), // cScaleInv7
-  Color(0xffdab9ff), // cScaleInv8
-  Color(0xffffb9da), // cScaleInv9
-  Color(0xffffb9b9), // cScaleInv10
-  Color(0xffffdab9), // cScaleInv11
-];
+Color _sectionLine(MermaidTheme theme, int section) {
+  final scale = theme.cScaleInv;
+  return scale[1 + (section % (scale.length - 1))];
+}
 
-/// Root node fill = `git0` (default theme: `darken(primaryColor, 25)`).
-const _rootFill = Color(0xff6d6dff);
-
-/// Root text color = `gitBranchLabel0` = `invert(labelTextColor=black)` = white.
-const _rootText = Color(0xffffffff);
-
-/// Section text fill = `cScaleLabel<i>` = `invert(labelTextColor)` for i==0,
-/// else `labelTextColor` (black `#333`). Branches use the dark label.
-const _sectionText = Color(0xff333333);
+Color _sectionTextColor(MermaidTheme theme, int section) {
+  final scale = theme.cScaleLabel;
+  return scale[1 + (section % (scale.length - 1))];
+}
 
 /// Perceived luminance, for choosing readable text on a fill.
 double _luminance(Color c) =>
@@ -405,8 +381,8 @@ class _PlacedMind {
   /// Section index for this node (`branchIndex % 11`), or -1 for the root.
   int section = -1;
 
-  /// Resolved fill color (section fill / root fill).
-  Color color = _rootFill;
+  /// Resolved fill color (section fill / root fill). Assigned during layout.
+  Color color = const Color(0xff000000);
 }
 
 RenderScene layoutMindmap(
@@ -526,7 +502,7 @@ RenderScene layoutMindmap(
   void tint(MindmapNode n, int section) {
     final p = placed[n]!;
     p.section = section;
-    p.color = _sectionFills[section % _sectionFills.length];
+    p.color = _sectionFill(theme, section);
     for (final c in n.children) {
       tint(c, section);
     }
@@ -583,17 +559,18 @@ RenderScene layoutMindmap(
     final isRoot = n.depth == 0;
     // A `:::class` mapped to a classDef overrides the section palette fill.
     final cls = classStyle(n);
-    final fill = cls?.fill ?? (isRoot ? _rootFill : p.color);
+    final fill = cls?.fill ?? (isRoot ? theme.git0 : p.color);
     final stroke = cls?.stroke;
-    // Text color: explicit classDef `color:` wins; otherwise the default theme
-    // paints root text `gitBranchLabel0` (white) and section text the dark
-    // label color `#333` (cScaleLabel for i>0).
+    // Text color: explicit classDef `color:` wins; otherwise the theme paints
+    // root text `gitBranchLabel0` and section text `cScaleLabel<i+1>`.
     final textColor = cls?.text ??
         (cls?.fill != null
             ? (_luminance(cls!.fill!) < 0.5
                 ? const Color(0xffffffff)
                 : const Color(0xff333333))
-            : (isRoot ? _rootText : _sectionText));
+            : (isRoot
+                ? theme.gitBranchLabel0
+                : _sectionTextColor(theme, p.section)));
     final children = <SceneNode>[];
     final nodeStroke = stroke != null ? Stroke(color: stroke, width: 2) : null;
     switch (n.shape) {
@@ -662,9 +639,8 @@ RenderScene layoutMindmap(
           fill: Fill(fill),
           stroke: nodeStroke,
         ));
-        final lineColor = isRoot
-            ? _sectionLines[0]
-            : _sectionLines[p.section % _sectionLines.length];
+        final lineColor =
+            isRoot ? _sectionLine(theme, 0) : _sectionLine(theme, p.section);
         children.add(SceneShape(
           geometry: PathGeometry([
             MoveTo(pt(0, h)),

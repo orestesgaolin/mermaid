@@ -1,5 +1,5 @@
 # wardley — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -81,3 +81,14 @@ Applied 2026-06-14 (parity pass). All edits confined to `wardley/wardley.dart`.
 11. (low) Font sizes — Done. Fixed labelFontSize=10, axisFontSize=12, stage=10, title=12*1.05; no longer derived from theme.fontSize.
 
 Deferred: none. Note: market overlay/inertia/source-strategy circles are drawn with primitives already in the IR — no raster-image primitive needed. Arrowheads use inline `PolygonGeometry` triangles rather than SVG markers (visually equivalent under the IR).
+
+Applied 2026-06-14 (theme-wiring + opacity pass). All edits confined to `wardley/wardley.dart`.
+
+- OPACITY FIX: stage divider lines now drawn at `_axisColor.withOpacity(0.8)` to match upstream `wardleyRenderer.ts` (the `.attr('opacity', 0.8)` on the `5 5` dashed dividers). Previously full-opacity; now matches the default render exactly.
+- THEME WIRING: scene `background` changed from the inlined `_white` constant to `theme.background`. Upstream uses `themeVariables.wardley?.backgroundColor ?? themeVariables.background ?? '#fff'` (the chart background rect, `wardleyRenderer.ts:145`). The default-theme `background` is `#fff`, so default output is pixel-identical; dark/forest/neutral now follow the theme background.
+- Reviewed all other inlined wardley constants against upstream `getTheme()`:
+  - `axisColor`/`componentStroke`/`linkStroke` (`#000`), `componentFill` (`#fff`), `evolutionStroke` (`#dc3545`), `annotationStroke` (`#000`), source-strategy overlay greys (`#666`/`#ccc`/`#eee`), market/accelerator/annotation `white` fills are all **theme-independent literals upstream** (not derived from `themeVariables`), so they stay inlined — no shared theme field corresponds to them.
+  - `axisTextColor`/`componentLabelColor`/`annotationTextColor` fall back to `themeVariables.primaryTextColor ?? '#222'` upstream. Our `MermaidTheme.primaryTextColor` default is `#131300`, which differs from the inlined `#222`; wiring `theme.primaryTextColor` would change the DEFAULT render, violating the pixel-identical constraint. Left inlined as `#222` (genuine niche/config residual, not a default-visual gap).
+  - `annotationFill` is declared in upstream's theme type but never applied — the annotation circles and box use a literal `'white'` in the renderer regardless of theme. Our `_white` annotation fills correctly mirror that; left as-is.
+
+No new theme fields added, no shared files touched. Status set to **full-parity**: default render matches mermaid.js and the scene background now adapts across themes; the only theme-derived residual (`#222` text vs `primaryTextColor`) cannot be wired without breaking the default-pixel-identical rule because our `primaryTextColor` default value differs from upstream's wardley literal.

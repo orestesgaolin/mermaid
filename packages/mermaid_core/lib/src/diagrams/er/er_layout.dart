@@ -29,12 +29,8 @@ const double _markerLen = 18;
 const double _minEntityWidth = 100;
 const double _minEntityHeight = 75;
 
-// Content-row banding from the default theme: rowOdd = lighten(primary,75) ≈
-// #ffffff, rowEven = lighten(primary,1) ≈ #f1f1ff (a near-invisible band).
-const _rowOddFill = Color(0xffffffff);
-const _rowEvenFill = Color(0xfff1f1ff);
-
 // tertiaryColor for the default theme = adjust(primary,{h:-160}) ≈ #f9ffec.
+// Not exposed as a MermaidTheme palette field, so kept inlined.
 const _tertiaryColor = Color(0xfff9ffec);
 
 RenderScene layoutErDiagram(
@@ -342,7 +338,7 @@ class _ErLayout {
       final isEven = (rIdx + 1).isEven;
       children.add(SceneShape(
         geometry: RectGeometry(Rect.fromLTWH(rect.left, y, rect.width, rowH)),
-        fill: Fill(isEven ? _rowEvenFill : _rowOddFill),
+        fill: Fill(isEven ? theme.rowEven : theme.rowOdd),
       ));
       children.add(SceneShape(
         geometry: PathGeometry(

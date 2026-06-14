@@ -208,23 +208,11 @@ XyChart parseXyChart(String source) {
   );
 }
 
-/// Upstream xychart default plot palette (`theme-default.js` `plotColorPalette`).
-/// Plot color is indexed by plot declaration order.
-const _plotPalette = <Color>[
-  Color(0xffececff),
-  Color(0xff8493a6),
-  Color(0xffffc3a0),
-  Color(0xffdcdde1),
-  Color(0xffb8e994),
-  Color(0xffd1a36f),
-  Color(0xffc3cde6),
-  Color(0xffffb6c1),
-  Color(0xff496078),
-  Color(0xfff8f3e3),
-];
-
-Color _plotColor(int plotIndex) =>
-    _plotPalette[plotIndex == 0 ? 0 : plotIndex % _plotPalette.length];
+/// Plot color, indexed by plot declaration order, from the theme's
+/// `xyChartPlotColorPalette` (default-theme values match upstream
+/// theme-default.js `plotColorPalette`; dark/forest/neutral adapt).
+Color _plotColor(List<Color> palette, int plotIndex) =>
+    palette[plotIndex == 0 ? 0 : plotIndex % palette.length];
 
 // --- XYChartConfig defaults (config.schema.yaml) ---
 const _canvasW = 700.0;
@@ -628,7 +616,7 @@ RenderScene layoutXyChart(
   // --- Plots (drawn in declaration order; bars then their labels). ---
   for (var pi = 0; pi < chart.series.length; pi++) {
     final s = chart.series[pi];
-    final color = _plotColor(pi);
+    final color = _plotColor(theme.xyChartPlotColorPalette, pi);
     if (s.kind == XySeriesKind.bar) {
       final barWidth =
           math.min(xAxis.outerPadding * 2, xAxis.tickDistance) * 0.95;

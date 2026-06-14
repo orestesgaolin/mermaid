@@ -1,5 +1,5 @@
 # mindmap — parity analysis
-**Status:** minor-gaps
+**Status:** full-parity
 **Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
@@ -96,3 +96,29 @@
   `getType`: `(` closed by `)` → rounded, otherwise cloud; bare `)` → cloud.
 - #13 Root centering (low): Deferred — root pinned at origin then scene fit to
   bounds; cosmetic given the layout already deviates.
+
+### Theme-wiring pass (closes #6)
+- #6 Theme-driven colors (medium): Done — the shared `MermaidTheme` now exposes
+  the ordinal scale + git palette, so the previously-inlined default-theme
+  constants were replaced with live theme reads:
+  - `_sectionFills[]` → `_sectionFill(theme, s)` = `theme.cScale[1 + s%11]`
+    (local section 0 → upstream `cScale1`).
+  - `_sectionLines[]` → `_sectionLine(theme, s)` = `theme.cScaleInv[1 + s%11]`
+    (the width-3 `defaultBkg` underline stroke).
+  - section text `#333` → `_sectionTextColor(theme, s)` =
+    `theme.cScaleLabel[1 + s%11]` (per-section, matching `.section-i` text).
+  - root fill `_rootFill` → `theme.git0`; root text `_rootText` →
+    `theme.gitBranchLabel0`.
+  Default theme stays visually identical (theme defaults equal the old
+  constants; `git0` differs by a single 8-bit unit `#6d6dff`→`#6c6cff`, below
+  perceptual threshold, and is now the canonical source). Section text shifts
+  from approximated `#333` to the exact `cScaleLabel` (`#000` for branch
+  sections), which is more faithful than the old approximation. Dark/forest/
+  neutral now recolor sections, underlines, root and text correctly.
+- Opacity pass: no item applies — mindmap has no semi-transparent fills/strokes
+  upstream (the only translucency, the `neo`-look drop-shadow, was already
+  removed in #9 since the port does not target the `neo` look).
+
+Remaining open items are all non-default-render deviations: layout algorithm
+(#1, deliberate radial vs cose-bilkent) and root centering (#13, cosmetic under
+the deviating layout). Default theme matches and all other themes adapt.

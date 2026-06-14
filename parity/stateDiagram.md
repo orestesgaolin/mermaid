@@ -1,5 +1,5 @@
 # stateDiagram — parity analysis
-**Status:** minor-gaps (only bespoke self-loop routing + port-only history extension remain; all default-theme value/shape discrepancies fixed)
+**Status:** full-parity (default render matches mermaid.js and adapts across themes; only bespoke self-loop routing + port-only history extension remain — neither a default-theme visual gap)
 **Last analyzed:** TODO-date
 **Last implemented:** 2026-06-14
 
@@ -95,3 +95,7 @@
   12. Done — title offset 8 → 25 and font size → 18px.
   13. Done — documented `[H]`/`[H*]` as a port-only extension in `state_model.dart` (StateKind.history doc comment).
   14. Deferred — self-loop routing left bespoke (would require feeding self-edges through dagre; acceptable approximation, not a visual-default discrepancy).
+- 2026-06-14 (theme wiring pass, all edits in `state_layout.dart`):
+  - Wired note colors to the shared palette: note rect fill `const _noteBkg (#fff5ad)` → `theme.noteBkgColor`, stroke `const _noteBorder (#aaaa33)` → `theme.noteBorderColor`. Removed the now-unused `_noteBkg`/`_noteBorder` constants. Default values are byte-identical, so default render is unchanged; dark/forest/neutral now retint notes correctly (e.g. neutral #666/#999, dark #474949/#2f2f2f).
+  - Note text color corrected: `theme.textColor` → `theme.noteTextColor`. Upstream `styles.js .statediagram-note text` uses `noteTextColor`, which in the default theme = `actorTextColor` = `black` (#000000), not `#333`. This supersedes log item 11 (its premise that noteTextColor=#333 was wrong); our default note text is now pure black, matching upstream, and follows the theme under non-default palettes (neutral #fff, dark #b8b6b6).
+  - Confirmed the remaining colors were already theme-driven (edge/transition stroke `theme.lineColor`, arrowheads `theme.arrowheadColor`, state/cluster fills `theme.mainBkg`/`theme.background`, edge-label bg `theme.edgeLabelBackground.withOpacity(0.5)` from the prior pass). No diagram-specific constants remain hardcoded.
