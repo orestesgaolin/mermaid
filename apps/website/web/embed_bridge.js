@@ -45,3 +45,33 @@ window.updateMermaidDart = (source) => {
   window.__mermaidDartInitialSource = source;
   window.mermaidDartEmbed?.render(source);
 };
+
+// Promotes the embedded Flutter pane to a full-page overlay. An in-Flutter
+// dialog is clipped to the (small) embedded view, so the host does this on the
+// page: toggle a CSS class on the pane and add a DOM close button + Esc.
+window.mermaidDartToggleFullscreen = () => {
+  const pane = document.getElementById('pane-mermaid-dart');
+  if (!pane) return;
+  const on = pane.classList.toggle('mermaid-fullscreen');
+  let close = document.getElementById('mermaid-fs-close');
+  if (on) {
+    if (!close) {
+      close = document.createElement('button');
+      close.id = 'mermaid-fs-close';
+      close.type = 'button';
+      close.textContent = '✕ Close';
+      close.addEventListener('click', () => window.mermaidDartToggleFullscreen());
+      document.body.appendChild(close);
+    }
+    window.__mermaidFsEsc = (e) => {
+      if (e.key === 'Escape') window.mermaidDartToggleFullscreen();
+    };
+    document.addEventListener('keydown', window.__mermaidFsEsc);
+  } else {
+    close?.remove();
+    if (window.__mermaidFsEsc) {
+      document.removeEventListener('keydown', window.__mermaidFsEsc);
+      window.__mermaidFsEsc = null;
+    }
+  }
+};

@@ -32,6 +32,7 @@ class MermaidView extends StatefulWidget {
     this.padding = 20.0,
     this.showControls = true,
     this.allowFullscreen = true,
+    this.onRequestFullscreen,
     this.backgroundColor,
   });
 
@@ -66,6 +67,13 @@ class MermaidView extends StatefulWidget {
 
   /// Whether the controls include a fullscreen popup button.
   final bool allowFullscreen;
+
+  /// If set, the fullscreen button calls this instead of showing the built-in
+  /// in-Flutter dialog. Use it when the diagram is embedded inside a larger
+  /// host (e.g. a Flutter web view on an HTML page) where an in-Flutter dialog
+  /// can't escape the view's bounds — the host can then present a true
+  /// full-page overlay.
+  final VoidCallback? onRequestFullscreen;
 
   /// Background painted behind the diagram (defaults to transparent).
   final Color? backgroundColor;
@@ -180,18 +188,26 @@ class _MermaidViewState extends State<MermaidView> {
 
   @override
   Widget build(BuildContext context) {
-    if (!_didFit) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || _didFit) return;
-        if (_childSize != null && _viewport != Size.zero) {
-          _didFit = true;
-          _fit();
-        }
-      });
-    }
     return LayoutBuilder(
       builder: (context, constraints) {
-        _viewport = constraints.biggest;
+        final vp = constraints.biggest;
+        if (vp != _viewport) {
+          _viewport = vp;
+          // Re-frame on a resize (e.g. expanding to full page) only if the
+          // user hasn't moved the view.
+          if (_fittedMatrix == null || _tc.value == _fittedMatrix) {
+            _didFit = false;
+          }
+        }
+        if (!_didFit) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted || _didFit) return;
+            if (_childSize != null && _viewport != Size.zero) {
+              _didFit = true;
+              _fit();
+            }
+          });
+        }
         return DecoratedBox(
           decoration: BoxDecoration(color: widget.backgroundColor),
           child: Stack(
@@ -245,7 +261,7 @@ class _MermaidViewState extends State<MermaidView> {
               _CtlButton(
                 icon: Icons.open_in_full,
                 tooltip: 'Open in popup',
-                onTap: _openFullscreen,
+                onTap: widget.onRequestFullscreen ?? _openFullscreen,
               ),
             ],
           ],

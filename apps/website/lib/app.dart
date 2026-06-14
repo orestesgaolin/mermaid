@@ -205,6 +205,30 @@ class App extends StatelessComponent {
           width: 100.percent,
           height: 100.percent,
         ),
+        // The embedded Flutter pane promoted to a full-page overlay (the
+        // viewer's popup button toggles this — see web/embed_bridge.js).
+        css('.flutter-host.mermaid-fullscreen').styles(
+          position: .fixed(top: .zero, left: .zero),
+          width: 100.vw,
+          height: 100.vh,
+          backgroundColor: Colors.white,
+          raw: {'z-index': '2000'},
+        ),
+        css('#mermaid-fs-close').styles(
+          position: .fixed(top: 16.px, right: 16.px),
+          padding: .symmetric(vertical: 8.px, horizontal: 14.px),
+          radius: .circular(8.px),
+          border: .all(
+              style: BorderStyle.solid,
+              color: const Color('#c8bfe8'),
+              width: 1.px),
+          backgroundColor: Colors.white,
+          color: const Color('#4a3a8a'),
+          fontSize: 0.95.rem,
+          fontWeight: .w600,
+          cursor: .pointer,
+          raw: {'z-index': '2001'},
+        ),
         css('.foot').styles(
           margin: .only(top: 24.px),
           color: const Color('#777788'),

@@ -22,6 +22,11 @@ external set _mermaidDartEmbed(JSObject value);
 @JS('__mermaidDartInitialSource')
 external JSString? get _initialSource;
 
+// Defined in web/embed_bridge.js — promotes the Flutter pane to a full-page
+// overlay (an in-Flutter dialog can't escape the embedded view's bounds).
+@JS('mermaidDartToggleFullscreen')
+external void _toggleFullscreen();
+
 class MermaidEmbedApp extends StatefulWidget {
   const MermaidEmbedApp({super.key});
 
@@ -62,6 +67,13 @@ class _MermaidEmbedAppState extends State<MermaidEmbedApp> {
           backgroundColor: Colors.white,
           // Errors replace the diagram so the comparison stays honest.
           keepLastGoodSceneOnError: false,
+          // Let the host page present a true full-page overlay (a Flutter
+          // dialog would be trapped inside this small embedded view).
+          onRequestFullscreen: () {
+            try {
+              _toggleFullscreen();
+            } catch (_) {}
+          },
         ),
       ),
     );
