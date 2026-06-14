@@ -184,45 +184,53 @@ RenderScene layoutTreemap(
     return [for (final r in placed) r ?? Rect.fromLTWH(rect.left, rect.top, 0, 0)];
   }
 
-  void layout(TreemapNode node, Rect rect, int depth) {
+    // [groupColor] is the top-level group's base hue; leaves share it
+    // (lightened), like upstream which colors a section and tints its leaves.
+    void layout(TreemapNode node, Rect rect, int depth, Color? groupColor) {
     final kids = node.children;
     if (kids.isEmpty) return;
     final rects = squarify(kids, rect);
     for (var ki = 0; ki < kids.length; ki++) {
       final child = kids[ki];
+      // Top-level children seed a group color; descendants inherit it.
+      final color = groupColor ?? _palette[colorIndex++ % _palette.length];
       final cellRect = rects[ki];
 
       if (child.isLeaf) {
-        final color = _palette[colorIndex++ % _palette.length];
+        final fill = _lighten(color, 0.45);
         final r = Rect.fromLTWH(cellRect.left + 1, cellRect.top + 1,
             math.max(0, cellRect.width - 2), math.max(0, cellRect.height - 2));
         nodes.add(SceneShape(
           geometry: RectGeometry(r, rx: 2, ry: 2),
-          fill: Fill(color),
+          fill: Fill(fill),
           stroke: Stroke(color: theme.background, width: 1),
         ));
-        final text = '${child.label}\n${_fmt(child.value)}';
         final ts = measurer.measure(child.label, baseStyle, maxWidth: r.width);
         if (r.width > ts.width * 0.6 && r.height > 24) {
+          // Name (bold) + value, centered like upstream.
           nodes.add(SceneText(
-            text: text,
-            bounds: Rect.fromLTWH(r.left + 4, r.top + 4,
-                math.max(0, r.width - 8), math.min(r.height - 8, 40)),
-            style: baseStyle,
-            color: const Color(0xffffffff),
-            align: TextAlignH.left,
+            text: '${child.label}\n${_fmt(child.value)}',
+            bounds: Rect.fromLTWH(r.left + 2, r.center.y - 16,
+                math.max(0, r.width - 4), 32),
+            style: baseStyle.copyWith(fontWeight: 700),
+            color: const Color(0xff1f1f1f),
           ));
         }
       } else {
-        // Branch: a header strip + recurse into the remaining area.
-        const head = 18.0;
+        // Branch: a coloured header strip in the group hue + recurse below.
+        const head = 20.0;
         if (cellRect.height > head + 6 && cellRect.width > 20) {
+          nodes.add(SceneShape(
+            geometry: RectGeometry(Rect.fromLTWH(cellRect.left + 1,
+                cellRect.top + 1, math.max(0, cellRect.width - 2), head)),
+            fill: Fill(color),
+          ));
           nodes.add(SceneText(
             text: child.label,
-            bounds: Rect.fromLTWH(cellRect.left + 4, cellRect.top + 2,
-                math.max(0, cellRect.width - 8), 14),
+            bounds: Rect.fromLTWH(cellRect.left + 6, cellRect.top + 3,
+                math.max(0, cellRect.width - 12), 14),
             style: baseStyle.copyWith(fontWeight: 700),
-            color: theme.textColor,
+            color: const Color(0xffffffff),
             align: TextAlignH.left,
           ));
           layout(
@@ -230,15 +238,16 @@ RenderScene layoutTreemap(
               Rect.fromLTWH(cellRect.left + 2, cellRect.top + head,
                   math.max(0, cellRect.width - 4),
                   math.max(0, cellRect.height - head - 2)),
-              depth + 1);
+              depth + 1,
+              color);
         } else {
-          layout(child, cellRect, depth + 1);
+          layout(child, cellRect, depth + 1, color);
         }
       }
     }
   }
 
-  layout(root, Rect.fromLTWH(0, titleH, w, h), 0);
+  layout(root, Rect.fromLTWH(0, titleH, w, h), 0, null);
 
   if (titleH > 0) {
     final ts = measurer.measure(map.title!, baseStyle.copyWith(fontWeight: 700));
@@ -262,3 +271,11 @@ RenderScene layoutTreemap(
 }
 
 String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : '$v';
+
+/// Mixes [c] toward white by [amount] (0..1).
+Color _lighten(Color c, double amount) => Color.fromARGB(
+      255,
+      (c.red + (255 - c.red) * amount).round(),
+      (c.green + (255 - c.green) * amount).round(),
+      (c.blue + (255 - c.blue) * amount).round(),
+    );
