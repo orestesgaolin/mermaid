@@ -234,9 +234,20 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   cynefin, venn, ishikawa, wardley, eventmodeling, railroad. Not ported:
   `zenuml` (external plugin / alternate sequence engine), `info` (version
   stamp), and `swimlanes` (a flowchart layout algorithm, not a type).
-- [ ] Frontmatter `config.themeVariables` (nested YAML) not yet parsed.
+- [x] Frontmatter `config.themeVariables` (nested YAML) parsed + applied
+  (`_frontmatterThemeVariables` in directives.dart).
+- [x] **Gap-fill pass (2026-06-14, subagent fan-out)** — gantt excluded-day
+  duration skipping (upstream checkTaskDates; renderEnd vs sequencing end);
+  architecture group-in-group nesting + junction/`{group}` edges + labels;
+  railroad full EBNF AST (choice/seq/group/`{}`*+/`[]`?); block arrows +
+  edge labels; treemap squarified; mindmap classDef/`:::`; C4
+  UpdateBoundaryStyle + arg tolerance; interactivity (SceneGroup link/
+  tooltip → SVG `<a>` + Flutter `onNodeTap` hit-testing); website samples
+  for all 11 new types.
 - [ ] Consolidate the per-diagram private copies of curveBasis/intersect
-  into a shared edges util (3 copies now).
+  into a shared edges util (3 copies now). Also: the flowchart-local
+  `_translateNode` drifted from `scene_utils.translateSceneNode` (re-synced
+  to carry link/tooltip/underline/rotation; should be unified).
 - [ ] SVG backend in mermaid_core (scene → SVG string; enables golden
   diffs against upstream).
 - [x] **CLI** (`bin/mermaid.dart`, executable `mermaid_dart`): reads file or
@@ -326,10 +337,15 @@ it alongside the theme.
 
 ## Known gaps / quirks
 
-- Novel v11 geometries (doc, hourglass, braces, ...) render as rect
-  (`_knownUnsupportedV11Shapes`).
-- `linkStyle ... interpolate X` parsed but curve is always basis.
-- Click links are stored in the model but not yet surfaced as tap targets
+- v11 geometries are implemented (document/card/hourglass/bolt/triangle/…);
+  only `icon`/`image` shapes still fall back to rect.
+- `linkStyle … interpolate` is honored (linear/step/catmull-rom).
+- ELK engine: a faithful elkjs port is impractical (elkjs is a large
+  GWT-compiled Java codebase). Our `layout: elk` = dagre's layered
+  placement + orthogonal Manhattan edge routing — an approximation, not the
+  exact ELK algorithm (no channel/bus routing or ELK node placement).
+- Click links ARE surfaced now: SceneGroup.link/tooltip → SVG `<a href>`/
+  `<title>` + Flutter `MermaidDiagram.onNodeTap`.
   in MermaidDiagram (SceneGroup.id exists for hit-testing).
 - ApproximateTextMeasurer is Helvetica-metrics; fine for tests, not pixel
   exact vs TextPainter — never assert exact pixel positions in core tests.
