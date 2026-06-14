@@ -133,11 +133,10 @@ RenderScene layoutRadar(
       Point(center.x + r * frac * math.cos(angle(i)),
           center.y + r * frac * math.sin(angle(i)));
 
-  // Concentric grid rings (4 levels).
+  // Concentric grid rings — circular graticule, like upstream's default.
   for (var ring = 1; ring <= 4; ring++) {
-    final frac = ring / 4;
     nodes.add(SceneShape(
-      geometry: PolygonGeometry([for (var i = 0; i < n; i++) at(i, frac)]),
+      geometry: CircleGeometry(center, r * ring / 4),
       stroke: const Stroke(color: Color(0xffdddddd), width: 1),
     ));
   }
@@ -168,8 +167,8 @@ RenderScene layoutRadar(
         at(i, ((i < cu.values.length ? cu.values[i] : chart.min) - chart.min) / span),
     ];
     nodes.add(SceneShape(
-      geometry: PolygonGeometry(pts),
-      fill: Fill(color.withOpacity(0.25)),
+      geometry: PathGeometry(_closedCurve(pts)),
+      fill: Fill(color.withOpacity(0.4)),
       stroke: Stroke(color: color, width: 2),
     ));
   }
@@ -216,4 +215,26 @@ RenderScene layoutRadar(
       for (final nd in nodes) translateSceneNode(nd, m - bounds.left, m - bounds.top)
     ],
   );
+}
+
+/// A closed smooth (Catmull-Rom) curve through [pts], for radar area fills.
+List<PathCommand> _closedCurve(List<Point> pts) {
+  final n = pts.length;
+  if (n < 3) {
+    return [MoveTo(pts.first), for (var i = 1; i < n; i++) LineTo(pts[i])];
+  }
+  final cmds = <PathCommand>[MoveTo(pts[0])];
+  for (var i = 0; i < n; i++) {
+    final p0 = pts[(i - 1 + n) % n];
+    final p1 = pts[i];
+    final p2 = pts[(i + 1) % n];
+    final p3 = pts[(i + 2) % n];
+    cmds.add(CubicTo(
+      Point(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6),
+      Point(p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6),
+      p2,
+    ));
+  }
+  cmds.add(const ClosePath());
+  return cmds;
 }
