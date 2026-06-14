@@ -1,8 +1,8 @@
 #!/bin/zsh
-# Builds the comparison website: Flutter web embed first, then the static
-# Jaspr site. Output: apps/website/build/jaspr (deployable as-is).
+# Builds the comparison website. The Flutter renderer is embedded via
+# jaspr_flutter_embed, so `jaspr build` runs the Flutter web build internally —
+# no separate `flutter build web` step. Output: apps/website/build/jaspr.
 set -e
 cd "$(dirname "$0")/.."
-(cd apps/flutter_embed && flutter build web --release --pwa-strategy=none -o ../website/web/flutter_embed)
 (cd apps/website && jaspr build)
 echo "Done: apps/website/build/jaspr"

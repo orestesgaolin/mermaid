@@ -12,7 +12,6 @@ on:
     # Only rebuild when something that affects the site changes.
     paths:
       - 'apps/website/**'
-      - 'apps/flutter_embed/**'
       - 'packages/**'
       - 'pubspec.yaml'
       - '.github/workflows/deploy-website.yml'
@@ -49,11 +48,7 @@ jobs:
           dart pub global activate jaspr_cli
           echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
 
-      - name: Build Flutter web embed
-        working-directory: apps/flutter_embed
-        run: flutter build web --release --pwa-strategy=none -o ../website/web/flutter_embed
-
-      - name: Build static Jaspr site
+      - name: Build static Jaspr site (runs the Flutter web build internally)
         working-directory: apps/website
         run: jaspr build
 

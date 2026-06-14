@@ -7,5 +7,4 @@ workspace:
   - packages/mermaid_flutter
   - packages/mermaid_samples
   - apps/demo
-  - apps/flutter_embed
   - apps/website

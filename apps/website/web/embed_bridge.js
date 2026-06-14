@@ -36,23 +36,12 @@ window.renderMermaidJs = async (el, source) => {
   }
 };
 
-// Latest requested source; the Flutter app reads it at startup and the
-// page falls back to it while the engine is still booting.
+// The Flutter view itself is mounted by jaspr_flutter_embed (FlutterEmbedView).
+// We only feed it source: __mermaidDartInitialSource is read by the embed at
+// boot, and render() (published by the embed once booted) pushes live edits.
 window.__mermaidDartInitialSource = '';
 
 window.updateMermaidDart = (source) => {
   window.__mermaidDartInitialSource = source;
   window.mermaidDartEmbed?.render(source);
-};
-
-window.loadMermaidDart = (host, initialSource) => {
-  window.__mermaidDartInitialSource = initialSource;
-  host.replaceChildren();
-  // flutter_bootstrap.js is generated from our custom template; it defines
-  // window.loadMermaidDartApp (it must carry the build config, plain
-  // flutter.js no longer works on its own since Flutter 3.22).
-  const script = document.createElement('script');
-  script.src = 'flutter_embed/flutter_bootstrap.js';
-  script.onload = () => window.loadMermaidDartApp(host);
-  document.body.append(script);
 };

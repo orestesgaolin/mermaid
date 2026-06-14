@@ -27,6 +27,9 @@ void main() {
   runApp(Document(
     title: 'mermaid dart — comparison',
     head: [
+      // Flutter bootstrap for jaspr_flutter_embed; jaspr_builder fills the
+      // {{flutter_js}} / {{flutter_build_config}} placeholders at build time.
+      script(src: 'flutter_bootstrap.js', attributes: {'async': ''}),
       script(src: 'embed_bridge.js', attributes: {'type': 'module'}),
     ],
     styles: [

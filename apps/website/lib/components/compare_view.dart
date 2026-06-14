@@ -1,23 +1,33 @@
 /// Interactive comparison: the selected sample is rendered by mermaid.js
 /// (left) and by the embedded Flutter build of mermaid dart (right).
+///
+/// The Flutter side is mounted by `jaspr_flutter_embed`'s [FlutterEmbedView]
+/// (so `jaspr build` produces the Flutter web build — no separate step). Live
+/// edits are pushed into the running view through the tiny JS bridge the embed
+/// widget publishes (`window.mermaidDartEmbed.render`), avoiding a remount.
 library;
 
 import 'dart:async';
 
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/jaspr.dart';
+import 'package:jaspr_flutter_embed/jaspr_flutter_embed.dart';
 import 'package:universal_web/js_interop.dart';
 import 'package:universal_web/web.dart' as web;
 
 import '../samples.dart';
 
+// The embedded Flutter widget — real on the web build, a stub during static
+// server pre-rendering (it pulls in dart:ui / Flutter, which the VM lacks).
+@Import.onWeb('../flutter/mermaid_embed_app.dart', show: [#MermaidEmbedApp])
+import 'compare_view.imports.dart';
+
 // Bridge functions defined in web/embed_bridge.js.
 @JS('renderMermaidJs')
 external void _renderMermaidJs(web.HTMLElement el, JSString source);
 
-@JS('loadMermaidDart')
-external void _loadMermaidDart(web.HTMLElement host, JSString initialSource);
-
+// Sets window.__mermaidDartInitialSource and calls the embed's render bridge
+// (a no-op until the Flutter view has booted and published it).
 @JS('updateMermaidDart')
 external void _updateMermaidDart(JSString source);
 
@@ -39,14 +49,12 @@ const _layouts = <(String, String)>[
 class _CompareViewState extends State<CompareView> {
   int _selected = 0;
   String _layout = 'dagre';
-  bool _flutterStarted = false;
 
   /// Live editor contents; starts from the selected sample and is edited in
   /// place. Both previews re-render from this, not from the sample.
   String _source = samples[0].source.trim();
   Timer? _debounce;
   final _jsPane = GlobalNodeKey<web.HTMLElement>();
-  final _flutterPane = GlobalNodeKey<web.HTMLElement>();
   final _editor = GlobalNodeKey<web.HTMLTextAreaElement>();
 
   Sample get _sample => samples[_selected];
@@ -131,15 +139,9 @@ class _CompareViewState extends State<CompareView> {
     if (jsPane != null) {
       _renderMermaidJs(jsPane, src.toJS);
     }
-    if (!_flutterStarted) {
-      final host = _flutterPane.currentNode;
-      if (host != null) {
-        _flutterStarted = true;
-        _loadMermaidDart(host, src.toJS);
-      }
-    } else {
-      _updateMermaidDart(src.toJS);
-    }
+    // Sets the initial-source global (read by the embed at boot) and pushes
+    // the update to the running Flutter view if it has booted.
+    _updateMermaidDart(src.toJS);
   }
 
   @override
@@ -190,11 +192,11 @@ class _CompareViewState extends State<CompareView> {
         ]),
         div(classes: 'pane', [
           div(classes: 'pane-title', [.text('mermaid dart (Flutter)')]),
-          div(
-            key: _flutterPane,
-            classes: 'pane-body flutter-host',
+          FlutterEmbedView(
             id: 'pane-mermaid-dart',
-            [.text('Loading Flutter…')],
+            classes: 'pane-body flutter-host',
+            loader: div([.text('Loading Flutter…')]),
+            widget: kIsWeb ? MermaidEmbedApp() : null,
           ),
         ]),
       ]),
