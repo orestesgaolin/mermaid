@@ -147,9 +147,18 @@ class App extends StatelessComponent {
           maxWidth: 100.percent,
           maxHeight: 100.percent,
         ),
+        // FlutterEmbedView mounts the Flutter view inside a wrapper div. The
+        // pane-body centres its child with flexbox, which collapses that
+        // wrapper (and the flutter-view) to width 0 — so render as a plain
+        // block and make the wrapper fill the pane.
         css('.flutter-host').styles(
+          display: .block,
           padding: .zero,
           overflow: .hidden,
+        ),
+        css('.flutter-host > div').styles(
+          width: 100.percent,
+          height: 100.percent,
         ),
         css('.foot').styles(
           margin: .only(top: 24.px),
