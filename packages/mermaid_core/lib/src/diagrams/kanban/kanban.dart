@@ -70,13 +70,25 @@ const _cardGap = 8.0;
 const _pad = 10.0;
 const _colWidth = 200.0;
 
-const _cardFills = <Color>[
-  Color(0xffeef0ff),
-  Color(0xfffff3e0),
-  Color(0xffe8f5e9),
-  Color(0xfffce4ec),
-  Color(0xffe0f7fa),
+// Distinct per-column hues (header + border), like upstream's cScale.
+const _columnColors = <Color>[
+  Color(0xff7e57c2),
+  Color(0xff26a69a),
+  Color(0xffef5350),
+  Color(0xff42a5f5),
+  Color(0xffffa726),
+  Color(0xff66bb6a),
 ];
+
+double _luminance(Color c) =>
+    (0.299 * c.red + 0.587 * c.green + 0.114 * c.blue) / 255;
+
+Color _lighten(Color c, double amount) => Color.fromARGB(
+      255,
+      (c.red + (255 - c.red) * amount).round(),
+      (c.green + (255 - c.green) * amount).round(),
+      (c.blue + (255 - c.blue) * amount).round(),
+    );
 
 RenderScene layoutKanban(
   KanbanBoard board, {
@@ -93,43 +105,51 @@ RenderScene layoutKanban(
 
   for (var ci = 0; ci < board.columns.length; ci++) {
     final col = board.columns[ci];
-    final fill = _cardFills[ci % _cardFills.length];
-    // Measure cards.
+    // Each column gets a distinct hue (like upstream's cScale palette): a
+    // coloured header bar, a faint body tint, and cards with that border.
+    final hue = _columnColors[ci % _columnColors.length];
+    final body = _lighten(hue, 0.86);
+    final titleSize = measurer.measure(col.title, titleStyle, maxWidth: cardW);
+    final headerH = titleSize.height + 2 * _pad;
     final cardSizes = [
       for (final t in col.tasks) measurer.measure(t, baseStyle, maxWidth: cardW)
     ];
-    final titleSize = measurer.measure(col.title, titleStyle, maxWidth: cardW);
-    var h = _pad + titleSize.height + _cardGap;
+    var h = headerH + _cardGap;
     for (final s in cardSizes) {
       h += s.height + 2 * _pad + _cardGap;
     }
     h += _pad;
 
-    // Column background.
+    // Column body.
     nodes.add(SceneShape(
-      geometry: RectGeometry(Rect.fromLTWH(x, 0, _colWidth, h), rx: 6, ry: 6),
-      fill: Fill(theme.clusterBkg),
-      stroke: Stroke(color: theme.clusterBorder),
+      geometry: RectGeometry(Rect.fromLTWH(x, 0, _colWidth, h), rx: 8, ry: 8),
+      fill: Fill(body),
+      stroke: Stroke(color: hue),
     ));
-    // Column title.
+    // Coloured header bar with centered title.
+    nodes.add(SceneShape(
+      geometry: RectGeometry(Rect.fromLTWH(x, 0, _colWidth, headerH),
+          rx: 8, ry: 8),
+      fill: Fill(hue),
+    ));
     nodes.add(SceneText(
       text: col.title,
-      bounds: Rect.fromLTWH(
-          x + _pad, _pad, cardW, titleSize.height),
+      bounds: Rect.fromLTWH(x, _pad, _colWidth, titleSize.height),
       style: titleStyle,
-      color: theme.titleColor,
-      align: TextAlignH.left,
+      color: _luminance(hue) < 0.6
+          ? const Color(0xffffffff)
+          : const Color(0xff1f1f1f),
     ));
-    // Cards.
-    var cy = _pad + titleSize.height + _cardGap;
+    // Cards: white with a column-coloured border.
+    var cy = headerH + _cardGap;
     for (var ti = 0; ti < col.tasks.length; ti++) {
       final s = cardSizes[ti];
       final ch = s.height + 2 * _pad;
       nodes.add(SceneShape(
         geometry: RectGeometry(Rect.fromLTWH(x + _pad, cy, cardW, ch),
             rx: 5, ry: 5),
-        fill: Fill(fill),
-        stroke: Stroke(color: theme.nodeBorder),
+        fill: const Fill(Color(0xffffffff)),
+        stroke: Stroke(color: hue, width: 1.4),
       ));
       nodes.add(SceneText(
         text: col.tasks[ti],
