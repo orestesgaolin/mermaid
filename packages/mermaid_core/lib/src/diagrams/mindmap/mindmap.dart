@@ -18,6 +18,7 @@ import '../../parse_error.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
+import '../flowchart/layout_engines.dart';
 
 enum MindmapShape { plain, rect, rounded, circle, bang, cloud, hexagon }
 
@@ -389,7 +390,16 @@ RenderScene layoutMindmap(
   Mindmap map, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  String engine = 'dagre',
 }) {
+  // Upstream feeds the mindmap's node/edge tree into the unified renderer with
+  // `layoutAlgorithm = config.layout` (fallback cose-bilkent), so a `layout:`
+  // directive relayouts it as a hierarchical tree instead of the organic
+  // radial default. We mirror that: `elk`/`tidy-tree` lay the mindmap out as a
+  // top-down layered tree with orthogonal edges (root on top, branches in a
+  // row beneath, leaves below that — matching mermaid's ELK render); any other
+  // engine keeps the organic radial default.
+  final treeLayout = engine == 'elk' || engine == 'tidy-tree';
   const siblingGap = 14.0;
   final baseStyle =
       TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
@@ -493,9 +503,40 @@ RenderScene layoutMindmap(
     }
   }
 
-  // Start at the upper right and walk clockwise, mirroring the typical
-  // upstream result.
-  placeRadial(map.root, -math.pi / 3, 2 * math.pi - math.pi / 3, 0);
+  if (treeLayout) {
+    // Hierarchical (elk/tidy-tree): assign a stable id per node by preorder
+    // index, feed sizes + parent→child edges to the shared tidy-tree layouter,
+    // then copy the resulting centers back onto the placed nodes.
+    final ids = <MindmapNode, String>{};
+    final order = <MindmapNode>[];
+    void collect(MindmapNode n) {
+      ids[n] = 'm${order.length}';
+      order.add(n);
+      n.children.forEach(collect);
+    }
+
+    collect(map.root);
+    final sizes = {for (final n in order) ids[n]!: placed[n]!.size};
+    final treeEdges = <(String, String)>[
+      for (final n in order)
+        for (final c in n.children) (ids[n]!, ids[c]!)
+    ];
+    final centers = tidyTreeLayout(
+      [for (final n in order) ids[n]!],
+      sizes,
+      treeEdges,
+      flow: TreeFlow.topBottom,
+      siblingGap: 20,
+      levelGap: 60,
+    );
+    for (final n in order) {
+      placed[n]!.center = centers[ids[n]!]!;
+    }
+  } else {
+    // Start at the upper right and walk clockwise, mirroring the typical
+    // upstream result.
+    placeRadial(map.root, -math.pi / 3, 2 * math.pi - math.pi / 3, 0);
+  }
 
   // Sections: each first-level child gets `section = index % 11`; descendants
   // inherit it (upstream `assignSections`). Section drives fill + edge stroke.
@@ -523,19 +564,35 @@ RenderScene layoutMindmap(
       // parent.level + 1), so root edges are thick (~17) and thin with depth.
       final edgeDepth = cp.node.depth;
       final width = math.max(1.0, 17.0 - 3.0 * edgeDepth);
-      nodes.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(p.center),
-          CubicTo(
-            Point(p.center.x + (cp.center.x - p.center.x) * 0.55,
-                p.center.y + (cp.center.y - p.center.y) * 0.1),
-            Point(p.center.x + (cp.center.x - p.center.x) * 0.9,
-                p.center.y + (cp.center.y - p.center.y) * 0.85),
-            cp.center,
-          ),
-        ]),
-        stroke: Stroke(color: cp.color, width: width),
-      ));
+      if (treeLayout) {
+        // Top-down tree: orthogonal (Manhattan) routing from the parent's
+        // bottom edge to the child's top edge, the characteristic ELK look.
+        final from = Point(p.center.x, p.center.y + p.size.height / 2);
+        final to = Point(cp.center.x, cp.center.y - cp.size.height / 2);
+        final route = orthogonalRoute(from, to, vertical: true);
+        nodes.add(SceneShape(
+          geometry: PathGeometry([
+            MoveTo(route.first),
+            for (final pt in route.skip(1)) LineTo(pt),
+          ]),
+          stroke: Stroke(color: cp.color, width: width),
+        ));
+      } else {
+        // Radial: the organic curve tuned for the settled-simulation look.
+        nodes.add(SceneShape(
+          geometry: PathGeometry([
+            MoveTo(p.center),
+            CubicTo(
+              Point(p.center.x + (cp.center.x - p.center.x) * 0.55,
+                  p.center.y + (cp.center.y - p.center.y) * 0.1),
+              Point(p.center.x + (cp.center.x - p.center.x) * 0.9,
+                  p.center.y + (cp.center.y - p.center.y) * 0.85),
+              cp.center,
+            ),
+          ]),
+          stroke: Stroke(color: cp.color, width: width),
+        ));
+      }
       edges(c);
     }
   }

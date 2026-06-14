@@ -23,7 +23,7 @@ Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/
 | **journey** | — | 🟢 | ✅ | [journey.md](journey.md) | 4ex title size approximated as 2*taskFontSize (font ex-metrics not resolved) |
 | **timeline** | — | 🟢 | ✅ | [timeline.md](timeline.md) | timeline LR/TD direction is parsed but not honored (upstream renders columnar regardless of direction) |
 | **xychart** | — | 🟢 | ✅ | [xychart.md](xychart.md) | config-only residual (showDataLabel via %%{init}%% JSON, d3 tick formatting) |
-| **mindmap** | — | 🟢 | ✅ | [mindmap.md](mindmap.md) | #1 layout algorithm: deliberate deterministic radial tree vs upstream cose-bilkent force simulation (intent… |
+| **mindmap** | radial (default), elk, tidy-tree | 🟢 | ✅ | [mindmap.md](mindmap.md) | default layout is a deterministic radial tree vs upstream cose-bilkent force simulation (intentional); `layout: elk`/`tidy-tree` now relayout as a left-to-right tidy tree (P10) |
 | **requirement** | — | 🟢 | ✅ | [requirement.md](requirement.md) | classDef/class/style per-node cssStyles + colorIndex color-cycling still deferred (parser/IR feature, not a… |
 | **c4** | — | 🟢 | ✅ | [c4.md](c4.md) | person is a vector rendition of upstream raster avatar; rels straight not curved (cosmetic) |
 | **gitGraph** | — | 🟢 | ✅ | [gitGraph.md](gitGraph.md) | parallelCommits mode and showBranches/showCommitLabel toggles are not wired because layoutGitGraph(graph, m… |

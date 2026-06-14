@@ -97,6 +97,28 @@ mindmap
       expect(groups, hasLength(5));
       expect(texts(s), containsAll(['R', 'A', 'B', 'C', 'D']));
     });
+    test('layout: elk relayouts as a top-down tree (P10)', () {
+      final src = 'mindmap\n  root((R))\n    A\n    B\n    C\n    D';
+      double yOf(RenderScene s, String label) => flatten(s.nodes)
+          .whereType<SceneText>()
+          .firstWhere((t) => t.text == label)
+          .bounds
+          .center
+          .y;
+      final radial =
+          layoutMindmap(parseMindmap(src), measurer: measurer, theme: theme);
+      final elk = layoutMindmap(parseMindmap(src),
+          measurer: measurer, theme: theme, engine: 'elk');
+      // Under elk the root sits on top and every child is on the row below it
+      // (a hierarchical tree), unlike the radial spread.
+      final rootY = yOf(elk, 'R');
+      for (final c in ['A', 'B', 'C', 'D']) {
+        expect(yOf(elk, c), greaterThan(rootY));
+      }
+      // Radial places at least one child above the root; the tree never does.
+      expect(['A', 'B', 'C', 'D'].any((c) => yOf(radial, c) < yOf(radial, 'R')),
+          isTrue);
+    });
   });
 
   group('requirement', () {

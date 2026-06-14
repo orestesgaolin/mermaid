@@ -728,10 +728,13 @@ void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
     // Vertical value/band axis on the left of the plot.
     if (axis.showAxisLine) {
       final x = axis.boundingX + axis.boundingW - _axisLineWidth / 2;
+      // Span the plot extent (the scale range, which the ticks use), not the
+      // axis band thickness — `boundingH` is the pre-reservation available
+      // height, not the final plot height.
       nodes.add(SceneShape(
         geometry: PathGeometry([
-          MoveTo(Point(x, axis.boundingY)),
-          LineTo(Point(x, axis.boundingY + axis.boundingH)),
+          MoveTo(Point(x, axis.rangeStart)),
+          LineTo(Point(x, axis.rangeEnd)),
         ]),
         stroke: Stroke(color: color, width: _axisLineWidth),
       ));
@@ -789,8 +792,8 @@ void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
       final y = axis.boundingY + _axisLineWidth / 2;
       nodes.add(SceneShape(
         geometry: PathGeometry([
-          MoveTo(Point(axis.boundingX, y)),
-          LineTo(Point(axis.boundingX + axis.boundingW, y)),
+          MoveTo(Point(axis.rangeStart, y)),
+          LineTo(Point(axis.rangeEnd, y)),
         ]),
         stroke: Stroke(color: color, width: _axisLineWidth),
       ));
@@ -846,8 +849,8 @@ void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
       final y = axis.boundingY + axis.boundingH - _axisLineWidth / 2;
       nodes.add(SceneShape(
         geometry: PathGeometry([
-          MoveTo(Point(axis.boundingX, y)),
-          LineTo(Point(axis.boundingX + axis.boundingW, y)),
+          MoveTo(Point(axis.rangeStart, y)),
+          LineTo(Point(axis.rangeEnd, y)),
         ]),
         stroke: Stroke(color: color, width: _axisLineWidth),
       ));

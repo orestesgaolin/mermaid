@@ -76,6 +76,31 @@ void main() {
       expect(flat.whereType<SceneShape>().where((s) => s.fill != null), isEmpty);
     });
 
+    test('fills a closed PathGeometry (pie wedge / radar area)', () {
+      // A closed triangular path with a fill: roughening must emit a hachure
+      // fill pass in the fill color, not just the outline (the pie/radar bug).
+      const wedge = RenderScene(
+        size: Size(100, 100),
+        nodes: [
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(50, 50)),
+              LineTo(Point(90, 30)),
+              LineTo(Point(90, 70)),
+              ClosePath(),
+            ]),
+            fill: Fill(Color(0xff3366cc)),
+          ),
+        ],
+      );
+      final r = roughenScene(wedge, seed: 1);
+      final paths =
+          flatten(r.nodes).whereType<SceneShape>().toList();
+      // At least one stroke path painted in the fill color (the hachure pass).
+      expect(
+          paths.any((s) => s.stroke?.color == const Color(0xff3366cc)), isTrue);
+    });
+
     test('is deterministic for a given seed', () {
       String dump(RenderScene s) => flatten(s.nodes)
           .whereType<SceneShape>()

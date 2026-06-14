@@ -107,7 +107,7 @@ class Mermaid {
             measurer: measurer, theme: theme);
       case DiagramType.mindmap:
         return layoutMindmap(parseMindmap(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer, theme: theme, engine: resolveLayout(source));
       case DiagramType.requirement:
         return layoutRequirementDiagram(parseRequirementDiagram(source),
             measurer: measurer, theme: theme);

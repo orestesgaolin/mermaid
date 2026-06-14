@@ -400,9 +400,15 @@ List<(Point, Point)> _hachureLines(
 
 List<SceneNode> _roughenShape(SceneShape shape, int seed) {
   final out = <SceneNode>[];
-  final outline = _outlinePoints(shape.geometry);
   final isEllipse = shape.geometry is CircleGeometry || shape.geometry is EllipseGeometry;
-  final closed = _isClosed(shape.geometry);
+  // A closed PathGeometry (pie wedge, radar area) encloses a fillable region;
+  // flatten it to a polygon outline so hachure clipping has a ring to work on.
+  final geom = shape.geometry;
+  final isClosedPath =
+      geom is PathGeometry && shape.fill != null && _pathIsClosed(geom);
+  final outline =
+      isClosedPath ? _flattenPath(geom) : _outlinePoints(shape.geometry);
+  final closed = isClosedPath || _isClosed(shape.geometry);
 
   // Hachure fill under the outline.
   if (shape.fill != null && closed && outline.length >= 3) {
@@ -529,6 +535,46 @@ List<Point> _polyEllipse(Point c, double rx, double ry) {
       Point(c.x + rx * math.cos(2 * math.pi * i / n),
           c.y + ry * math.sin(2 * math.pi * i / n)),
   ];
+}
+
+/// True if [g] is a closed path (contains a `ClosePath` command) — such paths
+/// (pie wedges, radar area rings, etc.) enclose a region that can be filled.
+bool _pathIsClosed(PathGeometry g) => g.commands.any((c) => c is ClosePath);
+
+/// Flattens a closed [PathGeometry] to an outline polygon (beziers sampled to
+/// line segments) suitable for hachure clipping.
+List<Point> _flattenPath(PathGeometry g) {
+  final pts = <Point>[];
+  Point? cur;
+  for (final c in g.commands) {
+    switch (c) {
+      case MoveTo(:final p):
+        cur = p;
+        pts.add(p);
+      case LineTo(:final p):
+        pts.add(p);
+        cur = p;
+      case CubicTo(:final c1, :final c2, :final p):
+        if (cur != null) {
+          const steps = 8;
+          for (var i = 1; i <= steps; i++) {
+            pts.add(_cubic(cur, c1, c2, p, i / steps));
+          }
+        }
+        cur = p;
+      case QuadTo(:final c, :final p):
+        if (cur != null) {
+          const steps = 6;
+          for (var i = 1; i <= steps; i++) {
+            pts.add(_quad(cur, c, p, i / steps));
+          }
+        }
+        cur = p;
+      case ClosePath():
+        break;
+    }
+  }
+  return pts;
 }
 
 Point _cubic(Point p0, Point p1, Point p2, Point p3, double t) {

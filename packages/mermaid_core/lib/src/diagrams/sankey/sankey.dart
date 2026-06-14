@@ -347,14 +347,16 @@ RenderScene layoutSankey(
         CubicTo(Point(cx, ty + half), Point(cx, sy + half), Point(x0, sy + half)),
         const ClosePath(),
       ]),
-      // Full-opacity gradient stops + a 0.5 fill opacity, matching upstream's
-      // `stroke-opacity:0.5` over full-color gradient stops.
+      // Upstream renders links with `stroke-opacity:0.5`. A gradient paint
+      // overrides the base fill color, so the half-opacity must live in the
+      // gradient stops themselves (otherwise ribbons paint at full opacity and
+      // visually swallow the node bars).
       fill: Fill(
         l.source.color.withOpacity(0.5),
         gradient: SceneGradient(
           Point(x0, 0),
           Point(x1, 0),
-          [l.source.color, l.target.color],
+          [l.source.color.withOpacity(0.5), l.target.color.withOpacity(0.5)],
         ),
       ),
     ));
