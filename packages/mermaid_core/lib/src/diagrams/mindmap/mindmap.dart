@@ -155,44 +155,244 @@ String _resolveIconRef(String ref) {
       .firstMatch(content);
   if (m == null) return (MindmapShape.plain, normalize(content));
   final open = m.group(2)!;
+  final close = m.group(4)!;
   final label = normalize(m.group(3)!);
+  // Mirror upstream `mindmapDb.getType(startStr, endStr)`:
+  //  '['            -> RECT
+  //  '('            -> ROUNDED_RECT if closed by ')', else CLOUD (e.g. `(-…-)`)
+  //  '(('           -> CIRCLE
+  //  ')'            -> CLOUD
+  //  '))'           -> BANG
+  //  '{{'           -> HEXAGON
   return switch (open) {
     '((' => (MindmapShape.circle, label),
     '))' => (MindmapShape.bang, label),
     '(-' => (MindmapShape.cloud, label),
-    '(' => (MindmapShape.rounded, label),
+    ')' => (MindmapShape.cloud, label),
+    '(' => (close == ')'
+        ? (MindmapShape.rounded, label)
+        : (MindmapShape.cloud, label)),
     '[' => (MindmapShape.rect, label),
     '{{' => (MindmapShape.hexagon, label),
     _ => (MindmapShape.plain, label),
   };
 }
 
-/// Section colors per first-level branch (mermaid default mindmap look:
-/// saturated pastel fills).
-const _branchColors = <Color>[
-  Color(0xfffcfc62),
-  Color(0xffcbe65a),
-  Color(0xffb87df2),
-  Color(0xff4fc3f7),
-  Color(0xffff8a65),
-  Color(0xfff06292),
-  Color(0xff9fa8da),
-  Color(0xff80cbc4),
+/// Section fill colors (`cScale1..11` cycling), default mermaid theme.
+///
+/// Upstream `styles.genSections` paints `.section-<i>` with `cScale<i+1>`; the
+/// default theme derives these from `primaryColor #ECECFF` (hue-rotated) and
+/// then darkens every entry by 10% — yielding pale/pastel fills, not the
+/// saturated palette we used before. Section index = `branchIndex % 11`
+/// (`MAX_SECTIONS - 1`). Index 0 here corresponds to upstream `cScale1`.
+/// Values precomputed from khroma (`darken(adjust(primaryColor,{h}), 10)`).
+const _sectionFills = <Color>[
+  Color(0xffffffab), // cScale1 (secondaryColor #ffffde)
+  Color(0xffe9ffb9), // cScale2 (tertiaryColor)
+  Color(0xffdeb9ff), // cScale3  adjust h+30
+  Color(0xffffb9ff), // cScale4  adjust h+60
+  Color(0xffffb9de), // cScale5  adjust h+90
+  Color(0xffffb9b9), // cScale6  adjust h+120
+  Color(0xffffdeb9), // cScale7  adjust h+150
+  Color(0xffdeffb9), // cScale8  adjust h+210
+  Color(0xffb9ffde), // cScale9  adjust h+270
+  Color(0xffb9ffff), // cScale10 adjust h+300
+  Color(0xffb9deff), // cScale11 adjust h+330
 ];
 
-/// Root node fill (upstream renders a large filled circle).
-const _rootFill = Color(0xff1f1fd1);
+/// Underline / section-line stroke colors (`cScaleInv1..11`), default theme.
+/// Upstream `.section-<i> line { stroke: cScaleInv<i+1>; stroke-width: 3 }`.
+const _sectionLines = <Color>[
+  Color(0xffababff), // cScaleInv1
+  Color(0xffcfb9ff), // cScaleInv2
+  Color(0xffdaffb9), // cScaleInv3
+  Color(0xffb9ffb9), // cScaleInv4
+  Color(0xffb9ffda), // cScaleInv5
+  Color(0xffb9ffff), // cScaleInv6
+  Color(0xffb9daff), // cScaleInv7
+  Color(0xffdab9ff), // cScaleInv8
+  Color(0xffffb9da), // cScaleInv9
+  Color(0xffffb9b9), // cScaleInv10
+  Color(0xffffdab9), // cScaleInv11
+];
+
+/// Root node fill = `git0` (default theme: `darken(primaryColor, 25)`).
+const _rootFill = Color(0xff6d6dff);
+
+/// Root text color = `gitBranchLabel0` = `invert(labelTextColor=black)` = white.
+const _rootText = Color(0xffffffff);
+
+/// Section text fill = `cScaleLabel<i>` = `invert(labelTextColor)` for i==0,
+/// else `labelTextColor` (black `#333`). Branches use the dark label.
+const _sectionText = Color(0xff333333);
 
 /// Perceived luminance, for choosing readable text on a fill.
 double _luminance(Color c) =>
     (0.299 * c.red + 0.587 * c.green + 0.114 * c.blue) / 255;
 
-Color _lighten(Color c, double amount) => Color.fromARGB(
-      255,
-      (c.red + (255 - c.red) * amount).round(),
-      (c.green + (255 - c.green) * amount).round(),
-      (c.blue + (255 - c.blue) * amount).round(),
+/// Approximate one SVG relative elliptical arc (`a rx ry 0 0 sweep dx dy`,
+/// large-arc-flag always 0 as in upstream cloud/bang paths) as cubic Béziers,
+/// appending the segments to [out] starting at [from]. Returns the end point.
+///
+/// The IR has no arc command, so we subdivide the arc into <=90° pieces and
+/// emit a cubic per piece — visually indistinguishable from the SVG arc.
+Point _arcTo(
+  List<PathCommand> out,
+  Point from,
+  double rx,
+  double ry,
+  int sweep,
+  double dx,
+  double dy,
+) {
+  final end = Point(from.x + dx, from.y + dy);
+  rx = rx.abs();
+  ry = ry.abs();
+  if (rx == 0 || ry == 0) {
+    out.add(LineTo(end));
+    return end;
+  }
+  // Endpoint -> center parameterization (xAxisRotation = 0, largeArc = 0).
+  final x1 = from.x, y1 = from.y, x2 = end.x, y2 = end.y;
+  final dx2 = (x1 - x2) / 2, dy2 = (y1 - y2) / 2;
+  var rxs = rx * rx, rys = ry * ry;
+  final px = dx2 * dx2, py = dy2 * dy2;
+  final radiiCheck = px / rxs + py / rys;
+  if (radiiCheck > 1) {
+    final s = math.sqrt(radiiCheck);
+    rx *= s;
+    ry *= s;
+    rxs = rx * rx;
+    rys = ry * ry;
+  }
+  var sign = (sweep == 0) ? 1.0 : -1.0; // largeArc==sweep -> 0; differ -> sign
+  var num = rxs * rys - rxs * py - rys * px;
+  if (num < 0) num = 0;
+  var den = rxs * py + rys * px;
+  final coef = (den == 0) ? 0.0 : sign * math.sqrt(num / den);
+  final cxp = coef * (rx * dy2 / ry);
+  final cyp = coef * -(ry * dx2 / rx);
+  final cx = cxp + (x1 + x2) / 2;
+  final cy = cyp + (y1 + y2) / 2;
+  double angle(double ux, double uy, double vx, double vy) {
+    final dot = ux * vx + uy * vy;
+    final len = math.sqrt((ux * ux + uy * uy) * (vx * vx + vy * vy));
+    var a = math.acos((dot / len).clamp(-1.0, 1.0));
+    if (ux * vy - uy * vx < 0) a = -a;
+    return a;
+  }
+
+  final theta1 = angle(1, 0, (dx2 - cxp) / rx, (dy2 - cyp) / ry);
+  var dtheta = angle((dx2 - cxp) / rx, (dy2 - cyp) / ry,
+      (-dx2 - cxp) / rx, (-dy2 - cyp) / ry);
+  if (sweep == 0 && dtheta > 0) dtheta -= 2 * math.pi;
+  if (sweep == 1 && dtheta < 0) dtheta += 2 * math.pi;
+
+  final segments = math.max(1, (dtheta.abs() / (math.pi / 2)).ceil());
+  final delta = dtheta / segments;
+  final t = 4 / 3 * math.tan(delta / 4);
+  var th = theta1;
+  var startX = x1, startY = y1;
+  for (var i = 0; i < segments; i++) {
+    final thNext = th + delta;
+    final cosTh = math.cos(th), sinTh = math.sin(th);
+    final cosNext = math.cos(thNext), sinNext = math.sin(thNext);
+    final ex = cx + rx * cosNext, ey = cy + ry * sinNext;
+    final c1 = Point(
+      startX + (-rx * sinTh) * t,
+      startY + (ry * cosTh) * t,
     );
+    final c2 = Point(
+      ex - (-rx * sinNext) * t,
+      ey - (ry * cosNext) * t,
+    );
+    out.add(CubicTo(c1, c2, Point(ex, ey)));
+    startX = ex;
+    startY = ey;
+    th = thNext;
+  }
+  return end;
+}
+
+/// Builds the cloud-shape path (port of `svgDraw.cloudBkg`). [pt] maps a
+/// local point (origin at node top-left) to scene coordinates; [w]/[h] are
+/// the node size. Relative SVG arcs are approximated with cubic Béziers.
+List<PathCommand> _cloudPath(Point Function(double, double) pt, double w, double h) {
+  final r1 = 0.15 * w;
+  final r2 = 0.25 * w;
+  final r3 = 0.35 * w;
+  final r4 = 0.2 * w;
+  // Walk in local coords, emitting commands via a local->scene wrapper.
+  final out = <PathCommand>[];
+  var cur = const Point(0, 0);
+  out.add(MoveTo(pt(cur.x, cur.y)));
+  // Local arc helper: appends to a temporary list in local coords, then we
+  // remap. Simpler: build a local list, then translate at the end.
+  final local = <PathCommand>[];
+  Point arc(Point from, double rx, double ry, int sweep, double dx, double dy) =>
+      _arcTo(local, from, rx, ry, sweep, dx, dy);
+  cur = arc(cur, r1, r1, 1, w * 0.25, -w * 0.1);
+  cur = arc(cur, r3, r3, 1, w * 0.4, -w * 0.1);
+  cur = arc(cur, r2, r2, 1, w * 0.35, w * 0.2);
+  cur = arc(cur, r1, r1, 1, w * 0.15, h * 0.35);
+  cur = arc(cur, r4, r4, 1, -w * 0.15, h * 0.65);
+  cur = arc(cur, r2, r1, 1, -w * 0.25, w * 0.15);
+  cur = arc(cur, r3, r3, 1, -w * 0.5, 0);
+  cur = arc(cur, r1, r1, 1, -w * 0.25, -w * 0.15);
+  cur = arc(cur, r1, r1, 1, -w * 0.1, -h * 0.35);
+  cur = arc(cur, r4, r4, 1, w * 0.1, -h * 0.65);
+  local.add(LineTo(Point(0, cur.y))); // H0
+  local.add(const LineTo(Point(0, 0))); // V0
+  local.add(const ClosePath());
+  out.addAll(_remap(local, pt));
+  return out;
+}
+
+/// Builds the bang-shape path (port of `svgDraw.bangBkg`).
+List<PathCommand> _bangPath(Point Function(double, double) pt, double w, double h) {
+  final r = 0.15 * w;
+  final out = <PathCommand>[];
+  out.add(MoveTo(pt(0, 0)));
+  final local = <PathCommand>[];
+  var cur = const Point(0, 0);
+  Point arc(Point from, double rx, double ry, int sweep, double dx, double dy) =>
+      _arcTo(local, from, rx, ry, sweep, dx, dy);
+  cur = arc(cur, r, r, 0, w * 0.25, -h * 0.1);
+  cur = arc(cur, r, r, 0, w * 0.25, 0);
+  cur = arc(cur, r, r, 0, w * 0.25, 0);
+  cur = arc(cur, r, r, 0, w * 0.25, h * 0.1);
+  cur = arc(cur, r, r, 0, w * 0.15, h * 0.33);
+  cur = arc(cur, r * 0.8, r * 0.8, 0, 0, h * 0.34);
+  cur = arc(cur, r, r, 0, -w * 0.15, h * 0.33);
+  cur = arc(cur, r, r, 0, -w * 0.25, h * 0.15);
+  cur = arc(cur, r, r, 0, -w * 0.25, 0);
+  cur = arc(cur, r, r, 0, -w * 0.25, 0);
+  cur = arc(cur, r, r, 0, -w * 0.25, -h * 0.15);
+  cur = arc(cur, r, r, 0, -w * 0.1, -h * 0.33);
+  cur = arc(cur, r * 0.8, r * 0.8, 0, 0, -h * 0.34);
+  cur = arc(cur, r, r, 0, w * 0.1, -h * 0.33);
+  local.add(LineTo(Point(0, cur.y))); // H0
+  local.add(const LineTo(Point(0, 0))); // V0
+  local.add(const ClosePath());
+  out.addAll(_remap(local, pt));
+  return out;
+}
+
+/// Remaps local-coordinate path commands through [pt] into scene coordinates.
+List<PathCommand> _remap(
+    List<PathCommand> local, Point Function(double, double) pt) {
+  Point m(Point p) => pt(p.x, p.y);
+  return [
+    for (final c in local)
+      switch (c) {
+        MoveTo() => MoveTo(m(c.p)),
+        LineTo() => LineTo(m(c.p)),
+        CubicTo() => CubicTo(m(c.c1), m(c.c2), m(c.p)),
+        QuadTo() => QuadTo(m(c.c), m(c.p)),
+        ClosePath() => const ClosePath(),
+      }
+  ];
+}
 
 class _PlacedMind {
   _PlacedMind(this.node, this.size);
@@ -201,7 +401,12 @@ class _PlacedMind {
   final Size size;
   Point center = Point.zero;
   double subtreeExtent = 0;
-  Color color = const Color(0xff9370db);
+
+  /// Section index for this node (`branchIndex % 11`), or -1 for the root.
+  int section = -1;
+
+  /// Resolved fill color (section fill / root fill).
+  Color color = _rootFill;
 }
 
 RenderScene layoutMindmap(
@@ -239,14 +444,35 @@ RenderScene layoutMindmap(
 
   _PlacedMind measure(MindmapNode n) {
     final style = n.depth == 0 ? baseStyle.copyWith(fontWeight: 700) : baseStyle;
-    final labelSize = measurer.measure(n.label, style, maxWidth: 170);
-    final circlePad = n.depth == 0 ? 52.0 : 30.0;
-    final w = n.shape == MindmapShape.circle
-        ? math.max(labelSize.width, labelSize.height) + circlePad
-        : labelSize.width + 26;
-    final h = n.shape == MindmapShape.circle
-        ? math.max(labelSize.width, labelSize.height) + circlePad
-        : labelSize.height + 18;
+    // Upstream: maxNodeWidth 200, padding 10 (doubled for rect/rounded/hexagon).
+    final labelSize = measurer.measure(n.label, style, maxWidth: 200);
+    final padding = switch (n.shape) {
+      MindmapShape.rect ||
+      MindmapShape.rounded ||
+      MindmapShape.hexagon =>
+        20.0,
+      _ => 10.0,
+    };
+    // svgDraw.drawNode: width = bbox.w + 2*padding,
+    //                   height = bbox.h + fontSize*1.1*0.5 + padding.
+    var w = labelSize.width + 2 * padding;
+    var h = labelSize.height + theme.fontSize * 1.1 * 0.5 + padding;
+    if (n.icon != null) {
+      // Icon foreignObject: CIRCLE adds +50 w/h, others +50 w and min height 60.
+      if (n.shape == MindmapShape.circle) {
+        w += 50;
+        h += 50;
+      } else {
+        w += 50;
+        h = math.max(h, 60);
+      }
+    }
+    if (n.shape == MindmapShape.circle) {
+      // circleBkg: r = width/2 — square the box so the diameter encloses text.
+      final d = math.max(w, h);
+      w = d;
+      h = d;
+    }
     final p = _PlacedMind(n, Size(w, h));
     placed[n] = p;
     var extent = 0.0;
@@ -295,16 +521,20 @@ RenderScene layoutMindmap(
   // upstream result.
   placeRadial(map.root, -math.pi / 3, 2 * math.pi - math.pi / 3, 0);
 
-  // Branch colors: each first-level child tints its subtree.
-  void tint(MindmapNode n, Color color) {
-    placed[n]!.color = color;
+  // Sections: each first-level child gets `section = index % 11`; descendants
+  // inherit it (upstream `assignSections`). Section drives fill + edge stroke.
+  void tint(MindmapNode n, int section) {
+    final p = placed[n]!;
+    p.section = section;
+    p.color = _sectionFills[section % _sectionFills.length];
     for (final c in n.children) {
-      tint(c, color);
+      tint(c, section);
     }
   }
 
+  const maxSections = 11; // MAX_SECTIONS - 1
   for (var i = 0; i < map.root.children.length; i++) {
-    tint(map.root.children[i], _branchColors[i % _branchColors.length]);
+    tint(map.root.children[i], i % maxSections);
   }
 
   // Edges: cubic from parent edge to child edge.
@@ -313,7 +543,10 @@ RenderScene layoutMindmap(
     for (final c in n.children) {
       final cp = placed[c]!;
       // Center-to-center; nodes paint on top, hiding the covered ends.
-      final width = math.max(3.0, 11.0 - cp.node.depth * 2.8);
+      // Upstream `.edge-depth-<d> { stroke-width: 17 - 3*d }` (d = edge depth =
+      // parent.level + 1), so root edges are thick (~17) and thin with depth.
+      final edgeDepth = cp.node.depth;
+      final width = math.max(1.0, 17.0 - 3.0 * edgeDepth);
       nodes.add(SceneShape(
         geometry: PathGeometry([
           MoveTo(p.center),
@@ -338,37 +571,30 @@ RenderScene layoutMindmap(
     final p = placed[n]!;
     final style =
         n.depth == 0 ? baseStyle.copyWith(fontWeight: 700) : baseStyle;
-    final labelSize = measurer.measure(n.label, style, maxWidth: 170);
+    final labelSize = measurer.measure(n.label, style, maxWidth: 200);
     final rect = Rect.fromCenter(p.center, p.size.width, p.size.height);
-    // Filled nodes like upstream: the root is a dark filled circle with
-    // inverted text; branches fill with the section color, lightening with
-    // depth.
+    final w = p.size.width;
+    final h = p.size.height;
+    // Local-coordinate origin = node top-left corner; upstream shape paths are
+    // authored in that frame (`M0 0` etc).
+    final ox = rect.left;
+    final oy = rect.top;
+    Point pt(double x, double y) => Point(ox + x, oy + y);
     final isRoot = n.depth == 0;
     // A `:::class` mapped to a classDef overrides the section palette fill.
     final cls = classStyle(n);
-    final fill = cls?.fill ??
-        (isRoot
-            ? _rootFill
-            : _lighten(p.color, ((n.depth - 1) * 0.18).clamp(0.0, 0.6)));
+    final fill = cls?.fill ?? (isRoot ? _rootFill : p.color);
     final stroke = cls?.stroke;
-    // Text color: explicit classDef `color:` wins; otherwise contrast against
-    // the resolved fill (class fill) or the branch base color (palette).
+    // Text color: explicit classDef `color:` wins; otherwise the default theme
+    // paints root text `gitBranchLabel0` (white) and section text the dark
+    // label color `#333` (cScaleLabel for i>0).
     final textColor = cls?.text ??
-        (_luminance(cls?.fill ?? (isRoot ? fill : p.color)) < 0.66
-            ? const Color(0xffffffff)
-            : const Color(0xff1f1f1f));
+        (cls?.fill != null
+            ? (_luminance(cls!.fill!) < 0.5
+                ? const Color(0xffffffff)
+                : const Color(0xff333333))
+            : (isRoot ? _rootText : _sectionText));
     final children = <SceneNode>[];
-    // Upstream nodes carry a drop shadow rendered as a soft strip below.
-    if (!isRoot) {
-      children.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromCenter(Point(p.center.x, p.center.y + 5),
-                p.size.width, p.size.height),
-            rx: 8,
-            ry: 8),
-        fill: const Fill(Color(0x3d6c6c9e)),
-      ));
-    }
     final nodeStroke = stroke != null ? Stroke(color: stroke, width: 2) : null;
     switch (n.shape) {
       case MindmapShape.circle:
@@ -384,32 +610,67 @@ RenderScene layoutMindmap(
           stroke: nodeStroke,
         ));
       case MindmapShape.hexagon:
-        final m = rect.height / 3;
+        // Upstream hexagonBkg: m = h/4.
+        final m = h / 4;
         children.add(SceneShape(
           geometry: PolygonGeometry([
-            Point(rect.left + m, rect.top),
-            Point(rect.right - m, rect.top),
-            Point(rect.right, rect.center.y),
-            Point(rect.right - m, rect.bottom),
-            Point(rect.left + m, rect.bottom),
-            Point(rect.left, rect.center.y),
+            pt(m, 0),
+            pt(w - m, 0),
+            pt(w, h / 2),
+            pt(w - m, h),
+            pt(m, h),
+            pt(0, h / 2),
           ]),
           fill: Fill(fill),
           stroke: nodeStroke,
         ));
-      case MindmapShape.bang || MindmapShape.cloud:
-        // Approximated as a stadium until dedicated geometry lands.
+      case MindmapShape.cloud:
         children.add(SceneShape(
-          geometry:
-              RectGeometry(rect, rx: rect.height / 2, ry: rect.height / 2),
+          geometry: PathGeometry(_cloudPath(pt, w, h)),
           fill: Fill(fill),
           stroke: nodeStroke,
         ));
-      case MindmapShape.rounded || MindmapShape.plain:
+      case MindmapShape.bang:
         children.add(SceneShape(
-          geometry: RectGeometry(rect, rx: 8, ry: 8),
+          geometry: PathGeometry(_bangPath(pt, w, h)),
           fill: Fill(fill),
           stroke: nodeStroke,
+        ));
+      case MindmapShape.rounded:
+        // roundedRectBkg: rx/ry = padding (=20 for rounded).
+        children.add(SceneShape(
+          geometry: RectGeometry(rect, rx: 20, ry: 20),
+          fill: Fill(fill),
+          stroke: nodeStroke,
+        ));
+      case MindmapShape.plain:
+        // defaultBkg: a rounded-top path (rd=5) with a flat bottom, plus a
+        // thick horizontal underline at the bottom (`node-line`, width 3,
+        // stroke cScaleInv<section>). The signature mindmap look.
+        const rd = 5.0;
+        children.add(SceneShape(
+          geometry: PathGeometry([
+            MoveTo(pt(0, h - rd)),
+            LineTo(pt(0, rd)),
+            QuadTo(pt(0, 0), pt(rd, 0)),
+            LineTo(pt(w - rd, 0)),
+            QuadTo(pt(w, 0), pt(w, rd)),
+            LineTo(pt(w, h)),
+            LineTo(pt(0, h)),
+            const ClosePath(),
+          ]),
+          fill: Fill(fill),
+          stroke: nodeStroke,
+        ));
+        final lineColor = isRoot
+            ? _sectionLines[0]
+            : _sectionLines[p.section % _sectionLines.length];
+        children.add(SceneShape(
+          geometry: PathGeometry([
+            MoveTo(pt(0, h)),
+            LineTo(pt(w, h)),
+          ]),
+          stroke: Stroke(color: lineColor, width: 3),
         ));
     }
     children.add(SceneText(
@@ -417,9 +678,9 @@ RenderScene layoutMindmap(
       bounds:
           Rect.fromCenter(p.center, labelSize.width, labelSize.height),
       style: style,
-      // Text contrast follows the section base color, like upstream: the
-      // whole purple branch reads white even on lightened leaves. A classDef
-      // `color:`/`fill:` overrides this (see [textColor] above).
+      // Default theme: root text white (`gitBranchLabel0`), section text dark
+      // `#333` (`cScaleLabel`). A classDef `color:`/`fill:` overrides (see
+      // [textColor] above).
       color: textColor,
     ));
     // `::icon(...)` glyph above the node, if it resolves in a registered pack.

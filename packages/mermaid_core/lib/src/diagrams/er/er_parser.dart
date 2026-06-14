@@ -36,6 +36,7 @@ class _ErParser {
 
   final entities = <String, ErEntity>{};
   final relationships = <ErRelationship>[];
+  final classDefs = <String, List<String>>{};
   var direction = FlowDirection.tb;
   String? title;
 
@@ -72,6 +73,7 @@ class _ErParser {
       relationships: relationships,
       direction: direction,
       title: title,
+      classDefs: classDefs,
     );
   }
 
@@ -102,6 +104,36 @@ class _ErParser {
     m = RegExp(r'^title\s+(.*)$').firstMatch(line);
     if (m != null) {
       title = m.group(1)!.trim();
+      return;
+    }
+
+    // Styling directives (erDb.addCssStyles / addClass / setClass).
+    m = RegExp(r'^classDef\s+([\w-]+)\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      classDefs[m.group(1)!] = _splitStyles(m.group(2)!);
+      return;
+    }
+    m = RegExp(r'^style\s+([\wÀ-￿-]+)\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      final id = m.group(1)!;
+      final entity = entities[id];
+      if (entity != null) {
+        entities[id] = entity.copyWith(cssStyles: _splitStyles(m.group(2)!));
+      }
+      return;
+    }
+    m = RegExp(r'^class\s+([\w,\s-]+?)\s+([\w-]+)\s*$').firstMatch(line);
+    if (m != null) {
+      final className = m.group(2)!;
+      for (final raw in m.group(1)!.split(',')) {
+        final id = raw.trim();
+        if (id.isEmpty) continue;
+        final entity = entities[id];
+        if (entity != null) {
+          entities[id] =
+              entity.copyWith(cssClasses: [...entity.cssClasses, className]);
+        }
+      }
       return;
     }
 
@@ -264,6 +296,12 @@ class _ErParser {
     }
     return out.toString();
   }
+
+  /// Splits a CSS style string (`fill:#f00,stroke:#000`) into `k:v` entries.
+  List<String> _splitStyles(String s) => [
+        for (final part in s.split(','))
+          if (part.trim().isNotEmpty) part.trim(),
+      ];
 
   void _ensure(String id) {
     entities.putIfAbsent(id, () => ErEntity(id: id, label: id));

@@ -32,6 +32,10 @@ enum StateKind {
   fork,
   join,
   composite,
+
+  /// Port-only extension: upstream stateDb has no history pseudo-state type
+  /// (`[H]`/`[H*]` is not parsed/rendered by mermaid.js). Rendered here as a
+  /// circle with "H"/"H*" text; will never byte-match upstream output.
   history,
   historyDeep,
 }

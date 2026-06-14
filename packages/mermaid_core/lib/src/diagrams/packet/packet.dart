@@ -9,6 +9,7 @@ library;
 
 import 'dart:math' as math;
 
+import '../../color.dart';
 import '../../detect.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -27,9 +28,14 @@ class PacketField {
 }
 
 class Packet {
-  const Packet({required this.fields, this.title});
+  const Packet({required this.fields, this.title, this.showBits = true});
   final List<PacketField> fields;
   final String? title;
+
+  /// When false, bit-index numbers above each block are hidden and the extra
+  /// vertical padding upstream reserves for them is dropped. Mirrors the
+  /// upstream `packet.showBits` config (default true).
+  final bool showBits;
 }
 
 Packet parsePacket(String source) {
@@ -101,17 +107,26 @@ RenderScene layoutPacket(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
+  // Upstream packet defaults (config.schema.yaml PacketDiagramConfig).
   const bitsPerRow = 32;
-  const bitWidth = 30.0;
-  const rowHeight = 34.0;
-  const rowGap = 8.0;
-  const bitLabelH = 14.0; // space above each row for bit numbers
-  final labelStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize - 3);
+  const bitWidth = 32.0;
+  const rowHeight = 32.0;
+  const paddingX = 5.0;
+  // db.ts:getConfig adds +10 to paddingY when showBits is true.
+  final paddingY = diagram.showBits ? 15.0 : 5.0;
+  const bitLabelH = 14.0; // notional band for bit numbers above each row
+
+  // Packet styling is theme-INDEPENDENT upstream (styles.ts hardcodes these):
+  // block fill #efefef, stroke/text black; label 12px, byte numbers 10px.
+  const blockFill = Color(0xffefefef);
+  const blockStroke = Color(0xff000000);
+  const blackText = Color(0xff000000);
+  final labelStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 12);
   final bitStyle = labelStyle.copyWith(fontSize: 10);
   final nodes = <SceneNode>[];
 
-  double rowTop(int row) => bitLabelH + row * (rowHeight + rowGap + bitLabelH);
+  // wordY = rowNumber*(rowHeight + paddingY) + paddingY (renderer.ts:drawWord).
+  double rowTop(int row) => row * (rowHeight + paddingY) + paddingY;
 
   // Split each field at row boundaries and emit a block per segment.
   for (final f in diagram.fields) {
@@ -121,41 +136,49 @@ RenderScene layoutPacket(
       final rowEndBit = (row + 1) * bitsPerRow - 1;
       final segEnd = math.min(f.end, rowEndBit);
       final colStart = bit % bitsPerRow;
-      final x = colStart * bitWidth;
+      // blockX = (start % bitsPerRow)*bitWidth + 1; width leaves a paddingX gap.
+      final x = colStart * bitWidth + 1;
       final y = rowTop(row);
-      final w = (segEnd - bit + 1) * bitWidth;
+      final w = (segEnd - bit + 1) * bitWidth - paddingX;
       final rect = Rect.fromLTWH(x, y, w, rowHeight);
 
       final children = <SceneNode>[
         SceneShape(
           geometry: RectGeometry(rect),
-          fill: Fill(theme.mainBkg),
-          stroke: Stroke(color: theme.nodeBorder, width: 1),
+          fill: const Fill(blockFill),
+          stroke: const Stroke(color: blockStroke, width: 1),
         ),
         SceneText(
           text: f.label,
           bounds: rect,
           style: labelStyle,
-          color: theme.textColor,
-        ),
-        // Start bit number at the segment's top-left.
-        SceneText(
-          text: '$bit',
-          bounds: Rect.fromLTWH(x, y - bitLabelH, 24, bitLabelH),
-          style: bitStyle,
-          color: theme.textColor,
-          align: TextAlignH.left,
+          color: blackText,
         ),
       ];
-      // End bit number at the top-right, if the segment is more than one bit.
-      if (segEnd != bit) {
+      if (diagram.showBits) {
+        // Bit numbers sit just above the row (upstream baseline at wordY-2).
+        final bitBandTop = y - 2 - bitLabelH;
+        final isSingle = segEnd == bit;
         children.add(SceneText(
-          text: '$segEnd',
-          bounds: Rect.fromLTWH(x + w - 24, y - bitLabelH, 24, bitLabelH),
+          text: '$bit',
+          // Single-bit block centers the start number over the block.
+          bounds: isSingle
+              ? Rect.fromLTWH(x, bitBandTop, w, bitLabelH)
+              : Rect.fromLTWH(x, bitBandTop, 24, bitLabelH),
           style: bitStyle,
-          color: theme.textColor,
-          align: TextAlignH.right,
+          color: blackText,
+          align: isSingle ? TextAlignH.center : TextAlignH.left,
         ));
+        // End bit number at the top-right, if the segment is more than one bit.
+        if (!isSingle) {
+          children.add(SceneText(
+            text: '$segEnd',
+            bounds: Rect.fromLTWH(x + w - 24, bitBandTop, 24, bitLabelH),
+            style: bitStyle,
+            color: blackText,
+            align: TextAlignH.right,
+          ));
+        }
       }
       nodes.add(SceneGroup(
           id: 'packet_${f.start}_$bit', semanticLabel: f.label, children: children));
@@ -166,21 +189,21 @@ RenderScene layoutPacket(
   final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);
   const pad = 12.0;
   final out = <SceneNode>[];
+  out.addAll(nodes);
 
-  // Optional title above the grid.
+  // Title is drawn in a reserved band BELOW the grid, centered horizontally
+  // (renderer.ts:draw). The band height matches one totalRowHeight.
   if (diagram.title != null && diagram.title!.isNotEmpty) {
-    final titleStyle =
-        labelStyle.copyWith(fontWeight: 700, fontSize: theme.fontSize);
-    final size = measurer.measure(diagram.title!, titleStyle, maxWidth: 100000);
+    final titleStyle = labelStyle.copyWith(fontSize: 14);
+    final totalRowHeight = rowHeight + paddingY;
     out.add(SceneText(
       text: diagram.title!,
-      bounds: Rect.fromLTWH(bounds.left, bounds.top - pad - size.height,
-          bounds.width, size.height),
+      bounds: Rect.fromLTWH(
+          bounds.left, bounds.bottom, bounds.width, totalRowHeight),
       style: titleStyle,
-      color: theme.titleColor,
+      color: blackText,
     ));
   }
-  out.addAll(nodes);
 
   final full = sceneBounds(out) ?? bounds;
   final dx = pad - full.left;

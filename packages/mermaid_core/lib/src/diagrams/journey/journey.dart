@@ -74,6 +74,16 @@ JourneyDiagram parseJourney(String source) {
       sections.add((m.group(1)!.trim(), []));
       continue;
     }
+    // Multi-line accDescr block: `accDescr { ... }` — skip until closing `}`.
+    if (RegExp(r'^accDescr\s*\{').hasMatch(line)) {
+      if (!line.contains('}')) {
+        while (i + 1 < lines.length && !lines[i + 1].contains('}')) {
+          i++;
+        }
+        if (i + 1 < lines.length) i++; // consume the closing `}` line
+      }
+      continue;
+    }
     if (RegExp(r'^acc(Title|Descr)\s*[:{]').hasMatch(line)) continue;
 
     // Task: `name : score : actor1, actor2` (actors optional).
@@ -114,189 +124,236 @@ JourneyDiagram parseJourney(String source) {
   );
 }
 
+// Upstream journey defaults (config.schema.yaml).
 const _sectionFills = [
-  Color(0xffececff),
-  Color(0xffffffde),
-  Color(0xffd5e5cf),
-  Color(0xffe5d0cf),
-  Color(0xffcfd6e5),
-  Color(0xffe5cfe0),
+  Color(0xff191970),
+  Color(0xff8B008B),
+  Color(0xff4B0082),
+  Color(0xff2F4F4F),
+  Color(0xff800000),
+  Color(0xff8B4513),
+  Color(0xff00008B),
 ];
+// Section text colour (sectionColours: ['#fff']).
+const _sectionTextColor = Color(0xffffffff);
 const _actorFills = [
-  Color(0xff8a90dd),
-  Color(0xffe8a33d),
-  Color(0xff5fb6a9),
-  Color(0xffbf6790),
-  Color(0xff7fbf67),
-  Color(0xff6788bf),
+  Color(0xff8FBC8F),
+  Color(0xff7CFC00),
+  Color(0xff00FFFF),
+  Color(0xff20B2AA),
+  Color(0xffB0E0E6),
+  Color(0xffFFFFE0),
 ];
+
+// Upstream journey layout constants (config.schema.yaml journey defaults).
+const _diagramMarginX = 50.0;
+const _diagramMarginY = 10.0;
+const _leftMargin = 150.0;
+const _boxWidth = 150.0;
+const _boxHeight = 65.0;
+const _taskMargin = 50.0;
+const _taskFontSize = 14.0;
+const _maxLabelWidth = 360.0;
 
 RenderScene layoutJourney(
   JourneyDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
-  const taskWidth = 130.0;
-  const taskGap = 12.0;
+  // Upstream uses a fixed pixel layout sourced from getConfig().journey.
+  // taskFontFamily is '"Open Sans", sans-serif'; we keep the theme family
+  // for measurement consistency but pin the size to the upstream default.
   final baseStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: theme.fontSize * 0.85);
+      fontFamily: theme.fontFamily, fontSize: _taskFontSize);
   final nodes = <SceneNode>[];
 
-  // Actor color assignment in first-appearance order.
-  final actorColor = <String, Color>{};
+  // Actor colour assignment follows the alphabetically sorted actor set
+  // (journeyDb.getActors → updateActors sorts the unique people).
+  final actorSet = <String>{};
   for (final s in diagram.sections) {
     for (final t in s.tasks) {
-      for (final a in t.actors) {
-        actorColor.putIfAbsent(
-            a, () => _actorFills[actorColor.length % _actorFills.length]);
+      actorSet.addAll(t.actors);
+    }
+  }
+  final actorNames = actorSet.toList()..sort();
+  final actorColor = <String, Color>{};
+  for (var p = 0; p < actorNames.length; p++) {
+    actorColor[actorNames[p]] = _actorFills[p % _actorFills.length];
+  }
+
+  // Actor legend on the LEFT column. Circle cx:20, label x:40 colour #666.
+  // yPos starts at 60 and steps by max(20, lineCount*20). leftMargin grows
+  // with the widest wrapped legend label.
+  const legendLabelColor = Color(0xff666666);
+  var maxLegendWidth = 0.0;
+  var yPos = 60.0;
+  for (final actor in actorNames) {
+    final lines = _wrapLegendLabel(actor, baseStyle, measurer, _maxLabelWidth);
+    nodes.add(SceneShape(
+      geometry: CircleGeometry(Point(20, yPos), 7),
+      fill: Fill(actorColor[actor]!),
+      stroke: Stroke(color: const Color(0xff000000), width: 1),
+    ));
+    for (var li = 0; li < lines.length; li++) {
+      final size = measurer.measure(lines[li], baseStyle);
+      final ly = yPos + 7 + li * 20;
+      nodes.add(SceneText(
+        text: lines[li],
+        bounds: Rect.fromLTWH(40, ly - size.height, size.width, size.height),
+        style: baseStyle,
+        color: legendLabelColor,
+        align: TextAlignH.left,
+      ));
+      // Upstream: expand maxWidth when a line is wider than the running max.
+      if (size.width > maxLegendWidth &&
+          size.width > _leftMargin - size.width) {
+        maxLegendWidth = size.width;
       }
     }
+    yPos += math.max(20, lines.length * 20);
   }
+  final leftMargin = _leftMargin + maxLegendWidth;
 
-  // Legend.
-  var legendY = 0.0;
-  actorColor.forEach((actor, color) {
-    final size = measurer.measure(actor, baseStyle);
-    nodes.add(SceneGroup(id: 'actor_$actor', children: [
-      SceneShape(
-          geometry: CircleGeometry(Point(8, legendY + 8), 7),
-          fill: Fill(color)),
-      SceneText(
-        text: actor,
-        bounds: Rect.fromLTWH(
-            22, legendY + 8 - size.height / 2, size.width, size.height),
-        style: baseStyle,
-        color: theme.textColor,
-        align: TextAlignH.left,
-      ),
-    ]));
-    legendY += 22;
-  });
+  // Faces hang at cy = 300 + (5-score)*30 (range 300..420); drop lines run
+  // from the task box top (y=140) down to maxHeight = 300 + 5*30 = 450.
+  const sectionY = 50.0;
+  final taskY = _boxHeight * 2 + _diagramMarginY; // 140
+  const faceBaseY = 300.0;
+  const maxHeight = 300.0 + 5 * 30.0; // 450
 
-  final sectionTop = legendY + 16;
-  const sectionH = 28.0;
-  final taskLabelTop = sectionTop + sectionH + 8;
-
-  // Task label block height: tallest wrapped name.
-  var labelBlockH = 0.0;
-  for (final s in diagram.sections) {
-    for (final t in s.tasks) {
-      labelBlockH = math.max(labelBlockH,
-          measurer.measure(t.name, baseStyle, maxWidth: taskWidth - 10).height);
-    }
-  }
-  // Horizontal axis under the task row; faces hang below it, higher
-  // scores closer to the axis (upstream journey vertical placement).
-  final axisY = taskLabelTop + labelBlockH + 26;
-
-  var x = 0.0;
+  // Flatten tasks into a single continuous row (global index i), tracking
+  // section spans. x = i*taskMargin + i*width + leftMargin.
+  var globalIndex = 0;
+  var lastX = leftMargin;
   var sectionIndex = 0;
   for (final section in diagram.sections) {
-    final sectionWidth =
-        section.tasks.length * (taskWidth + taskGap) - taskGap;
+    final count = section.tasks.length;
     final fill = _sectionFills[sectionIndex % _sectionFills.length];
+    final sectionX = globalIndex * _taskMargin + globalIndex * _boxWidth +
+        leftMargin;
     if (section.name.isNotEmpty) {
+      final sectionWidth =
+          _boxWidth * count + _diagramMarginX * (count - 1);
       final size = measurer.measure(section.name, baseStyle);
       nodes.add(SceneGroup(id: 'section_$sectionIndex', children: [
         SceneShape(
           geometry: RectGeometry(
-              Rect.fromLTWH(x, sectionTop, sectionWidth, sectionH),
+              Rect.fromLTWH(sectionX, sectionY, sectionWidth, _boxHeight),
               rx: 3,
               ry: 3),
           fill: Fill(fill),
-          stroke: Stroke(color: theme.nodeBorder, width: 0.7),
         ),
         SceneText(
           text: section.name,
-          bounds: Rect.fromLTWH(x + sectionWidth / 2 - size.width / 2,
-              sectionTop + sectionH / 2 - size.height / 2, size.width,
+          bounds: Rect.fromLTWH(
+              sectionX + sectionWidth / 2 - size.width / 2,
+              sectionY + _boxHeight / 2 - size.height / 2,
+              size.width,
               size.height),
-          style: baseStyle.copyWith(fontWeight: 700),
-          color: theme.textColor,
+          style: baseStyle,
+          color: _sectionTextColor,
         ),
       ]));
     }
     for (final t in section.tasks) {
-      final cx = x + taskWidth / 2;
+      final taskX = globalIndex * _taskMargin + globalIndex * _boxWidth +
+          leftMargin;
+      final cx = taskX + _boxWidth / 2;
+      final faceY = faceBaseY + (5 - t.score) * 30.0;
       final nameSize =
-          measurer.measure(t.name, baseStyle, maxWidth: taskWidth - 10);
-      final faceY = axisY + 34 + (5 - t.score) * 26.0;
+          measurer.measure(t.name, baseStyle, maxWidth: _boxWidth);
       final children = <SceneNode>[
+        // Drop line from task box top edge down to the descender baseline.
+        SceneShape(
+          geometry: PathGeometry(
+              [MoveTo(Point(cx, taskY)), LineTo(Point(cx, maxHeight))]),
+          stroke: Stroke(
+              color: const Color(0xff666666), width: 1, dash: const [4, 2]),
+        ),
+        ..._face(Point(cx, faceY), t.score),
         SceneShape(
           geometry: RectGeometry(
-              Rect.fromLTWH(x, taskLabelTop, taskWidth, labelBlockH + 12),
+              Rect.fromLTWH(taskX, taskY, _boxWidth, _boxHeight),
               rx: 3,
               ry: 3),
           fill: Fill(fill),
-          stroke: Stroke(color: theme.nodeBorder, width: 0.7),
         ),
         SceneText(
           text: t.name,
           bounds: Rect.fromLTWH(cx - nameSize.width / 2,
-              taskLabelTop + 6, nameSize.width, nameSize.height),
+              taskY + _boxHeight / 2 - nameSize.height / 2, nameSize.width,
+              nameSize.height),
           style: baseStyle,
-          color: theme.textColor,
+          color: _sectionTextColor,
         ),
-        // Drop line from the axis to the face.
-        SceneShape(
-          geometry: PathGeometry(
-              [MoveTo(Point(cx, axisY)), LineTo(Point(cx, faceY - 17))]),
-          stroke: Stroke(
-              color: theme.lineColor, width: 0.8, dash: const [3, 3]),
-        ),
-        ..._face(Point(cx, faceY), t.score, theme),
       ];
-      // Actor dots pinned to the task box's top edge (upstream look).
-      var dotX = x + 10.0;
+      // Actor dots on the task box top edge: cx start task.x+14, step 10,
+      // r7, stroke black.
+      var dotX = taskX + 14.0;
       for (final a in t.actors) {
         children.add(SceneShape(
-          geometry: CircleGeometry(Point(dotX, taskLabelTop), 5),
+          geometry: CircleGeometry(Point(dotX, taskY), 7),
           fill: Fill(actorColor[a]!),
-          stroke: Stroke(color: theme.background, width: 1),
+          stroke: Stroke(color: const Color(0xff000000), width: 1),
         ));
-        dotX += 13;
+        dotX += 10;
       }
-      nodes.add(SceneGroup(id: 'task_${t.name}', semanticLabel: t.name,
-          children: children));
-      x += taskWidth + taskGap;
+      nodes.add(SceneGroup(
+          id: 'task_${t.name}', semanticLabel: t.name, children: children));
+      lastX = taskX + _boxWidth + _taskMargin;
+      globalIndex++;
     }
     sectionIndex++;
   }
 
-  // Axis arrow spanning all tasks.
-  if (x > 0) {
+  // Activity line at y = height*4 = 260, from leftMargin to the right edge,
+  // stroke-width 4 black, with a small triangular arrowhead.
+  if (globalIndex > 0) {
+    const activityY = _boxHeight * 4; // 260
+    final lineEnd = lastX - _taskMargin + _diagramMarginX; // ~ stopx
     nodes.add(SceneShape(
       geometry: PathGeometry([
-        MoveTo(Point(0, axisY)),
-        LineTo(Point(x + 8, axisY)),
-        MoveTo(Point(x - 1, axisY - 5)),
-        LineTo(Point(x + 8, axisY)),
-        LineTo(Point(x - 1, axisY + 5)),
+        MoveTo(Point(leftMargin, activityY)),
+        LineTo(Point(lineEnd, activityY)),
       ]),
-      stroke: Stroke(color: theme.lineColor, width: 1.5),
+      stroke: Stroke(color: const Color(0xff000000), width: 4),
+    ));
+    // Arrowhead: marker path 'M 0,0 V 4 L6,2 Z' anchored at the line tip.
+    nodes.add(SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(lineEnd, activityY - 4)),
+        LineTo(Point(lineEnd, activityY + 4)),
+        LineTo(Point(lineEnd + 8, activityY)),
+        ClosePath(),
+      ]),
+      fill: Fill(const Color(0xff000000)),
     ));
   }
 
-  var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);
+  // Title: top-left at x = leftMargin, y = 25, bold, titleFontSize '4ex'.
+  // 4ex ≈ 4 * (fontSize/2) → ~2*taskFontSize for a large heading.
   final title = diagram.title;
   if (title != null && title.isNotEmpty) {
     final style = TextStyleSpec(
         fontFamily: theme.fontFamily,
-        fontSize: theme.fontSize * 1.2,
+        fontSize: _taskFontSize * 2,
         fontWeight: 700);
     final size = measurer.measure(title, style);
-    final node = SceneText(
+    nodes.add(SceneText(
       text: title,
-      bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-          bounds.top - size.height - 12, size.width, size.height),
+      bounds: Rect.fromLTWH(leftMargin, 25 - size.height, size.width,
+          size.height),
       style: style,
       color: theme.titleColor,
-    );
-    nodes.add(node);
-    bounds = bounds.union(node.bounds);
+      align: TextAlignH.left,
+    ));
   }
 
-  const pad = 12.0;
+  var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);
+  // Upstream viewBox starts at y = -25 to leave room for the title row.
+  bounds = bounds.union(const Rect.fromLTWH(0, -25, 1, 1));
+
+  const pad = _diagramMarginY;
   final dx = pad - bounds.left;
   final dy = pad - bounds.top;
   return RenderScene(
@@ -306,43 +363,88 @@ RenderScene layoutJourney(
   );
 }
 
-/// Smiley face colored by score: red (<=2), yellow (3), green (>=4); mouth
-/// follows the mood.
-List<SceneNode> _face(Point c, int score, MermaidTheme theme) {
-  final color = score <= 2
-      ? const Color(0xffe57373)
-      : score == 3
-          ? const Color(0xffffe082)
-          : const Color(0xff81c784);
+/// Knuth-plass-ish legend label wrapping at [maxWidth] with hyphenation of
+/// over-long words (matches drawActorLegend).
+List<String> _wrapLegendLabel(
+    String text, TextStyleSpec style, TextMeasurer measurer, double maxWidth) {
+  if (measurer.measure(text, style).width <= maxWidth) return [text];
+  final lines = <String>[];
+  var current = '';
+  for (final word in text.split(' ')) {
+    final test = current.isEmpty ? word : '$current $word';
+    if (measurer.measure(test, style).width > maxWidth) {
+      if (current.isNotEmpty) lines.add(current);
+      current = word;
+      // Break an over-long word with a trailing hyphen.
+      if (measurer.measure(word, style).width > maxWidth) {
+        var broken = '';
+        for (final char in word.split('')) {
+          broken += char;
+          if (measurer.measure('$broken-', style).width > maxWidth) {
+            lines.add('${broken.substring(0, broken.length - 1)}-');
+            broken = char;
+          }
+        }
+        current = broken;
+      }
+    } else {
+      current = test;
+    }
+  }
+  if (current.isNotEmpty) lines.add(current);
+  return lines.isEmpty ? [text] : lines;
+}
+
+/// Journey smiley face. Fill is a uniform cornsilk (`.face` CSS = #FFF8DC,
+/// stroke #999) for every score; the mood is conveyed by the mouth only.
+List<SceneNode> _face(Point c, int score) {
   const r = 15.0;
-  final mouth = switch (score) {
-    <= 2 => PathGeometry([
-        MoveTo(Point(c.x - 6, c.y + 8)),
-        QuadTo(Point(c.x, c.y + 2), Point(c.x + 6, c.y + 8)),
+  const eyeColor = Color(0xff666666);
+  // Mouth: crescent arc approximated with cubic curves. smile (>3),
+  // sad (<3), flat line (==3) — upstream uses a d3 ring-arc.
+  final SceneShape mouth;
+  if (score > 3) {
+    // Smile: downward crescent below centre (translate +2).
+    mouth = SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(c.x - r / 2, c.y + 2)),
+        CubicTo(Point(c.x - r / 4, c.y + 2 + r / 2),
+            Point(c.x + r / 4, c.y + 2 + r / 2), Point(c.x + r / 2, c.y + 2)),
       ]),
-    3 => PathGeometry([
-        MoveTo(Point(c.x - 6, c.y + 6)),
-        LineTo(Point(c.x + 6, c.y + 6)),
+      stroke: Stroke(color: eyeColor, width: r / 2 - r / 2.2),
+    );
+  } else if (score < 3) {
+    // Sad: upward crescent below centre (translate +7).
+    mouth = SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(c.x - r / 2, c.y + 7)),
+        CubicTo(Point(c.x - r / 4, c.y + 7 - r / 2),
+            Point(c.x + r / 4, c.y + 7 - r / 2), Point(c.x + r / 2, c.y + 7)),
       ]),
-    _ => PathGeometry([
-        MoveTo(Point(c.x - 6, c.y + 4)),
-        QuadTo(Point(c.x, c.y + 10), Point(c.x + 6, c.y + 4)),
+      stroke: Stroke(color: eyeColor, width: r / 2 - r / 2.2),
+    );
+  } else {
+    // Ambivalent: flat line.
+    mouth = SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(c.x - 5, c.y + 7)),
+        LineTo(Point(c.x + 5, c.y + 7)),
       ]),
-  };
+      stroke: Stroke(color: eyeColor, width: 1),
+    );
+  }
   return [
     SceneShape(
       geometry: CircleGeometry(c, r),
-      fill: Fill(color),
-      stroke: Stroke(color: theme.lineColor),
+      fill: Fill(const Color(0xffFFF8DC)),
+      stroke: Stroke(color: const Color(0xff999999), width: 2),
     ),
     SceneShape(
-        geometry: CircleGeometry(Point(c.x - 5, c.y - 4), 1.8),
-        fill: Fill(theme.lineColor)),
+        geometry: CircleGeometry(Point(c.x - r / 3, c.y - r / 3), 1.5),
+        fill: Fill(eyeColor)),
     SceneShape(
-        geometry: CircleGeometry(Point(c.x + 5, c.y - 4), 1.8),
-        fill: Fill(theme.lineColor)),
-    SceneShape(
-        geometry: mouth,
-        stroke: Stroke(color: theme.lineColor, width: 1.5)),
+        geometry: CircleGeometry(Point(c.x + r / 3, c.y - r / 3), 1.5),
+        fill: Fill(eyeColor)),
+    mouth,
   ];
 }

@@ -26,14 +26,19 @@ const double _messageMargin = 35;
 const double _activationWidth = 10;
 const double _blockLabelHeight = 24;
 
-// theme-default note/activation colors (not yet part of MermaidTheme).
+// theme-default sequence colors. These mirror mermaid's default theme exactly
+// (theme-default.js): noteBkgColor=#fff5ad, noteBorderColor=border2=#aaaa33,
+// activationBkgColor=#f4f4f4, activationBorderColor=#666, actorLineColor=
+// actorBorder=border1=#9370DB, labelBoxBorderColor=actorBorder=#9370DB.
 const _noteBkg = Color(0xfffff5ad);
 const _noteBorder = Color(0xffaaaa33);
 const _activationBkg = Color(0xfff4f4f4);
 const _activationBorder = Color(0xff666666);
-const _lifelineColor = Color(0xffb3a2e3);
-// Upstream .loopLine / labelBox styling.
-const _frameBorder = Color(0xffccccff);
+// `.actor-line` CSS color (actorLineColor) wins over the inline #999 presentation
+// attribute, so lifelines render in actorBorder (#9370DB) at width 0.5.
+const _lifelineColor = Color(0xff9370DB);
+// Upstream .loopLine / labelBox border = labelBoxBorderColor = actorBorder.
+const _frameBorder = Color(0xff9370DB);
 
 RenderScene layoutSequence(
   SequenceDiagram diagram, {
@@ -191,10 +196,13 @@ class _SequenceLayout {
     final bottomBoxTop = y + 2 * _boxMargin;
 
     for (final (id, startY, endY, depth) in activationRects) {
-      final cx = columns[id]!.x + depth * 3;
+      // Upstream: left = center + (stackedSize-1)*activationWidth/2, width
+      // activationWidth. `depth` is the 0-based stack index (stackedSize-1).
+      final left =
+          columns[id]!.x + depth * _activationWidth / 2;
       activationNodes.add(SceneShape(
         geometry: RectGeometry(Rect.fromLTWH(
-            cx - _activationWidth / 2, startY, _activationWidth, endY - startY)),
+            left, startY, _activationWidth, endY - startY)),
         fill: const Fill(_activationBkg),
         stroke: const Stroke(color: _activationBorder),
       ));
@@ -220,7 +228,6 @@ class _SequenceLayout {
             Rect.fromLTWH(left, top, right - left, bottomBoxTop - top + _boxMargin)),
         fill: Fill((box.color != null ? Color.tryParse(box.color!) : null) ??
             const Color(0x00000000)),
-        stroke: const Stroke(color: _activationBorder),
       ));
       if (box.label.isNotEmpty) {
         final size = measurer.measure(box.label, baseStyle);
@@ -243,7 +250,7 @@ class _SequenceLayout {
           MoveTo(Point(col.x, top)),
           LineTo(Point(col.x, bottom)),
         ]),
-        stroke: const Stroke(color: _lifelineColor, width: 1),
+        stroke: const Stroke(color: _lifelineColor, width: 0.5),
       ));
       // Top box: at the create point for created participants, else the top.
       _actorBox(col, createTop[id] ?? 0);
@@ -316,70 +323,77 @@ class _SequenceLayout {
       return;
     }
 
-    // Minimum center distance between adjacent columns, widened by message
-    // and note text between that pair (upstream calculateActorMargins).
-    final minGap = List<double>.filled(math.max(0, order.length - 1), 0);
-    double need(String a, String b, double width) {
-      final ia = order.indexOf(a);
-      final ib = order.indexOf(b);
-      if (ia < 0 || ib < 0 || ia == ib) return 0;
-      final lo = math.min(ia, ib);
-      final hi = math.max(ia, ib);
-      // Spread the requirement across the spanned gaps.
-      return width / (hi - lo);
-    }
-
-    void widen(String a, String b, double width) {
-      final ia = order.indexOf(a);
-      final ib = order.indexOf(b);
-      if (ia < 0 || ib < 0 || ia == ib) return;
-      final lo = math.min(ia, ib);
-      final hi = math.max(ia, ib);
-      final per = need(a, b, width);
-      for (var i = lo; i < hi; i++) {
-        minGap[i] = math.max(minGap[i], per);
-      }
+    // Per-actor max "message width" exactly like upstream
+    // getMaxMessageWidthPerActor: only messages/notes touching ADJACENT actors
+    // contribute, and the width is attributed to the LEFT actor of the gap.
+    // `maxMsgWidth[i]` holds the widest message held by actor order[i] toward
+    // its next actor order[i+1] (gap index i). messageWidth = text + 2*wrapPad.
+    const wrapPadding = 10.0;
+    final maxMsgWidth = List<double>.filled(math.max(0, order.length - 1), 0);
+    void hold(int gapIndex, double width) {
+      if (gapIndex < 0 || gapIndex >= maxMsgWidth.length) return;
+      maxMsgWidth[gapIndex] = math.max(maxMsgWidth[gapIndex], width);
     }
 
     for (final event in diagram.events) {
       switch (event) {
         case SeqMessage(:final from, :final to, :final text):
           if (text.isEmpty) break;
-          final w = measurer.measure(text, baseStyle).width + 2 * _boxTextMargin;
+          final w = measurer.measure(text, baseStyle).width + 2 * wrapPadding;
+          final ia = order.indexOf(from);
+          final ib = order.indexOf(to);
+          if (ia < 0 || ib < 0) break;
           if (from == to) {
-            // Self message text hangs to the right of the lifeline.
-            final i = order.indexOf(from);
-            if (i >= 0 && i < minGap.length) {
-              minGap[i] = math.max(minGap[i], w + 40);
-            }
-          } else {
-            widen(from, to, w);
+            // Self message: half-width held on both adjacent sides.
+            hold(ia, w / 2);
+            hold(ia - 1, w / 2);
+          } else if ((ia - ib).abs() == 1) {
+            // Adjacent message: attribute to the left actor's gap.
+            hold(math.min(ia, ib), w);
           }
+          // Non-adjacent (spanning) messages do not widen columns upstream.
         case SeqNote(:final placement, :final target, :final target2, :final text):
           final w = measurer.measure(text, baseStyle, maxWidth: 250).width +
-              2 * _noteMargin;
-          if (placement == NotePlacement.over && target2 != null) {
-            widen(target, target2, w - 50);
-          } else if (placement != NotePlacement.over) {
-            final i = order.indexOf(target);
-            final gapIndex = placement == NotePlacement.rightOf ? i : i - 1;
-            if (gapIndex >= 0 && gapIndex < minGap.length) {
-              minGap[gapIndex] = math.max(minGap[gapIndex], w + 10);
-            }
+              2 * wrapPadding;
+          final i = order.indexOf(target);
+          if (i < 0) break;
+          switch (placement) {
+            case NotePlacement.rightOf:
+              hold(i, w);
+            case NotePlacement.leftOf:
+              hold(i - 1, w);
+            case NotePlacement.over:
+              if (target2 != null) {
+                final j = order.indexOf(target2);
+                if (j >= 0) {
+                  final lo = math.min(i, j);
+                  final hi = math.max(i, j);
+                  if (hi - lo == 1) hold(lo, w - _actorMinWidth);
+                }
+              } else {
+                // Over a single actor: half to each adjacent gap.
+                hold(i - 1, w / 2);
+                hold(i, w / 2);
+              }
           }
         default:
           break;
       }
     }
 
+    // calculateActorMargins: actor.margin =
+    //   max(actorMargin, messageWidth + actorMargin - leftW/2 - rightW/2).
+    // Center distance = leftW/2 + margin + rightW/2.
     var x = columns[order.first]!.boxWidth / 2;
     columns[order.first]!.x = x;
     for (var i = 1; i < order.length; i++) {
       final prev = columns[order[i - 1]]!;
       final cur = columns[order[i]]!;
-      final centerDist = prev.boxWidth / 2 +
-          cur.boxWidth / 2 +
-          math.max(_actorMargin, minGap[i - 1]);
+      final msgWidth = maxMsgWidth[i - 1];
+      final margin = math.max(
+          _actorMargin,
+          msgWidth + _actorMargin - prev.boxWidth / 2 - cur.boxWidth / 2);
+      final centerDist = prev.boxWidth / 2 + margin + cur.boxWidth / 2;
       x += centerDist;
       cur.x = x;
     }
@@ -393,32 +407,39 @@ class _SequenceLayout {
         col.x - col.boxWidth / 2, top, col.boxWidth, _actorHeight);
     final children = <SceneNode>[];
     if (p.isActor) {
-      // Stick figure above the name.
+      // Stick figure above the name, matching svgDraw drawActorTypeActor
+      // (default look, scale=1): head circle r=15 at top+10, torso top+25→+45,
+      // arms horizontal at top+33 spanning ACTOR_TYPE_WIDTH (=36, ±18), legs
+      // from the arm ends at top+60 to the torso base at top+45.
+      const halfArm = 18.0; // ACTOR_TYPE_WIDTH / 2
       final cx = col.x;
-      final headY = top + 12;
       children.addAll([
         SceneShape(
-          geometry: CircleGeometry(Point(cx, headY), 7),
-          stroke: Stroke(color: theme.nodeBorder, width: 1.5),
-          fill: Fill(theme.mainBkg),
+          geometry: PathGeometry([
+            // torso
+            MoveTo(Point(cx, top + 25)),
+            LineTo(Point(cx, top + 45)),
+            // arms
+            MoveTo(Point(cx - halfArm, top + 33)),
+            LineTo(Point(cx + halfArm, top + 33)),
+            // left leg
+            MoveTo(Point(cx - halfArm, top + 60)),
+            LineTo(Point(cx, top + 45)),
+            // right leg
+            MoveTo(Point(cx, top + 45)),
+            LineTo(Point(cx + halfArm - 2, top + 60)),
+          ]),
+          stroke: Stroke(color: theme.nodeBorder, width: 2),
         ),
         SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(cx, headY + 7)),
-            LineTo(Point(cx, headY + 25)),
-            MoveTo(Point(cx - 10, headY + 13)),
-            LineTo(Point(cx + 10, headY + 13)),
-            MoveTo(Point(cx, headY + 25)),
-            LineTo(Point(cx - 8, headY + 37)),
-            MoveTo(Point(cx, headY + 25)),
-            LineTo(Point(cx + 8, headY + 37)),
-          ]),
-          stroke: Stroke(color: theme.nodeBorder, width: 1.5),
+          geometry: CircleGeometry(Point(cx, top + 10), 15),
+          stroke: Stroke(color: theme.nodeBorder, width: 2),
+          fill: Fill(theme.mainBkg),
         ),
         SceneText(
           text: p.label,
           bounds: Rect.fromLTWH(col.x - col.labelSize.width / 2,
-              headY + 39, col.labelSize.width, col.labelSize.height),
+              top + 64, col.labelSize.width, col.labelSize.height),
           style: baseStyle,
           color: theme.textColor,
         ),
@@ -460,7 +481,7 @@ class _SequenceLayout {
     double edge(String id, _Column col) {
       final depth = activations[id]?.length ?? 0;
       if (depth == 0) return col.x;
-      return col.x + (depth - 1) * 3 + dir * _activationWidth / 2 * 0;
+      return col.x + (depth - 1) * _activationWidth / 2;
     }
 
     final x1 = edge(msg.from, fromCol);
@@ -482,7 +503,7 @@ class _SequenceLayout {
       stroke: Stroke(
         color: theme.lineColor,
         width: 1.5,
-        dash: msg.arrow.dotted ? const [3, 3] : null,
+        dash: msg.arrow.dotted ? const [2, 2] : null,
       ),
     ));
 
@@ -523,7 +544,7 @@ class _SequenceLayout {
         stroke: Stroke(
           color: theme.lineColor,
           width: 1.5,
-          dash: msg.arrow.dotted ? const [3, 3] : null,
+          dash: msg.arrow.dotted ? const [2, 2] : null,
         ),
       ),
       ..._head(msg.arrow, Point(x + 2, y + h), const Point(-1, 0.2)),
@@ -702,25 +723,28 @@ class _SequenceLayout {
     frames.add(SceneGroup(id: 'frame_$keyword', children: [
       SceneShape(
         geometry: RectGeometry(rect),
-        stroke: const Stroke(color: _frameBorder, dash: [2, 2]),
+        // Upstream .loopLine: stroke-width 2, dash 2,2, labelBoxBorderColor.
+        stroke: const Stroke(color: _frameBorder, width: 2, dash: [2, 2]),
       ),
       for (final (dy, _) in frame.dividers)
         SceneShape(
           geometry: PathGeometry(
               [MoveTo(Point(rect.left, dy)), LineTo(Point(rect.right, dy))]),
-          stroke: const Stroke(color: _frameBorder, dash: [2, 2]),
+          stroke: const Stroke(color: _frameBorder, width: 2, dash: [2, 2]),
         ),
     ]));
     // Tab and labels paint above everything (activation bars would occlude
     // centered divider labels otherwise).
     final labelChildren = <SceneNode>[
-      // Pentagon label tab, upstream labelBox shape.
+      // Pentagon label tab, upstream labelBox genPoints with cut=7 (diagonal
+      // x offset cut*1.2 = 8.4). fill=labelBoxBkgColor(=mainBkg),
+      // stroke=labelBoxBorderColor.
       SceneShape(
         geometry: PolygonGeometry([
           Point(rect.left, rect.top),
           Point(rect.left + tabW, rect.top),
-          Point(rect.left + tabW, rect.top + tabH - 6),
-          Point(rect.left + tabW - 6, rect.top + tabH),
+          Point(rect.left + tabW, rect.top + tabH - 7),
+          Point(rect.left + tabW - 8.4, rect.top + tabH),
           Point(rect.left, rect.top + tabH),
         ]),
         fill: Fill(theme.mainBkg),
@@ -734,10 +758,24 @@ class _SequenceLayout {
         color: theme.textColor,
         align: TextAlignH.left,
       ),
-      if (frame.start.label.isNotEmpty)
-        _frameLabel(frame.start.label,
-            Point(rect.left + tabW + 8, rect.top + 2)),
     ];
+    // Block title (loopText): centered in the frame, shifted right by half the
+    // labelBoxWidth (=50) like upstream drawLoop, at top + boxMargin +
+    // boxTextMargin. Rendered with brackets, e.g. [is success].
+    if (frame.start.label.isNotEmpty) {
+      final titleText = '[${frame.start.label}]';
+      final size = measurer.measure(titleText, baseStyle);
+      const labelBoxWidth = 50.0;
+      final cx = rect.left + labelBoxWidth / 2 + (rect.right - rect.left) / 2;
+      labelChildren.add(SceneText(
+        text: titleText,
+        bounds: Rect.fromLTWH(cx - size.width / 2,
+            rect.top + _boxMargin + _boxTextMargin, size.width, size.height),
+        style: baseStyle,
+        color: theme.textColor,
+        align: TextAlignH.center,
+      ));
+    }
     for (final (dy, label) in frame.dividers) {
       if (label.isEmpty) continue;
       final size = measurer.measure('[$label]', baseStyle);

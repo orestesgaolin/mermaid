@@ -14,6 +14,9 @@ PieChart parsePieChart(String source) {
   String? title = frontTitle;
   var showData = false;
   final slices = <PieSlice>[];
+  // Upstream addSection stores sections in a Map: a repeated label is ignored
+  // (first value wins). Track seen labels to mirror that first-wins dedup.
+  final seenLabels = <String>{};
   var seenHeader = false;
 
   for (var i = 0; i < lines.length; i++) {
@@ -53,7 +56,10 @@ PieChart parsePieChart(String source) {
         throw MermaidParseException('invalid pie value "${m.group(2)}"',
             line: i + 1);
       }
-      slices.add(PieSlice(label: m.group(1)!, value: value));
+      final label = m.group(1)!;
+      if (seenLabels.add(label)) {
+        slices.add(PieSlice(label: label, value: value));
+      }
       continue;
     }
 

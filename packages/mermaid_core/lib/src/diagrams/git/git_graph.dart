@@ -2,9 +2,10 @@
 ///
 /// Reference: upstream gitGraphAst / gitGraphRenderer. Supports the core
 /// operations (commit, branch, checkout/switch, merge, cherry-pick) with
-/// commit id/type/tag attributes, and the default left-to-right (`LR`) and
-/// top-to-bottom (`TB`) orientations. Commits are positioned by insertion
-/// order (temporal layout); each branch gets its own lane.
+/// commit id/type/tag attributes, and the `LR`, `TB` and `BT` orientations.
+/// Commit positions are parent-relative (each commit sits one step past its
+/// closest parent); each branch gets its own lane. Default theme values are
+/// inlined to match mermaid.js's default-theme gitGraph render.
 library;
 
 import 'dart:math' as math;
@@ -21,7 +22,7 @@ import '../../theme/theme.dart';
 
 enum GitCommitType { normal, reverse, highlight }
 
-enum GitDirection { leftRight, topBottom }
+enum GitDirection { leftRight, topBottom, bottomTop }
 
 class GitCommit {
   GitCommit({
@@ -30,10 +31,11 @@ class GitCommit {
     required this.branch,
     required this.parents,
     this.type = GitCommitType.normal,
-    this.tag,
+    List<String>? tags,
+    this.customId = false,
     this.isMerge = false,
     this.isCherryPick = false,
-  });
+  }) : tags = tags ?? const [];
 
   final String id;
 
@@ -44,7 +46,17 @@ class GitCommit {
   /// Parent commit ids (0 for the first commit, 1 normally, 2 for a merge).
   final List<String> parents;
   final GitCommitType type;
-  final String? tag;
+
+  /// Tags attached to this commit; rendered as stacked flag labels.
+  final List<String> tags;
+
+  /// The first tag, or null when untagged. Convenience accessor kept for
+  /// callers that expect a single tag.
+  String? get tag => tags.isEmpty ? null : tags.first;
+
+  /// True when the commit's id was supplied explicitly (`id:`); controls
+  /// whether a merge commit shows its label (upstream `customId`).
+  final bool customId;
   final bool isMerge;
   final bool isCherryPick;
 }
@@ -58,7 +70,7 @@ class GitGraph {
 
   final List<GitCommit> commits;
 
-  /// Branch names in declaration order (main first).
+  /// Branch names in declaration order (main first), adjusted for `order:`.
   final List<String> branchOrder;
   final GitDirection direction;
 }
@@ -72,6 +84,7 @@ GitGraph parseGitGraph(String source) {
   final commitById = <String, GitCommit>{};
   final branchOrder = <String>['main'];
   final branchHead = <String, String?>{'main': null};
+  final branchOrderValue = <String, int>{'main': 0};
   var current = 'main';
   var seq = 0;
   var autoId = 0;
@@ -86,11 +99,11 @@ GitGraph parseGitGraph(String source) {
   }
 
   // Parses `key: value` / `key:value` attributes (id/type/tag) from the
-  // remainder of a commit/merge line.
-  ({String? id, GitCommitType type, String? tag}) parseAttrs(String rest) {
+  // remainder of a commit/merge line. `tag` may appear more than once.
+  ({String? id, GitCommitType type, List<String> tags}) parseAttrs(String rest) {
     String? id;
     var type = GitCommitType.normal;
-    String? tag;
+    final tags = <String>[];
     final re = RegExp(r'(id|type|tag)\s*:\s*("[^"]*"|\S+)');
     for (final m in re.allMatches(rest)) {
       final key = m.group(1)!;
@@ -99,7 +112,7 @@ GitGraph parseGitGraph(String source) {
         case 'id':
           id = value;
         case 'tag':
-          tag = value;
+          tags.add(value);
         case 'type':
           type = switch (value.toUpperCase()) {
             'REVERSE' => GitCommitType.reverse,
@@ -108,7 +121,12 @@ GitGraph parseGitGraph(String source) {
           };
       }
     }
-    return (id: id, type: type, tag: tag);
+    return (id: id, type: type, tags: tags);
+  }
+
+  int? parseOrder(String rest) {
+    final m = RegExp(r'order\s*:\s*(\d+)').firstMatch(rest);
+    return m == null ? null : int.tryParse(m.group(1)!);
   }
 
   for (var i = 0; i < lines.length; i++) {
@@ -126,7 +144,8 @@ GitGraph parseGitGraph(String source) {
         throw MermaidParseException('expected "gitGraph" header', line: i + 1);
       }
       final dir = m.group(1)?.toUpperCase();
-      if (dir == 'TB' || dir == 'BT') direction = GitDirection.topBottom;
+      if (dir == 'TB') direction = GitDirection.topBottom;
+      if (dir == 'BT') direction = GitDirection.bottomTop;
       seenHeader = true;
       final trailing = m.group(2)!.trim();
       if (trailing.isEmpty) continue;
@@ -147,7 +166,8 @@ GitGraph parseGitGraph(String source) {
           branch: current,
           parents: parents,
           type: attrs.type,
-          tag: attrs.tag,
+          tags: attrs.tags,
+          customId: attrs.id != null,
         );
         commits.add(c);
         commitById[id] = c;
@@ -159,6 +179,8 @@ GitGraph parseGitGraph(String source) {
           throw MermaidParseException('branch requires a name', line: i + 1);
         }
         if (!branchOrder.contains(name)) branchOrder.add(name);
+        final order = parseOrder(rest);
+        if (order != null) branchOrderValue[name] = order;
         branchHead[name] = branchHead[current];
         current = name;
 
@@ -189,7 +211,8 @@ GitGraph parseGitGraph(String source) {
           branch: current,
           parents: parents,
           type: attrs.type,
-          tag: attrs.tag,
+          tags: attrs.tags,
+          customId: attrs.id != null,
           isMerge: true,
         );
         commits.add(c);
@@ -204,7 +227,8 @@ GitGraph parseGitGraph(String source) {
           seq: seq++,
           branch: current,
           parents: parents,
-          tag: attrs.id, // show the picked id as a tag
+          // show the picked id as a tag
+          tags: [if (attrs.id != null) attrs.id!, ...attrs.tags],
           isCherryPick: true,
         );
         commits.add(c);
@@ -220,6 +244,24 @@ GitGraph parseGitGraph(String source) {
   if (!seenHeader) {
     throw const MermaidParseException('empty gitGraph source');
   }
+
+  // Sort branches by their `order:` value when supplied (main stays 0 unless
+  // overridden), preserving declaration order as the tie-breaker — mirrors
+  // upstream `compareBranchesByOrder`.
+  if (branchOrderValue.length > 1) {
+    final declIndex = {
+      for (var i = 0; i < branchOrder.length; i++) branchOrder[i]: i,
+    };
+    branchOrder.sort((a, b) {
+      final oa = branchOrderValue[a];
+      final ob = branchOrderValue[b];
+      if (oa != null && ob != null && oa != ob) return oa.compareTo(ob);
+      if (oa != null && ob == null) return oa.compareTo(declIndex[b]!);
+      if (oa == null && ob != null) return declIndex[a]!.compareTo(ob);
+      return declIndex[a]!.compareTo(declIndex[b]!);
+    });
+  }
+
   return GitGraph(
     commits: commits,
     branchOrder: branchOrder,
@@ -227,22 +269,46 @@ GitGraph parseGitGraph(String source) {
   );
 }
 
-/// Default branch palette (git0..git7), sampled from upstream's default-theme
-/// gitGraph render: git0 blue, git1 yellow, then saturated hue rotations.
-const _branchColors = <Color>[
-  Color(0xff0000ec),
-  Color(0xffdede00),
-  Color(0xff00d6b3),
-  Color(0xff0076ec),
-  Color(0xff00ecec),
-  Color(0xff00ec76),
-  Color(0xffec00ec),
-  Color(0xffec0000),
+// Default-theme gitGraph palette (git0..git7), matching upstream
+// theme-default.js: git0=darken(primaryColor #ECECFF,25), git1=darken(
+// secondaryColor #ffffde,25), git2=darken(tertiaryColor,25), and git3..7 are
+// hue-rotations of primaryColor, all darkened by 25 (HSL lightness). Branch /
+// commit / arrow colors all source these.
+const _gitColors = <Color>[
+  Color(0xff6c6cff), // git0
+  Color(0xffffff5e), // git1
+  Color(0xffceff6c), // git2
+  Color(0xff6cb6ff), // git3
+  Color(0xff6cffff), // git4
+  Color(0xff6cffb6), // git5
+  Color(0xffff6cff), // git6
+  Color(0xffff6c6c), // git7
 ];
 
-/// Perceived luminance, for readable label text on a branch fill.
-double _luminance(Color c) =>
-    (0.299 * c.red + 0.587 * c.green + 0.114 * c.blue) / 255;
+// gitInv{i} = invert(git{i}); used as the highlight outer-rect fill.
+const _gitInvColors = <Color>[
+  Color(0xff131300), // gitInv0 = darken(invert(git0),25)
+  Color(0xff0000a1), // gitInv1
+  Color(0xff310093), // gitInv2
+  Color(0xff934900), // gitInv3
+  Color(0xff930000), // gitInv4
+  Color(0xff930049), // gitInv5
+  Color(0xff009300), // gitInv6
+  Color(0xff009393), // gitInv7
+];
+
+// gitBranchLabel{i}: text color for the branch-label chip. label0/label3 use
+// invert(labelTextColor #000) = white, all others use labelTextColor (#000).
+const _gitBranchLabelColors = <Color>[
+  Color(0xffffffff), // 0
+  Color(0xff000000), // 1
+  Color(0xff000000), // 2
+  Color(0xffffffff), // 3
+  Color(0xff000000), // 4
+  Color(0xff000000), // 5
+  Color(0xff000000), // 6
+  Color(0xff000000), // 7
+];
 
 RenderScene layoutGitGraph(
   GitGraph graph, {
@@ -250,174 +316,332 @@ RenderScene layoutGitGraph(
   required MermaidTheme theme,
 }) {
   const commitR = 10.0;
-  const commitGap = 50.0; // along the time axis
-  const laneGap = 50.0; // between branch lanes
-  const labelStyleSize = 12.0;
+  const commitStep = 40.0; // COMMIT_STEP
+  const layoutOffset = 10.0; // LAYOUT_OFFSET
+  const defaultPos = 30.0; // TB/BT lane time-origin
+  // LR lane gap: 50 + 40 (rotateCommitLabel defaults true). TB/BT lanes add
+  // half the (rotated) commit-label width; we approximate with the same gap.
+  const laneGap = 90.0;
+  const commitLabelSize = 10.0;
+  const tagLabelSize = 10.0;
   final lr = graph.direction == GitDirection.leftRight;
-  final labelStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: labelStyleSize);
-  final branchLabelStyle = labelStyle.copyWith(fontWeight: 700);
+  final tb = graph.direction == GitDirection.topBottom ||
+      graph.direction == GitDirection.bottomTop;
+  final bt = graph.direction == GitDirection.bottomTop;
+
+  final commitLabelStyle =
+      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: commitLabelSize);
+  final tagLabelStyle =
+      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: tagLabelSize);
+  final branchLabelStyle = TextStyleSpec(
+      fontFamily: theme.fontFamily, fontSize: 12, fontWeight: 700);
 
   final laneOf = <String, int>{
     for (var i = 0; i < graph.branchOrder.length; i++) graph.branchOrder[i]: i,
   };
   Color branchColor(String b) =>
-      _branchColors[(laneOf[b] ?? 0) % _branchColors.length];
+      _gitColors[(laneOf[b] ?? 0) % _gitColors.length];
+  int branchIndex(String b) => (laneOf[b] ?? 0) % _gitColors.length;
 
-  // Position helpers: time axis grows along x (LR) or y (TB); lanes along
-  // the other axis.
-  const timeBase = 70.0; // leave room for branch labels
-  const laneBase = 40.0;
-  Point posOf(GitCommit c) {
-    final t = timeBase + c.seq * commitGap;
-    final l = laneBase + (laneOf[c.branch] ?? 0) * laneGap;
-    return lr ? Point(t, l) : Point(l, t);
-  }
+  // Lane spine coordinate (perpendicular to the time axis) for a branch.
+  double laneCoord(String b) => (laneOf[b] ?? 0) * laneGap;
 
-  final centers = <String, Point>{
-    for (final c in graph.commits) c.id: posOf(c),
-  };
-
-  final nodes = <SceneNode>[];
+  final commitById = {for (final c in graph.commits) c.id: c};
   final branchOf = {for (final c in graph.commits) c.id: c.branch};
 
-  // Branch lane lines: a solid horizontal (LR) / vertical (TB) line in the
-  // branch color spanning that branch's commits, like upstream's branch line.
+  // Parent-relative time positions: a commit sits one COMMIT_STEP past its
+  // closest parent along the time axis. Commits are walked in seq order; the
+  // running `pos` advances by COMMIT_STEP+LAYOUT_OFFSET each commit, and a
+  // commit's time is max(running pos, closestParent + step) so side branches
+  // can share a fork's slot. (Mirrors calculatePosition + the pos cursor.)
+  final timeOf = <String, double>{};
+  var pos = tb ? defaultPos : 0.0;
+  var maxPos = 0.0;
+  final ordered = [...graph.commits]..sort((a, b) => a.seq.compareTo(b.seq));
+  for (final c in ordered) {
+    double t;
+    if (c.parents.isEmpty) {
+      t = pos + layoutOffset;
+    } else {
+      var parentMax = double.negativeInfinity;
+      for (final pid in c.parents) {
+        final pt = timeOf[pid];
+        if (pt != null && pt > parentMax) parentMax = pt;
+      }
+      final fromParent =
+          parentMax.isFinite ? parentMax + commitStep : pos + layoutOffset;
+      final cursor = pos + layoutOffset;
+      t = math.max(fromParent, cursor);
+    }
+    timeOf[c.id] = t;
+    if (t > maxPos) maxPos = t;
+    pos = math.max(pos, t - layoutOffset) + commitStep + layoutOffset;
+  }
+  final timeSpanMax = maxPos + commitStep;
+
+  // For BT the time axis is reversed (origin at the bottom).
+  double timeToCoord(double t) => bt ? (timeSpanMax - t) : t;
+
+  Point centerOf(GitCommit c) {
+    final t = timeToCoord(timeOf[c.id]!);
+    final lane = laneCoord(c.branch);
+    // LR: commits sit 2px above the spine (upstream `branchY - 2`).
+    return lr ? Point(t, lane - 2) : Point(lane, t);
+  }
+
+  final centers = {for (final c in graph.commits) c.id: centerOf(c)};
+
+  final nodes = <SceneNode>[];
+
+  // Branch lane lines: a dashed neutral line at strokeWidth=1 spanning the
+  // whole diagram (0..maxPos along the time axis), colored lineColor — not the
+  // branch color (upstream `.branch` style).
   for (final b in graph.branchOrder) {
-    final pts = [
-      for (final c in graph.commits)
-        if (c.branch == b) centers[c.id]!
-    ];
-    if (pts.isEmpty) continue;
-    final lane = laneBase + (laneOf[b] ?? 0) * laneGap;
-    final lo = pts.map((p) => lr ? p.x : p.y).reduce(math.min);
-    final hi = pts.map((p) => lr ? p.x : p.y).reduce(math.max);
+    if (!graph.commits.any((c) => c.branch == b) && b != 'main') continue;
+    final spine = laneCoord(b);
+    final start = timeToCoord(tb ? defaultPos : 0);
+    final end = timeToCoord(timeSpanMax);
+    final lo = math.min(start, end);
+    final hi = math.max(start, end);
+    final p1 = lr ? Point(lo, spine - 2) : Point(spine, lo);
+    final p2 = lr ? Point(hi, spine - 2) : Point(spine, hi);
     nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(lr ? Point(lo, lane) : Point(lane, lo)),
-        LineTo(lr ? Point(hi, lane) : Point(lane, hi)),
-      ]),
-      stroke: Stroke(color: branchColor(b), width: 2.5),
+      geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
+      stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
     ));
   }
 
-  // Cross-branch connectors only: branch points (a commit whose parent is on
-  // another branch) and merges (the second parent). Same-branch parents are
-  // already covered by the lane line above.
+  // Arrows: one for EVERY parent → child edge (including consecutive
+  // same-branch commits). Stroke width 8, round caps, no fill, colored by the
+  // destination branch (or source branch for merge second parents / upward
+  // arrows). Bends are 20-radius quarter-circle arcs.
   for (final c in graph.commits) {
     final to = centers[c.id]!;
-    for (final pid in c.parents) {
+    for (var pi = 0; pi < c.parents.length; pi++) {
+      final pid = c.parents[pi];
       final from = centers[pid];
       if (from == null) continue;
-      final parentBranch = branchOf[pid];
-      if (parentBranch == c.branch) continue; // covered by the lane line
-      // Branch point → child's color; merge → the merged (parent) branch.
-      final color = branchColor(
-          c.isMerge && pid == c.parents.last ? parentBranch! : c.branch);
-      nodes.add(_edge(from, to, color, lr));
+      final parent = commitById[pid];
+      final isMergeSecond = c.isMerge && pi > 0;
+      // color = destination branch, except for merge-of-second-parent and
+      // "upward" arrows where the source branch's color is used.
+      final color = _arrowColor(
+        from: from,
+        to: to,
+        sourceBranch: branchOf[pid]!,
+        destBranch: c.branch,
+        isMergeSecond: isMergeSecond,
+        lr: lr,
+        branchColor: branchColor,
+      );
+      nodes.add(_arrow(
+        from: from,
+        to: to,
+        color: color,
+        lr: lr,
+        bt: bt,
+        isMergeSecond: isMergeSecond,
+        sourceMatchesFirstParent: parent != null && pi == 0,
+      ));
     }
   }
 
-  // Commit nodes.
+  // Commit bullets.
   for (final c in graph.commits) {
     final center = centers[c.id]!;
     final color = branchColor(c.branch);
+    final idx = branchIndex(c.branch);
     final children = <SceneNode>[];
     switch (c.type) {
       case GitCommitType.highlight:
+        // Outer rect 20×20 filled with gitInv{i}; inner rect 12×12 filled
+        // with primaryColor.
         children.add(SceneShape(
-          geometry: RectGeometry(
-              Rect.fromCenter(center, commitR * 2.4, commitR * 2.4)),
-          fill: Fill(color),
-          stroke: Stroke(color: theme.textColor, width: 2),
+          geometry: RectGeometry(Rect.fromCenter(center, 20, 20)),
+          fill: Fill(_gitInvColors[idx]),
+          stroke: Stroke(color: _gitInvColors[idx], width: 1),
+        ));
+        children.add(SceneShape(
+          geometry: RectGeometry(Rect.fromCenter(center, 12, 12)),
+          fill: Fill(theme.primaryColor),
+          stroke: Stroke(color: theme.primaryColor, width: 1),
         ));
       case GitCommitType.reverse:
         children.add(SceneShape(
           geometry: CircleGeometry(center, commitR),
           fill: Fill(color),
-          stroke: Stroke(color: theme.textColor, width: 1.5),
+          stroke: Stroke(color: color, width: 1),
         ));
-        // Cross marker.
-        final d = commitR * 0.6;
+        // Cross marker: arm 5, stroke-width 3, primaryColor.
+        const arm = 5.0;
         children.add(SceneShape(
           geometry: PathGeometry([
-            MoveTo(Point(center.x - d, center.y - d)),
-            LineTo(Point(center.x + d, center.y + d)),
-            MoveTo(Point(center.x + d, center.y - d)),
-            LineTo(Point(center.x - d, center.y + d)),
+            MoveTo(Point(center.x - arm, center.y - arm)),
+            LineTo(Point(center.x + arm, center.y + arm)),
+            MoveTo(Point(center.x - arm, center.y + arm)),
+            LineTo(Point(center.x + arm, center.y - arm)),
           ]),
-          stroke: Stroke(color: theme.textColor, width: 1.5),
+          stroke: Stroke(color: theme.primaryColor, width: 3),
         ));
       case GitCommitType.normal:
-        children.add(SceneShape(
-          geometry: CircleGeometry(center, commitR),
-          fill: Fill(c.isCherryPick ? const Color(0xffffffff) : color),
-          stroke: Stroke(color: color, width: c.isCherryPick ? 2 : 1.5),
-        ));
-        if (c.isMerge) {
+        if (c.isCherryPick) {
+          // Cherry glyph: r10 circle + two small white circles (r2.75 at
+          // x±3, y+2) + two white stems up to (x, y−5).
           children.add(SceneShape(
-            geometry: CircleGeometry(center, commitR * 0.45),
-            fill: Fill(theme.background),
+            geometry: CircleGeometry(center, commitR),
+            fill: Fill(color),
+            stroke: Stroke(color: color, width: 1),
           ));
+          for (final dx in const [-3.0, 3.0]) {
+            children.add(SceneShape(
+              geometry:
+                  CircleGeometry(Point(center.x + dx, center.y + 2), 2.75),
+              fill: const Fill(Color(0xffffffff)),
+            ));
+            children.add(SceneShape(
+              geometry: PathGeometry([
+                MoveTo(Point(center.x + dx, center.y + 1)),
+                LineTo(Point(center.x, center.y - 5)),
+              ]),
+              stroke: const Stroke(color: Color(0xffffffff), width: 1),
+            ));
+          }
+        } else {
+          children.add(SceneShape(
+            geometry: CircleGeometry(center, commitR),
+            fill: Fill(color),
+            stroke: Stroke(color: color, width: 1),
+          ));
+          if (c.isMerge) {
+            // Inner circle r6 filled with primaryColor.
+            children.add(SceneShape(
+              geometry: CircleGeometry(center, 6),
+              fill: Fill(theme.primaryColor),
+              stroke: Stroke(color: theme.primaryColor, width: 1),
+            ));
+          }
         }
     }
 
-    // Commit id label below (LR) / right (TB).
-    final showId = !c.id.startsWith('${c.branch}_') &&
-        !c.id.startsWith('merge_') &&
-        !c.id.startsWith('cherry_');
-    if (showId) {
-      final size = measurer.measure(c.id, labelStyle, maxWidth: 200);
+    // Commit id label. Shown for every commit except cherry-picks and
+    // non-custom-id merges, when showCommitLabel (default true). Font 10px,
+    // commitLabelColor (#000021) on a 50%-opacity commitLabelBackground rect
+    // (#ffffde). Rotated −45° for LR (rotateCommitLabel defaults true).
+    final showLabel =
+        !c.isCherryPick && (c.customId || !c.isMerge);
+    if (showLabel) {
+      final size = measurer.measure(c.id, commitLabelStyle, maxWidth: 200);
       final lblCenter = lr
-          ? Point(center.x, center.y + commitR + 4 + size.height / 2)
-          : Point(center.x + commitR + 4 + size.width / 2, center.y);
+          ? Point(center.x, center.y + commitR + 9 + size.height / 2)
+          : Point(center.x - commitR - 8 - size.width / 2, center.y);
+      const py = 2.0;
+      children.add(SceneShape(
+        geometry: RectGeometry(Rect.fromCenter(
+            lblCenter, size.width + 2 * py, size.height + 2 * py)),
+        fill: const Fill(Color(0xffffffde)),
+      ));
       children.add(SceneText(
         text: c.id,
         bounds: Rect.fromCenter(lblCenter, size.width, size.height),
-        style: labelStyle,
-        color: theme.textColor,
+        style: commitLabelStyle,
+        color: const Color(0xff000021),
+        rotation: lr ? -45 : 0,
       ));
     }
 
-    // Tag flag.
-    if (c.tag != null && c.tag!.isNotEmpty) {
-      final size = measurer.measure(c.tag!, labelStyle, maxWidth: 200);
-      final tagCenter = lr
-          ? Point(center.x, center.y - commitR - 6 - size.height / 2)
-          : Point(center.x - commitR - 6 - size.width / 2, center.y);
-      children.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromCenter(
-                tagCenter, size.width + 12, size.height + 6),
-            rx: 3,
-            ry: 3),
-        fill: const Fill(Color(0xfffff5ad)),
-        stroke: const Stroke(color: Color(0xffaaaa33)),
-      ));
-      children.add(SceneText(
-        text: c.tag!,
-        bounds: Rect.fromCenter(tagCenter, size.width, size.height),
-        style: labelStyle,
-        color: const Color(0xff333322),
-      ));
+    // Tags: a stack of flag labels offset by 20px each, placed above (LR) /
+    // left (TB) of the commit. Flag = 6-point polygon + r1.5 hole circle.
+    if (c.tags.isNotEmpty) {
+      var tagOffset = 0.0;
+      for (final tag in c.tags.reversed) {
+        final size = measurer.measure(tag, tagLabelStyle, maxWidth: 200);
+        final w = size.width;
+        final h = size.height;
+        const px = 4.0, py = 2.0;
+        if (lr) {
+          // Flag body center sits above the commit; the notch points down-left
+          // toward the spine.
+          final cy = center.y - 19.2 - tagOffset;
+          final cx = center.x;
+          final notchX = cx - w / 2 - px - 6; // pole side
+          final h2 = h / 2;
+          children.add(SceneShape(
+            geometry: PolygonGeometry([
+              Point(notchX, cy + py),
+              Point(notchX, cy - py),
+              Point(cx - w / 2 - px, cy - h2 - py),
+              Point(cx + w / 2 + px, cy - h2 - py),
+              Point(cx + w / 2 + px, cy + h2 + py),
+              Point(cx - w / 2 - px, cy + h2 + py),
+            ]),
+            fill: Fill(theme.primaryColor),
+            stroke: Stroke(color: theme.primaryBorderColor, width: 1),
+          ));
+          children.add(SceneShape(
+            geometry: CircleGeometry(Point(notchX + px / 2, cy), 1.5),
+            fill: Fill(theme.textColor),
+          ));
+          children.add(SceneText(
+            text: tag,
+            bounds: Rect.fromCenter(Point(cx, cy), w, h),
+            style: tagLabelStyle,
+            color: const Color(0xff131300),
+          ));
+        } else {
+          final cx = center.x - commitR - 10 - tagOffset;
+          final cy = center.y;
+          final w2 = w / 2 + px;
+          final h2 = h / 2 + py;
+          children.add(SceneShape(
+            geometry: PolygonGeometry([
+              Point(cx + w2 + 6, cy - py),
+              Point(cx + w2 + 6, cy + py),
+              Point(cx + w2, cy + h2),
+              Point(cx - w2, cy + h2),
+              Point(cx - w2, cy - h2),
+              Point(cx + w2, cy - h2),
+            ]),
+            fill: Fill(theme.primaryColor),
+            stroke: Stroke(color: theme.primaryBorderColor, width: 1),
+          ));
+          children.add(SceneShape(
+            geometry: CircleGeometry(Point(cx + w2 + 5, cy), 1.5),
+            fill: Fill(theme.textColor),
+          ));
+          children.add(SceneText(
+            text: tag,
+            bounds: Rect.fromCenter(Point(cx, cy), w, h),
+            style: tagLabelStyle,
+            color: const Color(0xff131300),
+          ));
+        }
+        tagOffset += 20;
+      }
     }
 
     nodes.add(SceneGroup(id: 'commit_${c.id}', children: children));
   }
 
-  // Branch labels at the start of each lane.
+  // Branch labels: chip filled with the branch (label{i}=git{i}) color, text
+  // gitBranchLabel{i} (white for branch 0/3, black otherwise), placed to the
+  // left of the spine origin (LR) / above the lane (TB).
   for (final b in graph.branchOrder) {
-    // Only label branches that actually have commits or are main.
     final hasCommit = graph.commits.any((c) => c.branch == b);
     if (!hasCommit && b != 'main') continue;
-    final color = branchColor(b);
+    final idx = branchIndex(b);
+    final color = _gitColors[idx];
     final size = measurer.measure(b, branchLabelStyle, maxWidth: 200);
-    final lane = laneBase + (laneOf[b] ?? 0) * laneGap;
-    final center =
-        lr ? Point(8 + size.width / 2 + 6, lane) : Point(lane, 8 + size.height);
+    final spine = laneCoord(b);
+    final Point center;
+    if (lr) {
+      // Left of the spine origin (x=0). bbox.width + ~14 to the left.
+      center = Point(-(size.width / 2 + 11), spine - 2);
+    } else {
+      center = Point(spine, timeToCoord(tb ? 0 : defaultPos) - 4);
+    }
     nodes.add(SceneShape(
       geometry: RectGeometry(
-          Rect.fromCenter(center, size.width + 14, size.height + 8),
+          Rect.fromCenter(center, size.width + 14, size.height + 4),
           rx: 4,
           ry: 4),
       fill: Fill(color),
@@ -426,9 +650,7 @@ RenderScene layoutGitGraph(
       text: b,
       bounds: Rect.fromCenter(center, size.width, size.height),
       style: branchLabelStyle,
-      color: _luminance(color) < 0.6
-          ? const Color(0xffffffff)
-          : const Color(0xff000000),
+      color: _gitBranchLabelColors[idx],
     ));
   }
 
@@ -443,34 +665,144 @@ RenderScene layoutGitGraph(
   );
 }
 
-/// An L-shaped/orthogonal edge from parent to child, turning at the corner so
-/// branch points and merges read as right-angle git connectors.
-SceneShape _edge(Point from, Point to, Color color, bool lr) {
-  final commands = <PathCommand>[MoveTo(from)];
+/// Chooses the arrow color following upstream `drawArrow`: destination branch
+/// color, but the source branch color for merge-of-second-parent arrows and
+/// for arrows that travel "backward" along the time axis (child before parent).
+Color _arrowColor({
+  required Point from,
+  required Point to,
+  required String sourceBranch,
+  required String destBranch,
+  required bool isMergeSecond,
+  required bool lr,
+  required Color Function(String) branchColor,
+}) {
+  if (isMergeSecond) return branchColor(sourceBranch);
+  // Upward / leftward arrow → source branch color.
+  final backward = lr ? from.y > to.y : from.x > to.x;
+  return branchColor(backward ? sourceBranch : destBranch);
+}
+
+/// A git connector arrow from parent (`from`) to child (`to`). Straight when
+/// the two share a lane; otherwise a single 20-radius quarter-circle bend, with
+/// the elbow shaped so branch-points fan out and merges fold in — mirroring
+/// upstream `drawArrow`'s default (non-rerouted) path. Stroke width 8, round.
+SceneShape _arrow({
+  required Point from,
+  required Point to,
+  required Color color,
+  required bool lr,
+  required bool bt,
+  required bool isMergeSecond,
+  required bool sourceMatchesFirstParent,
+}) {
+  const radius = 20.0;
+  final p1 = from;
+  final p2 = to;
+  // Each path is: line to the arc start, a quarter-circle arc bending around a
+  // corner, then a line to the destination. Picks which leg runs along the
+  // time axis vs the lane axis exactly as upstream does per direction/merge.
+  final List<PathCommand> commands;
   if (lr) {
-    if ((from.y - to.y).abs() < 0.5) {
-      commands.add(LineTo(to));
+    if ((p1.y - p2.y).abs() < 0.5) {
+      commands = [MoveTo(p1), LineTo(p2)];
+    } else if (p1.y < p2.y) {
+      if (isMergeSecond) {
+        // Travel along source lane, arc down into destination lane.
+        final arcStart = Point(p2.x - radius, p1.y);
+        final corner = Point(p2.x, p1.y);
+        final arcEnd = Point(p2.x, p1.y + radius);
+        commands = [
+          MoveTo(p1),
+          LineTo(arcStart),
+          ..._arc(arcStart, corner, arcEnd),
+          LineTo(p2),
+        ];
+      } else {
+        // Branch point: drop within source column, arc right into dest lane.
+        final arcStart = Point(p1.x, p2.y - radius);
+        final corner = Point(p1.x, p2.y);
+        final arcEnd = Point(p1.x + radius, p2.y);
+        commands = [
+          MoveTo(p1),
+          LineTo(arcStart),
+          ..._arc(arcStart, corner, arcEnd),
+          LineTo(p2),
+        ];
+      }
     } else {
-      // Travel along the parent lane, then curve into the child lane.
-      final cornerX = to.x - 25;
-      commands
-        ..add(LineTo(Point(cornerX, from.y)))
-        ..add(CubicTo(Point(cornerX + 12, from.y),
-            Point(to.x, to.y - (to.y - from.y) * 0.4), to));
+      // Source below destination (upward arrow / merge fold-in).
+      if (isMergeSecond) {
+        final arcStart = Point(p2.x - radius, p1.y);
+        final corner = Point(p2.x, p1.y);
+        final arcEnd = Point(p2.x, p1.y - radius);
+        commands = [
+          MoveTo(p1),
+          LineTo(arcStart),
+          ..._arc(arcStart, corner, arcEnd),
+          LineTo(p2),
+        ];
+      } else {
+        final arcStart = Point(p1.x, p2.y + radius);
+        final corner = Point(p1.x, p2.y);
+        final arcEnd = Point(p1.x + radius, p2.y);
+        commands = [
+          MoveTo(p1),
+          LineTo(arcStart),
+          ..._arc(arcStart, corner, arcEnd),
+          LineTo(p2),
+        ];
+      }
     }
   } else {
-    if ((from.x - to.x).abs() < 0.5) {
-      commands.add(LineTo(to));
+    // TB / BT: time axis is vertical, lanes are horizontal.
+    if ((p1.x - p2.x).abs() < 0.5) {
+      commands = [MoveTo(p1), LineTo(p2)];
+    } else if (isMergeSecond) {
+      // Travel along source lane (vertical), arc into destination column.
+      final dirY = bt ? -radius : radius;
+      final arcStart = Point(p1.x, p2.y - dirY);
+      final corner = Point(p1.x, p2.y);
+      final arcEnd = Point(p1.x + (p1.x < p2.x ? radius : -radius), p2.y);
+      commands = [
+        MoveTo(p1),
+        LineTo(arcStart),
+        ..._arc(arcStart, corner, arcEnd),
+        LineTo(p2),
+      ];
     } else {
-      final cornerY = to.y - 25;
-      commands
-        ..add(LineTo(Point(from.x, cornerY)))
-        ..add(CubicTo(Point(from.x, cornerY + 12),
-            Point(to.x - (to.x - from.x) * 0.4, to.y), to));
+      // Branch point: travel along the lane to the dest column, arc down.
+      final dirY = bt ? -radius : radius;
+      final arcStart = Point(p2.x - (p1.x < p2.x ? radius : -radius), p1.y);
+      final corner = Point(p2.x, p1.y);
+      final arcEnd = Point(p2.x, p1.y + dirY);
+      commands = [
+        MoveTo(p1),
+        LineTo(arcStart),
+        ..._arc(arcStart, corner, arcEnd),
+        LineTo(p2),
+      ];
     }
   }
   return SceneShape(
     geometry: PathGeometry(commands),
-    stroke: Stroke(color: color, width: 2.5),
+    stroke: Stroke(color: color, width: 8),
   );
+}
+
+/// A 90° rounded corner from [start] to [end] bending around [corner],
+/// approximated with a cubic Bézier (the IR has no arc primitive). Control
+/// points use the circle constant 0.5523 so the curve closely tracks a true
+/// quarter circle of the implied radius.
+List<PathCommand> _arc(Point start, Point corner, Point end) {
+  const k = 0.5522847498;
+  final c1 = Point(
+    start.x + (corner.x - start.x) * k,
+    start.y + (corner.y - start.y) * k,
+  );
+  final c2 = Point(
+    end.x + (corner.x - end.x) * k,
+    end.y + (corner.y - end.y) * k,
+  );
+  return [CubicTo(c1, c2, end)];
 }

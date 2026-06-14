@@ -95,14 +95,14 @@ journey
         theme: theme,
       );
       expect(texts(s), containsAll(['S', 'A', 'B', 'Me', 'Cat']));
-      // Smiley faces: green for 5, red for 1.
+      // Upstream draws every smiley face with a uniform cornsilk fill
+      // (#FFF8DC); the score is conveyed by the mouth shape, not the fill.
       final fills = flatten(s.nodes)
           .whereType<SceneShape>()
           .where((n) => n.geometry is CircleGeometry && n.fill != null)
           .map((n) => n.fill!.color.value)
           .toSet();
-      expect(fills, contains(0xff81c784));
-      expect(fills, contains(0xffe57373));
+      expect(fills, contains(0xffFFF8DC));
     });
     test('invalid score throws', () {
       expect(() => parseJourney('journey\nA: nope: Me'),

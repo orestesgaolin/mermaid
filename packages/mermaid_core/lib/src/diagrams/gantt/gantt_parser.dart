@@ -31,6 +31,7 @@ class _GanttParser {
   final _excludeDates = <DateTime>{};
   final _includeDates = <DateTime>{};
   var _todayMarkerOff = false;
+  var _inclusiveEndDates = false;
 
   GanttChart parse() {
     title = frontTitle;
@@ -60,6 +61,7 @@ class _GanttParser {
       ],
       title: title,
       axisFormat: axisFormat,
+      dateFormat: dateFormat,
       excludeWeekdays: _excludeWeekdays,
       excludeDates: _excludeDates,
       todayMarkerOff: _todayMarkerOff,
@@ -123,8 +125,12 @@ class _GanttParser {
       if (m.group(1)!.trim().toLowerCase() == 'off') _todayMarkerOff = true;
       return;
     }
+    if (RegExp(r'^inclusiveEndDates\b').hasMatch(line)) {
+      _inclusiveEndDates = true;
+      return;
+    }
     // Recognized-but-unsupported settings: parsed and ignored.
-    if (RegExp(r'^(inclusiveEndDates|'
+    if (RegExp(r'^('
             r'topAxis|weekday|tickInterval|displayMode|compact|'
             r'click|link|call|acc(Title|Descr))\b')
         .hasMatch(line)) {
@@ -145,8 +151,9 @@ class _GanttParser {
   void _parseTask(String name, String meta, int n) {
     final parts = meta.split(',').map((p) => p.trim()).toList();
     var active = false, done = false, crit = false, milestone = false;
+    var vert = false;
     while (parts.isNotEmpty &&
-        RegExp(r'^(active|done|crit|milestone)$').hasMatch(parts.first)) {
+        RegExp(r'^(active|done|crit|milestone|vert)$').hasMatch(parts.first)) {
       switch (parts.removeAt(0)) {
         case 'active':
           active = true;
@@ -154,6 +161,8 @@ class _GanttParser {
           done = true;
         case 'crit':
           crit = true;
+        case 'vert':
+          vert = true;
         default:
           milestone = true;
       }
@@ -211,6 +220,11 @@ class _GanttParser {
     // An explicit end date is a "manual" end and is never adjusted for
     // excludes; only duration/default-derived ends are.
     final manualEnd = end != null;
+    // `inclusiveEndDates`: a manually-supplied end date is inclusive, so the
+    // bar runs through the end of that day (+1 day). Upstream ganttDb.
+    if (manualEnd && _inclusiveEndDates) {
+      end = end.add(const Duration(days: 1));
+    }
     start ??= lastTask?.end ?? DateTime(2024);
     end ??= duration != null
         ? start.add(duration)
@@ -236,6 +250,7 @@ class _GanttParser {
       done: done,
       crit: crit,
       milestone: milestone,
+      vert: vert,
     );
     byId[task.id] = task;
     lastTask = task;

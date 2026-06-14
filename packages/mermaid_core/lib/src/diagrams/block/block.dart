@@ -25,6 +25,15 @@ enum BlockShape {
   cylinder,
   space,
   blockArrow,
+  hexagon,
+  subroutine,
+  doubleCircle,
+  ellipse,
+  leanRight,
+  leanLeft,
+  trapezoid,
+  invTrapezoid,
+  odd,
 }
 
 /// Directions a block arrow can point. A set is used so `(left, right)` /
@@ -60,13 +69,36 @@ class BlockGroup extends BlockItem {
   final List<BlockItem> children;
 }
 
+/// Endpoint marker shapes (mirrors upstream `point`/`circle`/`cross`).
+enum BlockMarker { none, point, circle, cross }
+
 class BlockEdge {
-  const BlockEdge(this.from, this.to, this.label, this.arrowTo, this.arrowFrom);
+  const BlockEdge(
+    this.from,
+    this.to,
+    this.label,
+    this.arrowTo,
+    this.arrowFrom, {
+    this.thick = false,
+    this.dotted = false,
+    this.markerTo = BlockMarker.point,
+    this.markerFrom = BlockMarker.point,
+  });
   final String from;
   final String to;
   final String label;
   final bool arrowTo;
   final bool arrowFrom;
+
+  /// `==` thick link.
+  final bool thick;
+
+  /// `.-` dotted link pattern.
+  final bool dotted;
+
+  /// Marker shape at the `to`/`from` end (when [arrowTo]/[arrowFrom]).
+  final BlockMarker markerTo;
+  final BlockMarker markerFrom;
 }
 
 class BlockDiagram {
@@ -87,6 +119,9 @@ BlockDiagram parseBlock(String source) {
   ];
   var rootColumns = -1;
   final styleById = <String, Map<String, String>>{};
+  // classDef name -> parsed styles; class id(s) -> applied class names.
+  final classDefs = <String, Map<String, String>>{};
+  final classByNode = <String, List<String>>{};
   final allNodes = <String, BlockNode>{};
   var seenHeader = false;
 
@@ -119,15 +154,33 @@ BlockDiagram parseBlock(String source) {
       }
       continue;
     }
+    // classDef name fill:#f96,stroke:#333,...
+    final classDefM =
+        RegExp(r'^classDef\s+(\S+)\s+(.+)$').firstMatch(line);
+    if (classDefM != null) {
+      classDefs[classDefM.group(1)!] = _parseStyles(classDefM.group(2)!);
+      continue;
+    }
+    // class id1,id2 className
+    final classM =
+        RegExp(r'^class\s+([^\s]+)\s+(\S+)\s*$').firstMatch(line);
+    if (classM != null) {
+      final cls = classM.group(2)!;
+      for (final id in classM.group(1)!.split(',')) {
+        final t = id.trim();
+        if (t.isEmpty) continue;
+        (classByNode[t] ??= <String>[]).add(cls);
+      }
+      continue;
+    }
     // style id k:v,...
     final styleM = RegExp(r'^style\s+(\S+)\s+(.+)$').firstMatch(line);
     if (styleM != null) {
       styleById[styleM.group(1)!] = _parseStyles(styleM.group(2)!);
       continue;
     }
-    // Edge: A --> B, A -- "label" --> B (kept simple).
-    if (RegExp(r'(?<![<>-])--+>|<--+(?![->])|--+').hasMatch(line) &&
-        line.contains(RegExp(r'-->|---|<--'))) {
+    // Edge: A --> B, A -- "label" --> B, A ==> B, A -.- B, A --o B, A --x B.
+    if (line.contains(RegExp(r'-->|---|<--|==|-\.|\.-|--[ox]|[ox]--'))) {
       _parseEdges(line, edges);
       continue;
     }
@@ -156,9 +209,20 @@ BlockDiagram parseBlock(String source) {
   }
   if (!seenHeader) throw const MermaidParseException('empty block source');
 
-  // Apply styles.
+  // Apply class styles first (lower precedence), then inline `style` overrides.
+  classByNode.forEach((id, classNames) {
+    final node = allNodes[id];
+    if (node == null) return;
+    final merged = <String, String>{};
+    for (final cls in classNames) {
+      final def = classDefs[cls];
+      if (def != null) merged.addAll(def);
+    }
+    if (merged.isNotEmpty) node.styles = {...merged, ...node.styles};
+  });
   styleById.forEach((id, st) {
-    allNodes[id]?.styles = st;
+    final node = allNodes[id];
+    if (node != null) node.styles = {...node.styles, ...st};
   });
 
   return BlockDiagram(scopes.first.items, rootColumns, edges);
@@ -228,25 +292,37 @@ BlockNode _parseNode(String spec) {
     return BlockNode(id, label, BlockShape.blockArrow, span, {},
         arrowDirs: dirs);
   }
-  final m = RegExp(r'^([^\s([{]+)\s*'
-          r'(\(\(|\(\[|\[\(|\(|\[|\{)(.*?)(\)\)|\]\)|\)\]|\)|\]|\})?\s*$')
+  // Opening delimiters, longest first so `(((` wins over `((` etc. The id is
+  // any run of non-delimiter chars. `>` opens the `odd` (`id>label]`) shape.
+  final m = RegExp(r'^([^\s([{>]+)\s*'
+          r'(\(\(\(|\(\(|\(\[|\[\(|\{\{|\[\[|\[/|\[\\|\(|\[|\{|>)'
+          r'(.*?)'
+          r'(\)\)\)|\)\)|\]\)|\)\]|\}\}|\]\]|/\]|\\\]|\)|\]|\})?\s*$')
       .firstMatch(spec);
   if (m == null) {
     return BlockNode(spec, spec, BlockShape.rect, span, {});
   }
   final id = m.group(1)!;
   final open = m.group(2);
+  final close = m.group(3) != null ? (m.group(4) ?? '') : '';
   var label = (m.group(3) ?? '').trim();
   if (label.length >= 2 && label.startsWith('"') && label.endsWith('"')) {
     label = label.substring(1, label.length - 1);
   }
   if (label.isEmpty) label = id;
+  // Mirror upstream `typeStr2Type` keyed on the open+close delimiter pair.
   final shape = switch (open) {
+    '(((' => BlockShape.doubleCircle,
     '((' => BlockShape.circle,
     '([' => BlockShape.stadium,
     '[(' => BlockShape.cylinder,
+    '{{' => BlockShape.hexagon,
+    '[[' => BlockShape.subroutine,
+    '[/' => close == r'\]' ? BlockShape.trapezoid : BlockShape.leanRight,
+    '[\\' => close == '/]' ? BlockShape.invTrapezoid : BlockShape.leanLeft,
     '(' => BlockShape.rounded,
     '{' => BlockShape.diamond,
+    '>' => BlockShape.odd,
     _ => BlockShape.rect,
   };
   return BlockNode(id, label, shape, span, {});
@@ -263,11 +339,14 @@ void _parseEdges(String line, List<BlockEdge> edges) {
   //   -->|label|    (piped label)
   // Split on link operators while capturing the operator + label.
   final ids = <String>[];
-  final ops = <({bool to, bool from, String label})>[];
+  final ops =
+      <({bool to, bool from, String label, bool thick, bool dotted, BlockMarker mTo, BlockMarker mFrom})>[];
   var pos = 0;
   final whole = line;
-  // Find link operators (the dashes). A link operator always contains `--`.
-  final dashRe = RegExp(r'-{2,}>?|<?-{2,}>?');
+  // A link operator: an optional leading marker (`<`/`o`/`x`), a body of
+  // `-`/`=`/`.` (at least two chars), and an optional trailing marker
+  // (`>`/`o`/`x`). An embedded `=` => thick, an embedded `.` => dotted.
+  final dashRe = RegExp(r'[<ox]?[-=][-=.]*[-=](?:[>ox])?');
   while (pos < whole.length) {
     final m = dashRe.firstMatch(whole.substring(pos));
     if (m == null) {
@@ -278,18 +357,18 @@ void _parseEdges(String line, List<BlockEdge> edges) {
     final start = pos + m.start;
     final head = whole.substring(pos, start).trim();
     // Determine if this is a two-part link (label between halves) by scanning
-    // forward: `--` [label] `-->` . We greedily consume a following dash run.
+    // forward: `--` [label] `-->` . We greedily consume a following link body.
     var opStr = m.group(0)!;
     var after = pos + m.end;
     var label = '';
     final rest = whole.substring(after);
     // A label can sit between two halves only when this leading operator does
-    // not already terminate the arrow (no `>`); otherwise `G-->H-->I` would
-    // mistake the node `H` for a label.
-    final openHalf = !opStr.contains('>');
-    // pattern: optional `"label"` or bare label then another dash run
+    // not already terminate the arrow (no trailing marker); otherwise
+    // `G-->H-->I` would mistake the node `H` for a label.
+    final openHalf = !RegExp(r'[>ox]$').hasMatch(opStr);
+    // pattern: optional `"label"` or bare label then another link body
     final twoPart = openHalf
-        ? RegExp(r'^\s*(?:"([^"]*)"|([^<>|"-][^<>|]*?))\s*(-{1,}>?)')
+        ? RegExp(r'^\s*(?:"([^"]*)"|([^<>|"=.-][^<>|]*?))\s*([-=][-=.]*(?:[>ox])?)')
             .firstMatch(rest)
         : null;
     if (twoPart != null) {
@@ -305,10 +384,16 @@ void _parseEdges(String line, List<BlockEdge> edges) {
       }
     }
     if (head.isNotEmpty) ids.add(_cleanEdgeId(head));
+    final lastCh = opStr.isEmpty ? '' : opStr[opStr.length - 1];
+    final firstCh = opStr.isEmpty ? '' : opStr[0];
     ops.add((
-      to: opStr.contains('>'),
-      from: opStr.startsWith('<'),
+      to: lastCh == '>' || lastCh == 'o' || lastCh == 'x',
+      from: firstCh == '<' || firstCh == 'o' || firstCh == 'x',
       label: label.replaceAll('&nbsp;', ' ').trim(),
+      thick: opStr.contains('='),
+      dotted: opStr.contains('.'),
+      mTo: _markerFor(lastCh),
+      mFrom: _markerFor(firstCh),
     ));
     pos = after;
   }
@@ -317,9 +402,25 @@ void _parseEdges(String line, List<BlockEdge> edges) {
     if (i >= ops.length) break;
     final op = ops[i];
     if (ids[i].isEmpty || ids[i + 1].isEmpty) continue;
-    edges.add(BlockEdge(ids[i], ids[i + 1], op.label, op.to, op.from));
+    edges.add(BlockEdge(
+      ids[i],
+      ids[i + 1],
+      op.label,
+      op.to,
+      op.from,
+      thick: op.thick,
+      dotted: op.dotted,
+      markerTo: op.mTo,
+      markerFrom: op.mFrom,
+    ));
   }
 }
+
+BlockMarker _markerFor(String ch) => switch (ch) {
+      'o' => BlockMarker.circle,
+      'x' => BlockMarker.cross,
+      _ => BlockMarker.point,
+    };
 
 String _cleanEdgeId(String tok) =>
     tok.split(RegExp(r'[\s"\[\](){}]')).firstWhere((s) => s.isNotEmpty,
@@ -337,7 +438,8 @@ Map<String, String> _parseStyles(String s) {
 // --- layout ----------------------------------------------------------------
 
 const _cellGap = 8.0;
-const _pad = 14.0;
+// Upstream layout default padding is `config.block.padding ?? 8`.
+const _pad = 8.0;
 
 /// Depth of a block-arrow's triangular head (how far it extends past the body).
 const _arrowHead = 18.0;
@@ -390,13 +492,32 @@ RenderScene layoutBlock(
           math.max(ls.height + 2 * _pad, 40.0) + (vert ? 2 * _arrowHead : 0);
       return _Sized(item, w, h);
     }
-    final w = n.shape == BlockShape.circle || n.shape == BlockShape.diamond
-        ? math.max(ls.width, ls.height) + 40
-        : ls.width + 2 * _pad;
-    final h = n.shape == BlockShape.circle || n.shape == BlockShape.diamond
-        ? math.max(ls.width, ls.height) + 40
-        : ls.height + 2 * _pad;
-    return _Sized(item, w, h);
+    switch (n.shape) {
+      case BlockShape.circle:
+      case BlockShape.doubleCircle:
+      case BlockShape.diamond:
+        final s = math.max(ls.width, ls.height) + 40;
+        return _Sized(item, s, s);
+      case BlockShape.ellipse:
+        return _Sized(item, ls.width + 4 * _pad, ls.height + 2 * _pad);
+      case BlockShape.hexagon:
+        // hexagon reserves m = h/4 of horizontal slant on each side.
+        final h = ls.height + 2 * _pad;
+        return _Sized(item, ls.width + 2 * _pad + h / 2, h);
+      case BlockShape.subroutine:
+        return _Sized(item, ls.width + 2 * _pad + 16, ls.height + 2 * _pad);
+      case BlockShape.leanRight:
+      case BlockShape.leanLeft:
+      case BlockShape.trapezoid:
+      case BlockShape.invTrapezoid:
+        // Parallelogram/trapezoid slant adds ~h of horizontal extent.
+        final h = ls.height + 2 * _pad;
+        return _Sized(item, ls.width + 2 * _pad + h, h);
+      case BlockShape.odd:
+        return _Sized(item, ls.width + 2 * _pad + 10, ls.height + 2 * _pad);
+      default:
+        return _Sized(item, ls.width + 2 * _pad, ls.height + 2 * _pad);
+    }
   }
 
   final root = _layoutGrid(diagram.root, diagram.columns, measure);
@@ -409,10 +530,12 @@ RenderScene layoutBlock(
       final item = s.item;
       if (item is BlockGroup) {
         final rect = Rect.fromCenter(Point(cx, cy), s.width, s.height);
+        // Upstream `.node .cluster` fills with fade(clusterBkg, 0.5) and
+        // strokes with fade(clusterBorder, 0.2); composite rx is 0.
         nodes.add(SceneShape(
-          geometry: RectGeometry(rect, rx: 6, ry: 6),
-          fill: Fill(theme.clusterBkg),
-          stroke: Stroke(color: theme.clusterBorder),
+          geometry: RectGeometry(rect),
+          fill: Fill(theme.clusterBkg.withOpacity(0.5)),
+          stroke: Stroke(color: theme.clusterBorder.withOpacity(0.2)),
         ));
         if (item.label.isNotEmpty) {
           final ls = measurer.measure(item.label, baseStyle);
@@ -447,22 +570,37 @@ RenderScene layoutBlock(
     final from = sa != null ? _clip(a, sa.width, sa.height, b) : a;
     final to = sb != null ? _clip(b, sb.width, sb.height, a) : b;
     final dir = _unit(from, to);
-    final end = e.arrowTo ? to - dir * 8 : to;
+    // Pull the line back from a filled point head so it doesn't poke through.
+    final end =
+        (e.arrowTo && e.markerTo == BlockMarker.point) ? to - dir * 8 : to;
+    // Upstream `.edgePath .path` stroke is 2.0px; `==` => thick (3.5px),
+    // `.-` => dotted dash pattern.
+    final width = e.thick ? 3.5 : 2.0;
     nodes.add(SceneShape(
       geometry: PathGeometry([MoveTo(from), LineTo(end)]),
-      stroke: Stroke(color: theme.lineColor, width: 1.5),
+      stroke: Stroke(
+        color: theme.lineColor,
+        width: width,
+        dash: e.dotted ? const [3, 3] : null,
+      ),
     ));
-    if (e.arrowTo) nodes.addAll(_arrow(to, dir, theme.lineColor));
-    if (e.arrowFrom) nodes.addAll(_arrow(from, _unit(to, from), theme.lineColor));
+    if (e.arrowTo) {
+      nodes.addAll(_marker(e.markerTo, to, dir, theme.lineColor, width));
+    }
+    if (e.arrowFrom) {
+      nodes.addAll(
+          _marker(e.markerFrom, from, _unit(to, from), theme.lineColor, width));
+    }
     // Edge label at the midpoint, on a small background chip.
     if (e.label.isNotEmpty) {
       final ls = measurer.measure(e.label, baseStyle, maxWidth: 200);
       final mid = Point((from.x + to.x) / 2, (from.y + to.y) / 2);
       const lp = 3.0;
+      // Upstream edge-label rect is opacity 0.5.
       nodes.add(SceneShape(
         geometry: RectGeometry(
             Rect.fromCenter(mid, ls.width + 2 * lp, ls.height + 2 * lp)),
-        fill: Fill(theme.edgeLabelBackground),
+        fill: Fill(theme.edgeLabelBackground.withOpacity(0.5)),
       ));
       nodes.add(SceneText(
         text: e.label,
@@ -515,6 +653,12 @@ _GridLayout _layoutGrid(
     col = 0;
     for (final s in row) {
       final spanW = s.item.span * cellW + (s.item.span - 1) * _cellGap;
+      // Upstream `setBlockSizes` equalizes every sibling leaf to the uniform
+      // cell size; groups keep their own (already laid-out) extent.
+      if (s.item is BlockNode) {
+        s.width = spanW;
+        s.height = rh;
+      }
       s.center = Point(rx + spanW / 2, y + rh / 2);
       rx += spanW + _cellGap;
       col += s.item.span;
@@ -532,36 +676,92 @@ List<SceneNode> _drawNode(BlockNode n, Point c, double w, double h,
   final stroke = Color.tryParse(n.styles['stroke'] ?? '') ?? theme.nodeBorder;
   final rect = Rect.fromCenter(c, w, h);
   final st = Stroke(color: stroke, width: 1);
-  final shape = switch (n.shape) {
+  final f = Fill(fill);
+  final shapes = switch (n.shape) {
     BlockShape.circle =>
-      SceneShape(geometry: CircleGeometry(c, w / 2), fill: Fill(fill), stroke: st),
-    BlockShape.stadium => SceneShape(
-        geometry: RectGeometry(rect, rx: h / 2, ry: h / 2),
-        fill: Fill(fill),
-        stroke: st),
-    BlockShape.rounded =>
-      SceneShape(geometry: RectGeometry(rect, rx: 6, ry: 6), fill: Fill(fill), stroke: st),
-    BlockShape.diamond => SceneShape(
-        geometry: PolygonGeometry([
-          Point(c.x, rect.top),
-          Point(rect.right, c.y),
-          Point(c.x, rect.bottom),
-          Point(rect.left, c.y),
-        ]),
-        fill: Fill(fill),
-        stroke: st),
-    BlockShape.cylinder => SceneShape(
-        geometry: RectGeometry(rect, rx: 8, ry: 8), fill: Fill(fill), stroke: st),
-    BlockShape.blockArrow => SceneShape(
-        geometry: PolygonGeometry(_blockArrowPoints(rect, n.arrowDirs)),
-        fill: Fill(fill),
-        stroke: st),
-    _ => SceneShape(geometry: RectGeometry(rect), fill: Fill(fill), stroke: st),
+      [SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st)],
+    BlockShape.doubleCircle => [
+        SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st),
+        SceneShape(
+            geometry: CircleGeometry(c, math.max(w / 2 - 5, 1)),
+            fill: const Fill(Color.transparent),
+            stroke: st),
+      ],
+    BlockShape.ellipse => [
+        SceneShape(
+            geometry: EllipseGeometry(c, w / 2, h / 2), fill: f, stroke: st)
+      ],
+    BlockShape.stadium => [
+        SceneShape(
+            geometry: RectGeometry(rect, rx: h / 2, ry: h / 2),
+            fill: f,
+            stroke: st)
+      ],
+    BlockShape.rounded => [
+        SceneShape(geometry: RectGeometry(rect, rx: 5, ry: 5), fill: f, stroke: st)
+      ],
+    BlockShape.diamond => [
+        SceneShape(
+            geometry: PolygonGeometry([
+              Point(c.x, rect.top),
+              Point(rect.right, c.y),
+              Point(c.x, rect.bottom),
+              Point(rect.left, c.y),
+            ]),
+            fill: f,
+            stroke: st)
+      ],
+    BlockShape.hexagon => [
+        SceneShape(
+            geometry: PolygonGeometry(_hexagonPoints(rect)),
+            fill: f,
+            stroke: st)
+      ],
+    BlockShape.leanRight => [
+        SceneShape(
+            geometry: PolygonGeometry(_parallelogramPoints(rect, lean: true)),
+            fill: f,
+            stroke: st)
+      ],
+    BlockShape.leanLeft => [
+        SceneShape(
+            geometry: PolygonGeometry(_parallelogramPoints(rect, lean: false)),
+            fill: f,
+            stroke: st)
+      ],
+    BlockShape.trapezoid => [
+        SceneShape(
+            geometry: PolygonGeometry(_trapezoidPoints(rect, inverted: false)),
+            fill: f,
+            stroke: st)
+      ],
+    BlockShape.invTrapezoid => [
+        SceneShape(
+            geometry: PolygonGeometry(_trapezoidPoints(rect, inverted: true)),
+            fill: f,
+            stroke: st)
+      ],
+    BlockShape.odd => [
+        SceneShape(
+            geometry: PolygonGeometry(_oddPoints(rect)), fill: f, stroke: st)
+      ],
+    BlockShape.subroutine => _subroutineShapes(rect, f, st),
+    BlockShape.cylinder => [
+        SceneShape(
+            geometry: PathGeometry(_cylinderPath(rect)), fill: f, stroke: st)
+      ],
+    BlockShape.blockArrow => [
+        SceneShape(
+            geometry: PolygonGeometry(_blockArrowPoints(rect, n.arrowDirs)),
+            fill: f,
+            stroke: st)
+      ],
+    _ => [SceneShape(geometry: RectGeometry(rect), fill: f, stroke: st)],
   };
   final ls = measurer.measure(n.label, style, maxWidth: 200);
   return [
     SceneGroup(id: n.id, semanticLabel: n.label, children: [
-      shape,
+      ...shapes,
       SceneText(
         text: n.label,
         bounds: Rect.fromCenter(c, ls.width, ls.height),
@@ -569,6 +769,136 @@ List<SceneNode> _drawNode(BlockNode n, Point c, double w, double h,
         color: Color.tryParse(n.styles['color'] ?? '') ?? theme.textColor,
       ),
     ]),
+  ];
+}
+
+/// Hexagon outline filling [rect], with a horizontal slant of `m = h/4` on
+/// each side (mirrors flowchart `hexagon.ts`).
+List<Point> _hexagonPoints(Rect rect) {
+  final m = rect.height / 4;
+  final cy = (rect.top + rect.bottom) / 2;
+  return [
+    Point(rect.left + m, rect.top),
+    Point(rect.right - m, rect.top),
+    Point(rect.right, cy),
+    Point(rect.right - m, rect.bottom),
+    Point(rect.left + m, rect.bottom),
+    Point(rect.left, cy),
+  ];
+}
+
+/// Parallelogram outline. [lean] true ⇒ `lean_right` (`[/  /]`), false ⇒
+/// `lean_left` (`[\\  \\]`). The slant width equals the rect height.
+List<Point> _parallelogramPoints(Rect rect, {required bool lean}) {
+  final s = rect.height;
+  if (lean) {
+    return [
+      Point(rect.left + s, rect.top),
+      Point(rect.right, rect.top),
+      Point(rect.right - s, rect.bottom),
+      Point(rect.left, rect.bottom),
+    ];
+  }
+  return [
+    Point(rect.left, rect.top),
+    Point(rect.right - s, rect.top),
+    Point(rect.right, rect.bottom),
+    Point(rect.left + s, rect.bottom),
+  ];
+}
+
+/// Trapezoid outline. [inverted] false ⇒ `trapezoid` (`[/  \]`, wide bottom),
+/// true ⇒ `inv_trapezoid` (`[\  /]`, wide top). Slant width = rect height.
+List<Point> _trapezoidPoints(Rect rect, {required bool inverted}) {
+  final s = rect.height;
+  if (inverted) {
+    return [
+      Point(rect.left, rect.top),
+      Point(rect.right, rect.top),
+      Point(rect.right - s, rect.bottom),
+      Point(rect.left + s, rect.bottom),
+    ];
+  }
+  return [
+    Point(rect.left + s, rect.top),
+    Point(rect.right - s, rect.top),
+    Point(rect.right, rect.bottom),
+    Point(rect.left, rect.bottom),
+  ];
+}
+
+/// `odd` / `rect_left_inv_arrow` (`id>label]`): a rectangle with a notch cut
+/// into the left edge (depth h/4), mirrors flowchart `rectLeftInvArrow.ts`.
+List<Point> _oddPoints(Rect rect) {
+  final notch = rect.height / 4;
+  final cy = (rect.top + rect.bottom) / 2;
+  return [
+    Point(rect.left, rect.top),
+    Point(rect.left + notch, cy),
+    Point(rect.left, rect.bottom),
+    Point(rect.right, rect.bottom),
+    Point(rect.right, rect.top),
+  ];
+}
+
+/// Subroutine (`[[  ]]`): a rect with an extra vertical rule near each side.
+List<SceneNode> _subroutineShapes(Rect rect, Fill fill, Stroke st) {
+  const inset = 8.0;
+  return [
+    SceneShape(geometry: RectGeometry(rect), fill: fill, stroke: st),
+    SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(rect.left + inset, rect.top)),
+          LineTo(Point(rect.left + inset, rect.bottom)),
+        ]),
+        stroke: st),
+    SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(rect.right - inset, rect.top)),
+          LineTo(Point(rect.right - inset, rect.bottom)),
+        ]),
+        stroke: st),
+  ];
+}
+
+/// True database cylinder filling [rect]: an elliptical cap at the top and a
+/// bulged base, mirroring flowchart `cylinder.ts` bezier construction.
+List<PathCommand> _cylinderPath(Rect rect) {
+  const kappa = 0.5522847498;
+  final rx = rect.width / 2;
+  // Cap depth proportional to width, clamped so it never exceeds the body.
+  final ry =
+      math.min(rect.height / 4, rx / (2.5 + rect.width / 50));
+  final cx = (rect.left + rect.right) / 2;
+  final top = rect.top;
+  final bottom = rect.bottom;
+  final left = rect.left;
+  final right = rect.right;
+  final k = kappa;
+  final topMid = top + ry;
+  final bottomMid = bottom - ry;
+  return [
+    MoveTo(Point(left, topMid)),
+    // Lower half of the top ellipse.
+    CubicTo(Point(left, topMid + k * ry), Point(cx - k * rx, top + 2 * ry),
+        Point(cx, top + 2 * ry)),
+    CubicTo(Point(cx + k * rx, top + 2 * ry), Point(right, topMid + k * ry),
+        Point(right, topMid)),
+    // Upper half of the top ellipse (back to start).
+    CubicTo(Point(right, topMid - k * ry), Point(cx + k * rx, top),
+        Point(cx, top)),
+    CubicTo(Point(cx - k * rx, top), Point(left, topMid - k * ry),
+        Point(left, topMid)),
+    // Left wall.
+    LineTo(Point(left, bottomMid)),
+    // Bottom bulge.
+    CubicTo(Point(left, bottomMid + k * ry), Point(cx - k * rx, bottom),
+        Point(cx, bottom)),
+    CubicTo(Point(cx + k * rx, bottom), Point(right, bottomMid + k * ry),
+        Point(right, bottomMid)),
+    // Right wall.
+    LineTo(Point(right, topMid)),
+    const ClosePath(),
   ];
 }
 
@@ -645,13 +975,47 @@ Point _unit(Point a, Point b) {
   return len == 0 ? const Point(1, 0) : Point(dx / len, dy / len);
 }
 
-List<SceneNode> _arrow(Point tip, Point dir, Color color) {
+/// Endpoint marker at [tip] pointing along [dir]. Mirrors upstream
+/// `insertMarkers` (`point` filled triangle, `circle`, `cross`).
+List<SceneNode> _marker(
+    BlockMarker marker, Point tip, Point dir, Color color, double width) {
   final perp = Point(-dir.y, dir.x);
-  return [
-    SceneShape(
-      geometry: PolygonGeometry(
-          [tip, tip - dir * 9 + perp * 4, tip - dir * 9 - perp * 4]),
-      fill: Fill(color),
-    ),
-  ];
+  switch (marker) {
+    case BlockMarker.circle:
+      const r = 5.0;
+      final c = tip - dir * r;
+      return [
+        SceneShape(
+          geometry: CircleGeometry(c, r),
+          fill: Fill(color),
+          stroke: Stroke(color: color, width: width),
+        ),
+      ];
+    case BlockMarker.cross:
+      const r = 5.0;
+      final c = tip - dir * r;
+      final a1 = c + dir * r + perp * r;
+      final a2 = c - dir * r - perp * r;
+      final b1 = c + dir * r - perp * r;
+      final b2 = c - dir * r + perp * r;
+      return [
+        SceneShape(
+          geometry: PathGeometry([MoveTo(a1), LineTo(a2)]),
+          stroke: Stroke(color: color, width: width),
+        ),
+        SceneShape(
+          geometry: PathGeometry([MoveTo(b1), LineTo(b2)]),
+          stroke: Stroke(color: color, width: width),
+        ),
+      ];
+    case BlockMarker.point:
+    case BlockMarker.none:
+      return [
+        SceneShape(
+          geometry: PolygonGeometry(
+              [tip, tip - dir * 9 + perp * 4, tip - dir * 9 - perp * 4]),
+          fill: Fill(color),
+        ),
+      ];
+  }
 }

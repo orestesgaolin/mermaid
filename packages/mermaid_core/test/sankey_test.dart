@@ -70,10 +70,12 @@ A,C,2
           .whereType<SceneShape>()
           .where((s) => s.geometry is PathGeometry && s.fill != null);
       expect(ribbons.length, 2);
-      // Labels present.
-      final texts =
-          flatten(scene.nodes).whereType<SceneText>().map((t) => t.text);
-      expect(texts, containsAll(['A', 'B', 'C']));
+      // Labels present. showValues defaults true upstream, so each node label
+      // is "<name>\n<value>"; check the name on the first line.
+      final names = flatten(scene.nodes)
+          .whereType<SceneText>()
+          .map((t) => t.text.split('\n').first);
+      expect(names, containsAll(['A', 'B', 'C']));
     });
   });
 }

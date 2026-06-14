@@ -67,6 +67,12 @@ class RailroadOptional extends RailroadExpr {
   final RailroadExpr child;
 }
 
+/// A special sequence (`? text ?`), drawn as a dashed-border rect.
+class RailroadSpecial extends RailroadExpr {
+  const RailroadSpecial(this.text);
+  final String text;
+}
+
 /// An empty expression (e.g. an empty group), drawn as a straight rail.
 class RailroadEmpty extends RailroadExpr {
   const RailroadEmpty();
@@ -240,6 +246,17 @@ class _ExprParser {
         final inner = _parseChoice();
         _match(_Tok.rbrack);
         return RailroadOptional(inner);
+      case _Tok.question:
+        // Special sequence: `? text ?`. The opening `?` is in primary
+        // position; gather raw token text up to the closing `?`.
+        _advance();
+        final buf = StringBuffer();
+        while (_cur.kind != _Tok.question && _cur.kind != _Tok.eof) {
+          if (buf.isNotEmpty) buf.write(' ');
+          buf.write(_advance().value);
+        }
+        _match(_Tok.question); // closing `?`
+        return RailroadSpecial(buf.toString());
       default:
         // Unexpected token: consume and treat as empty to stay robust.
         _advance();
@@ -252,7 +269,8 @@ class _ExprParser {
       k == _Tok.string ||
       k == _Tok.lparen ||
       k == _Tok.lbrace ||
-      k == _Tok.lbrack;
+      k == _Tok.lbrack ||
+      k == _Tok.question;
 
   static List<_Token> _lex(String s) {
     final out = <_Token>[];
@@ -392,10 +410,29 @@ List<String> _splitTop(String s, String sep) {
 // Layout
 // ---------------------------------------------------------------------------
 
-const _hGap = 26.0, _vGap = 18.0, _boxH = 30.0, _pad = 12.0;
-const _arc = 10.0; // corner radius for loop/bypass arcs
+// Upstream DEFAULT_RAILROAD_CONFIG: horizontalSeparation 10,
+// verticalSeparation 8, padding 10, arcRadius 10, strokeWidth 2.
+const _hGap = 10.0, _vGap = 8.0, _pad = 10.0;
+const _arc = 10.0; // corner radius for loop/bypass arcs (arcRadius)
+const _strokeWidth = 2.0;
 
-const _terminalFill = Color(0xffd7f0d7);
+// Terminal corner radius is a fixed 10px (not a full pill).
+const _terminalRadius = 10.0;
+
+// Upstream theme defaults (default theme): terminalFill #FFFFC0,
+// nonTerminalFill #FFFFFF, lineColor/markerFill #000000, ruleNameColor #000066.
+const _terminalFill = Color(0xffffffc0);
+const _nonTerminalFill = Color(0xffffffff);
+const _lineColor = Color(0xff000000);
+const _ruleNameColor = Color(0xff000066);
+const _boxStroke = Color(0xff000000);
+const _boxTextColor = Color(0xff000000);
+
+// Special sequence styling (default theme): fill #F0E0FF, stroke #8800CC.
+const _specialFill = Color(0xfff0e0ff);
+const _specialStroke = Color(0xff8800cc);
+
+const _markerRadius = 5.0;
 
 /// A laid-out fragment of a railroad track. Coordinates are local to the
 /// fragment's own origin; [entryY] / [exitY] give the y of the rail where the
@@ -418,15 +455,16 @@ class _Frag {
 
 class _Layouter {
   _Layouter(this.measurer, this.theme)
-      : baseStyle = TextStyleSpec(
-          fontFamily: theme.fontFamily,
-          fontSize: theme.fontSize,
+      : baseStyle = const TextStyleSpec(
+          // Upstream railroad forces fontFamily: monospace, fontSize: 14.
+          fontFamily: 'monospace',
+          fontSize: 14,
         );
   final TextMeasurer measurer;
   final MermaidTheme theme;
   final TextStyleSpec baseStyle;
 
-  Stroke get _rail => Stroke(color: theme.lineColor, width: 1.5);
+  Stroke get _rail => const Stroke(color: _lineColor, width: _strokeWidth);
 
   List<SceneNode> _hLine(double x1, double x2, double y) => [
         SceneShape(
@@ -440,43 +478,83 @@ class _Layouter {
 
   _Frag _box(String label, {required bool terminal}) {
     final ts = measurer.measure(label, baseStyle);
+    // Upstream: width = textW + padding*2, height = textH + padding*2.
     final bw = ts.width + 2 * _pad;
-    final rect = Rect.fromLTWH(0, 0, bw, _boxH);
-    final mid = _boxH / 2;
+    final bh = ts.height + 2 * _pad;
+    final rect = Rect.fromLTWH(0, 0, bw, bh);
+    final mid = bh / 2;
+    // Terminal: rounded rect (rx=ry=10). Non-terminal: plain rect (square).
+    final radius = terminal ? _terminalRadius : 0.0;
     return _Frag(
       nodes: [
         SceneShape(
-          geometry: RectGeometry(rect,
-              rx: terminal ? _boxH / 2 : 4, ry: terminal ? _boxH / 2 : 4),
-          fill: Fill(terminal ? _terminalFill : theme.mainBkg),
-          stroke: Stroke(color: theme.nodeBorder),
+          geometry: RectGeometry(rect, rx: radius, ry: radius),
+          fill: Fill(terminal ? _terminalFill : _nonTerminalFill),
+          stroke: const Stroke(color: _boxStroke, width: _strokeWidth),
         ),
         SceneText(
           text: label,
           bounds: Rect.fromCenter(rect.center, ts.width, ts.height),
           style: baseStyle,
-          color: theme.textColor,
+          color: _boxTextColor,
         ),
       ],
       width: bw,
-      height: _boxH,
+      height: bh,
+      entryY: mid,
+      exitY: mid,
+    );
+  }
+
+  /// Special sequence (`? text ?`): dashed-border rect.
+  _Frag _special(String text) {
+    final label = '? $text ?';
+    final ts = measurer.measure(label, baseStyle);
+    final bw = ts.width + 2 * _pad;
+    final bh = ts.height + 2 * _pad;
+    final rect = Rect.fromLTWH(0, 0, bw, bh);
+    final mid = bh / 2;
+    return _Frag(
+      nodes: [
+        SceneShape(
+          geometry: RectGeometry(rect),
+          fill: const Fill(_specialFill),
+          stroke: const Stroke(
+            color: _specialStroke,
+            width: _strokeWidth,
+            dash: [5, 3],
+          ),
+        ),
+        SceneText(
+          text: label,
+          bounds: Rect.fromCenter(rect.center, ts.width, ts.height),
+          style: baseStyle,
+          color: _boxTextColor,
+        ),
+      ],
+      width: bw,
+      height: bh,
       entryY: mid,
       exitY: mid,
     );
   }
 
   /// A short straight rail used for empty fragments.
-  _Frag _stub() => _Frag(
-        nodes: _hLine(0, _hGap, _boxH / 2),
-        width: _hGap,
-        height: _boxH,
-        entryY: _boxH / 2,
-        exitY: _boxH / 2,
-      );
+  _Frag _stub() {
+    const h = 14.0 + 2 * _pad; // approx box height for alignment
+    return _Frag(
+      nodes: _hLine(0, _hGap, h / 2),
+      width: _hGap,
+      height: h,
+      entryY: h / 2,
+      exitY: h / 2,
+    );
+  }
 
   _Frag layout(RailroadExpr e) => switch (e) {
         RailroadTerminal(:final text) => _box(text, terminal: true),
         RailroadNonTerminal(:final text) => _box(text, terminal: false),
+        RailroadSpecial(:final text) => _special(text),
         RailroadEmpty() => _stub(),
         RailroadSequence(:final items) => _layoutSequence(items),
         RailroadChoice(:final options) => _layoutChoice(options),
@@ -534,24 +612,24 @@ class _Layouter {
   _Frag _layoutChoice(List<RailroadExpr> options) {
     final frags = [for (final o in options) layout(o)];
     final innerW = frags.map((f) => f.width).reduce(math.max);
-    const lead = _arc + 6; // horizontal room for fork/join elbows
+    // Upstream choice adds arcRadius*4 of horizontal room (2 each side).
+    const lead = _arc * 2;
 
     final nodes = <SceneNode>[];
-    // Lay options stacked; first option's entry rail is the through baseline.
+    // Lay options stacked top-to-bottom.
     var y = 0.0;
     final rowEntryY = <double>[]; // absolute entry-rail y per option
-    final rowExitY = <double>[];
     final rowX = <double>[]; // left x of each centred fragment
     for (final f in frags) {
       final fx = lead + (innerW - f.width) / 2;
       rowX.add(fx);
       rowEntryY.add(y + f.entryY);
-      rowExitY.add(y + f.entryY); // connect rails at entry height
       nodes.addAll(_shift(f, fx, y));
       y += f.height + _vGap;
     }
     final totalH = y - _vGap;
-    final baseline = rowEntryY.first;
+    // Upstream: the through baseline is the vertical centre of the whole stack.
+    final baseline = totalH / 2;
     final width = lead + innerW + lead;
     final rightEnd = width;
 
@@ -564,14 +642,14 @@ class _Layouter {
       nodes.addAll(_hLine(lead, fx, ry));
       nodes.addAll(_hLine(fx + f.width, lead + innerW, ry));
 
-      if (i == 0) {
-        // Straight through rails on the baseline.
+      if ((ry - baseline).abs() < 0.01) {
+        // On the centre line: straight through rails.
         nodes.addAll(_hLine(0, lead, baseline));
         nodes.addAll(_hLine(lead + innerW, rightEnd, baseline));
       } else {
-        // Fork: down from baseline at x=0..lead, into row ry.
+        // Fork down/up from centre baseline at x=0..lead into row ry.
         nodes.addAll(_forkDown(0, baseline, lead, ry));
-        // Join: row ry back up to baseline at right.
+        // Join: row ry back to baseline at right.
         nodes.addAll(_joinUp(lead + innerW, ry, rightEnd, baseline));
       }
     }
@@ -585,18 +663,21 @@ class _Layouter {
     );
   }
 
-  /// Fork rail: from (x0, y0) on the baseline, curve down and run to (x1, y1).
+  /// Fork rail: from (x0, y0) on the centre baseline, curve toward row y1
+  /// (which may be above or below the baseline) and run to (x1, y1).
   List<SceneNode> _forkDown(double x0, double y0, double x1, double y1) {
+    final dir = y1 >= y0 ? 1.0 : -1.0; // +1 = below baseline, -1 = above
     final r = math.min(_arc, (y1 - y0).abs() / 2);
     return _path([
       MoveTo(Point(x0, y0)),
-      // curve down at x0
+      // First quarter turn off the baseline.
       CubicTo(
         Point(x0 + r, y0),
         Point(x0 + r, y0),
-        Point(x0 + r, y0 + r),
+        Point(x0 + r, y0 + dir * r),
       ),
-      LineTo(Point(x0 + r, y1 - r)),
+      LineTo(Point(x0 + r, y1 - dir * r)),
+      // Second quarter turn back to horizontal at the row.
       CubicTo(
         Point(x0 + r, y1),
         Point(x0 + r, y1),
@@ -606,8 +687,10 @@ class _Layouter {
     ]);
   }
 
-  /// Join rail: from (x0, y1) on a lower row, curve up to (x1, y0) on baseline.
+  /// Join rail: from (x0, y1) on a branch row, curve back to (x1, y0) on the
+  /// centre baseline. The row may be above or below the baseline.
   List<SceneNode> _joinUp(double x0, double y1, double x1, double y0) {
+    final dir = y1 >= y0 ? 1.0 : -1.0; // +1 = row below baseline
     final r = math.min(_arc, (y1 - y0).abs() / 2);
     return _path([
       MoveTo(Point(x0, y1)),
@@ -615,9 +698,9 @@ class _Layouter {
       CubicTo(
         Point(x1 - r, y1),
         Point(x1 - r, y1),
-        Point(x1 - r, y1 - r),
+        Point(x1 - r, y1 - dir * r),
       ),
-      LineTo(Point(x1 - r, y0 + r)),
+      LineTo(Point(x1 - r, y0 + dir * r)),
       CubicTo(
         Point(x1 - r, y0),
         Point(x1 - r, y0),
@@ -629,8 +712,9 @@ class _Layouter {
   /// Optional `[ x ]` / `x?`: item on the baseline with a bypass arc above.
   _Frag _layoutOptional(RailroadExpr child) {
     final f = layout(child);
-    const lead = _arc + 6;
-    final bypassRise = _vGap; // how far above the baseline the bypass runs
+    // Upstream: element offset by arcRadius*2 each side, bypass rise arcHeight.
+    const lead = _arc * 2;
+    const bypassRise = _arc * 2; // how far above the baseline the bypass runs
     final baseline = bypassRise + f.entryY;
     final width = lead + f.width + lead;
     final nodes = <SceneNode>[];
@@ -672,9 +756,10 @@ class _Layouter {
   /// return loop runs below. For one-or-more there is no skip.
   _Frag _layoutRepetition(RailroadExpr child, bool oneOrMore) {
     final f = layout(child);
-    const lead = _arc + 6;
-    final loopDrop = _vGap; // how far below baseline the return arc runs
-    final bypassRise = _vGap; // skip arc above (zero-or-more only)
+    // Upstream: element offset by arcRadius*2 each side; loop/bypass arcHeight.
+    const lead = _arc * 2;
+    const loopDrop = _arc * 2; // how far below baseline the return arc runs
+    const bypassRise = _arc * 2; // skip arc above (zero-or-more only)
     final topPad = oneOrMore ? 0.0 : bypassRise;
     final baseline = topPad + f.entryY;
     final width = lead + f.width + lead;
@@ -739,55 +824,74 @@ RenderScene layoutRailroad(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
+  // Upstream forces monospace / fontSize 14 for the whole diagram.
   final baseStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
+      const TextStyleSpec(fontFamily: 'monospace', fontSize: 14);
   final nameStyle = baseStyle.copyWith(fontWeight: 700);
   final layouter = _Layouter(measurer, theme);
   final nodes = <SceneNode>[];
   var y = 0.0;
 
-  const startStub = 16.0; // entry rail before each rule
-  const endStub = 16.0; // exit rail after each rule
+  const rail = Stroke(color: _lineColor, width: _strokeWidth);
 
   for (final rule in d.rules) {
-    // Rule name label.
-    final ns = measurer.measure(rule.name, nameStyle);
-    nodes.add(SceneText(
-      text: rule.name,
-      bounds: Rect.fromLTWH(0, y, ns.width, ns.height),
-      style: nameStyle,
-      color: theme.titleColor,
-      align: TextAlignH.left,
-    ));
-    final trackTop = y + ns.height + 10;
+    // Upstream: name label is "<name> =" on the rail baseline, to the left.
+    final ruleName = '${rule.name} =';
+    final ns = measurer.measure(ruleName, nameStyle);
+    final nameWidth = ns.width + 20; // start-marker x
+    final definitionX = nameWidth + 20;
 
     final frag = layouter.layout(rule.expr);
-    const x0 = 20.0;
-    // Translate the fragment so its baseline sits at trackTop + entryY-relative.
-    final dx = x0 + startStub;
-    final dy = trackTop;
+    // Baseline at least 20 from the rule top (upstream `Math.max(20, up)`).
+    final baselineY = y + math.max(20.0, frag.entryY);
+    final definitionY = baselineY - frag.entryY;
+
     final children = <SceneNode>[
-      for (final n in frag.nodes) translateSceneNode(n, dx, dy),
+      for (final n in frag.nodes)
+        translateSceneNode(n, definitionX, definitionY),
     ];
-    final baselineY = dy + frag.entryY;
-    // Entry / exit stubs.
+
+    // Rule name label, vertically centred on the rail baseline.
+    children.add(SceneText(
+      text: ruleName,
+      bounds: Rect.fromLTWH(0, baselineY - ns.height / 2, ns.width, ns.height),
+      style: nameStyle,
+      color: _ruleNameColor,
+      align: TextAlignH.left,
+    ));
+
+    // Start marker (filled circle) + line into the definition.
     children.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(x0, baselineY)),
-        LineTo(Point(x0 + startStub, baselineY)),
-      ]),
-      stroke: Stroke(color: theme.lineColor, width: 1.5),
+      geometry: CircleGeometry(Point(nameWidth, baselineY), _markerRadius),
+      fill: const Fill(_lineColor),
     ));
     children.add(SceneShape(
       geometry: PathGeometry([
-        MoveTo(Point(dx + frag.width, baselineY)),
-        LineTo(Point(dx + frag.width + endStub, baselineY)),
+        MoveTo(Point(nameWidth + _markerRadius, baselineY)),
+        LineTo(Point(definitionX, baselineY)),
       ]),
-      stroke: Stroke(color: theme.lineColor, width: 1.5),
+      stroke: rail,
     ));
+
+    // End marker (filled circle) + line out of the definition.
+    final endX = definitionX + frag.width + 10;
+    children.add(SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(definitionX + frag.width, baselineY)),
+        LineTo(Point(endX - _markerRadius, baselineY)),
+      ]),
+      stroke: rail,
+    ));
+    children.add(SceneShape(
+      geometry: CircleGeometry(Point(endX, baselineY), _markerRadius),
+      fill: const Fill(_lineColor),
+    ));
+
     nodes.add(SceneGroup(id: rule.name, children: children));
 
-    y = trackTop + frag.height + 28;
+    // Advance below this rule (upstream: rule height + verticalSeparation).
+    final ruleBottom = definitionY + frag.height;
+    y = math.max(baselineY + _markerRadius, ruleBottom) + 2 * _pad + _vGap;
   }
 
   var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 200, 80);
@@ -805,7 +909,7 @@ RenderScene layoutRailroad(
     children.add(node);
     bounds = bounds.union(node.bounds);
   }
-  const m = 16.0;
+  const m = _pad; // outer margin = upstream padding (10)
   return RenderScene(
     size: Size(bounds.width + 2 * m, bounds.height + 2 * m),
     background: theme.background,

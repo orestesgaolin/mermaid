@@ -20,12 +20,27 @@ import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 
 class ArchService {
-  ArchService(this.id, this.icon, this.label, this.group, this.isJunction);
+  ArchService(this.id, this.icon, this.label, this.group, this.isJunction,
+      {this.iconText});
   final String id;
   final String? icon;
   final String label;
   final String? group;
   final bool isJunction;
+
+  /// Inline icon text from the `service id(("AB"))` form: renders a blank icon
+  /// box with the centered text instead of a glyph.
+  final String? iconText;
+}
+
+/// An `align row|column a b c ...` directive: places the listed members along a
+/// shared axis (same y for `row`, same x for `column`).
+class ArchAlignment {
+  ArchAlignment(this.row, this.members);
+
+  /// True for `row` (horizontal alignment), false for `column` (vertical).
+  final bool row;
+  final List<String> members;
 }
 
 class ArchGroup {
@@ -60,10 +75,12 @@ class ArchEdge {
 }
 
 class ArchitectureDiagram {
-  const ArchitectureDiagram(this.services, this.groups, this.edges);
+  const ArchitectureDiagram(this.services, this.groups, this.edges,
+      {this.alignments = const []});
   final List<ArchService> services;
   final List<ArchGroup> groups;
   final List<ArchEdge> edges;
+  final List<ArchAlignment> alignments;
 }
 
 String _bracketLabel(String? s, String id) {
@@ -87,15 +104,23 @@ ArchitectureDiagram parseArchitecture(String source) {
   final services = <ArchService>[];
   final groups = <ArchGroup>[];
   final edges = <ArchEdge>[];
+  final alignments = <ArchAlignment>[];
   var seenHeader = false;
 
   // group id(icon)[Label] [in parent]
   final groupRe = RegExp(
       r'^group\s+(\w+)\s*(?:\((\w+)\))?\s*(?:\[([^\]]*)\])?\s*(?:in\s+(\w+))?\s*$');
+  // service id(("iconText"))[Label] [in group] — blank icon box with centered
+  // text (upstream `(("AB"))` form). Checked before the plain icon form.
+  final svcIconTextRe = RegExp(
+      r'^service\s+(\w+)\s*\(\(\s*(?:"([^"]*)"|' "'([^']*)'" r'|([^)]*?))\s*\)\)\s*(?:\[([^\]]*)\])?\s*(?:in\s+(\w+))?\s*$');
   // service id(icon)[Label] [in group]
   final svcRe = RegExp(
       r'^service\s+(\w+)\s*(?:\((\w+)\))?\s*(?:\[([^\]]*)\])?\s*(?:in\s+(\w+))?\s*$');
   final junctionRe = RegExp(r'^junction\s+(\w+)\s*(?:in\s+(\w+))?\s*$');
+  // align row|column a b c ... (at least two members)
+  final alignRe =
+      RegExp(r'^align\s+(row|column)\s+(\w+(?:\s+\w+)+)\s*$');
   // Edge syntax (mirrors the upstream langium grammar):
   //   lhsId {group}? : Dir  <?  ('--' | '-[label]-')  >?  Dir : rhsId {group}?
   // Examples:
@@ -126,6 +151,18 @@ ArchitectureDiagram parseArchitecture(String source) {
           _bracketLabel(m.group(3), m.group(1)!), m.group(4)));
       continue;
     }
+    m = svcIconTextRe.firstMatch(line);
+    if (m != null) {
+      final iconText = m.group(2) ?? m.group(3) ?? m.group(4) ?? '';
+      services.add(ArchService(
+          m.group(1)!,
+          null,
+          _bracketLabel(m.group(5), m.group(1)!),
+          m.group(6),
+          false,
+          iconText: iconText));
+      continue;
+    }
     m = svcRe.firstMatch(line);
     if (m != null) {
       services.add(ArchService(m.group(1)!, m.group(2),
@@ -135,6 +172,15 @@ ArchitectureDiagram parseArchitecture(String source) {
     m = junctionRe.firstMatch(line);
     if (m != null) {
       services.add(ArchService(m.group(1)!, null, '', m.group(2), true));
+      continue;
+    }
+    m = alignRe.firstMatch(line);
+    if (m != null) {
+      final members =
+          m.group(2)!.split(RegExp(r'\s+')).where((s) => s.isNotEmpty).toList();
+      if (members.length >= 2) {
+        alignments.add(ArchAlignment(m.group(1) == 'row', members));
+      }
       continue;
     }
     m = edgeRe.firstMatch(line);
@@ -159,11 +205,20 @@ ArchitectureDiagram parseArchitecture(String source) {
     }
   }
   if (!seenHeader) throw const MermaidParseException('empty architecture source');
-  return ArchitectureDiagram(services, groups, edges);
+  return ArchitectureDiagram(services, groups, edges, alignments: alignments);
 }
 
-const _cell = 90.0;
-const _iconSize = 44.0;
+// Upstream architecture config defaults (config.schema.yaml:1010-1018):
+//   iconSize: 80, padding: 40, fontSize: 16.
+const _iconSize = 80.0;
+const _padding = 40.0;
+const _archFontSize = 16.0;
+
+// Grid cell pitch. Upstream spaces nodes with fcose (idealEdgeLength =
+// iconSize * 1.5 plus nodeSeparation 75); we approximate that on a fixed grid
+// by pitching cells at iconSize + nodeSeparation so neighbouring icons get
+// comparable breathing room to upstream.
+const _cell = _iconSize + 75.0;
 
 (int, int) _sideDelta(String side) => switch (side) {
       'R' => (1, 0),
@@ -179,8 +234,9 @@ RenderScene layoutArchitecture(
   required MermaidTheme theme,
 }) {
   ensureBuiltinIconPacks();
+  // Architecture uses its own fontSize (config default 16), not the global one.
   final baseStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize * 0.8);
+      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _archFontSize);
   final nodes = <SceneNode>[];
 
   // Map service id -> group id (services only; groups are boxed separately).
@@ -237,6 +293,41 @@ RenderScene layoutArchitecture(
     nextRow = (pos.values.map((p) => p.$2).fold(0, math.max)) + 2;
   }
 
+  // Apply `align row|column` hints: snap the listed members onto a shared axis,
+  // spreading them along the other axis to avoid overlaps. Mirrors upstream's
+  // alignment constraints (services co-located on a row share y, a column
+  // shares x).
+  for (final a in diagram.alignments) {
+    final members = a.members.where(pos.containsKey).toList();
+    if (members.length < 2) continue;
+    if (a.row) {
+      final sharedY = members.map((m) => pos[m]!.$2).reduce(math.min);
+      // Order members by their current x so the row keeps a sensible sequence.
+      members.sort((p, q) => pos[p]!.$1.compareTo(pos[q]!.$1));
+      var x = members.map((m) => pos[m]!.$1).reduce(math.min);
+      for (final m in members) {
+        occupied.remove(pos[m]!);
+        while (occupied.contains((x, sharedY))) {
+          x++;
+        }
+        place(m, x, sharedY);
+        x++;
+      }
+    } else {
+      final sharedX = members.map((m) => pos[m]!.$1).reduce(math.min);
+      members.sort((p, q) => pos[p]!.$2.compareTo(pos[q]!.$2));
+      var y = members.map((m) => pos[m]!.$2).reduce(math.min);
+      for (final m in members) {
+        occupied.remove(pos[m]!);
+        while (occupied.contains((sharedX, y))) {
+          y++;
+        }
+        place(m, sharedX, y);
+        y++;
+      }
+    }
+  }
+
   Point centerOf(String id) {
     final p = pos[id] ?? (0, 0);
     return Point(p.$1 * _cell, p.$2 * _cell);
@@ -258,11 +349,10 @@ RenderScene layoutArchitecture(
   final svcById = {for (final s in diagram.services) s.id: s};
 
   // Service-icon bounding box (the painted rect, not just the center).
+  // Junctions are an invisible iconSize anchor upstream, so they occupy the
+  // same footprint for group-rect purposes.
   Rect serviceRect(String id) {
     final c = centerOf(id);
-    if (svcById[id]?.isJunction ?? false) {
-      return Rect.fromCenter(c, 12, 12);
-    }
     return Rect.fromCenter(Point(c.x, c.y - 6), _iconSize, _iconSize);
   }
 
@@ -313,7 +403,9 @@ RenderScene layoutArchitecture(
       maxX = c.x + _cell / 2;
       maxY = c.y + _cell / 2;
     }
-    const pad = 28.0;
+    // Upstream uses a uniform padding of 40 around group contents; the top gets
+    // extra room for the group icon/label header.
+    const pad = _padding;
     const titleSpace = 18.0;
     final rect = Rect.fromLTRB(
         minX - pad, minY - pad - titleSpace, maxX + pad, maxY + pad);
@@ -331,20 +423,27 @@ RenderScene layoutArchitecture(
   for (final g in drawOrder) {
     final rect = groupRects[g.id];
     if (rect == null) continue;
+    // Upstream `.node-bkg`: fill:none, stroke primaryBorderColor,
+    // stroke-width:2, stroke-dasharray:8 (i.e. 8 on / 8 off).
     nodes.add(SceneShape(
       geometry: RectGeometry(rect, rx: 10, ry: 10),
-      fill: Fill(theme.clusterBkg),
-      stroke: Stroke(color: theme.clusterBorder, dash: const [4, 3]),
+      stroke: Stroke(
+          color: theme.primaryBorderColor, width: 2, dash: const [8, 8]),
     ));
     final ts = measurer.measure(g.label, baseStyle.copyWith(fontWeight: 700));
     final children = <SceneNode>[];
+    // Group icon size = padding * 0.75 (upstream `groupIconSize`).
+    const groupIconSize = _padding * 0.75;
+    final labelX = rect.left + 8 + (g.icon != null ? groupIconSize + 4 : 0);
     if (g.icon != null) {
-      children.addAll(renderIcon(_iconRef(g.icon!),
-          Rect.fromLTWH(rect.left + 8, rect.top + 6, 16, 16), theme.textColor));
+      children.addAll(renderIcon(
+          _iconRef(g.icon!),
+          Rect.fromLTWH(rect.left + 8, rect.top + 6, groupIconSize, groupIconSize),
+          theme.textColor));
     }
     nodes.add(SceneText(
       text: g.label,
-      bounds: Rect.fromLTWH(rect.left + (g.icon != null ? 28 : 8), rect.top + 6,
+      bounds: Rect.fromLTWH(labelX, rect.top + 6 + (groupIconSize - ts.height) / 2,
           ts.width, ts.height),
       style: baseStyle.copyWith(fontWeight: 700),
       color: theme.textColor,
@@ -366,40 +465,87 @@ RenderScene layoutArchitecture(
     return _port(centerOf(id), side, junction: isJunction);
   }
 
-  // Edges (under service icons).
+  // Edges (under service icons). Upstream: edge stroke-width 3, arrow size
+  // iconSize/6; XY (bend) edges turn at a 90° corner; X/Y edges are direct.
+  const arrowSize = _iconSize / 6;
+  bool isX(String side) => side == 'L' || side == 'R';
   for (final e in diagram.edges) {
     final from = endpoint(e.from, e.fromSide, e.fromGroup);
     final to = endpoint(e.to, e.toSide, e.toGroup);
-    final midX = from.x + (to.x - from.x) / 2;
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
+
+    // Axis classification mirrors upstream: a mixed X/Y pair bends; otherwise
+    // the edge runs straight along its shared axis.
+    final fromX = isX(e.fromSide);
+    final toX = isX(e.toSide);
+    final isBend = fromX != toX;
+
+    // 90° corner at the perpendicular port projection: the bend takes the x of
+    // the vertical (T/B) endpoint and the y of the horizontal (L/R) endpoint.
+    final Point bend;
+    if (isBend) {
+      if (fromX) {
+        // from is L/R (horizontal), to is T/B (vertical).
+        bend = Point(to.x, from.y);
+      } else {
+        bend = Point(from.x, to.y);
+      }
+    } else {
+      // Same axis: keep a mid bend so non-aligned ports still connect cleanly.
+      bend = fromX
+          ? Point(from.x + (to.x - from.x) / 2, from.y)
+          : Point(from.x, from.y + (to.y - from.y) / 2);
+    }
+
+    final List<PathCommand> cmds;
+    if (isBend) {
+      cmds = [MoveTo(from), LineTo(bend), LineTo(to)];
+    } else if (fromX && from.y == to.y) {
+      cmds = [MoveTo(from), LineTo(to)];
+    } else if (!fromX && from.x == to.x) {
+      cmds = [MoveTo(from), LineTo(to)];
+    } else {
+      cmds = [
         MoveTo(from),
-        LineTo(Point(midX, from.y)),
-        LineTo(Point(midX, to.y)),
+        LineTo(bend),
+        LineTo(fromX ? Point(bend.x, to.y) : Point(to.x, bend.y)),
         LineTo(to),
-      ]),
-      stroke: Stroke(color: theme.lineColor, width: 1.5),
+      ];
+    }
+    nodes.add(SceneShape(
+      geometry: PathGeometry(cmds),
+      stroke: Stroke(color: theme.lineColor, width: 3),
     ));
-    if (e.arrowTo) nodes.addAll(_arrow(to, e.toSide, theme.lineColor));
-    if (e.arrowFrom) nodes.addAll(_arrow(from, e.fromSide, theme.lineColor));
+    if (e.arrowTo) nodes.addAll(_arrow(to, e.toSide, theme.lineColor, arrowSize));
+    if (e.arrowFrom) {
+      nodes.addAll(_arrow(from, e.fromSide, theme.lineColor, arrowSize));
+    }
     final label = e.label;
     if (label != null && label.isNotEmpty) {
-      final mid = Point(midX, from.y + (to.y - from.y) / 2);
+      // Midpoint of the edge (the bend for XY edges, otherwise the segment mid).
+      final mid = isBend
+          ? bend
+          : Point(from.x + (to.x - from.x) / 2, from.y + (to.y - from.y) / 2);
       final ts = measurer.measure(label, baseStyle);
-      // Small background chip so the label stays legible over the edge line.
-      nodes.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromCenter(mid, ts.width + 8, ts.height + 4),
-            rx: 3,
-            ry: 3),
-        fill: Fill(theme.background),
-      ));
+      // Upstream: text drawn directly over the edge (no background chip).
+      // Rotation: -90° for vertical (Y) edges, ±45° for XY (bend) edges.
+      double rotation = 0;
+      if (isBend) {
+        // Bend direction: T/B vs L/R combination yields a ±45° tilt.
+        final vertSide = fromX ? e.toSide : e.fromSide;
+        final horizSide = fromX ? e.fromSide : e.toSide;
+        final x = horizSide == 'L' ? -1 : 1;
+        final y = vertSide == 'T' ? -1 : 1;
+        rotation = -45.0 * x * y;
+      } else if (!fromX) {
+        rotation = -90;
+      }
       nodes.add(SceneText(
         text: label,
         bounds: Rect.fromCenter(mid, ts.width, ts.height),
         style: baseStyle,
         color: theme.textColor,
         align: TextAlignH.center,
+        rotation: rotation,
       ));
     }
   }
@@ -407,33 +553,52 @@ RenderScene layoutArchitecture(
   // Services (icon + label).
   for (final s in diagram.services) {
     final c = centerOf(s.id);
-    if (s.isJunction) {
-      nodes.add(SceneShape(
-        geometry: CircleGeometry(c, 5),
-        fill: Fill(theme.lineColor),
-      ));
-      continue;
-    }
+    // Junctions are an invisible iconSize anchor upstream — no visible glyph.
+    if (s.isJunction) continue;
+
     final iconRect =
         Rect.fromCenter(Point(c.x, c.y - 6), _iconSize, _iconSize);
-    nodes.add(SceneShape(
-      geometry: RectGeometry(iconRect, rx: 8, ry: 8),
-      fill: Fill(theme.mainBkg),
-      stroke: Stroke(color: theme.nodeBorder),
-    ));
+    final hasGlyph = s.icon != null || s.iconText != null;
+    if (!hasGlyph) {
+      // Upstream `.node-bkg` background: top-two-corners rounded path (radius 5)
+      // with fill:none (border only).
+      nodes.add(SceneShape(
+        geometry: PathGeometry(_topRoundedRect(iconRect, 5)),
+        stroke: Stroke(color: theme.primaryBorderColor),
+      ));
+    }
     if (s.icon != null) {
       nodes.addAll(renderIcon(
-          _iconRef(s.icon!),
-          Rect.fromCenter(Point(c.x, c.y - 6), _iconSize - 14, _iconSize - 14),
-          theme.textColor));
+          _iconRef(s.icon!), iconRect, theme.textColor));
+    } else if (s.iconText != null) {
+      // Blank icon box with centered (white-on-fill) text. We draw a filled
+      // rounded box and center the text, approximating upstream's `blank` icon
+      // + HTML overlay.
+      nodes.add(SceneShape(
+        geometry: RectGeometry(iconRect, rx: 5, ry: 5),
+        fill: Fill(theme.mainBkg),
+        stroke: Stroke(color: theme.primaryBorderColor),
+      ));
+      final it = s.iconText!;
+      final its = measurer.measure(it, baseStyle, maxWidth: _iconSize - 4);
+      nodes.add(SceneText(
+        text: it,
+        bounds: Rect.fromCenter(iconRect.center, its.width, its.height),
+        style: baseStyle,
+        color: theme.textColor,
+        align: TextAlignH.center,
+      ));
     }
-    final ts = measurer.measure(s.label, baseStyle, maxWidth: 90);
+    if (s.label.isEmpty) continue;
+    // Label below the icon, wrapped at iconSize*1.5 (upstream).
+    final ts = measurer.measure(s.label, baseStyle, maxWidth: _iconSize * 1.5);
     nodes.add(SceneText(
       text: s.label,
-      bounds:
-          Rect.fromLTWH(c.x - ts.width / 2, c.y + _iconSize / 2 - 2, ts.width, ts.height),
+      bounds: Rect.fromLTWH(
+          c.x - ts.width / 2, c.y + _iconSize / 2 - 2, ts.width, ts.height),
       style: baseStyle,
       color: theme.textColor,
+      align: TextAlignH.center,
     ));
   }
 
@@ -448,29 +613,47 @@ RenderScene layoutArchitecture(
   );
 }
 
-/// Architecture icon names (cloud/database/disk/server/internet) mapped to our
-/// built-in pack; unknown names fall back to a generic box glyph.
-String _iconRef(String name) => switch (name) {
-      'database' || 'db' => 'icon:database',
-      'cloud' => 'icon:cloud',
-      'internet' => 'icon:internet',
-      'disk' => 'icon:disk',
-      'server' => 'icon:server',
-      _ => 'icon:cog',
-    };
+/// Architecture icon names mapped to our built-in pack. Upstream ships a small
+/// architecture pack (cloud/database/disk/internet/server/blank) plus iconify
+/// fallback for arbitrary `prefix:name` refs. We honour an explicit `prefix:`
+/// ref as-is, map the architecture pack names plus common aliases, and fall
+/// back to a generic cog for unknown names.
+String _iconRef(String name) {
+  if (name.contains(':')) return name; // already a pack-qualified ref
+  return switch (name.toLowerCase()) {
+    'database' || 'db' || 'sql' || 'postgresql' || 'mysql' => 'icon:database',
+    'cloud' => 'icon:cloud',
+    'internet' || 'web' || 'globe' => 'icon:internet',
+    'disk' || 'storage' || 'drive' => 'icon:disk',
+    'server' || 'compute' || 'vm' || 'host' => 'icon:server',
+    _ => 'icon:cog',
+  };
+}
 
-/// Attachment point on a service icon's side. Junctions have no icon box, so
-/// the edge attaches at (or just outside) the junction dot's center.
+/// Builds a rect path with only the top two corners rounded (radius [r]),
+/// mirroring upstream's service `.node-bkg` path
+/// `M0,h V r Q0,0 r,0 H w-r Q w,0 w,r V h Z`.
+List<PathCommand> _topRoundedRect(Rect rect, double r) {
+  final l = rect.left, t = rect.top, b = rect.bottom, rt = rect.right;
+  return [
+    MoveTo(Point(l, b)),
+    LineTo(Point(l, t + r)),
+    QuadTo(Point(l, t), Point(l + r, t)),
+    LineTo(Point(rt - r, t)),
+    QuadTo(Point(rt, t), Point(rt, t + r)),
+    LineTo(Point(rt, b)),
+    const ClosePath(),
+  ];
+}
+
+/// Attachment point on a service icon's side. Junctions are an invisible
+/// iconSize anchor; upstream shifts the endpoint inward by halfIconSize so the
+/// edge meets at the junction's center.
 Point _port(Point c, String side, {bool junction = false}) {
+  // c is the icon center; for non-junctions the port sits on the icon-box edge.
+  // Junctions collapse to the center (box edge shifted inward by halfIconSize).
   if (junction) {
-    const r = 5.0;
-    return switch (side) {
-      'R' => Point(c.x + r, c.y),
-      'L' => Point(c.x - r, c.y),
-      'T' => Point(c.x, c.y - r),
-      'B' => Point(c.x, c.y + r),
-      _ => c,
-    };
+    return Point(c.x, c.y - 6);
   }
   const half = _iconSize / 2;
   return switch (side) {
@@ -494,7 +677,7 @@ Point _rectPort(Rect rect, Point memberCenter, String side) {
   };
 }
 
-List<SceneNode> _arrow(Point tip, String side, Color color) {
+List<SceneNode> _arrow(Point tip, String side, Color color, double size) {
   final dir = switch (side) {
     'R' => const Point(1, 0),
     'L' => const Point(-1, 0),
@@ -504,8 +687,11 @@ List<SceneNode> _arrow(Point tip, String side, Color color) {
   final perp = Point(-dir.y, dir.x);
   return [
     SceneShape(
-      geometry: PolygonGeometry(
-          [tip, tip - dir * 8 + perp * 4, tip - dir * 8 - perp * 4]),
+      geometry: PolygonGeometry([
+        tip,
+        tip - dir * size + perp * (size / 2),
+        tip - dir * size - perp * (size / 2),
+      ]),
       fill: Fill(color),
     ),
   ];

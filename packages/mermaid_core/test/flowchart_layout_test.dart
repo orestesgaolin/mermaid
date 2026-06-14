@@ -445,7 +445,7 @@ void main() {
       }
     });
 
-    test('title is rendered bold above the content', () {
+    test('title is rendered above the content', () {
       final scene = layout(FlowGraph(
         direction: FlowDirection.tb,
         nodes: {'A': node('A')},
@@ -455,7 +455,9 @@ void main() {
       final titleText = scene.nodes
           .whereType<SceneText>()
           .firstWhere((t) => t.text == 'Hello title');
-      expect(titleText.style.fontWeight, greaterThanOrEqualTo(700));
+      // Upstream .flowchartTitleText sets only font-size/fill (no font-weight),
+      // so the title renders at normal weight, not bold.
+      expect(titleText.style.fontWeight, lessThan(700));
       final a = groupBounds(findGroup(scene, 'A'));
       expect(titleText.bounds.bottom, lessThanOrEqualTo(a.top));
     });

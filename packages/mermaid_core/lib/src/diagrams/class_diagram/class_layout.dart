@@ -20,8 +20,15 @@ const double _padding = 12;
 const double _memberGap = 4;
 const double _diagramPadding = 8;
 const double _nodeSpacing = 50;
-const double _rankSpacing = 60;
+const double _rankSpacing = 50;
 const double _markerSize = 14;
+
+/// Upstream `styles.js` forces `g.classGroup text { font-size: 10px }`,
+/// overriding the theme font size for every class box, member and title.
+const double _classFontSize = 10;
+
+/// Upstream `svgDraw.js` draws cardinality labels at `font-size: 6`.
+const double _cardinalityFontSize = 6;
 
 const _noteBkg = Color(0xfffff5ad);
 const _noteBorder = Color(0xffaaaa33);
@@ -65,7 +72,7 @@ class _ClassLayout {
   _ClassLayout(this.diagram, this.measurer, this.theme)
       : baseStyle = TextStyleSpec(
           fontFamily: theme.fontFamily,
-          fontSize: theme.fontSize,
+          fontSize: _classFontSize,
         );
 
   final ClassDiagram diagram;
@@ -236,7 +243,8 @@ class _ClassLayout {
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
                 rx: 2,
                 ry: 2),
-            fill: Fill(theme.edgeLabelBackground),
+            // Upstream `.classLabel .box { fill: mainBkg; opacity: 0.5 }`.
+            fill: Fill(theme.mainBkg.withOpacity(0.5)),
           ),
           SceneText(
             text: r.label!,
@@ -246,15 +254,16 @@ class _ClassLayout {
           ),
         ]));
       }
+      final cardStyle = baseStyle.copyWith(fontSize: _cardinalityFontSize);
       void cardinality(String? card, Point tip, Point dir) {
         if (card == null || card.isEmpty) return;
-        final size = measurer.measure(card, baseStyle);
+        final size = measurer.measure(card, cardStyle);
         final pos = tip - dir * 18 + Point(-dir.y, dir.x) * 12;
         labelNodes.add(SceneText(
           text: card,
           bounds: Rect.fromCenter(pos, size.width, size.height),
-          style: baseStyle,
-          color: theme.textColor,
+          style: cardStyle,
+          color: Color.black,
         ));
       }
 
@@ -286,7 +295,9 @@ class _ClassLayout {
           text: diagram.notes[i].text,
           bounds: rect.inflate(-_padding),
           style: baseStyle,
-          color: Color.black,
+          // Upstream `.noteLabel .nodeLabel { color: noteTextColor }`;
+          // noteTextColor defaults to actorTextColor (#333) == textColor.
+          color: theme.textColor,
         ),
       ]));
     }
@@ -333,8 +344,6 @@ class _ClassLayout {
 
   _Box _measureBox(ClassNode node) {
     final titleStyle = baseStyle.copyWith(fontWeight: 700);
-    final annotationStyle = baseStyle.copyWith(
-        italic: true, fontSize: baseStyle.fontSize * 0.85);
     final lines = <_BoxLine>[];
     var y = _padding / 2 + 2;
     var width = 0.0;
@@ -348,38 +357,56 @@ class _ClassLayout {
       width = math.max(width, size.width);
     }
 
-    for (final a in node.annotations) {
-      add('«$a»', annotationStyle, centered: true);
+    // Upstream `shapeUtil.ts:textHelper` renders only the first annotation,
+    // plain (non-italic) at the base class font size, centered.
+    if (node.annotations.isNotEmpty) {
+      add('«${node.annotations.first}»', baseStyle, centered: true);
     }
     add(node.label, titleStyle, centered: true);
     y += _padding / 2;
 
-    var first = true;
-    for (final m in node.attributes) {
-      add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
-          separator: first, underline: m.isStatic);
-      first = false;
-    }
-    if (node.attributes.isEmpty) {
+    // Upstream `classBox.ts`: with default `hideEmptyMembersBox` (false) and
+    // both compartments empty, draw a single extra empty compartment bounded
+    // by two divider lines (`renderExtraBox`). Otherwise draw a divider above
+    // each present compartment, reserving the methods region when methods are
+    // empty but members are present.
+    final renderExtraBox = node.attributes.isEmpty && node.methods.isEmpty;
+
+    if (renderExtraBox) {
+      // Divider under the label and a second divider closing the extra box.
       lines.add(_BoxLine('', baseStyle, Size.zero, y, separatorAbove: true));
-      y += 8;
+      y += _padding * 2;
+      lines.add(_BoxLine('', baseStyle, Size.zero, y, separatorAbove: true));
     } else {
-      y += _padding / 2;
+      var first = true;
+      for (final m in node.attributes) {
+        add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
+            separator: first, underline: m.isStatic);
+        first = false;
+      }
+      if (node.attributes.isEmpty) {
+        // Members compartment empty but methods present: divider under label.
+        lines.add(_BoxLine('', baseStyle, Size.zero, y, separatorAbove: true));
+        y += 8;
+      } else {
+        y += _padding / 2;
+      }
+
+      first = true;
+      for (final m in node.methods) {
+        add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
+            separator: first, underline: m.isStatic);
+        first = false;
+      }
+      if (node.methods.isEmpty) {
+        // Methods compartment empty but members present: divider + region.
+        lines.add(_BoxLine('', baseStyle, Size.zero, y, separatorAbove: true));
+        y += 8;
+      }
     }
 
-    first = true;
-    for (final m in node.methods) {
-      add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
-          separator: first, underline: m.isStatic);
-      first = false;
-    }
-    if (node.methods.isEmpty) {
-      lines.add(_BoxLine('', baseStyle, Size.zero, y, separatorAbove: true));
-      y += 8;
-    }
-
-    return _Box(
-        node, math.max(110, width + 2 * _padding), y + _padding / 2, lines);
+    // Upstream box width is purely content-driven: bbox.width + 2*PADDING.
+    return _Box(node, width + 2 * _padding, y + _padding / 2, lines);
   }
 
   SceneGroup _buildBox(_Box b) {

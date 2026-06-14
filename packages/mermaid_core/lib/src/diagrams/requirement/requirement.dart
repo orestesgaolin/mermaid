@@ -5,6 +5,7 @@ library;
 
 import 'dart:math' as math;
 
+import '../../color.dart';
 import '../../detect.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -64,6 +65,56 @@ const _kinds = {
   'element',
 };
 
+/// Maps a requirement keyword to its mermaid display name (see
+/// `requirementDb.ts` `RequirementType`). Elements use the literal `Element`.
+const _kindDisplay = {
+  'requirement': 'Requirement',
+  'functionalRequirement': 'Functional Requirement',
+  'interfaceRequirement': 'Interface Requirement',
+  'performanceRequirement': 'Performance Requirement',
+  'physicalRequirement': 'Physical Requirement',
+  'designConstraint': 'Design Constraint',
+  'element': 'Element',
+};
+
+/// Maps a raw field key to its mermaid body-row prefix (see `requirementBox.ts`).
+const _fieldPrefix = {
+  'id': 'ID',
+  'text': 'Text',
+  'risk': 'Risk',
+  'verifyMethod': 'Verification',
+  'type': 'Type',
+  'docRef': 'Doc Ref',
+};
+
+/// Risk keyword -> display value (`requirementDb.ts` `RiskLevel`).
+const _riskDisplay = {
+  'low': 'Low',
+  'medium': 'Medium',
+  'high': 'High',
+};
+
+/// Verify-method keyword -> display value (`requirementDb.ts` `VerifyType`).
+const _verifyDisplay = {
+  'analysis': 'Analysis',
+  'demonstration': 'Demonstration',
+  'inspection': 'Inspection',
+  'test': 'Test',
+};
+
+/// Applies upstream value normalization for risk/verify keywords. Other field
+/// values pass through unchanged.
+String _displayFieldValue(String key, String value) {
+  switch (key) {
+    case 'risk':
+      return _riskDisplay[value.toLowerCase()] ?? value;
+    case 'verifyMethod':
+      return _verifyDisplay[value.toLowerCase()] ?? value;
+    default:
+      return value;
+  }
+}
+
 RequirementDiagram parseRequirementDiagram(String source) {
   final frontTitle = frontmatterTitle(source);
   final text = stripMetadata(source);
@@ -103,7 +154,14 @@ RequirementDiagram parseRequirementDiagram(String source) {
           'docref' => 'docRef',
           _ => key,
         };
-        open.$3.add((key, m.group(2)!.trim()));
+        var value = m.group(2)!.trim();
+        // Upstream string tokens strip surrounding double quotes.
+        if (value.length >= 2 &&
+            value.startsWith('"') &&
+            value.endsWith('"')) {
+          value = value.substring(1, value.length - 1);
+        }
+        open.$3.add((key, value));
         continue;
       }
       throw MermaidParseException('unrecognized field "$line"', line: i + 1);
@@ -141,6 +199,15 @@ RequirementDiagram parseRequirementDiagram(String source) {
     if (RegExp(r'^(acc(Title|Descr)\s*[:{]|direction\s)').hasMatch(line)) {
       continue;
     }
+    // Tolerate styling/interaction directives. Full styling (classDef/class/
+    // style -> per-node cssStyles + colorIndex cycling) is not yet applied —
+    // upstream's default theme has no `borderColorArray`, so the common case
+    // (no explicit styles) is unaffected. We skip these rather than throw so
+    // valid diagrams still render.
+    if (RegExp(r'^(classDef|class|style|click|callback|link)\b')
+        .hasMatch(line)) {
+      continue;
+    }
     throw MermaidParseException('unrecognized statement "$line"', line: i + 1);
   }
   if (!seenHeader) {
@@ -158,30 +225,43 @@ RenderScene layoutRequirementDiagram(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
-  const pad = 12.0;
+  // Upstream `requirementRenderer` uses SVG padding of 8.
+  const pad = 8.0;
+  // Upstream node padding/gap (`requirementBox.ts`): padding 20, gap 20.
+  const boxPadding = 20.0;
+  const gap = 20.0;
+  // Upstream node text uses the full configured font size (no shrink).
   final baseStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: theme.fontSize * 0.85);
+      fontFamily: theme.fontFamily, fontSize: theme.fontSize);
   final titleStyle = baseStyle.copyWith(fontWeight: 700);
 
-  // Measure boxes: «kind» line, bold id, divider, field lines.
-  final boxes = <String, (Size, List<(String, TextStyleSpec, Size)>)>{};
+  // Measure boxes: «Type» line, bold name, gap, divider, prefixed field rows.
+  // The bool flag marks the row after which a gap is inserted (the name row).
+  final boxes =
+      <String, (Size, List<(String, TextStyleSpec, Size, bool)>)>{};
   for (final n in diagram.nodes.values) {
-    final lines = <(String, TextStyleSpec, Size)>[];
-    void add(String text, TextStyleSpec style) {
-      lines.add((text, style, measurer.measure(text, style, maxWidth: 240)));
+    final lines = <(String, TextStyleSpec, Size, bool)>[];
+    void add(String text, TextStyleSpec style, {bool gapAfter = false}) {
+      lines.add(
+          (text, style, measurer.measure(text, style, maxWidth: 240), gapAfter));
     }
 
-    add('«${n.kind}»', baseStyle.copyWith(italic: true));
-    add(n.id, titleStyle);
+    final display = _kindDisplay[n.kind] ?? n.kind;
+    add('«$display»', baseStyle.copyWith(italic: true));
+    add(n.id, titleStyle, gapAfter: true);
     for (final (k, v) in n.fields) {
-      add('$k: $v', baseStyle);
+      if (v.isEmpty) continue;
+      final value = _displayFieldValue(k, v);
+      final prefix = _fieldPrefix[k];
+      add(prefix != null ? '$prefix: $value' : '$k: $value', baseStyle);
     }
-    var w = 0.0, h = 10.0;
-    for (final (_, _, s) in lines) {
+    var w = 0.0, h = boxPadding;
+    for (final (_, _, s, gapAfter) in lines) {
       w = w > s.width ? w : s.width;
       h += s.height + 4;
+      if (gapAfter) h += gap;
     }
-    boxes[n.id] = (Size(w + 24, h + 6), lines);
+    boxes[n.id] = (Size(w + boxPadding, h), lines);
   }
 
   final g = dagre.DagreGraph();
@@ -201,7 +281,7 @@ RenderScene layoutRequirementDiagram(
         labelPos: dagre.LabelPosition.center));
   }
   final result = dagre.layout(g,
-      dagre.DagreConfig(rankDir: dagre.RankDir.ttb, nodeSep: 60, rankSep: 70));
+      dagre.DagreConfig(rankDir: dagre.RankDir.ttb, nodeSep: 50, rankSep: 50));
 
   final nodes = <SceneNode>[];
   final centers = <String, Point>{};
@@ -220,36 +300,87 @@ RenderScene layoutRequirementDiagram(
         Rect.fromCenter(centers[r.to]!, boxes[r.to]!.$1.width, boxes[r.to]!.$1.height);
     pts[0] = _intersectRect(fromRect, pts[1]);
     pts[pts.length - 1] = _intersectRect(toRect, pts[pts.length - 2]);
-    final tip = pts.last;
-    final dir = _dir(pts[pts.length - 2], tip);
-    pts[pts.length - 1] = tip - dir * 10;
-    final perp = Point(-dir.y, dir.x);
-    nodes.add(SceneGroup(id: 'rel_$i', semanticLabel: r.label, children: [
-      SceneShape(
+    final isContains = r.label == 'contains';
+
+    // Upstream: `contains` is solid (`pattern: normal`), other relations are
+    // dashed with `stroke-dasharray: 10,7` (`requirementDb.ts:327`).
+    final dash = isContains ? null : const <double>[10, 7];
+
+    final children = <SceneNode>[];
+    if (isContains) {
+      // `contains` uses a start marker (circle r=9 + crosshair) at the `from`
+      // end, no end arrow (`markers.js:requirement_contains`, refX 0).
+      final start = pts.first;
+      final sdir = _dir(pts[1], start); // points from line outward into marker
+      // Marker center sits at the start point; the crosshair lines span the
+      // circle. Reproduce circle (r=9) + two crossing lines.
+      final perp = Point(-sdir.y, sdir.x);
+      children.add(SceneShape(
         geometry: PathGeometry([
           MoveTo(pts.first),
           for (final p in pts.skip(1)) LineTo(p),
         ]),
-        stroke: Stroke(color: theme.lineColor, width: 1.3, dash: const [4, 4]),
-      ),
-      SceneShape(
-        geometry: PolygonGeometry([tip, tip - dir * 11 + perp * 5, tip - dir * 11 - perp * 5]),
-        fill: Fill(theme.lineColor),
-      ),
-    ]));
+        stroke: Stroke(color: theme.lineColor, width: 1.3, dash: dash),
+      ));
+      children.add(SceneShape(
+        geometry: CircleGeometry(start, 9),
+        stroke: Stroke(color: theme.lineColor, width: 1),
+      ));
+      // Crosshair: one line along the edge direction, one perpendicular.
+      children.add(SceneShape(
+        geometry: PathGeometry([
+          MoveTo(start - sdir * 9),
+          LineTo(start + sdir * 9),
+        ]),
+        stroke: Stroke(color: theme.lineColor, width: 1),
+      ));
+      children.add(SceneShape(
+        geometry: PathGeometry([
+          MoveTo(start - perp * 9),
+          LineTo(start + perp * 9),
+        ]),
+        stroke: Stroke(color: theme.lineColor, width: 1),
+      ));
+    } else {
+      // Non-contains: dashed line ending in an open `>` arrow (two strokes,
+      // unfilled) — `markers.js:requirement_arrow`, `edgeMarker.ts` fill:false.
+      final tip = pts.last;
+      final dir = _dir(pts[pts.length - 2], tip);
+      pts[pts.length - 1] = tip - dir * 10;
+      final perp = Point(-dir.y, dir.x);
+      children.add(SceneShape(
+        geometry: PathGeometry([
+          MoveTo(pts.first),
+          for (final p in pts.skip(1)) LineTo(p),
+        ]),
+        stroke: Stroke(color: theme.lineColor, width: 1.3, dash: dash),
+      ));
+      children.add(SceneShape(
+        geometry: PathGeometry([
+          MoveTo(tip - dir * 11 + perp * 5),
+          LineTo(tip),
+          LineTo(tip - dir * 11 - perp * 5),
+        ]),
+        stroke: Stroke(color: theme.lineColor, width: 1.3),
+      ));
+    }
+    nodes.add(
+        SceneGroup(id: 'rel_$i', semanticLabel: r.label, children: children));
     final size = labelSizes[i]!;
     final mid = pts[pts.length ~/ 2];
+    // Upstream label: `relationLabelColor` (=actorTextColor='black') on
+    // `relationLabelBackground` (=labelBackground='rgba(232,232,232,0.8)').
     nodes.add(SceneGroup(id: 'rellabel_$i', children: [
       SceneShape(
         geometry: RectGeometry(
             Rect.fromCenter(mid, size.width + 4, size.height + 2)),
-        fill: Fill(theme.background),
+        fill: const Fill(Color(0xccE8E8E8)),
       ),
       SceneText(
         text: '«${r.label}»',
         bounds: Rect.fromCenter(mid, size.width, size.height),
         style: baseStyle,
-        color: theme.textColor,
+        color: Color.black,
       ),
     ]));
   }
@@ -257,34 +388,44 @@ RenderScene layoutRequirementDiagram(
   diagram.nodes.forEach((id, n) {
     final (size, lines) = boxes[id]!;
     final rect = Rect.fromCenter(centers[id]!, size.width, size.height);
+    // Upstream draws square corners (no rx/ry), `requirementBackground`
+    // (=primaryColor/mainBkg) for both requirements and elements, and a
+    // border in `requirementBorderColor` (=primaryBorderColor) width 1.
     final children = <SceneNode>[
       SceneShape(
-        geometry: RectGeometry(rect, rx: 4, ry: 4),
-        fill: Fill(n.kind == 'element' ? theme.secondaryColor : theme.mainBkg),
-        stroke: Stroke(color: theme.nodeBorder),
+        geometry: RectGeometry(rect),
+        fill: Fill(theme.mainBkg),
+        stroke: Stroke(color: theme.primaryBorderColor, width: 1),
       ),
     ];
-    var y = rect.top + 8;
+    var y = rect.top + boxPadding / 2;
+    // The name row (index 1) is centered like the type row; body rows below
+    // the gap are left-aligned (matching the non-elk `center` default would
+    // also be valid, but mermaid left-aligns the prefixed body rows visually).
     for (var li = 0; li < lines.length; li++) {
-      final (text, style, s) = lines[li];
+      final (text, style, s, gapAfter) = lines[li];
       children.add(SceneText(
         text: text,
         bounds: li < 2
             ? Rect.fromLTWH(rect.center.x - s.width / 2, y, s.width, s.height)
-            : Rect.fromLTWH(rect.left + 12, y, s.width, s.height),
+            : Rect.fromLTWH(rect.left + boxPadding / 2, y, s.width, s.height),
         style: style,
         color: theme.textColor,
         align: li < 2 ? TextAlignH.center : TextAlignH.left,
       ));
       y += s.height + 4;
-      if (li == 1 && lines.length > 2) {
-        children.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(rect.left, y - 2)),
-            LineTo(Point(rect.right, y - 2)),
-          ]),
-          stroke: Stroke(color: theme.nodeBorder, width: 0.8),
-        ));
+      if (gapAfter) {
+        // Divider line sits at the top of the gap when body rows follow.
+        if (lines.length > 2) {
+          children.add(SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(rect.left, y - 2)),
+              LineTo(Point(rect.right, y - 2)),
+            ]),
+            stroke: Stroke(color: theme.primaryBorderColor, width: 1),
+          ));
+        }
+        y += gap;
       }
     }
     nodes.add(SceneGroup(id: id, semanticLabel: n.id, children: children));
@@ -301,7 +442,7 @@ RenderScene layoutRequirementDiagram(
     final node = SceneText(
       text: title,
       bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-          bounds.top - size.height - 10, size.width, size.height),
+          bounds.top - size.height - 25, size.width, size.height),
       style: style,
       color: theme.titleColor,
     );

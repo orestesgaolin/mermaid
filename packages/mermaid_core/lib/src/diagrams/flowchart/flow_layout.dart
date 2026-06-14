@@ -57,7 +57,8 @@ RenderScene layoutFlowchart(
   // Diagram title above the content.
   final title = graph.title;
   if (title != null && title.isNotEmpty) {
-    final titleStyle = baseStyle.copyWith(fontWeight: 700);
+    // `.flowchartTitleText`: fixed 18px, normal weight, fill = textColor.
+    final titleStyle = baseStyle.copyWith(fontSize: 18, fontWeight: 400);
     final titleSize =
         measurer.measure(title, titleStyle, maxWidth: _wrappingWidth);
     final titleNode = SceneText(
@@ -69,7 +70,7 @@ RenderScene layoutFlowchart(
         titleSize.height,
       ),
       style: titleStyle,
-      color: theme.titleColor,
+      color: theme.textColor,
     );
     sceneNodes = [...sceneNodes, titleNode];
     bounds = bounds.union(titleNode.bounds);
@@ -115,7 +116,10 @@ class _IsolatedCluster {
   final double width;
   final double height;
 
-  double get titleBand => titleSize.height > 0 ? titleSize.height + 4 : 0;
+  // Upstream reserves a title band equal to the label height; the title sits
+  // flush at the cluster top (subGraphTitleMargin.top default 0) and the node
+  // area starts below it.
+  double get titleBand => titleSize.height;
 }
 
 _Fragment _layoutGraph(
@@ -402,8 +406,10 @@ _Fragment _layoutGraph(
   }
 
   // Alternate engine: tidy-tree replaces the dagre placement when there are no
-  // clusters (which it doesn't model). elk keeps the layered placement but
-  // routes edges orthogonally (handled in the edge loop below).
+  // clusters (which it doesn't model). It has no upstream counterpart — mermaid
+  // flowcharts only ship dagre — so it is a Dart-only extension reachable solely
+  // via an explicit `engine: 'tidy-tree'`; the default ('dagre') and the elk
+  // alias never select it implicitly.
   final useTidyTree = engine == 'tidy-tree' && sgs.isEmpty;
   if (useTidyTree) {
     final ids = [
@@ -429,7 +435,11 @@ _Fragment _layoutGraph(
         flow: flow, siblingGap: _nodeSpacing, levelGap: _rankSpacing);
     centers.forEach((id, c) => placed[id]?.center = c);
   }
-  final orthogonalEdges = engine == 'elk';
+  // Upstream v11 flowchart does not ship ELK: `layout: elk` logs a warning and
+  // falls back to dagre with curveBasis edges (flowRenderer-v3-unified.ts:36).
+  // We mirror that fallback — elk keeps the dagre placement and the default
+  // basis curves rather than rerouting edges orthogonally, so the `elk` engine
+  // here is intentionally a no-op alias for dagre.
 
   // --- 5. Emit scene nodes (in dagre coordinate space; translated later). ---
   final clusterGroups = <SceneNode>[];
@@ -471,10 +481,11 @@ _Fragment _layoutGraph(
         ),
         if (sg.title.isNotEmpty)
           SceneText(
+            // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
             text: sg.title,
             bounds: Rect.fromLTWH(
               rect.center.x - titleSize.width / 2,
-              rect.top + 4,
+              rect.top,
               titleSize.width,
               titleSize.height,
             ),
@@ -498,10 +509,11 @@ _Fragment _layoutGraph(
       ),
       if (cluster.subgraph.title.isNotEmpty)
         SceneText(
+          // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
           text: cluster.subgraph.title,
           bounds: Rect.fromLTWH(
             rect.center.x - cluster.titleSize.width / 2,
-            rect.top + 4,
+            rect.top,
             cluster.titleSize.width,
             cluster.titleSize.height,
           ),
@@ -571,10 +583,6 @@ _Fragment _layoutGraph(
     // Alternate engines route their own edges from the recomputed centers.
     if (useTidyTree) {
       points = [source.center, target.center];
-    } else if (orthogonalEdges) {
-      final vertical = graph.direction == FlowDirection.tb ||
-          graph.direction == FlowDirection.bt;
-      points = orthogonalRoute(source.center, target.center, vertical: vertical);
     }
     // Cluster endpoints: the dagre path runs to a representative node deep
     // inside the cluster; cut it back so it meets the cluster border.
@@ -608,8 +616,7 @@ _Fragment _layoutGraph(
     }
 
     children.add(SceneShape(
-      geometry: PathGeometry(
-          _edgeCurve(points, orthogonalEdges ? 'linear' : e.interpolate)),
+      geometry: PathGeometry(_edgeCurve(points, e.interpolate)),
       stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
     ));
     if (e.headTo != ArrowHead.none) {
@@ -710,8 +717,11 @@ SceneGroup _edgeLabelGroup(
     id: 'edgelabel_${e.from}_${e.to}_$index',
     children: [
       SceneShape(
+        // styles.ts `.edgeLabel rect { opacity: 0.5 }` — CSS opacity multiplies
+        // the fill's existing alpha, so halve the resolved alpha here.
         geometry: RectGeometry(bg, rx: 2, ry: 2),
-        fill: Fill(theme.edgeLabelBackground),
+        fill: Fill(theme.edgeLabelBackground
+            .withOpacity(theme.edgeLabelBackground.alpha / 255 * 0.5)),
       ),
       if (math != null)
         ...math.render(Point(
@@ -973,7 +983,10 @@ sealed class _Shape {
     switch (shape) {
       case FlowNodeShape.rect:
       case FlowNodeShape.plain:
-        return _RectShape(lw + 2 * p, lh + 2 * p);
+        // squareRect.ts: labelPaddingX = padding * 2 (=30), labelPaddingY =
+        // padding (=15). drawRect.ts: total = bbox + 2*labelPadding →
+        // width = lw + 4*p (=+60), height = lh + 2*p (=+30).
+        return _RectShape(lw + 4 * p, lh + 2 * p);
       case FlowNodeShape.rounded:
         return _RectShape(lw + 2 * p, lh + 2 * p, rx: 5);
       case FlowNodeShape.stadium:
@@ -989,12 +1002,13 @@ sealed class _Shape {
         final ry = rx / (2.5 + w / 50);
         return _CylinderShape(w, lh + 2 * p + 3 * ry, ry);
       case FlowNodeShape.circle:
-        // circle.ts: radius = bbox.width / 2 + padding
-        return _CircleShape(math.max(lw, lh) / 2 + p);
+        // circle.ts: radius = bbox.width / 2 + halfPadding (halfPadding = p/2).
+        return _CircleShape(lw / 2 + p / 2);
       case FlowNodeShape.doubleCircle:
-        // doubleCircle.ts: gap 5, outer = inner + gap
+        // doubleCircle.ts: inner radius = bbox.width / 2 + halfPadding,
+        // gap 5, outer = inner + gap.
         return _DoubleCircleShape(
-            math.max(lw, lh) / 2 + p + _doubleCircleGap, _doubleCircleGap);
+            lw / 2 + p / 2 + _doubleCircleGap, _doubleCircleGap);
       case FlowNodeShape.ellipse:
         return _EllipseShape(lw / 2 + p, lh / 2 + p);
       case FlowNodeShape.diamond:
@@ -1672,7 +1686,9 @@ Point _direction(Point from, Point to) {
 }
 
 double _markerShorten(ArrowHead head) => switch (head) {
-      ArrowHead.point => 9,
+      // pointEnd marker: viewBox 0 0 10 10 scaled into an 8x8 box, so the
+      // triangle spans 8px; pull the path back by its length.
+      ArrowHead.point => 8,
       ArrowHead.circle => 10,
       ArrowHead.cross => 9,
       ArrowHead.none => 0,
@@ -1684,8 +1700,11 @@ List<SceneNode> _marker(ArrowHead head, Point tip, Point dir, Color color) {
   final perp = Point(-dir.y, dir.x);
   switch (head) {
     case ArrowHead.point:
-      // Filled triangle, ~10x8 px.
-      final base = tip - dir * 10;
+      // pointEnd marker `M 0 0 L 10 5 L 0 10 z` in a 0 0 10 10 viewBox mapped
+      // to an 8x8 marker (markerUnits userSpaceOnUse — does NOT scale with
+      // stroke width): 8px long, half-height 4px, refX 5 puts the tip ~4px
+      // past the line endpoint.
+      final base = tip - dir * 8;
       return [
         SceneShape(
           geometry: PolygonGeometry([

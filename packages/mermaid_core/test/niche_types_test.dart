@@ -85,7 +85,13 @@ tf 01 ui CartUI
 tf 02 cmd AddItem
 tf 03 evt ItemAdded
 ''');
-    expect(_texts(s), containsAll(['CartUI', 'AddItem', 'UI', 'Command']));
+    // Upstream conceptual swimlanes: UI/Automation, Command/Read Model, Events.
+    expect(
+      _texts(s),
+      containsAll(
+        ['CartUI', 'AddItem', 'UI/Automation', 'Command/Read Model'],
+      ),
+    );
   });
 
   test('railroad renders rule alternatives', () {
@@ -93,6 +99,7 @@ tf 03 evt ItemAdded
 railroad-diagram
 digit = "0" | "1" | "2" ;
 ''');
-    expect(_texts(s), containsAll(['digit', '0', '1', '2']));
+    // Upstream renders the rule name with a trailing ' =' on the rail.
+    expect(_texts(s), containsAll(['digit =', '0', '1', '2']));
   });
 }

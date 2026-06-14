@@ -9,6 +9,7 @@ class ErDiagram {
     required this.relationships,
     this.direction = FlowDirection.tb,
     this.title,
+    this.classDefs = const {},
   });
 
   /// First-mention order, keyed by id.
@@ -16,6 +17,9 @@ class ErDiagram {
   final List<ErRelationship> relationships;
   final FlowDirection direction;
   final String? title;
+
+  /// `classDef <name> <css>` declarations, name → raw `k:v` style list.
+  final Map<String, List<String>> classDefs;
 }
 
 class ErEntity {
@@ -23,6 +27,8 @@ class ErEntity {
     required this.id,
     required this.label,
     this.attributes = const [],
+    this.cssStyles = const [],
+    this.cssClasses = const [],
   });
 
   final String id;
@@ -31,11 +37,24 @@ class ErEntity {
   final String label;
   final List<ErAttribute> attributes;
 
-  ErEntity copyWith({String? label, List<ErAttribute>? attributes}) =>
+  /// Inline `style <entity> fill:#f00,stroke:#000` declarations (raw `k:v`).
+  final List<String> cssStyles;
+
+  /// Class names attached via `class <entity> <className>`.
+  final List<String> cssClasses;
+
+  ErEntity copyWith({
+    String? label,
+    List<ErAttribute>? attributes,
+    List<String>? cssStyles,
+    List<String>? cssClasses,
+  }) =>
       ErEntity(
         id: id,
         label: label ?? this.label,
         attributes: attributes ?? this.attributes,
+        cssStyles: cssStyles ?? this.cssStyles,
+        cssClasses: cssClasses ?? this.cssClasses,
       );
 }
 

@@ -7,6 +7,7 @@ class GanttChart {
     required this.sections,
     this.title,
     this.axisFormat,
+    this.dateFormat,
     this.excludeWeekdays = const {},
     this.excludeDates = const {},
     this.todayMarkerOff = false,
@@ -18,6 +19,10 @@ class GanttChart {
 
   /// strftime-style axis label format (subset), e.g. `%m-%d`.
   final String? axisFormat;
+
+  /// The `dateFormat` directive (dayjs tokens). When it is `D` the axis uses
+  /// `%d` by default (upstream ganttRenderer makeGrid).
+  final String? dateFormat;
 
   /// Weekdays excluded via `excludes weekends` / `excludes monday` (1=Mon..7=Sun).
   final Set<int> excludeWeekdays;
@@ -53,6 +58,7 @@ class GanttTask {
     this.done = false,
     this.crit = false,
     this.milestone = false,
+    this.vert = false,
   }) : renderEnd = renderEnd ?? end;
 
   final String id;
@@ -73,4 +79,8 @@ class GanttTask {
   final bool done;
   final bool crit;
   final bool milestone;
+
+  /// A `vert` marker: a full-height thin vertical bar that does not occupy a
+  /// row (upstream vertical markers).
+  final bool vert;
 }

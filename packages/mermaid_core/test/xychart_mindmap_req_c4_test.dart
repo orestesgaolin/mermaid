@@ -137,8 +137,10 @@ requirementDiagram
         measurer: measurer,
         theme: theme,
       );
+      // Upstream shows the kind as its display name («Requirement»), not the
+      // raw keyword; relation labels stay lowercase («satisfies»).
       expect(texts(s),
-          containsAll(['«requirement»', 'r1', '«satisfies»', 'e1']));
+          containsAll(['«Requirement»', 'r1', '«satisfies»', 'e1']));
       expect(
         flatten(s.nodes).whereType<SceneShape>().any(
             (n) => n.geometry is PathGeometry && n.stroke?.dash != null),

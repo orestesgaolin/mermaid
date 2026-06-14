@@ -16,7 +16,7 @@ import '../../vendor/dagre/dart_dagre.dart' as dagre;
 import '../flowchart/flow_model.dart' show FlowDirection;
 import 'state_model.dart';
 
-const double _padding = 12;
+const double _padding = 8;
 const double _diagramPadding = 8;
 const double _nodeSpacing = 50;
 const double _rankSpacing = 50;
@@ -198,11 +198,19 @@ class _StateLayout {
       );
       clusterRects[s.id] = rect;
       final titleY = rect.top + 4;
+      final dividerY = titleY + titleSize.height + 4;
       clusterNodes.add(SceneGroup(id: s.id, semanticLabel: s.label, children: [
+        // Outer rect uses compositeTitleBackground (= mainBkg) so the title
+        // band is tinted; inner region below the divider uses the background.
         SceneShape(
-          geometry: RectGeometry(rect, rx: 8, ry: 8),
-          fill: Fill(theme.background),
+          geometry: RectGeometry(rect, rx: 5, ry: 5),
+          fill: Fill(theme.mainBkg),
           stroke: Stroke(color: theme.nodeBorder),
+        ),
+        SceneShape(
+          geometry: RectGeometry(
+              Rect.fromLTRB(rect.left, dividerY, rect.right, rect.bottom)),
+          fill: Fill(theme.background),
         ),
         // Title band.
         SceneText(
@@ -214,8 +222,8 @@ class _StateLayout {
         ),
         SceneShape(
           geometry: PathGeometry([
-            MoveTo(Point(rect.left, titleY + titleSize.height + 4)),
-            LineTo(Point(rect.right, titleY + titleSize.height + 4)),
+            MoveTo(Point(rect.left, dividerY)),
+            LineTo(Point(rect.right, dividerY)),
           ]),
           stroke: Stroke(color: theme.nodeBorder),
         ),
@@ -291,7 +299,7 @@ class _StateLayout {
           SceneShape(
             geometry: PathGeometry(
                 [MoveTo(start), CubicTo(c1, c2, end - endDir * 8)]),
-            stroke: Stroke(color: theme.lineColor, width: 1.5),
+            stroke: Stroke(color: theme.lineColor, width: 1),
           ),
           SceneShape(
             geometry: PolygonGeometry([
@@ -352,7 +360,7 @@ class _StateLayout {
         children: [
           SceneShape(
             geometry: PathGeometry(_curveBasis(points)),
-            stroke: Stroke(color: theme.lineColor, width: 1.5),
+            stroke: Stroke(color: theme.lineColor, width: 1),
           ),
           SceneShape(
             geometry: PolygonGeometry([
@@ -376,7 +384,7 @@ class _StateLayout {
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
                 rx: 2,
                 ry: 2),
-            fill: Fill(theme.edgeLabelBackground),
+            fill: Fill(theme.edgeLabelBackground.withOpacity(0.5)),
           ),
           SceneText(
             text: t.label!,
@@ -411,7 +419,7 @@ class _StateLayout {
           text: diagram.notes[i].text,
           bounds: b.rect.inflate(-_padding),
           style: baseStyle,
-          color: Color.black,
+          color: theme.textColor,
         ),
       ]));
     }
@@ -430,12 +438,12 @@ class _StateLayout {
 
     final title = diagram.title;
     if (title != null && title.isNotEmpty) {
-      final style = baseStyle.copyWith(fontWeight: 700);
+      final style = baseStyle.copyWith(fontWeight: 700, fontSize: 18);
       final size = measurer.measure(title, style);
       final node = SceneText(
         text: title,
         bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-            bounds.top - size.height - 8, size.width, size.height),
+            bounds.top - size.height - 25, size.width, size.height),
         style: style,
         color: theme.titleColor,
       );
@@ -460,11 +468,11 @@ class _StateLayout {
       case StateKind.end:
         return _Placed(s, 18, 18, Size.zero);
       case StateKind.choice:
-        return _Placed(s, 32, 32, Size.zero);
+        return _Placed(s, 28, 28, Size.zero);
       case StateKind.fork || StateKind.join:
         return horizontal
-            ? _Placed(s, 8, 60, Size.zero)
-            : _Placed(s, 60, 8, Size.zero);
+            ? _Placed(s, 10, 70, Size.zero)
+            : _Placed(s, 70, 10, Size.zero);
       case StateKind.history || StateKind.historyDeep:
         return _Placed(s, 26, 26, Size.zero);
       case StateKind.normal || StateKind.composite:
@@ -500,30 +508,31 @@ class _StateLayout {
       case StateKind.end:
         children.addAll([
           SceneShape(
-            geometry: CircleGeometry(p.center, 9),
+            geometry: CircleGeometry(p.center, 7),
             fill: Fill(theme.background),
-            stroke: Stroke(color: theme.lineColor, width: 1.5),
+            stroke: Stroke(color: theme.lineColor, width: 2),
           ),
           SceneShape(
-            geometry: CircleGeometry(p.center, 5),
-            fill: Fill(theme.lineColor),
+            geometry: CircleGeometry(p.center, 2.5),
+            fill: Fill(theme.nodeBorder),
           ),
         ]);
       case StateKind.choice:
         children.add(SceneShape(
           geometry: PolygonGeometry([
-            p.center + const Point(0, -16),
-            p.center + const Point(16, 0),
-            p.center + const Point(0, 16),
-            p.center + const Point(-16, 0),
+            p.center + const Point(0, -14),
+            p.center + const Point(14, 0),
+            p.center + const Point(0, 14),
+            p.center + const Point(-14, 0),
           ]),
           fill: Fill(fill),
           stroke: Stroke(color: stroke),
         ));
       case StateKind.fork || StateKind.join:
         children.add(SceneShape(
-          geometry: RectGeometry(p.rect, rx: 3, ry: 3),
+          geometry: RectGeometry(p.rect),
           fill: Fill(theme.lineColor),
+          stroke: Stroke(color: theme.lineColor),
         ));
       case StateKind.history || StateKind.historyDeep:
         // A circle with "H" (shallow) or "H*" (deep), like upstream.
@@ -541,7 +550,7 @@ class _StateLayout {
       case StateKind.normal || StateKind.composite:
         children.addAll([
           SceneShape(
-            geometry: RectGeometry(p.rect, rx: 8, ry: 8),
+            geometry: RectGeometry(p.rect, rx: 5, ry: 5),
             fill: Fill(fill),
             stroke: Stroke(color: stroke),
           ),
@@ -549,7 +558,7 @@ class _StateLayout {
             text: s.label,
             bounds: Rect.fromCenter(
                 p.center, p.labelSize.width, p.labelSize.height),
-            style: baseStyle,
+            style: baseStyle.copyWith(fontWeight: 700),
             color: theme.textColor,
           ),
         ]);
