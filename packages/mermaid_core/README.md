@@ -6,10 +6,12 @@ scene*, then renders that scene to SVG. No Flutter dependency — pair it with
 `mermaid_flutter` for native Flutter painting, or use the built-in SVG
 renderer and CLI anywhere Dart runs.
 
-## Supported diagrams (15)
+## Supported diagrams (28)
 
 flowchart · sequence · class · state · ER · pie · gantt · quadrant ·
-journey · timeline · xychart · mindmap · requirement · C4 · gitGraph
+journey · timeline · xychart · mindmap · requirement · C4 · gitGraph ·
+sankey · packet · block · radar · treemap · kanban · architecture ·
+cynefin · venn · ishikawa · wardley · eventModeling · railroad
 
 Plus: `%%{init}%%` / frontmatter theme directives (default/dark/forest/
 neutral + `themeVariables`), the hand-drawn `look: handDrawn` style (a
@@ -56,9 +58,9 @@ PNG output pipes the SVG through the first rasterizer found on `PATH`
 
 ## Fidelity
 
-Validated against 178 upstream mermaid demo fixtures, and compared
+Validated against 184 upstream mermaid demo fixtures, and compared
 side-by-side with mermaid.js in the browser. Known deltas are tracked in the
-project's `PLAN.md` (e.g. KaTeX math fonts, ELK layout engine).
+project's `parity/` docs (e.g. KaTeX math fonts, ELK layout engine).
 
 ## Licensing
 

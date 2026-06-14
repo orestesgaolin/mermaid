@@ -14,7 +14,7 @@ no SVG, no WebView, no platform views.
   layout is correct for whatever fonts your app uses.
 - **Live-editing friendly** — keeps the last good render on screen with an
   error overlay while you type invalid source (`keepLastGoodSceneOnError`).
-- Supports every diagram type and feature `mermaid_core` does: 15 diagram
+- Supports every diagram type and feature `mermaid_core` does: 28 diagram
   types, theme directives, hand-drawn look, icons, and math.
 
 ## Usage

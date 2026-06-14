@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_driver/driver_extension.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
+import 'package:mermaid_samples/mermaid_samples.dart';
 
 void main() {
   // Lets tooling (screenshots, UI driving) attach in debug builds.
@@ -16,298 +17,6 @@ void main() {
   }
   runApp(const MermaidDemoApp());
 }
-
-// ---------------------------------------------------------------------------
-// Samples
-// ---------------------------------------------------------------------------
-
-class Sample {
-  const Sample(this.name, this.source);
-
-  final String name;
-  final String source;
-}
-
-const _samples = <Sample>[
-  Sample('Basic flow', '''
-graph TD
-    A[Start] --> B{Is it working?}
-    B -->|Yes| C[Ship it]
-    B -->|No| D[Debug]
-    D --> B
-    C --> E[Celebrate]
-'''),
-  Sample('Shapes', '''
-graph TD
-    A[Rectangle] --> B(Rounded)
-    B --> C([Stadium])
-    C --> D[[Subroutine]]
-    D --> E[(Database)]
-    E --> F((Circle))
-    F --> G>Asymmetric]
-    G --> H{Diamond}
-    H --> I{{Hexagon}}
-    I --> J[/Parallelogram/]
-    J --> K[\\Parallelogram alt\\]
-    K --> L[/Trapezoid\\]
-    L --> M[\\Trapezoid alt/]
-    M --> N(((Double circle)))
-'''),
-  Sample('Edges', '''
-graph LR
-    A[A] --> B[B]
-    B --- C[C]
-    C -.-> D[D]
-    D ==> E[E]
-    E --o F[F]
-    F --x G[G]
-    G <--> H[H]
-    A -- solid label --> E
-    B -.->|dotted label| F
-    C ==>|thick label| G
-'''),
-  Sample('Subgraphs', '''
-graph LR
-    subgraph Pipeline
-        direction LR
-        subgraph Stage One
-            direction TB
-            a1[Fetch] --> a2[Validate]
-        end
-        subgraph Stage Two
-            direction TB
-            b1[Transform] --> b2[Store]
-        end
-        a2 --> b1
-    end
-    Start([Start]) --> a1
-    b2 --> Done([Done])
-'''),
-  Sample('Styled', '''
-graph TD
-    classDef hot fill:#ffcccc,stroke:#cc0000,stroke-width:2px,color:#660000
-    classDef cool fill:#cce5ff,stroke:#0055aa,color:#003366
-    A[Normal node] --> B[Hot node]:::hot
-    A --> C[Cool node]:::cool
-    B --> D{Decision}
-    C --> D
-    D -->|left| E[Result]
-    style A fill:#ffffcc,stroke:#aaaa00,stroke-width:3px
-    style E fill:#e6ffe6,stroke:#00aa00
-'''),
-  Sample('CI/CD pipeline', '''
-graph LR
-    dev[Developer] --> push[Git push]
-    push --> trigger{CI triggered?}
-    trigger -->|yes| lint[Lint]
-    trigger -->|no| idle([Idle])
-    lint --> unit[Unit tests]
-    unit --> build[Build artifacts]
-    build --> integ[Integration tests]
-    integ --> ok{All green?}
-    ok -->|no| notify[Notify author]
-    notify --> dev
-    ok -->|yes| stage[Deploy to staging]
-    stage --> smoke[Smoke tests]
-    smoke --> approve{Manual approval}
-    approve -->|approved| prod[Deploy to production]
-    approve -->|rejected| notify
-    prod --> monitor[(Metrics & alerts)]
-'''),
-  Sample('v11 shapes', '''
-flowchart LR
-    in@{ shape: start, label: " " } --> read@{ shape: datastore, label: "Read config" }
-    read --> check@{ shape: decision, label: "Valid?" }
-    check -->|yes| run@{ shape: subprocess, label: "Run job" }
-    check -->|no| fix@{ shape: manual, label: "Fix by hand" }
-    fix --> read
-    run --> report@{ shape: doc, label: "Report" }
-    report --> out@{ shape: stop, label: " " }
-'''),
-  Sample('Self-loops', '''
-graph TD
-    boot[Boot] --> poll[Poll queue]
-    poll -->|empty| poll
-    poll -->|job| work[Process job<br/>with retries]
-    work -->|retry| work
-    work -->|done| ack[Acknowledge]
-    work -->|fatal| dead[(Dead letter)]
-    ack --> poll
-'''),
-  Sample('Mixed directions', '''
-graph TB
-    req[Request] --> auth
-    subgraph mw[Middleware chain]
-        direction LR
-        auth[Auth] --> rate[Rate limit] --> log[Logging]
-    end
-    log --> app[App handler]
-    app --> resp[Response]
-'''),
-  Sample('Microservices', '''
-graph LR
-    web[Web client] --> gw[API Gateway]
-    mobile[Mobile app] --> gw
-    subgraph services[Services]
-        direction TB
-        gw2[Router] --> users[Users svc]
-        gw2 --> orders[Orders svc]
-        gw2 --> billing[Billing svc]
-    end
-    gw ==> gw2
-    users --> udb[(Users DB)]
-    orders --> odb[(Orders DB)]
-    orders -.->|events| bus{{Message bus}}
-    billing -.->|events| bus
-    bus -.-> mail[Email worker]
-    bus -.-> analytics[Analytics sink]
-    linkStyle default stroke:#666
-'''),
-  Sample('Sequence', '''
-sequenceDiagram
-    autonumber
-    actor U as User
-    participant W as Web App
-    participant S as Auth Service
-    U->>+W: Login request
-    W->>+S: Validate credentials
-    Note right of S: Check password hash
-    alt valid
-        S-->>W: Token
-        W-->>U: Welcome!
-    else invalid
-        S-->>-W: 401
-        W-->>-U: Try again
-    end
-    loop every 15 min
-        W->>S: Refresh token
-        S--)W: New token
-    end
-'''),
-  Sample('Class diagram', '''
-classDiagram
-    direction TB
-    class Animal {
-        <<abstract>>
-        +String name
-        +int age
-        +isMammal() bool
-        +mate()*
-    }
-    class Duck {
-        +String beakColor
-        +swim()
-        +quack()
-    }
-    class Fish {
-        -int sizeInFeet
-        -canEat() bool
-    }
-    class Zebra {
-        +bool is_wild
-        +run()
-    }
-    Animal <|-- Duck
-    Animal <|-- Fish
-    Animal <|-- Zebra
-    Duck "1" --> "*" Egg : lays
-    note for Duck "can fly<br/>and swim"
-'''),
-  Sample('State machine', '''
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> Connecting : connect
-    state check <<choice>>
-    Connecting --> check
-    check --> Connected : ok
-    check --> Backoff : failed
-    Backoff --> Connecting : retry
-    state Connected {
-        [*] --> Receiving
-        Receiving --> Processing : message
-        Processing --> Receiving : done
-    }
-    Connected --> Connected : heartbeat
-    Connected --> Closing : close
-    Closing --> [*]
-    note right of Backoff : exponential<br/>backoff
-'''),
-  Sample('ER diagram', '''
-erDiagram
-    CUSTOMER ||--o{ ORDER : places
-    ORDER ||--|{ LINE_ITEM : contains
-    PRODUCT }|..|{ LINE_ITEM : "ordered in"
-    CUSTOMER {
-        string name PK "full name"
-        string email UK
-        int loyaltyPoints
-    }
-    ORDER {
-        int orderNumber PK
-        date placedAt
-        string status FK
-    }
-'''),
-  Sample('Gantt', '''
-gantt
-    dateFormat YYYY-MM-DD
-    title Release plan
-    section Design
-    Wireframes      : done, des1, 2024-03-01, 4d
-    Visual design   : active, des2, after des1, 5d
-    section Build
-    API             : crit, api1, 2024-03-04, 7d
-    Frontend        : fe1, after des2, 6d
-    Integration     : after api1 fe1, 3d
-    section Launch
-    Beta            : milestone, 2024-03-20, 1d
-    Rollout         : after fe1, 4d
-'''),
-  Sample('Pie', '''
-pie showData title Browser share
-    "Chrome" : 64.7
-    "Safari" : 18.1
-    "Edge" : 5.4
-    "Firefox" : 3.1
-    "Other" : 8.7
-'''),
-  Sample('Quadrant', '''
-quadrantChart
-    title Reach and engagement of campaigns
-    x-axis Low Reach --> High Reach
-    y-axis Low Engagement --> High Engagement
-    quadrant-1 We should expand
-    quadrant-2 Need to promote
-    quadrant-3 Re-evaluate
-    quadrant-4 May be improved
-    Campaign A: [0.3, 0.6]
-    Campaign B: [0.45, 0.23]
-    Campaign C: [0.57, 0.69]
-    Campaign D: [0.78, 0.34]
-    Campaign E: [0.40, 0.34]
-'''),
-  Sample('Journey', '''
-journey
-    title My working day
-    section Go to work
-      Make tea: 5: Me
-      Go upstairs: 3: Me
-      Do work: 1: Me, Cat
-    section Go home
-      Go downstairs: 5: Me
-      Sit down: 5: Me
-'''),
-  Sample('Timeline', '''
-timeline
-    title History of Social Media
-    section Web 1.0
-    2002 : LinkedIn
-    2004 : Facebook : Google
-    section Web 2.0
-    2005 : YouTube
-    2006 : Twitter
-'''),
-];
 
 // ---------------------------------------------------------------------------
 // App
@@ -359,13 +68,13 @@ class _EditorPageState extends State<EditorPage> {
   late final TextEditingController _controller;
   Timer? _debounce;
   int _sampleIndex = 0;
-  String _renderedSource = _samples.first.source;
+  String _renderedSource = samples.first.source;
   bool _autoFit = true;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: _samples.first.source);
+    _controller = TextEditingController(text: samples.first.source);
   }
 
   @override
@@ -387,8 +96,8 @@ class _EditorPageState extends State<EditorPage> {
     _debounce?.cancel();
     setState(() {
       _sampleIndex = index;
-      _controller.text = _samples[index].source;
-      _renderedSource = _samples[index].source;
+      _controller.text = samples[index].source;
+      _renderedSource = samples[index].source;
     });
   }
 
@@ -461,20 +170,43 @@ class _EditorPageState extends State<EditorPage> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
-          child: Wrap(
-            spacing: 6,
-            runSpacing: 6,
-            children: [
-              for (var i = 0; i < _samples.length; i++)
-                ChoiceChip(
-                  label: Text(_samples[i].name),
-                  selected: _sampleIndex == i,
-                  visualDensity: VisualDensity.compact,
-                  onSelected: (_) => _selectSample(i),
-                ),
-            ],
+        ConstrainedBox(
+          constraints: const BoxConstraints(maxHeight: 168),
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(12, 12, 12, 4),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final category in sampleCategories) ...[
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4, bottom: 4),
+                    child: Text(
+                      category.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 0.6,
+                        color: colors.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      for (var i = 0; i < samples.length; i++)
+                        if (samples[i].category == category)
+                          ChoiceChip(
+                            label: Text(samples[i].name),
+                            selected: _sampleIndex == i,
+                            visualDensity: VisualDensity.compact,
+                            onSelected: (_) => _selectSample(i),
+                          ),
+                    ],
+                  ),
+                ],
+              ],
+            ),
           ),
         ),
         Expanded(

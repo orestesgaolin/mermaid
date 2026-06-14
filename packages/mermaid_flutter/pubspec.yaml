@@ -1,13 +1,39 @@
 name: mermaid_flutter
 description: >-
-  Flutter renderer for mermaid_core: TextPainter-based text measurement and a
-  CustomPainter that paints the mermaid render scene natively.
+  Native Flutter renderer for mermaid_core: TextPainter text measurement and a
+  CustomPainter that paints the mermaid render scene directly. 28 diagram types.
 version: 0.1.0
-publish_to: none
+repository: https://github.com/makevisible/mermaid_dart
+issue_tracker: https://github.com/makevisible/mermaid_dart/issues
+topics:
+  - mermaid
+  - diagram
+  - flutter
+  - visualization
 environment:
   sdk: ^3.12.0
   flutter: '>=3.35.0'
 resolution: workspace
+
+screenshots:
+  - description: Flowchart with decisions and labelled edges.
+    path: doc/screenshots/flowchart.png
+  - description: Sequence diagram with activations, notes and alt blocks.
+    path: doc/screenshots/sequence.png
+  - description: UML class diagram with relationships and visibility markers.
+    path: doc/screenshots/class.png
+  - description: State machine with choice nodes and transitions.
+    path: doc/screenshots/state.png
+  - description: Git graph with branches, merges and tags.
+    path: doc/screenshots/git.png
+  - description: Pie chart computed from labelled values.
+    path: doc/screenshots/pie.png
+  - description: XY chart with bar and line series.
+    path: doc/screenshots/xychart.png
+  - description: Mindmap radiating from a central root.
+    path: doc/screenshots/mindmap.png
+  - description: Sankey flow diagram with proportional ribbons.
+    path: doc/screenshots/sankey.png
 
 dependencies:
   flutter:

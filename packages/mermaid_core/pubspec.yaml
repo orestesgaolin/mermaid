@@ -1,6 +1,6 @@
 name: mermaid_core
 description: >-
-  Pure Dart port of mermaid.js: detect, parse and lay out 15 diagram types
+  Pure Dart port of mermaid.js: detect, parse and lay out 28 diagram types
   into a backend-agnostic scene, with an SVG renderer and a CLI. No Flutter.
 version: 0.1.0
 repository: https://github.com/makevisible/mermaid_dart

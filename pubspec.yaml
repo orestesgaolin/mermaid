@@ -5,6 +5,7 @@ environment:
 workspace:
   - packages/mermaid_core
   - packages/mermaid_flutter
+  - packages/mermaid_samples
   - apps/demo
   - apps/flutter_embed
   - apps/website

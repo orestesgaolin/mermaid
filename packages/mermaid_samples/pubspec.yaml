@@ -1,0 +1,9 @@
+name: mermaid_samples
+description: >-
+  Shared catalogue of example Mermaid diagrams (one per supported type, grouped
+  and annotated) reused by the demo app, the comparison website and tests.
+version: 0.1.0
+publish_to: none
+environment:
+  sdk: ^3.12.0
+resolution: workspace

@@ -2,10 +2,13 @@
 
 Initial release. Pure Dart port of mermaid.js.
 
-- **15 diagram types**: flowchart, sequence, class, state, ER, pie, gantt,
-  quadrant, journey, timeline, xychart, mindmap, requirement, C4, gitGraph.
+- **28 diagram types**: flowchart, sequence, class, state, ER, pie, gantt,
+  quadrant, journey, timeline, xychart, mindmap, requirement, C4, gitGraph,
+  sankey, packet, block, radar, treemap, kanban, architecture, cynefin, venn,
+  ishikawa, wardley, eventModeling, railroad.
 - Diagram detection, hand-written parsers, layout (vendored dagre for
-  graph diagrams), and a backend-agnostic **render scene IR**.
+  graph diagrams; `elk` and `tidy-tree` alternate engines), and a
+  backend-agnostic **render scene IR**.
 - **SVG renderer** (`renderSceneToSvg`) and a **CLI** (`mermaid_dart`) that
   emits SVG, or PNG via an external rasterizer.
 - Theme directives: `%%{init}%%` + frontmatter `config.theme`/`themeVariables`;
@@ -14,4 +17,4 @@ Initial release. Pure Dart port of mermaid.js.
 - **Icons** on flowchart nodes via iconify-style packs (`@{ icon: }`).
 - **Math** in labels (`$$...$$`): a TeX subset (super/subscripts, `\frac`,
   `\sqrt`, matrices, `cases`, braces, accents) laid out with scene primitives.
-- Validated against 178 upstream demo fixtures.
+- Validated against 184 upstream demo fixtures.

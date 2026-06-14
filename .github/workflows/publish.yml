@@ -1,0 +1,74 @@
+name: Publish to pub.dev
+
+# Publishes the packages to pub.dev in dependency order when a release tag
+# like `v0.1.0` is pushed: mermaid_core first, then mermaid_flutter (which
+# depends on `mermaid_core: ^…`, so core must be live before flutter resolves).
+# A final job generates release notes with `package:changelog_cli` and cuts a
+# GitHub Release. The two packages are versioned in lockstep, so the tag's
+# version must match BOTH pubspecs.
+#
+# ── One-time setup ───────────────────────────────────────────────────────────
+# Authentication uses GitHub Actions OIDC (no secrets stored). On pub.dev, for
+# EACH package (mermaid_core, mermaid_flutter):
+#   Admin → Automated publishing → Enable publishing from GitHub Actions
+#     • Repository:   <owner>/<repo>
+#     • Tag pattern:  v{{version}}
+# pub.dev then trusts tokens minted by this workflow for the matching tag.
+
+on:
+  push:
+    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+
+jobs:
+  publish-core:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write # mint the OIDC token pub.dev verifies
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dart-lang/setup-dart@v1
+      - name: Resolve workspace
+        run: dart pub get
+      - name: Publish mermaid_core
+        working-directory: packages/mermaid_core
+        run: dart pub publish --force
+
+  publish-flutter:
+    # mermaid_flutter depends on mermaid_core, so core must be on pub.dev first.
+    needs: publish-core
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve workspace
+        run: flutter pub get
+      - name: Publish mermaid_flutter
+        working-directory: packages/mermaid_flutter
+        run: flutter pub publish --force
+
+  github-release:
+    needs: publish-flutter
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # create the GitHub Release
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # full history so changelog_cli can diff from the last tag
+      - uses: dart-lang/setup-dart@v1
+      - name: Generate release notes (changelog_cli)
+        run: |
+          dart pub global activate changelog_cli
+          export PATH="$HOME/.pub-cache/bin:$PATH"
+          # Conventional-commit notes since the previous tag, as Markdown.
+          changelog_cli generate --auto --printer markdown --output RELEASE_NOTES.md \
+            || changelog_cli generate --auto --printer markdown > RELEASE_NOTES.md
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file RELEASE_NOTES.md
