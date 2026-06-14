@@ -335,6 +335,18 @@ it alongside the theme.
   knobs belong to the **architecture** diagram, which isn't ported yet.
   Two steps: port architecture (`diagrams/architecture/`), then its tuning.
 
+## 2026-06-14 fidelity pass on the new diagram types (vs mermaid.js)
+After visual side-by-side comparison on the website, the new types were
+restyled to match mermaid.js: **radar** (circular graticule + smooth closed
+Catmull-Rom area curves, was polygonal); **treemap** (leaves coloured by
+top-level group with a coloured header + centered labels, was rainbow
+per-leaf); **kanban** (per-column coloured header bars + centered titles +
+bordered cards, was uniform); **architecture** (distinct cloud/server/disk/
+internet icons, were all the database glyph). block / ishikawa / wardley are
+structurally close. Note: mermaid@11 CDN does NOT render cynefin / venn /
+eventmodeling / railroad (newer than the build) so there's no in-demo
+side-by-side for those — they're matched to the mermaid docs instead.
+
 ## Known gaps / quirks
 
 - v11 geometries are implemented (document/card/hourglass/bolt/triangle/…);
