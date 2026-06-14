@@ -3,8 +3,8 @@ description: >-
   Native Flutter renderer for mermaid_core: TextPainter text measurement and a
   CustomPainter that paints the mermaid render scene directly. 28 diagram types.
 version: 0.1.0
-repository: https://github.com/makevisible/mermaid_dart
-issue_tracker: https://github.com/makevisible/mermaid_dart/issues
+repository: https://github.com/orestesgaolin/mermaid
+issue_tracker: https://github.com/orestesgaolin/mermaid/issues
 topics:
   - mermaid
   - diagram
