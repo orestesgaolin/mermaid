@@ -65,11 +65,12 @@ class _CompareViewState extends State<CompareView> {
     super.dispose();
   }
 
-  /// Picking a sample replaces the editor contents and re-renders.
+  /// Picking a sample replaces the editor contents (keeping the current
+  /// layout choice baked in) and re-renders.
   void _select(int index) {
     setState(() {
       _selected = index;
-      _source = samples[index].source.trim();
+      _source = _withLayoutDirective(samples[index].source.trim(), _layout);
     });
     if (kIsWeb) {
       _editor.currentNode?.value = _source;
@@ -87,30 +88,45 @@ class _CompareViewState extends State<CompareView> {
     _debounce = Timer(const Duration(milliseconds: 250), _sync);
   }
 
+  /// Selecting a layout rewrites the editor text: the `%%{init}%%` layout
+  /// directive is added/updated/removed in-place so the source shown matches
+  /// what both panes render.
   void _selectLayout(String layout) {
-    setState(() => _layout = layout);
-    if (kIsWeb) Future.delayed(Duration.zero, _sync);
+    setState(() {
+      _layout = layout;
+      _source = _withLayoutDirective(_source, layout);
+    });
+    if (kIsWeb) {
+      _editor.currentNode?.value = _source;
+      Future.delayed(Duration.zero, _sync);
+    }
   }
 
-  /// Injects the chosen `layout` as an `%%{init}%%` directive (after any
-  /// frontmatter) so both renderers pick it up, without touching the editor.
-  String get _effective {
-    if (_layout == 'dagre') return _source;
-    final directive = "%%{init: {'layout': '$_layout'}}%%";
-    final s = _source.trimLeft();
-    if (s.startsWith('---')) {
-      final end = s.indexOf('\n---', 3);
+  /// Returns [base] with any existing layout init directive removed and, when
+  /// [layout] isn't the default dagre, a fresh one inserted (after frontmatter
+  /// if present, else at the top).
+  static String _withLayoutDirective(String base, String layout) {
+    var s = base.replaceAll(
+        RegExp(r'^[ \t]*%%\{\s*init[^\n]*layout[^\n]*\}%%[ \t]*\n?',
+            multiLine: true),
+        '');
+    s = s.trimRight();
+    if (layout == 'dagre') return s;
+    final directive = "%%{init: {'layout': '$layout'}}%%";
+    final t = s.trimLeft();
+    if (t.startsWith('---')) {
+      final end = t.indexOf('\n---', 3);
       if (end >= 0) {
-        final close = s.indexOf('\n', end + 1);
-        final cut = close >= 0 ? close + 1 : s.length;
-        return '${s.substring(0, cut)}$directive\n${s.substring(cut)}';
+        final close = t.indexOf('\n', end + 1);
+        final cut = close >= 0 ? close + 1 : t.length;
+        return '${t.substring(0, cut)}$directive\n${t.substring(cut)}';
       }
     }
-    return '$directive\n$_source';
+    return '$directive\n$s';
   }
 
   void _sync() {
-    final src = _effective;
+    final src = _source;
     final jsPane = _jsPane.currentNode;
     if (jsPane != null) {
       _renderMermaidJs(jsPane, src.toJS);
