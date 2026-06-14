@@ -37,6 +37,7 @@ export 'src/diagrams/timeline/timeline.dart';
 export 'src/diagrams/xychart/xychart.dart';
 export 'src/geometry.dart';
 export 'src/ir/scene.dart';
+export 'src/ir/scene_utils.dart' show sceneBounds, geometryBounds;
 export 'src/mermaid.dart';
 export 'src/parse_error.dart';
 export 'src/render/svg_renderer.dart';

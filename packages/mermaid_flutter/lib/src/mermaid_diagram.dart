@@ -22,7 +22,13 @@ class MermaidDiagram extends StatefulWidget {
     this.theme = core.MermaidTheme.defaultTheme,
     this.errorBuilder,
     this.keepLastGoodSceneOnError = true,
+    this.onNodeTap,
   });
+
+  /// Called when a node/group is tapped, with its id and optional click link
+  /// (from a flowchart `click`/`href`). Only fires for groups carrying an id
+  /// or a link. Use it to open links or drive selection.
+  final void Function(String id, String? link)? onNodeTap;
 
   /// Mermaid diagram source text.
   final String source;
@@ -68,6 +74,33 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     }
   }
 
+  /// Finds the topmost (last-painted) group with an id/link whose bounds
+  /// contain [p]. Returns (id, link) or null.
+  (String, String?)? _hitTest(List<core.SceneNode> nodes, Offset p) {
+    (String, String?)? found;
+    void walk(List<core.SceneNode> ns) {
+      for (final n in ns) {
+        if (n is core.SceneGroup) {
+          if (n.id != null || n.link != null) {
+            final b = core.sceneBounds(n.children);
+            if (b != null &&
+                p.dx >= b.left &&
+                p.dx <= b.right &&
+                p.dy >= b.top &&
+                p.dy <= b.bottom) {
+              // Later in paint order wins; keep updating.
+              found = (n.id ?? '', n.link);
+            }
+          }
+          walk(n.children);
+        }
+      }
+    }
+
+    walk(nodes);
+    return found;
+  }
+
   @override
   Widget build(BuildContext context) {
     _rebuildSceneIfNeeded();
@@ -82,6 +115,21 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     }
 
     final background = scene.background;
+    Widget paint = CustomPaint(
+      painter: ScenePainter(scene),
+      size: Size(scene.size.width, scene.size.height),
+    );
+    final onNodeTap = widget.onNodeTap;
+    if (onNodeTap != null) {
+      paint = GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTapUp: (d) {
+          final hit = _hitTest(scene.nodes, d.localPosition);
+          if (hit != null) onNodeTap(hit.$1, hit.$2);
+        },
+        child: paint,
+      );
+    }
     Widget diagram = SizedBox(
       width: scene.size.width,
       height: scene.size.height,
@@ -89,10 +137,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
         decoration: BoxDecoration(
           color: background != null ? Color(background.value) : null,
         ),
-        child: CustomPaint(
-          painter: ScenePainter(scene),
-          size: Size(scene.size.width, scene.size.height),
-        ),
+        child: paint,
       ),
     );
 
