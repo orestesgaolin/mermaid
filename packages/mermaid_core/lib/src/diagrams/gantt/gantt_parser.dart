@@ -29,6 +29,7 @@ class _GanttParser {
   var _autoId = 0;
   final _excludeWeekdays = <int>{};
   final _excludeDates = <DateTime>{};
+  final _includeDates = <DateTime>{};
   var _todayMarkerOff = false;
 
   GanttChart parse() {
@@ -108,13 +109,22 @@ class _GanttParser {
       }
       return;
     }
+    m = RegExp(r'^includes\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      // Dates listed here are never treated as excluded (override excludes).
+      for (final raw in m.group(1)!.split(RegExp(r'[\s,]+'))) {
+        final d = parseGanttDate(raw.trim(), dateFormat);
+        if (d != null) _includeDates.add(DateTime(d.year, d.month, d.day));
+      }
+      return;
+    }
     m = RegExp(r'^todayMarker\s+(.+)$').firstMatch(line);
     if (m != null) {
       if (m.group(1)!.trim().toLowerCase() == 'off') _todayMarkerOff = true;
       return;
     }
     // Recognized-but-unsupported settings: parsed and ignored.
-    if (RegExp(r'^(includes|inclusiveEndDates|'
+    if (RegExp(r'^(inclusiveEndDates|'
             r'topAxis|weekday|tickInterval|displayMode|compact|'
             r'click|link|call|acc(Title|Descr))\b')
         .hasMatch(line)) {
@@ -198,17 +208,30 @@ class _GanttParser {
       // upstream's lenient task resolution; sequencing fallbacks apply.
     }
 
+    // An explicit end date is a "manual" end and is never adjusted for
+    // excludes; only duration/default-derived ends are.
+    final manualEnd = end != null;
     start ??= lastTask?.end ?? DateTime(2024);
     end ??= duration != null
         ? start.add(duration)
         : start.add(const Duration(days: 1));
     if (milestone) end = start;
 
+    // Push the end past excluded days so a duration-based task keeps its full
+    // count of working days. Matches upstream checkTaskDates/fixTaskDates:
+    // `renderEnd` stays at the original (unextended) end, while `end` (used by
+    // `after` dependents and the axis domain) moves forward.
+    var renderEnd = end;
+    if (!milestone && !manualEnd && _hasExcludes) {
+      (end, renderEnd) = _fixTaskDates(start, end);
+    }
+
     final task = GanttTask(
       id: id ?? 'task${_autoId++}',
       name: name,
       start: start,
       end: end,
+      renderEnd: renderEnd,
       active: active,
       done: done,
       crit: crit,
@@ -218,5 +241,39 @@ class _GanttParser {
     lastTask = task;
     if (sections.isEmpty) sections.add(('', []));
     sections.last.$2.add(task);
+  }
+
+  bool get _hasExcludes =>
+      _excludeWeekdays.isNotEmpty || _excludeDates.isNotEmpty;
+
+  /// Whether [d]'s calendar day is excluded (weekend/weekday/specific date),
+  /// unless overridden by an `includes` date.
+  bool _isExcluded(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    if (_includeDates.contains(day)) return false;
+    return _excludeWeekdays.contains(d.weekday) || _excludeDates.contains(day);
+  }
+
+  /// Port of upstream `fixTaskDates`: walk the day after [start] up to [end];
+  /// every excluded day inside that window pushes [end] forward by one day so
+  /// the task spans its full working-day count. Returns the extended sequencing
+  /// end and the render end (original end, frozen at the first excluded day).
+  (DateTime, DateTime) _fixTaskDates(DateTime start, DateTime end) {
+    var endTime = end;
+    var renderEnd = end;
+    var invalid = false;
+    final maxEnd = end.add(const Duration(days: 10000));
+    var cur = start.add(const Duration(days: 1));
+    while (!cur.isAfter(endTime)) {
+      if (!invalid) renderEnd = endTime;
+      invalid = _isExcluded(cur);
+      if (invalid) {
+        endTime = endTime.add(const Duration(days: 1));
+        // Guard against an all-excluded calendar (upstream throws; we cap).
+        if (endTime.isAfter(maxEnd)) break;
+      }
+      cur = cur.add(const Duration(days: 1));
+    }
+    return (endTime, renderEnd);
   }
 }

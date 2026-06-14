@@ -47,17 +47,32 @@ class _IdGen {
 
 void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
   switch (node) {
-    case SceneGroup(:final id, :final semanticLabel, :final children):
+    case SceneGroup(
+        :final id,
+        :final semanticLabel,
+        :final link,
+        :final tooltip,
+        :final children
+      ):
+      // A linked group becomes an SVG hyperlink.
+      if (link != null) {
+        b.write('<a href="${_escapeAttr(link)}" target="_blank">');
+      }
       b.write('<g');
       if (id != null) b.write(' id="${_escapeAttr(id)}"');
       if (semanticLabel != null) {
         b.write(' aria-label="${_escapeAttr(semanticLabel)}"');
       }
+      if (link != null) b.write(' style="cursor:pointer"');
       b.write('>');
+      if (tooltip != null) {
+        b.write('<title>${_escapeText(tooltip)}</title>');
+      }
       for (final c in children) {
         _writeNode(b, c, ids);
       }
       b.write('</g>');
+      if (link != null) b.write('</a>');
 
     case SceneShape(:final geometry, :final fill, :final stroke):
       final paint = StringBuffer();

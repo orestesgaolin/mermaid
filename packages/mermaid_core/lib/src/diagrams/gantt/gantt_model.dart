@@ -48,16 +48,27 @@ class GanttTask {
     required this.name,
     required this.start,
     required this.end,
+    DateTime? renderEnd,
     this.active = false,
     this.done = false,
     this.crit = false,
     this.milestone = false,
-  });
+  }) : renderEnd = renderEnd ?? end;
 
   final String id;
   final String name;
   final DateTime start;
+
+  /// Sequencing end: the end used by `after` dependents and the axis domain.
+  /// When excluded days (weekends / `excludes <date>`) fall inside a
+  /// duration-based task, this is pushed past them so the task keeps its full
+  /// count of working days (upstream `checkTaskDates`/`fixTaskDates`).
   final DateTime end;
+
+  /// Drawn end of the bar. Equals [end] for manual-end and milestone tasks and
+  /// when there are no excludes; otherwise it is the original (unextended) end,
+  /// matching upstream's `renderEndTime`.
+  final DateTime renderEnd;
   final bool active;
   final bool done;
   final bool crit;

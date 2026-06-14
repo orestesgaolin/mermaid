@@ -675,6 +675,8 @@ _Fragment _layoutGraph(
     nodeGroups.add(SceneGroup(
       id: p.node.id,
       semanticLabel: p.node.label,
+      link: p.node.link,
+      tooltip: p.node.tooltip,
       children: children,
     ));
   }
@@ -1873,10 +1875,18 @@ Rect _pointsBounds(List<Point> pts) {
 
 SceneNode _translateNode(SceneNode node, double dx, double dy) =>
     switch (node) {
-      SceneGroup(:final id, :final semanticLabel, :final children) =>
+      SceneGroup(
+        :final id,
+        :final semanticLabel,
+        :final link,
+        :final tooltip,
+        :final children
+      ) =>
         SceneGroup(
           id: id,
           semanticLabel: semanticLabel,
+          link: link,
+          tooltip: tooltip,
           children: [for (final c in children) _translateNode(c, dx, dy)],
         ),
       SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
@@ -1884,13 +1894,23 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
           fill: fill,
           stroke: stroke,
         ),
-      SceneText(:final text, :final bounds, :final style, :final color, :final align) =>
+      SceneText(
+        :final text,
+        :final bounds,
+        :final style,
+        :final color,
+        :final align,
+        :final rotation,
+        :final underline
+      ) =>
         SceneText(
           text: text,
           bounds: bounds.translate(dx, dy),
           style: style,
           color: color,
           align: align,
+          rotation: rotation,
+          underline: underline,
         ),
     };
 

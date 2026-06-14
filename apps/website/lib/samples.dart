@@ -165,6 +165,83 @@ C4Context
     Rel(customer, banking, "Uses")
     BiRel(banking, mainframe, "Reads & writes")
 '''),
+  Sample('block', 'Block', cDiagrams,
+      'Grid-based blocks laid out in columns, with nested groups and edges '
+          'between them.', '''
+block-beta
+    columns 3
+    A["Input"] B["Process"] C["Output"]
+    block:group:3
+        D["Worker 1"] E["Worker 2"]
+    end
+    A --> B
+'''),
+  Sample('architecture', 'Architecture', cDiagrams,
+      'Cloud/service architecture: grouped services (databases, servers, '
+          'disks) wired together with directional edges.', '''
+architecture-beta
+    group api(cloud)[API]
+    service db(database)[Database] in api
+    service server(server)[Server] in api
+    service disk(disk)[Storage] in api
+    db:L -- R:server
+    server:L -- R:disk
+'''),
+  Sample('kanban', 'Kanban', cDiagrams,
+      'Task board with columns; each column lists its cards top to bottom.',
+      '''
+kanban
+    todo[To Do]
+        t1[Design API]
+        t2[Write specs]
+    doing[In Progress]
+        t3[Build UI]
+    done[Done]
+        t4[Setup repo]
+        t5[CI pipeline]
+'''),
+  Sample('cynefin', 'Cynefin', cDiagrams,
+      'Cynefin sense-making framework: items sorted across the clear, '
+          'complicated, complex and chaotic domains.', '''
+cynefin-beta
+    title Decision contexts
+    clear
+        Run a backup
+    complicated
+        Tune the database
+    complex
+        Launch a new product
+    chaotic
+        Recover from outage
+'''),
+  Sample('ishikawa', 'Ishikawa', cDiagrams,
+      'Fishbone (cause-and-effect) diagram: a problem with contributing '
+          'causes grouped by category.', '''
+ishikawa-beta
+    Slow website
+        People
+            Untrained staff
+        Process
+            No caching
+        Technology
+            Old servers
+'''),
+  Sample('eventmodeling', 'Event modeling', cDiagrams,
+      'Event-modeling timeline: UI, commands, events and read models placed '
+          'along a horizontal flow.', '''
+eventmodeling
+    tf 01 ui Order Page
+    tf 02 cmd Place Order
+    tf 03 evt Order Placed
+    tf 04 view Order List
+'''),
+  Sample('railroad', 'Railroad', cDiagrams,
+      'Syntax (railroad) diagram: grammar rules drawn as branching tracks.',
+      '''
+railroad-diagram
+    title Greeting grammar
+    name = "a" | "b" ;
+'''),
   Sample('pie', 'Pie', cCharts,
       'Proportional slices computed from labelled values, with optional '
           'data labels.', '''
@@ -276,6 +353,47 @@ mindmap
     Tools
       Pen and paper
       Mermaid
+'''),
+  Sample('radar', 'Radar', cCharts,
+      'Radar (spider) chart: one or more series plotted across shared axes '
+          'radiating from a centre.', '''
+radar-beta
+    title Skills
+    axis design, code, comms, testing, ops
+    curve alice{4, 5, 3, 4, 2}
+    curve bob{3, 4, 5, 2, 4}
+    max 5
+    min 0
+'''),
+  Sample('treemap', 'Treemap', cCharts,
+      'Nested rectangles sized by value, grouped into categories.', '''
+treemap-beta
+    "Frontend"
+        "UI": 40
+        "State": 25
+    "Backend"
+        "API": 35
+        "DB": 20
+'''),
+  Sample('venn', 'Venn', cCharts,
+      'Overlapping sets with their intersections and unions highlighted.', '''
+venn-beta
+    title Skills overlap
+    set frontend ["UI", "CSS"]
+    set backend ["API", "DB"]
+    union ["frontend", "backend"]
+'''),
+  Sample('wardley', 'Wardley map', cCharts,
+      'Value-chain map: components placed by visibility and evolution, with '
+          'dependencies and an expected movement.', '''
+wardley-beta
+    title Tea shop
+    component Cup [0.9, 0.6]
+    component Tea [0.7, 0.7]
+    component Kettle [0.5, 0.4]
+    Cup -> Tea
+    Tea -> Kettle
+    evolve Kettle 0.8
 '''),
   Sample('dark', 'Dark theme', cTheming,
       'The same flowchart with the built-in dark theme, selected via an '

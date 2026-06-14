@@ -15,13 +15,15 @@ MermaidTheme resolveTheme(String source, MermaidTheme base) {
   var theme = base;
   Map<String, Object?>? themeVariables;
 
-  // Frontmatter: `config:\n  theme: dark` (nested themeVariables not yet).
+  // Frontmatter: `config:\n  theme: dark\n  themeVariables:\n    primaryColor: ...`
   final fm = RegExp(r'^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*\n')
       .firstMatch(source.replaceAll('\r\n', '\n'));
   if (fm != null) {
-    final m =
-        RegExp(r'^\s*theme:\s*(\w+)\s*$', multiLine: true).firstMatch(fm.group(1)!);
+    final body = fm.group(1)!;
+    final m = RegExp(r'^\s*theme:\s*(\w+)\s*$', multiLine: true).firstMatch(body);
     if (m != null) theme = MermaidTheme.named(m.group(1)!);
+    final fmVars = _frontmatterThemeVariables(body);
+    if (fmVars.isNotEmpty) themeVariables = {...?themeVariables, ...fmVars};
   }
 
   final directive =
@@ -111,6 +113,43 @@ String resolveLayout(String source) {
     }
   }
   return layout;
+}
+
+/// Parses a nested `themeVariables:` block out of frontmatter YAML, e.g.
+///   config:
+///     themeVariables:
+///       primaryColor: "#ff0000"
+///       lineColor: '#00ff00'
+/// Returns the key→value map (values unquoted). Empty if absent.
+Map<String, Object?> _frontmatterThemeVariables(String body) {
+  final lines = body.split('\n');
+  final out = <String, Object?>{};
+  var inBlock = false;
+  int? blockIndent;
+  for (final raw in lines) {
+    if (raw.trim().isEmpty) continue;
+    final indent = raw.length - raw.trimLeft().length;
+    final line = raw.trim();
+    if (!inBlock) {
+      if (RegExp(r'^themeVariables:\s*$').hasMatch(line)) {
+        inBlock = true;
+        blockIndent = indent;
+      }
+      continue;
+    }
+    // The block ends at the first line indented at or below `themeVariables:`.
+    if (indent <= blockIndent!) break;
+    final m = RegExp(r'^([A-Za-z_]\w*)\s*:\s*(.+)$').firstMatch(line);
+    if (m == null) continue;
+    var v = m.group(2)!.trim();
+    if (v.length >= 2 &&
+        ((v.startsWith('"') && v.endsWith('"')) ||
+            (v.startsWith("'") && v.endsWith("'")))) {
+      v = v.substring(1, v.length - 1);
+    }
+    out[m.group(1)!] = v;
+  }
+  return out;
 }
 
 /// Mermaid directives use loose JSON (single quotes, bare keys); normalize

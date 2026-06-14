@@ -41,9 +41,13 @@ class MindmapNode {
 }
 
 class Mindmap {
-  const Mindmap({required this.root});
+  const Mindmap({required this.root, this.classDefs = const {}});
 
   final MindmapNode root;
+
+  /// `classDef <name> fill:#xxx,stroke:#yyy,color:#zzz` declarations, keyed by
+  /// class name. Each value maps style property → raw value (e.g. `'#f00'`).
+  final Map<String, Map<String, String>> classDefs;
 }
 
 Mindmap parseMindmap(String source) {
@@ -52,6 +56,7 @@ Mindmap parseMindmap(String source) {
   MindmapNode? root;
   // (indent, node) stack from root to current.
   final stack = <(int, MindmapNode)>[];
+  final classDefs = <String, Map<String, String>>{};
   var seenHeader = false;
 
   for (var i = 0; i < lines.length; i++) {
@@ -69,6 +74,22 @@ Mindmap parseMindmap(String source) {
     }
     final indent = line.length - line.trimLeft().length;
     final content = line.trim();
+    // `classDef <name[,name...]> prop:val,prop:val` — diagram-level styles.
+    final classDefM =
+        RegExp(r'^classDef\s+([^\s]+)\s+(.+)$').firstMatch(content);
+    if (classDefM != null) {
+      final styles = <String, String>{};
+      for (final decl in classDefM.group(2)!.split(',')) {
+        final c = decl.indexOf(':');
+        if (c < 0) continue;
+        styles[decl.substring(0, c).trim()] = decl.substring(c + 1).trim();
+      }
+      for (final name in classDefM.group(1)!.split(',')) {
+        final n = name.trim();
+        if (n.isNotEmpty) (classDefs[n] ??= {}).addAll(styles);
+      }
+      continue;
+    }
     // Decorations attach to the most-recent node.
     final iconM = RegExp(r'^::icon\(\s*(.+?)\s*\)$').firstMatch(content);
     if (iconM != null) {
@@ -105,7 +126,23 @@ Mindmap parseMindmap(String source) {
   if (!seenHeader || root == null) {
     throw const MermaidParseException('empty mindmap source');
   }
-  return Mindmap(root: root);
+  return Mindmap(root: root, classDefs: classDefs);
+}
+
+/// Normalizes an `::icon(...)` reference to a registry `prefix:name` lookup.
+///
+/// - `icon:cog` (already `prefix:name`) is returned unchanged.
+/// - FontAwesome / MDI style refs like `fa fa-book` or `mdi mdi-skull-outline`
+///   carry a leading pack word; we treat that word as the pack prefix and the
+///   remainder as the icon name, i.e. `fa fa-book` → `fa:fa-book`. If no such
+///   pack is registered, [renderIcon] resolves to nothing and the glyph is
+///   silently skipped (never throws).
+String _resolveIconRef(String ref) {
+  final trimmed = ref.trim();
+  if (trimmed.contains(':')) return trimmed; // already prefix:name
+  final parts = trimmed.split(RegExp(r'\s+'));
+  if (parts.length < 2) return trimmed;
+  return '${parts.first}:${parts.sublist(1).join(' ')}';
 }
 
 (MindmapShape, String) _parseNodeText(String content, int line) {
@@ -177,6 +214,28 @@ RenderScene layoutMindmap(
       TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
   final nodes = <SceneNode>[];
   final placed = <MindmapNode, _PlacedMind>{};
+
+  // Merge the classDefs attached to a node (later classes win), returning the
+  // resolved fill/stroke/text colors — any of which may be null if unset.
+  ({Color? fill, Color? stroke, Color? text})? classStyle(MindmapNode n) {
+    if (n.cssClasses.isEmpty || map.classDefs.isEmpty) return null;
+    final merged = <String, String>{};
+    var matched = false;
+    for (final cls in n.cssClasses) {
+      final def = map.classDefs[cls];
+      if (def != null) {
+        merged.addAll(def);
+        matched = true;
+      }
+    }
+    if (!matched) return null;
+    return (
+      fill: merged['fill'] != null ? Color.tryParse(merged['fill']!) : null,
+      stroke:
+          merged['stroke'] != null ? Color.tryParse(merged['stroke']!) : null,
+      text: merged['color'] != null ? Color.tryParse(merged['color']!) : null,
+    );
+  }
 
   _PlacedMind measure(MindmapNode n) {
     final style = n.depth == 0 ? baseStyle.copyWith(fontWeight: 700) : baseStyle;
@@ -285,9 +344,19 @@ RenderScene layoutMindmap(
     // inverted text; branches fill with the section color, lightening with
     // depth.
     final isRoot = n.depth == 0;
-    final fill = isRoot
-        ? _rootFill
-        : _lighten(p.color, ((n.depth - 1) * 0.18).clamp(0.0, 0.6));
+    // A `:::class` mapped to a classDef overrides the section palette fill.
+    final cls = classStyle(n);
+    final fill = cls?.fill ??
+        (isRoot
+            ? _rootFill
+            : _lighten(p.color, ((n.depth - 1) * 0.18).clamp(0.0, 0.6)));
+    final stroke = cls?.stroke;
+    // Text color: explicit classDef `color:` wins; otherwise contrast against
+    // the resolved fill (class fill) or the branch base color (palette).
+    final textColor = cls?.text ??
+        (_luminance(cls?.fill ?? (isRoot ? fill : p.color)) < 0.66
+            ? const Color(0xffffffff)
+            : const Color(0xff1f1f1f));
     final children = <SceneNode>[];
     // Upstream nodes carry a drop shadow rendered as a soft strip below.
     if (!isRoot) {
@@ -300,16 +369,19 @@ RenderScene layoutMindmap(
         fill: const Fill(Color(0x3d6c6c9e)),
       ));
     }
+    final nodeStroke = stroke != null ? Stroke(color: stroke, width: 2) : null;
     switch (n.shape) {
       case MindmapShape.circle:
         children.add(SceneShape(
           geometry: CircleGeometry(p.center, p.size.width / 2),
           fill: Fill(fill),
+          stroke: nodeStroke,
         ));
       case MindmapShape.rect:
         children.add(SceneShape(
           geometry: RectGeometry(rect),
           fill: Fill(fill),
+          stroke: nodeStroke,
         ));
       case MindmapShape.hexagon:
         final m = rect.height / 3;
@@ -323,6 +395,7 @@ RenderScene layoutMindmap(
             Point(rect.left, rect.center.y),
           ]),
           fill: Fill(fill),
+          stroke: nodeStroke,
         ));
       case MindmapShape.bang || MindmapShape.cloud:
         // Approximated as a stadium until dedicated geometry lands.
@@ -330,11 +403,13 @@ RenderScene layoutMindmap(
           geometry:
               RectGeometry(rect, rx: rect.height / 2, ry: rect.height / 2),
           fill: Fill(fill),
+          stroke: nodeStroke,
         ));
       case MindmapShape.rounded || MindmapShape.plain:
         children.add(SceneShape(
           geometry: RectGeometry(rect, rx: 8, ry: 8),
           fill: Fill(fill),
+          stroke: nodeStroke,
         ));
     }
     children.add(SceneText(
@@ -343,21 +418,16 @@ RenderScene layoutMindmap(
           Rect.fromCenter(p.center, labelSize.width, labelSize.height),
       style: style,
       // Text contrast follows the section base color, like upstream: the
-      // whole purple branch reads white even on lightened leaves.
-      color: _luminance(isRoot ? fill : p.color) < 0.66
-          ? const Color(0xffffffff)
-          : const Color(0xff1f1f1f),
+      // whole purple branch reads white even on lightened leaves. A classDef
+      // `color:`/`fill:` overrides this (see [textColor] above).
+      color: textColor,
     ));
     // `::icon(...)` glyph above the node, if it resolves in a registered pack.
     if (n.icon != null) {
       ensureBuiltinIconPacks();
-      final textColor = _luminance(isRoot ? fill : p.color) < 0.66
-          ? const Color(0xffffffff)
-          : const Color(0xff1f1f1f);
       final glyph = renderIcon(
-        n.icon!,
-        Rect.fromCenter(
-            Point(p.center.x, rect.top - 12), 20, 20),
+        _resolveIconRef(n.icon!),
+        Rect.fromCenter(Point(p.center.x, rect.top - 12), 20, 20),
         textColor,
       );
       children.addAll(glyph);

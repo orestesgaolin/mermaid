@@ -68,10 +68,18 @@ Rect pointsBounds(List<Point> pts) {
 
 SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
     switch (node) {
-      SceneGroup(:final id, :final semanticLabel, :final children) =>
+      SceneGroup(
+        :final id,
+        :final semanticLabel,
+        :final link,
+        :final tooltip,
+        :final children
+      ) =>
         SceneGroup(
           id: id,
           semanticLabel: semanticLabel,
+          link: link,
+          tooltip: tooltip,
           children: [for (final c in children) translateSceneNode(c, dx, dy)],
         ),
       SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(

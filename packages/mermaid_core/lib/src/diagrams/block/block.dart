@@ -16,7 +16,20 @@ import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 
-enum BlockShape { rect, rounded, stadium, circle, diamond, cylinder, space }
+enum BlockShape {
+  rect,
+  rounded,
+  stadium,
+  circle,
+  diamond,
+  cylinder,
+  space,
+  blockArrow,
+}
+
+/// Directions a block arrow can point. A set is used so `(left, right)` /
+/// `(x)` (= left+right) / `(y)` (= up+down) can point both ways.
+enum BlockArrowDir { left, right, up, down }
 
 sealed class BlockItem {
   const BlockItem();
@@ -24,13 +37,17 @@ sealed class BlockItem {
 }
 
 class BlockNode extends BlockItem {
-  BlockNode(this.id, this.label, this.shape, this.span, this.styles);
+  BlockNode(this.id, this.label, this.shape, this.span, this.styles,
+      {this.arrowDirs = const {}});
   final String id;
   final String label;
   final BlockShape shape;
   @override
   final int span;
   Map<String, String> styles;
+
+  /// For [BlockShape.blockArrow]: the direction(s) the arrow points.
+  final Set<BlockArrowDir> arrowDirs;
 }
 
 class BlockGroup extends BlockItem {
@@ -180,6 +197,37 @@ BlockNode _parseNode(String spec) {
     spec = spec.substring(0, spanM.start);
   }
   if (spec == 'space') return BlockNode('', '', BlockShape.space, span, {});
+  // Block arrow: id<["label"]>(dir[, dir]) — a fat arrow polygon.
+  final arrowM =
+      RegExp(r'^([^\s<]+)<\[(.*?)\]>\(([^)]*)\)$').firstMatch(spec);
+  if (arrowM != null) {
+    final id = arrowM.group(1)!;
+    var label = arrowM.group(2)!.trim();
+    if (label.length >= 2 && label.startsWith('"') && label.endsWith('"')) {
+      label = label.substring(1, label.length - 1);
+    }
+    label = label.replaceAll('&nbsp;', ' ').trim();
+    final dirs = <BlockArrowDir>{};
+    for (final d in arrowM.group(3)!.split(',')) {
+      switch (d.trim().toLowerCase()) {
+        case 'left':
+          dirs.add(BlockArrowDir.left);
+        case 'right':
+          dirs.add(BlockArrowDir.right);
+        case 'up':
+          dirs.add(BlockArrowDir.up);
+        case 'down':
+          dirs.add(BlockArrowDir.down);
+        case 'x':
+          dirs..add(BlockArrowDir.left)..add(BlockArrowDir.right);
+        case 'y':
+          dirs..add(BlockArrowDir.up)..add(BlockArrowDir.down);
+      }
+    }
+    if (dirs.isEmpty) dirs.add(BlockArrowDir.right);
+    return BlockNode(id, label, BlockShape.blockArrow, span, {},
+        arrowDirs: dirs);
+  }
   final m = RegExp(r'^([^\s([{]+)\s*'
           r'(\(\(|\(\[|\[\(|\(|\[|\{)(.*?)(\)\)|\]\)|\)\]|\)|\]|\})?\s*$')
       .firstMatch(spec);
@@ -205,25 +253,77 @@ BlockNode _parseNode(String spec) {
 }
 
 void _parseEdges(String line, List<BlockEdge> edges) {
-  // Token walk over `A --> B --> C` (edge operators are whitespace-separated).
-  final tokens = line.split(RegExp(r'\s+'));
-  String? prev;
-  String? op;
-  for (final tok in tokens) {
-    if (RegExp(r'^<?-{2,}>?$').hasMatch(tok)) {
-      op = tok;
-      continue;
+  // Each segment is `<id> <link> <id>` where <link> may carry a label, in
+  // either `A-- "x" -->B` / `A -- x --> B` (split arrow) or `A-->|x|B`
+  // (piped) form. We walk match-by-match so chains `A-->B-->C` work and the
+  // tail of one edge is reused as the head of the next.
+  // link forms:
+  //   --> --- <-->  (no label)
+  //   -- label -->  /  -- label ---  (label between two halves)
+  //   -->|label|    (piped label)
+  // Split on link operators while capturing the operator + label.
+  final ids = <String>[];
+  final ops = <({bool to, bool from, String label})>[];
+  var pos = 0;
+  final whole = line;
+  // Find link operators (the dashes). A link operator always contains `--`.
+  final dashRe = RegExp(r'-{2,}>?|<?-{2,}>?');
+  while (pos < whole.length) {
+    final m = dashRe.firstMatch(whole.substring(pos));
+    if (m == null) {
+      final tail = whole.substring(pos).trim();
+      if (tail.isNotEmpty) ids.add(_cleanEdgeId(tail));
+      break;
     }
-    final id = tok.replaceAll(RegExp(r'["\[\](){}]'), '');
-    if (id.isEmpty) continue;
-    if (prev != null && op != null) {
-      edges.add(
-          BlockEdge(prev, id, '', op.endsWith('>'), op.startsWith('<')));
+    final start = pos + m.start;
+    final head = whole.substring(pos, start).trim();
+    // Determine if this is a two-part link (label between halves) by scanning
+    // forward: `--` [label] `-->` . We greedily consume a following dash run.
+    var opStr = m.group(0)!;
+    var after = pos + m.end;
+    var label = '';
+    final rest = whole.substring(after);
+    // A label can sit between two halves only when this leading operator does
+    // not already terminate the arrow (no `>`); otherwise `G-->H-->I` would
+    // mistake the node `H` for a label.
+    final openHalf = !opStr.contains('>');
+    // pattern: optional `"label"` or bare label then another dash run
+    final twoPart = openHalf
+        ? RegExp(r'^\s*(?:"([^"]*)"|([^<>|"-][^<>|]*?))\s*(-{1,}>?)')
+            .firstMatch(rest)
+        : null;
+    if (twoPart != null) {
+      label = (twoPart.group(1) ?? twoPart.group(2) ?? '').trim();
+      opStr = opStr + twoPart.group(3)!;
+      after = after + twoPart.end;
+    } else {
+      // piped label: `-->|label|`
+      final piped = RegExp(r'^\s*\|\s*(?:"([^"]*)"|([^|]*))\|').firstMatch(rest);
+      if (piped != null) {
+        label = (piped.group(1) ?? piped.group(2) ?? '').trim();
+        after = after + piped.end;
+      }
     }
-    prev = id;
-    op = null;
+    if (head.isNotEmpty) ids.add(_cleanEdgeId(head));
+    ops.add((
+      to: opStr.contains('>'),
+      from: opStr.startsWith('<'),
+      label: label.replaceAll('&nbsp;', ' ').trim(),
+    ));
+    pos = after;
+  }
+
+  for (var i = 0; i + 1 < ids.length; i++) {
+    if (i >= ops.length) break;
+    final op = ops[i];
+    if (ids[i].isEmpty || ids[i + 1].isEmpty) continue;
+    edges.add(BlockEdge(ids[i], ids[i + 1], op.label, op.to, op.from));
   }
 }
+
+String _cleanEdgeId(String tok) =>
+    tok.split(RegExp(r'[\s"\[\](){}]')).firstWhere((s) => s.isNotEmpty,
+        orElse: () => '');
 
 Map<String, String> _parseStyles(String s) {
   final out = <String, String>{};
@@ -238,6 +338,9 @@ Map<String, String> _parseStyles(String s) {
 
 const _cellGap = 8.0;
 const _pad = 14.0;
+
+/// Depth of a block-arrow's triangular head (how far it extends past the body).
+const _arrowHead = 18.0;
 
 class _Sized {
   _Sized(this.item, this.width, this.height, [this.childLayout]);
@@ -275,6 +378,18 @@ RenderScene layoutBlock(
     final n = item as BlockNode;
     if (n.shape == BlockShape.space) return _Sized(item, 60, 40);
     final ls = measurer.measure(n.label, baseStyle, maxWidth: 200);
+    if (n.shape == BlockShape.blockArrow) {
+      // Reserve room for the arrow head(s) on whichever axis they point.
+      final horiz = n.arrowDirs.contains(BlockArrowDir.left) ||
+          n.arrowDirs.contains(BlockArrowDir.right);
+      final vert = n.arrowDirs.contains(BlockArrowDir.up) ||
+          n.arrowDirs.contains(BlockArrowDir.down);
+      final w =
+          math.max(ls.width + 2 * _pad, 60.0) + (horiz ? 2 * _arrowHead : 0);
+      final h =
+          math.max(ls.height + 2 * _pad, 40.0) + (vert ? 2 * _arrowHead : 0);
+      return _Sized(item, w, h);
+    }
     final w = n.shape == BlockShape.circle || n.shape == BlockShape.diamond
         ? math.max(ls.width, ls.height) + 40
         : ls.width + 2 * _pad;
@@ -339,6 +454,23 @@ RenderScene layoutBlock(
     ));
     if (e.arrowTo) nodes.addAll(_arrow(to, dir, theme.lineColor));
     if (e.arrowFrom) nodes.addAll(_arrow(from, _unit(to, from), theme.lineColor));
+    // Edge label at the midpoint, on a small background chip.
+    if (e.label.isNotEmpty) {
+      final ls = measurer.measure(e.label, baseStyle, maxWidth: 200);
+      final mid = Point((from.x + to.x) / 2, (from.y + to.y) / 2);
+      const lp = 3.0;
+      nodes.add(SceneShape(
+        geometry: RectGeometry(
+            Rect.fromCenter(mid, ls.width + 2 * lp, ls.height + 2 * lp)),
+        fill: Fill(theme.edgeLabelBackground),
+      ));
+      nodes.add(SceneText(
+        text: e.label,
+        bounds: Rect.fromCenter(mid, ls.width, ls.height),
+        style: baseStyle,
+        color: theme.textColor,
+      ));
+    }
   }
 
   final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);
@@ -420,6 +552,10 @@ List<SceneNode> _drawNode(BlockNode n, Point c, double w, double h,
         stroke: st),
     BlockShape.cylinder => SceneShape(
         geometry: RectGeometry(rect, rx: 8, ry: 8), fill: Fill(fill), stroke: st),
+    BlockShape.blockArrow => SceneShape(
+        geometry: PolygonGeometry(_blockArrowPoints(rect, n.arrowDirs)),
+        fill: Fill(fill),
+        stroke: st),
     _ => SceneShape(geometry: RectGeometry(rect), fill: Fill(fill), stroke: st),
   };
   final ls = measurer.measure(n.label, style, maxWidth: 200);
@@ -434,6 +570,58 @@ List<SceneNode> _drawNode(BlockNode n, Point c, double w, double h,
       ),
     ]),
   ];
+}
+
+/// Builds the polygon for a fat block arrow filling [rect]. The body is a
+/// rectangle inset by [_arrowHead] on each side that carries an arrow head; a
+/// triangular point extends out to the rect edge on each of those sides. The
+/// head width is half the cross-axis so the point looks like a wide arrow.
+List<Point> _blockArrowPoints(Rect rect, Set<BlockArrowDir> dirs) {
+  final left = dirs.contains(BlockArrowDir.left);
+  final right = dirs.contains(BlockArrowDir.right);
+  final up = dirs.contains(BlockArrowDir.up);
+  final down = dirs.contains(BlockArrowDir.down);
+  // Body edges: inset wherever there is a head.
+  final bl = rect.left + (left ? _arrowHead : 0);
+  final br = rect.right - (right ? _arrowHead : 0);
+  final bt = rect.top + (up ? _arrowHead : 0);
+  final bb = rect.bottom - (down ? _arrowHead : 0);
+  final cx = (bl + br) / 2;
+  final cy = (bt + bb) / 2;
+  // Head half-spans (perpendicular to the point) — wider than the body wall.
+  final hHalf = (bb - bt) / 2 * 0.9; // for left/right heads
+  final vHalf = (br - bl) / 2 * 0.9; // for up/down heads
+  final pts = <Point>[];
+  // Walk the outline clockwise starting top-left of the body.
+  pts.add(Point(bl, bt));
+  if (up) {
+    pts
+      ..add(Point(cx - vHalf, bt))
+      ..add(Point(cx, rect.top))
+      ..add(Point(cx + vHalf, bt));
+  }
+  pts.add(Point(br, bt));
+  if (right) {
+    pts
+      ..add(Point(br, cy - hHalf))
+      ..add(Point(rect.right, cy))
+      ..add(Point(br, cy + hHalf));
+  }
+  pts.add(Point(br, bb));
+  if (down) {
+    pts
+      ..add(Point(cx + vHalf, bb))
+      ..add(Point(cx, rect.bottom))
+      ..add(Point(cx - vHalf, bb));
+  }
+  pts.add(Point(bl, bb));
+  if (left) {
+    pts
+      ..add(Point(bl, cy + hHalf))
+      ..add(Point(rect.left, cy))
+      ..add(Point(bl, cy - hHalf));
+  }
+  return pts;
 }
 
 Point _clip(Point c, double w, double h, Point toward) {

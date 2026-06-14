@@ -103,7 +103,9 @@ RenderScene layoutGanttChart(
     }
     for (final t in section.tasks) {
       final x1 = xOf(t.start);
-      final x2 = xOf(t.end);
+      // Bar is drawn to renderEnd (original duration); excluded days extend
+      // `end` for sequencing/axis only, matching upstream's renderEndTime.
+      final x2 = xOf(t.renderEnd);
       var fill = _taskFill;
       var border = _taskBorder;
       if (t.done) {

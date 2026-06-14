@@ -75,11 +75,37 @@ class C4Node {
 }
 
 class C4Boundary {
-  const C4Boundary({required this.id, required this.label, this.parent});
+  const C4Boundary({
+    required this.id,
+    required this.label,
+    this.parent,
+    this.bgColor,
+    this.borderColor,
+    this.fontColor,
+  });
 
   final String id;
   final String label;
   final String? parent;
+
+  /// `UpdateBoundaryStyle` overrides ($bgColor / $borderColor / $fontColor).
+  final Color? bgColor;
+  final Color? borderColor;
+  final Color? fontColor;
+
+  C4Boundary copyWith({
+    Color? bgColor,
+    Color? borderColor,
+    Color? fontColor,
+  }) =>
+      C4Boundary(
+        id: id,
+        label: label,
+        parent: parent,
+        bgColor: bgColor ?? this.bgColor,
+        borderColor: borderColor ?? this.borderColor,
+        fontColor: fontColor ?? this.fontColor,
+      );
 }
 
 class C4Rel {
@@ -124,8 +150,8 @@ C4Diagram parseC4Diagram(String source) {
   var seenHeader = false;
   final boundaryStack = <String>[];
 
-  List<String> args(String s) {
-    // Split on commas outside quotes; unquote each.
+  // Split on commas outside quotes; returns the raw (still-quoted) tokens.
+  List<String> rawArgs(String s) {
     final out = <String>[];
     final buf = StringBuffer();
     var inQuote = false;
@@ -140,17 +166,26 @@ C4Diagram parseC4Diagram(String source) {
       }
     }
     out.add(buf.toString());
-    return [
-      for (var a in out)
-        () {
-          a = a.trim();
-          if (a.length >= 2 && a.startsWith('"') && a.endsWith('"')) {
-            a = a.substring(1, a.length - 1);
-          }
-          return a.replaceAll('<br/>', '\n').replaceAll('<br>', '\n');
-        }(),
-    ];
+    return out;
   }
+
+  String unquote(String a) {
+    a = a.trim();
+    if (a.length >= 2 && a.startsWith('"') && a.endsWith('"')) {
+      a = a.substring(1, a.length - 1);
+    }
+    return a.replaceAll('<br/>', '\n').replaceAll('<br>', '\n');
+  }
+
+  List<String> args(String s) => [for (final a in rawArgs(s)) unquote(a)];
+
+  // Positional args only: drops `$key=value` named args (e.g. $sprite, $tags,
+  // $link, $type) so trailing/extra named args don't get mistaken for
+  // label/desc/tech. Tested against the raw token so a quoted value such as
+  // "$5 / item" is never dropped.
+  final namedArg = RegExp(r'^\$\w+\s*=');
+  List<String> positional(String s) =>
+      [for (final a in rawArgs(s)) if (!namedArg.hasMatch(a.trim())) unquote(a)];
 
   final lines = text.split('\n');
   for (var i = 0; i < lines.length; i++) {
@@ -184,7 +219,7 @@ C4Diagram parseC4Diagram(String source) {
             r'^(Enterprise_Boundary|System_Boundary|Container_Boundary|Boundary|Deployment_Node|Node|Node_L|Node_R)\s*\((.*)\)\s*\{$')
         .firstMatch(line);
     if (m != null) {
-      final a = args(m.group(2)!);
+      final a = positional(m.group(2)!);
       final id = a[0];
       boundaries.add(C4Boundary(
         id: id,
@@ -198,7 +233,10 @@ C4Diagram parseC4Diagram(String source) {
     m = RegExp(r'^(\w+)\s*\((.*)\)\s*$').firstMatch(line);
     if (m != null) {
       final fn = m.group(1)!;
+      // `a` for the Update* handlers keeps the $key=value tokens; element/rel
+      // parsing uses `p` which drops them (sprite/tags/link tolerance).
       final a = args(m.group(2)!);
+      final p = positional(m.group(2)!);
       C4Kind? kind = switch (fn) {
         'Person' => C4Kind.person,
         'Person_Ext' => C4Kind.personExt,
@@ -214,25 +252,25 @@ C4Diagram parseC4Diagram(String source) {
         _ => null,
       };
       if (kind != null) {
-        if (a.isEmpty) {
+        if (p.isEmpty) {
           throw MermaidParseException('$fn needs arguments', line: i + 1);
         }
-        nodes[a[0]] = C4Node(
-          id: a[0],
+        nodes[p[0]] = C4Node(
+          id: p[0],
           kind: kind,
-          label: a.length > 1 ? a[1] : a[0],
+          label: p.length > 1 ? p[1] : p[0],
           technology: (fn.startsWith('Container') || fn.startsWith('Component')) &&
-                  a.length > 2
-              ? a[2]
+                  p.length > 2
+              ? p[2]
               : '',
-          description: a.length >
+          description: p.length >
                   ((fn.startsWith('Container') || fn.startsWith('Component'))
                       ? 3
                       : 2)
-              ? a.last
-              : (a.length > 2 &&
+              ? p.last
+              : (p.length > 2 &&
                       !(fn.startsWith('Container') || fn.startsWith('Component'))
-                  ? a[2]
+                  ? p[2]
                   : ''),
           boundary: boundaryStack.isEmpty ? null : boundaryStack.last,
         );
@@ -241,14 +279,14 @@ C4Diagram parseC4Diagram(String source) {
       // Rel(from, to, "label" [, "technology"]) and directional variants.
       if (RegExp(r'^(Bi)?Rel(_[UDLR]|_Up|_Down|_Left|_Right|_Back)?$')
           .hasMatch(fn)) {
-        if (a.length < 2) {
+        if (p.length < 2) {
           throw MermaidParseException('$fn needs two endpoints', line: i + 1);
         }
         rels.add(C4Rel(
-          from: a[0],
-          to: a[1],
-          label: a.length > 2 ? a[2] : '',
-          technology: a.length > 3 ? a[3] : '',
+          from: p[0],
+          to: p[1],
+          label: p.length > 2 ? p[2] : '',
+          technology: p.length > 3 ? p[3] : '',
           bidirectional: fn.startsWith('BiRel'),
         ));
         continue;
@@ -264,6 +302,21 @@ C4Diagram parseC4Diagram(String source) {
             fontColor: Color.tryParse(kv['fontColor'] ?? ''),
             borderColor: Color.tryParse(kv['borderColor'] ?? ''),
           );
+        }
+        continue;
+      }
+      // UpdateBoundaryStyle(id, $bgColor=, $borderColor=, $fontColor=).
+      if (fn == 'UpdateBoundaryStyle' && a.isNotEmpty) {
+        final kv = _styleArgs(a.skip(1));
+        final id = a[0];
+        for (var b = 0; b < boundaries.length; b++) {
+          if (boundaries[b].id == id) {
+            boundaries[b] = boundaries[b].copyWith(
+              bgColor: Color.tryParse(kv['bgColor'] ?? ''),
+              borderColor: Color.tryParse(kv['borderColor'] ?? ''),
+              fontColor: Color.tryParse(kv['fontColor'] ?? ''),
+            );
+          }
         }
         continue;
       }
@@ -416,17 +469,20 @@ RenderScene layoutC4Diagram(
     final size = measurer.measure(b.label, labelStyle);
     final rect = Rect.fromLTRB(inner.left - 14, inner.top - 14,
         inner.right + 14, inner.bottom + 18 + size.height);
+    final borderColor = b.borderColor ?? const Color(0xff444444);
+    final fontColor = b.fontColor ?? const Color(0xff444444);
     clusterNodes.add(SceneGroup(id: 'boundary_${b.id}', children: [
       SceneShape(
         geometry: RectGeometry(rect),
-        stroke: Stroke(color: const Color(0xff444444), dash: const [4, 4]),
+        fill: b.bgColor != null ? Fill(b.bgColor!) : null,
+        stroke: Stroke(color: borderColor, dash: const [4, 4]),
       ),
       SceneText(
         text: b.label,
         bounds: Rect.fromLTWH(rect.left + 8, rect.bottom - size.height - 4,
             size.width, size.height),
         style: labelStyle,
-        color: const Color(0xff444444),
+        color: fontColor,
         align: TextAlignH.left,
       ),
     ]));

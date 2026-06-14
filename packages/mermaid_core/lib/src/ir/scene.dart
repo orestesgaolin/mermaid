@@ -28,13 +28,25 @@ sealed class SceneNode {
 /// Logical grouping (a diagram node, an edge with its label, a cluster).
 /// Purely structural: children use absolute scene coordinates.
 class SceneGroup extends SceneNode {
-  const SceneGroup({required this.children, this.id, this.semanticLabel});
+  const SceneGroup({
+    required this.children,
+    this.id,
+    this.semanticLabel,
+    this.link,
+    this.tooltip,
+  });
 
   /// Stable identifier (e.g. flowchart node id) for hit-testing/interactivity.
   final String? id;
 
   /// Accessibility label for this group, if any.
   final String? semanticLabel;
+
+  /// Click target URL (from flowchart `click`/`href`); makes the group a link.
+  final String? link;
+
+  /// Hover/tap tooltip text.
+  final String? tooltip;
   final List<SceneNode> children;
 }
 

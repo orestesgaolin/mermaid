@@ -1,6 +1,7 @@
 /// Treemap (`treemap-beta`): nested rectangles sized by value. Indentation
 /// builds the hierarchy; leaves carry `: value`, branches sum their children.
-/// Uses a squarified-ish slice layout. Reference: upstream treemap.
+/// Uses a squarified layout (Bruls/Huizing/van Wijk). Reference: upstream
+/// treemap.
 library;
 
 import 'dart:math' as math;
@@ -101,19 +102,95 @@ RenderScene layoutTreemap(
   final root = TreemapNode('', 0)..children.addAll(map.roots);
   var colorIndex = 0;
 
+  // Squarified treemap (Bruls/Huizing/van Wijk): pack children into rows laid
+  // out along the shorter side, choosing rows that minimize the worst aspect
+  // ratio of their rectangles. Produces near-square cells instead of slices.
+  List<Rect> squarify(List<TreemapNode> children, Rect rect) {
+    final placed = List<Rect?>.filled(children.length, null);
+    final totalV =
+        children.fold(0.0, (a, c) => a + math.max(c.total, 0.0001));
+    final area = math.max(rect.width, 0.0) * math.max(rect.height, 0.0);
+    if (area <= 0 || totalV <= 0) {
+      return [for (var i = 0; i < children.length; i++) Rect.fromLTWH(rect.left, rect.top, 0, 0)];
+    }
+    // Scale each child's value to an area in the rect.
+    final areas = [
+      for (final c in children) math.max(c.total, 0.0001) / totalV * area
+    ];
+
+    // Worst aspect ratio for a row of given areas laid along length `length`.
+    double worst(List<double> row, double length) {
+      if (row.isEmpty) return double.infinity;
+      var sum = 0.0, maxA = 0.0, minA = double.infinity;
+      for (final a in row) {
+        sum += a;
+        if (a > maxA) maxA = a;
+        if (a < minA) minA = a;
+      }
+      final s2 = sum * sum;
+      final l2 = length * length;
+      return math.max(l2 * maxA / s2, s2 / (l2 * minA));
+    }
+
+    // Free sub-rectangle we are filling, advances as rows are committed.
+    var x = rect.left, y = rect.top, w = rect.width, hgt = rect.height;
+    var index = 0;
+
+    // Lay a finished row across the shorter side of the free rect, then shrink.
+    void commitRow(List<int> rowIdx, List<double> rowAreas) {
+      final rowSum = rowAreas.fold(0.0, (a, b) => a + b);
+      if (w >= hgt) {
+        // Vertical row occupying a column of width `rw` on the left.
+        final rw = rowSum / hgt;
+        var cy = y;
+        for (var k = 0; k < rowIdx.length; k++) {
+          final ch = rowAreas[k] / rowSum * hgt;
+          placed[rowIdx[k]] = Rect.fromLTWH(x, cy, rw, ch);
+          cy += ch;
+        }
+        x += rw;
+        w -= rw;
+      } else {
+        // Horizontal row occupying a strip of height `rh` on the top.
+        final rh = rowSum / w;
+        var cx = x;
+        for (var k = 0; k < rowIdx.length; k++) {
+          final cw = rowAreas[k] / rowSum * w;
+          placed[rowIdx[k]] = Rect.fromLTWH(cx, y, cw, rh);
+          cx += cw;
+        }
+        y += rh;
+        hgt -= rh;
+      }
+    }
+
+    while (index < areas.length) {
+      final shortest = math.min(w, hgt);
+      final rowIdx = <int>[index];
+      final rowAreas = <double>[areas[index]];
+      var i = index + 1;
+      while (i < areas.length) {
+        final cur = worst(rowAreas, shortest);
+        final next = worst([...rowAreas, areas[i]], shortest);
+        if (next > cur) break;
+        rowAreas.add(areas[i]);
+        rowIdx.add(i);
+        i++;
+      }
+      commitRow(rowIdx, rowAreas);
+      index = i;
+    }
+
+    return [for (final r in placed) r ?? Rect.fromLTWH(rect.left, rect.top, 0, 0)];
+  }
+
   void layout(TreemapNode node, Rect rect, int depth) {
     final kids = node.children;
     if (kids.isEmpty) return;
-    final totalV = kids.fold(0.0, (a, c) => a + math.max(c.total, 0.0001));
-    // Slice-and-dice alternating by depth.
-    final horizontal = depth.isEven;
-    var offset = horizontal ? rect.left : rect.top;
-    for (final child in kids) {
-      final frac = math.max(child.total, 0.0001) / totalV;
-      final cellRect = horizontal
-          ? Rect.fromLTWH(offset, rect.top, frac * rect.width, rect.height)
-          : Rect.fromLTWH(rect.left, offset, rect.width, frac * rect.height);
-      offset += horizontal ? frac * rect.width : frac * rect.height;
+    final rects = squarify(kids, rect);
+    for (var ki = 0; ki < kids.length; ki++) {
+      final child = kids[ki];
+      final cellRect = rects[ki];
 
       if (child.isLeaf) {
         final color = _palette[colorIndex++ % _palette.length];
