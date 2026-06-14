@@ -10,7 +10,16 @@ class Home extends StatelessComponent {
   Component build(BuildContext context) {
     return div(classes: 'page', [
       header(classes: 'hero', [
-        h1([.text('mermaid dart')]),
+        div(classes: 'hero-top', [
+          h1([.text('mermaid dart')]),
+          a(
+            classes: 'gh-link',
+            href: 'https://github.com/orestesgaolin/mermaid',
+            target: .blank,
+            attributes: {'rel': 'noopener noreferrer'},
+            [.text('GitHub ↗')],
+          ),
+        ]),
         p(classes: 'tagline', [
           .text('A pure-Dart port of mermaid.js with native Flutter '
               'rendering — same source, side by side with the original.'),

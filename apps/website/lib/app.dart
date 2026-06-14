@@ -20,10 +20,55 @@ class App extends StatelessComponent {
           margin: .symmetric(horizontal: .auto),
           padding: .all(24.px),
         ),
+        css('.hero-top').styles(
+          display: .flex,
+          alignItems: .baseline,
+          justifyContent: .spaceBetween,
+          flexWrap: .wrap,
+          gap: .all(12.px),
+        ),
         css('.hero h1').styles(
           fontSize: 2.6.rem,
           margin: .only(bottom: 4.px),
           color: const Color('#4a3a8a'),
+        ),
+        css('.gh-link').styles(
+          padding: .symmetric(vertical: 6.px, horizontal: 14.px),
+          radius: .circular(16.px),
+          border: .all(
+              style: BorderStyle.solid, color: const Color('#c8bfe8'), width: 1.px),
+          backgroundColor: Colors.white,
+          color: const Color('#4a3a8a'),
+          fontSize: 0.95.rem,
+          fontWeight: .w600,
+          textDecoration: const TextDecoration(line: TextDecorationLine.none),
+        ),
+        css('.gh-link:hover').styles(
+          backgroundColor: const Color('#ececff'),
+        ),
+        css('.actions').styles(
+          display: .flex,
+          alignItems: .center,
+          flexWrap: .wrap,
+          gap: .all(10.px),
+          margin: .only(top: 8.px),
+        ),
+        css('.report-btn').styles(
+          padding: .symmetric(vertical: 6.px, horizontal: 14.px),
+          radius: .circular(16.px),
+          border: .all(
+              style: BorderStyle.solid, color: const Color('#e0a0a0'), width: 1.px),
+          backgroundColor: const Color('#fff5f5'),
+          color: const Color('#9a2a2a'),
+          fontSize: 0.95.rem,
+          cursor: .pointer,
+        ),
+        css('.report-btn:hover').styles(
+          backgroundColor: const Color('#ffe9e9'),
+        ),
+        css('.actions-hint').styles(
+          fontSize: 0.85.rem,
+          color: const Color('#999'),
         ),
         css('.tagline').styles(
           color: const Color('#555566'),
