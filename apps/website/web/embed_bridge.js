@@ -2,6 +2,14 @@
 // Flutter build of mermaid dart.
 import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 
+// Network-first service worker so a returning visitor never runs a stale
+// cached build (the bundles have stable filenames). Registered relative to
+// this module, so it scopes correctly under a project-pages subpath too.
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register(new URL('sw.js', import.meta.url))
+    .catch((e) => console.warn('service worker registration failed:', e));
+}
+
 mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
 // Register the ELK layout loader so mermaid.js honours `layout: elk` (it ships
