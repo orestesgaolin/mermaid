@@ -51,6 +51,24 @@ class App extends StatelessComponent {
           margin: .only(bottom: 4.px),
           color: const Color('#4a3a8a'),
         ),
+        css('.layout-row').styles(
+          display: .flex,
+          alignItems: .center,
+          flexWrap: .wrap,
+          gap: .all(8.px),
+          margin: .only(bottom: 10.px),
+        ),
+        css('.layout-label').styles(
+          fontSize: 0.8.rem,
+          fontWeight: .w700,
+          textTransform: .upperCase,
+          letterSpacing: 0.05.em,
+          color: const Color('#8a82a8'),
+        ),
+        css('.layout-hint').styles(
+          fontSize: 0.85.rem,
+          color: const Color('#999'),
+        ),
         css('.doc-desc').styles(
           margin: .only(top: .zero, bottom: 10.px),
           color: const Color('#555566'),

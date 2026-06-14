@@ -4,6 +4,17 @@ import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.mi
 
 mermaid.initialize({ startOnLoad: false, theme: 'default' });
 
+// Register the ELK layout loader so mermaid.js honours `layout: elk` (it ships
+// dagre only by default). Best-effort: a failed import must not break the page.
+try {
+  const elk = await import(
+    'https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0/dist/mermaid-layout-elk.esm.min.mjs'
+  );
+  mermaid.registerLayoutLoaders(elk.default ?? elk);
+} catch (e) {
+  console.warn('mermaid.js ELK layout loader unavailable:', e);
+}
+
 let seq = 0;
 
 window.renderMermaidJs = async (el, source) => {

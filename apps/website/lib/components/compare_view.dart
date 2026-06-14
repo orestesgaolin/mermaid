@@ -29,8 +29,16 @@ class CompareView extends StatefulComponent {
   State<CompareView> createState() => _CompareViewState();
 }
 
+/// Layout engines offered in the picker (label, config value).
+const _layouts = <(String, String)>[
+  ('Default (dagre)', 'dagre'),
+  ('ELK', 'elk'),
+  ('Tidy tree', 'tidy-tree'),
+];
+
 class _CompareViewState extends State<CompareView> {
   int _selected = 0;
+  String _layout = 'dagre';
   bool _flutterStarted = false;
 
   /// Live editor contents; starts from the selected sample and is edited in
@@ -79,19 +87,42 @@ class _CompareViewState extends State<CompareView> {
     _debounce = Timer(const Duration(milliseconds: 250), _sync);
   }
 
+  void _selectLayout(String layout) {
+    setState(() => _layout = layout);
+    if (kIsWeb) Future.delayed(Duration.zero, _sync);
+  }
+
+  /// Injects the chosen `layout` as an `%%{init}%%` directive (after any
+  /// frontmatter) so both renderers pick it up, without touching the editor.
+  String get _effective {
+    if (_layout == 'dagre') return _source;
+    final directive = "%%{init: {'layout': '$_layout'}}%%";
+    final s = _source.trimLeft();
+    if (s.startsWith('---')) {
+      final end = s.indexOf('\n---', 3);
+      if (end >= 0) {
+        final close = s.indexOf('\n', end + 1);
+        final cut = close >= 0 ? close + 1 : s.length;
+        return '${s.substring(0, cut)}$directive\n${s.substring(cut)}';
+      }
+    }
+    return '$directive\n$_source';
+  }
+
   void _sync() {
+    final src = _effective;
     final jsPane = _jsPane.currentNode;
     if (jsPane != null) {
-      _renderMermaidJs(jsPane, _source.toJS);
+      _renderMermaidJs(jsPane, src.toJS);
     }
     if (!_flutterStarted) {
       final host = _flutterPane.currentNode;
       if (host != null) {
         _flutterStarted = true;
-        _loadMermaidDart(host, _source.toJS);
+        _loadMermaidDart(host, src.toJS);
       }
     } else {
-      _updateMermaidDart(_source.toJS);
+      _updateMermaidDart(src.toJS);
     }
   }
 
@@ -113,6 +144,18 @@ class _CompareViewState extends State<CompareView> {
       div(classes: 'doc', [
         h2([.text(_sample.name)]),
         p(classes: 'doc-desc', [.text(_sample.description)]),
+      ]),
+      div(classes: 'layout-row', [
+        span(classes: 'layout-label', [.text('Layout')]),
+        for (final (label, value) in _layouts)
+          button(
+            classes: value == _layout ? 'chip selected' : 'chip',
+            onClick: () => _selectLayout(value),
+            [.text(label)],
+          ),
+        span(classes: 'layout-hint', [
+          .text('applies to flowcharts (graph diagrams)'),
+        ]),
       ]),
       textarea(
         key: _editor,
