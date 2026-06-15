@@ -1,7 +1,12 @@
 name: Deploy website to GitHub Pages
 
-# Builds the side-by-side comparison site (Flutter web embed + static Jaspr
-# site) and publishes apps/website/build/jaspr to GitHub Pages.
+# Builds the side-by-side comparison site (Jaspr static + embedded Flutter web,
+# via jaspr_flutter_embed) and publishes apps/website/build/jaspr to Pages.
+#
+# mermaid_core depends on the pure-Dart `katex` package by a relative path
+# (../../../katex/packages/katex), so this checks out BOTH repos as siblings
+# under the workspace — mermaid/ and katex/ — making that path resolve exactly
+# as it does locally.
 #
 # Before the first run: in the repo Settings → Pages, set "Source" to
 # "GitHub Actions".
@@ -31,7 +36,19 @@ jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout mermaid
+        uses: actions/checkout@v4
+        with:
+          path: mermaid
+
+      - name: Checkout katex (cross-repo path dependency of mermaid_core)
+        uses: actions/checkout@v4
+        with:
+          repository: orestesgaolin/katex
+          path: katex
+          # katex is public, so the default token clones it. If it ever goes
+          # private, add a PAT with read access as the KATEX_TOKEN secret.
+          token: ${{ secrets.KATEX_TOKEN || github.token }}
 
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
@@ -41,6 +58,7 @@ jobs:
           cache: true
 
       - name: Resolve workspace dependencies
+        working-directory: mermaid
         run: dart pub get
 
       - name: Install Jaspr CLI
@@ -49,10 +67,11 @@ jobs:
           echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
 
       - name: Build static Jaspr site (runs the Flutter web build internally)
-        working-directory: apps/website
+        working-directory: mermaid/apps/website
         run: jaspr build
 
       - name: Set base href for project Pages subpath
+        working-directory: mermaid
         run: |
           # Project Pages serve from https://<owner>.github.io/<repo>/, so the
           # page <base href> must be /<repo>/. The Flutter loader and
@@ -70,7 +89,7 @@ jobs:
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
-          path: apps/website/build/jaspr
+          path: mermaid/apps/website/build/jaspr
 
   deploy:
     needs: build
