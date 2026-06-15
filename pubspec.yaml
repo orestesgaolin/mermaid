@@ -3,6 +3,7 @@ publish_to: none
 environment:
   sdk: ^3.12.0
 workspace:
+  - packages/elk_layout
   - packages/mermaid_core
   - packages/mermaid_flutter
   - packages/mermaid_samples

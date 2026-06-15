@@ -21,7 +21,10 @@ import '../../math/tex_math.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
+import 'package:elk_layout/elk_layout.dart' as elk;
+
 import '../../vendor/dagre/dart_dagre.dart' as dagre;
+import 'elk_adapter.dart';
 import 'flow_model.dart';
 import 'layout_engines.dart';
 
@@ -44,13 +47,16 @@ RenderScene layoutFlowchart(
   required TextMeasurer measurer,
   required MermaidTheme theme,
   String engine = 'dagre',
+  elk.ElkLayoutOptions? elkOptions,
 }) {
   ensureBuiltinIconPacks();
   final baseStyle = TextStyleSpec(
     fontFamily: theme.fontFamily,
     fontSize: theme.fontSize,
   );
-  final fragment = _layoutGraph(graph, measurer, theme, baseStyle, engine);
+  final fragment = _layoutGraph(
+      graph, measurer, theme, baseStyle, engine,
+      elkOptions: elkOptions ?? const elk.ElkLayoutOptions());
   var sceneNodes = fragment.nodes;
   var bounds = fragment.bounds;
 
@@ -127,8 +133,9 @@ _Fragment _layoutGraph(
   TextMeasurer measurer,
   MermaidTheme theme,
   TextStyleSpec baseStyle,
-  String engine,
-) {
+  String engine, {
+  required elk.ElkLayoutOptions elkOptions,
+}) {
   // --- 0. Subgraphs with their own direction become recursive fragments. ---
   // dagre has no per-cluster rankdir, so (like upstream mermaid) such a
   // subgraph is laid out separately and inserted into the parent layout as a
@@ -208,8 +215,11 @@ _Fragment _layoutGraph(
       measurer,
       theme,
       baseStyle,
-      // Sub-fragments always use dagre; alternate engines apply to the top.
-      'dagre',
+      // Isolated-direction sub-fragments inherit the top engine, so an elk
+      // diagram lays its nested clusters out with elk too (tidy-tree, which
+      // doesn't model clusters, stays on dagre for the fragment).
+      engine == 'elk' ? 'elk' : 'dagre',
+      elkOptions: elkOptions,
     );
     final titleSize = sgs[root].title.isEmpty
         ? Size.zero
@@ -393,16 +403,32 @@ _Fragment _layoutGraph(
   }
 
   // --- 4. Run layout. -------------------------------------------------------
-  final result = dagre.layout(
-    g,
-    dagre.DagreConfig(
-      rankDir: _rankDir(graph.direction),
-      nodeSep: _nodeSpacing,
-      rankSep: _rankSpacing,
-    ),
-  );
-  for (final p in placed.values) {
-    p.center = result.graph.nodeMap[p.node.id]!.position!.center;
+  // `elk` runs the real ELK layered algorithm (standalone `elk_layout`
+  // package, via elk_adapter) over the same compound graph: genuinely
+  // different placement from dagre plus orthogonal edge routing, with full
+  // cluster support. Everything else uses the vendored dagre.
+  final useElk = engine == 'elk';
+  dagre.DagreResult? result;
+  ElkLayoutResult? elkResult;
+  if (useElk) {
+    elkResult = layoutWithElk(g,
+        direction: graph.direction, options: elkOptions);
+    for (final p in placed.values) {
+      final c = elkResult.center(p.node.id);
+      if (c != null) p.center = c;
+    }
+  } else {
+    result = dagre.layout(
+      g,
+      dagre.DagreConfig(
+        rankDir: _rankDir(graph.direction),
+        nodeSep: _nodeSpacing,
+        rankSep: _rankSpacing,
+      ),
+    );
+    for (final p in placed.values) {
+      p.center = result.graph.nodeMap[p.node.id]!.position!.center;
+    }
   }
 
   // Alternate engine: tidy-tree replaces the dagre placement when there are no
@@ -435,14 +461,6 @@ _Fragment _layoutGraph(
         flow: flow, siblingGap: _nodeSpacing, levelGap: _rankSpacing);
     centers.forEach((id, c) => placed[id]?.center = c);
   }
-  // ELK: we don't port elkjs's placement (impractical), but `elk` keeps the
-  // dagre layered placement and reroutes edges ORTHOGONALLY (Manhattan), the
-  // signature ELK look — visibly distinct from dagre's smooth curves. Gated on
-  // no clusters (cluster edge routing stays on dagre). The default `dagre` and
-  // the rest are unaffected.
-  final useElk = engine == 'elk' && sgs.isEmpty;
-  final elkVertical = graph.direction != FlowDirection.lr &&
-      graph.direction != FlowDirection.rl;
 
   // --- 5. Emit scene nodes (in dagre coordinate space; translated later). ---
   final clusterGroups = <SceneNode>[];
@@ -460,7 +478,9 @@ _Fragment _layoutGraph(
       // a regular node, not a compound cluster).
       continue;
     }
-    final pos = result.graph.nodeMap[sg.id]?.position;
+    final pos = useElk
+        ? elkResult!.rect(sg.id)
+        : result!.graph.nodeMap[sg.id]?.position;
     if (pos == null) continue;
     final titleSize = sg.title.isEmpty
         ? Size.zero
@@ -588,9 +608,16 @@ _Fragment _layoutGraph(
       continue;
     }
 
-    final dagreEdge = result.graph.findEdgeById('e$i')!;
-
-    var points = List<Point>.from(dagreEdge.points);
+    // elk routes its own orthogonal polyline; dagre supplies one through its
+    // dummy chain.
+    dagre.DagreEdge? dagreEdge;
+    List<Point> points;
+    if (useElk) {
+      points = elkResult!.edgePoints('e$i') ?? [source.center, target.center];
+    } else {
+      dagreEdge = result!.graph.findEdgeById('e$i')!;
+      points = List<Point>.from(dagreEdge.points);
+    }
     if (points.length < 2) {
       points = [source.center, target.center];
     }
@@ -623,30 +650,6 @@ _Fragment _layoutGraph(
           points = [source.center, mid + perp * (spread * 28.0), target.center];
         }
       }
-    }
-    if (useElk) {
-      // Orthogonal (Manhattan) route between node centres; later clipped to the
-      // shape boundaries. Parallel/antiparallel edges get a per-pair lane
-      // offset so they run on distinct lanes instead of overlapping.
-      var lane = 0.0;
-      final group = pairEdges[pairKey(e.from, e.to)];
-      if (group != null && group.length > 1) {
-        lane = (group.indexOf(i) - (group.length - 1) / 2.0) * 24.0;
-      }
-      final a = source.center, b = target.center;
-      points = elkVertical
-          ? [
-              a,
-              Point(a.x, (a.y + b.y) / 2 + lane),
-              Point(b.x, (a.y + b.y) / 2 + lane),
-              b,
-            ]
-          : [
-              a,
-              Point((a.x + b.x) / 2 + lane, a.y),
-              Point((a.x + b.x) / 2 + lane, b.y),
-              b,
-            ];
     }
     // Cluster endpoints: the dagre path runs to a representative node deep
     // inside the cluster; cut it back so it meets the cluster border.
@@ -696,8 +699,8 @@ _Fragment _layoutGraph(
 
     final labelSize = edgeLabelSizes[i];
     if (labelSize != null) {
-      final labelCenter = (dagreEdge.labelX != null && dagreEdge.labelY != null)
-          ? Point(dagreEdge.labelX!, dagreEdge.labelY!)
+      final labelCenter = (dagreEdge?.labelX != null && dagreEdge?.labelY != null)
+          ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
           : _pathMidpoint(points);
       edgeLabelGroups.add(_edgeLabelGroup(
           e, i, labelCenter, labelSize, baseStyle, theme,

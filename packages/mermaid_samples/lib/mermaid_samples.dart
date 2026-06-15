@@ -372,6 +372,26 @@ mindmap
       Pen and paper
       Mermaid
 '''),
+  Sample('flowchart-elk', 'Flowchart (ELK layout)', cDiagrams,
+      'A flowchart with subgraphs laid out by the ELK layered algorithm: '
+          'genuinely different node placement from the default dagre engine, '
+          'plus orthogonal (right-angle) edge routing.', '''
+---
+config:
+  layout: elk
+---
+flowchart TB
+  A[Start] --> B{Decision}
+  B -->|yes| C[Process]
+  B -->|no| D[Skip]
+  subgraph S1[Worker pool]
+    C --> E[Step E]
+    D --> F[Step F]
+  end
+  E --> G[Collect]
+  F --> G
+  G --> H[End]
+'''),
   Sample('radar', 'Radar', cCharts,
       'Radar (spider) chart: one or more series plotted across shared axes '
           'radiating from a centre.', '''

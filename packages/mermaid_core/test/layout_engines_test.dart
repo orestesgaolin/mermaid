@@ -141,6 +141,57 @@ void main() {
       final dx = bd.x - db.x, dy = bd.y - db.y;
       expect(dx * dx + dy * dy, greaterThan(15 * 15));
     });
+
+    test('elk lays out subgraphs (no longer falls back to dagre)', () {
+      // Previously elk was gated on `sgs.isEmpty`; now it lays clusters out.
+      final src = '''
+flowchart TB
+  A-->B
+  subgraph S1[Cluster]
+    B-->C
+    B-->D
+  end
+  C-->E
+  D-->E''';
+      final scene = layoutFlowchart(parseFlowchart(src),
+          measurer: measurer, theme: theme, engine: 'elk');
+      // The cluster group is present and edges are orthogonal under elk.
+      final groups = _flat(scene.nodes).whereType<SceneGroup>();
+      expect(groups.any((g) => g.id == 'S1'), isTrue,
+          reason: 'cluster S1 should be laid out under elk');
+      final anyCubic = _flat(scene.nodes)
+          .whereType<SceneGroup>()
+          .where((g) => (g.id ?? '').startsWith('edge_'))
+          .expand((g) => g.children.whereType<SceneShape>())
+          .map((s) => s.geometry)
+          .whereType<PathGeometry>()
+          .expand((p) => p.commands)
+          .any((c) => c is CubicTo);
+      expect(anyCubic, isFalse, reason: 'elk edges are orthogonal');
+    });
+
+    test('elk placement differs from dagre', () {
+      final g3 = parseFlowchart('graph TD\n  A-->B\n  A-->C\n  B-->D\n  C-->D');
+      Map<String, Point> centers(String engine) {
+        final scene = layoutFlowchart(g3,
+            measurer: measurer, theme: theme, engine: engine);
+        final out = <String, Point>{};
+        for (final t in _flat(scene.nodes).whereType<SceneText>()) {
+          out[t.text] = Point(t.bounds.center.x, t.bounds.center.y);
+        }
+        return out;
+      }
+
+      final dagreC = centers('dagre');
+      final elkC = centers('elk');
+      // At least one node lands in a measurably different place.
+      final moved = ['A', 'B', 'C', 'D'].any((id) {
+        final a = dagreC[id]!, b = elkC[id]!;
+        final dx = a.x - b.x, dy = a.y - b.y;
+        return dx * dx + dy * dy > 1.0;
+      });
+      expect(moved, isTrue, reason: 'elk should not reproduce dagre placement');
+    });
   });
 }
 

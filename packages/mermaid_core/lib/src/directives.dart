@@ -5,6 +5,8 @@ library;
 
 import 'dart:convert';
 
+import 'package:elk_layout/elk_layout.dart' as elk;
+
 import 'color.dart';
 import 'theme/theme.dart';
 
@@ -113,6 +115,84 @@ String resolveLayout(String source) {
     }
   }
   return layout;
+}
+
+/// Resolves ELK layered options from `config.elk` in an `%%{init}%%` directive
+/// or frontmatter. Unspecified knobs keep ELK's defaults (Brandes–Köpf
+/// placement, `spacing.baseValue` 40 — matching upstream mermaid-layout-elk).
+elk.ElkLayoutOptions resolveElkConfig(String source) {
+  final text = source.replaceAll('\r\n', '\n');
+  Map<String, dynamic> elkCfg = {};
+  void merge(Object? config) {
+    if (config is Map && config['elk'] is Map) {
+      elkCfg.addAll((config['elk'] as Map).cast<String, dynamic>());
+    }
+  }
+
+  final fm = RegExp(r'^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*\n')
+      .firstMatch(text);
+  if (fm != null) {
+    final cfg = _looseJson('{${fm.group(1)!}}');
+    if (cfg is Map && cfg['config'] is Map) merge(cfg['config']);
+    merge(cfg);
+  }
+  for (final m in RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%')
+      .allMatches(text)) {
+    merge(_looseJson(m.group(1)!));
+  }
+
+  return elk.ElkLayoutOptions(
+    nodePlacement: _enumByName(
+        elkCfg['nodePlacementStrategy'], elk.ElkNodePlacement.values,
+        fallback: elk.ElkNodePlacement.brandesKoepf),
+    fixedAlignment: _elkAlignment(elkCfg['nodePlacementAlignment']),
+    mergeEdges: elkCfg['mergeEdges'] == true,
+    considerModelOrder: _elkModelOrder(elkCfg['considerModelOrder']),
+    cycleBreaking: _elkCycleBreaking(elkCfg['cycleBreakingStrategy']),
+    forceNodeModelOrder: elkCfg['forceNodeModelOrder'] == true,
+  );
+}
+
+T _enumByName<T extends Enum>(Object? raw, List<T> values, {required T fallback}) {
+  if (raw is! String) return fallback;
+  final key = raw.replaceAll('_', '').toLowerCase();
+  for (final v in values) {
+    if (v.name.toLowerCase() == key) return v;
+  }
+  return fallback;
+}
+
+elk.ElkFixedAlignment _elkAlignment(Object? raw) {
+  if (raw is! String) return elk.ElkFixedAlignment.none;
+  return switch (raw.toUpperCase()) {
+    'LEFTUP' => elk.ElkFixedAlignment.leftUp,
+    'LEFTDOWN' => elk.ElkFixedAlignment.leftDown,
+    'RIGHTUP' => elk.ElkFixedAlignment.rightUp,
+    'RIGHTDOWN' => elk.ElkFixedAlignment.rightDown,
+    'BALANCED' => elk.ElkFixedAlignment.balanced,
+    _ => elk.ElkFixedAlignment.none,
+  };
+}
+
+elk.ElkConsiderModelOrder _elkModelOrder(Object? raw) {
+  if (raw is! String) return elk.ElkConsiderModelOrder.none;
+  return switch (raw.toUpperCase()) {
+    'NODES_AND_EDGES' => elk.ElkConsiderModelOrder.nodesAndEdges,
+    'PREFER_EDGES' => elk.ElkConsiderModelOrder.preferEdges,
+    'PREFER_NODES' => elk.ElkConsiderModelOrder.preferNodes,
+    _ => elk.ElkConsiderModelOrder.none,
+  };
+}
+
+elk.ElkCycleBreaking _elkCycleBreaking(Object? raw) {
+  if (raw is! String) return elk.ElkCycleBreaking.greedy;
+  return switch (raw.toUpperCase()) {
+    'DEPTH_FIRST' => elk.ElkCycleBreaking.depthFirst,
+    'INTERACTIVE' => elk.ElkCycleBreaking.interactive,
+    'MODEL_ORDER' => elk.ElkCycleBreaking.modelOrder,
+    'GREEDY_MODEL_ORDER' => elk.ElkCycleBreaking.greedyModelOrder,
+    _ => elk.ElkCycleBreaking.greedy,
+  };
 }
 
 /// Parses a nested `themeVariables:` block out of frontmatter YAML, e.g.
