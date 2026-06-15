@@ -16,10 +16,13 @@ dependencies:
     sdk: flutter
   jaspr: ^0.23.1
   jaspr_flutter_embed: ^0.4.11
+  # Standalone ELK layered layout — drives the /elk demo page (no mermaid).
+  elk_layout: ^0.1.0
   mermaid_core: ^0.1.0
   mermaid_flutter: ^0.1.0
   mermaid_samples: ^0.1.0
   universal_web: ^1.1.0
+  jaspr_router: ^0.8.2
 
 dev_dependencies:
   build_runner: ^2.10.0
@@ -29,6 +32,8 @@ dev_dependencies:
 
 jaspr:
   mode: static
+  # Port for the static-build crawl server (default 8080 is often taken).
+  port: 8091
   # `jaspr build` runs the Flutter web build internally and wires the embed —
   # no standalone `flutter build web` / tracked main.dart.js artifact.
   flutter: embedded

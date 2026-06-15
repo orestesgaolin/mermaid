@@ -7,6 +7,8 @@
 import 'package:jaspr/client.dart';
 
 import 'package:website/components/compare_view.dart' deferred as _compare_view;
+import 'package:website/components/elk_flutter_view.dart'
+    deferred as _elk_flutter_view;
 
 /// Default [ClientOptions] for use with your Jaspr project.
 ///
@@ -29,6 +31,10 @@ ClientOptions get defaultClientOptions => ClientOptions(
     'compare_view': ClientLoader(
       (p) => _compare_view.CompareView(),
       loader: _compare_view.loadLibrary,
+    ),
+    'elk_flutter_view': ClientLoader(
+      (p) => _elk_flutter_view.ElkFlutterView(),
+      loader: _elk_flutter_view.loadLibrary,
     ),
   },
 );

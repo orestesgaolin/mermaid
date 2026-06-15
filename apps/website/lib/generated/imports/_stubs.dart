@@ -6,5 +6,7 @@
 
 // ignore_for_file: directives_ordering, non_constant_identifier_names
 
+dynamic ElkFlutterApp;
+typedef ElkFlutterAppOrStubbed = dynamic;
 dynamic MermaidEmbedApp;
 typedef MermaidEmbedAppOrStubbed = dynamic;

@@ -2,6 +2,7 @@ import 'package:jaspr/dom.dart';
 import 'package:jaspr/jaspr.dart';
 
 import '../components/compare_view.dart';
+import '../components/site_nav.dart';
 
 class Home extends StatelessComponent {
   const Home({super.key});
@@ -9,6 +10,7 @@ class Home extends StatelessComponent {
   @override
   Component build(BuildContext context) {
     return div(classes: 'page', [
+      const SiteNav(active: SiteRoute.comparison),
       header(classes: 'site-header', [
         div(classes: 'header-top', [
           h1([.text('mermaid dart')]),
@@ -61,13 +63,21 @@ class Home extends StatelessComponent {
               'dart reuses that backend-agnostic box tree to lay out math '
               'natively in Flutter.'),
         ]),
-        p(classes: 'intro-links', [
+        p([
+          .text('The '),
+          strong([.text('ELK layout')]),
+          .text(' option is powered by '),
+          strong([.text('elk_layout')]),
+          .text(' — a standalone, pure-Dart port of the Eclipse Layout '
+              'Kernel\'s layered algorithm (orthogonal edges, clusters, no '
+              'elkjs, no JavaScript). It is reusable on its own for any graph '
+              'layout, such as package dependency visualizations. Explore it '
+              'on the '),
           a(
-            [.text('See the katex renderer comparison →')],
-            href: 'https://orestesgaolin.github.io/katex/',
-            target: .blank,
-            attributes: const {'rel': 'noopener noreferrer'},
+            [.text('ELK layout')],
+            href: 'elk',
           ),
+          .text(' page.'),
         ]),
       ]),
       const CompareView(),

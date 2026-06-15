@@ -1,16 +1,29 @@
 import 'package:jaspr/dom.dart';
 import 'package:jaspr/jaspr.dart';
+import 'package:jaspr_router/jaspr_router.dart';
 
+import 'pages/elk_demo.dart';
 import 'pages/home.dart';
 
-/// Server-rendered shell; the interactive comparison inside [Home] is the
-/// only client island (see CompareView's @client annotation).
+/// Server-rendered shell. Two statically-generated routes: the comparison
+/// home (`/`, with the interactive CompareView @client island) and the
+/// standalone ELK layout demo (`/elk`). Both are pre-rendered to HTML by
+/// `jaspr build`; navigation between them is a full page load.
 class App extends StatelessComponent {
   const App({super.key});
 
   @override
   Component build(BuildContext context) {
-    return const Home();
+    return Router(routes: [
+      Route(
+          path: '/',
+          title: 'mermaid dart — comparison',
+          builder: (context, state) => const Home()),
+      Route(
+          path: '/elk',
+          title: 'elk_layout — pure-Dart ELK layered layout',
+          builder: (context, state) => const ElkDemoPage()),
+    ]);
   }
 
   @css
@@ -94,21 +107,6 @@ class App extends StatelessComponent {
           lineHeight: 1.6.em,
         ),
         css('.intro a').styles(color: const Color('#4a3a8a')),
-        css('.intro .intro-links').styles(margin: .only(top: 8.px)),
-        // Primary call-to-action button (accent-filled).
-        css('.intro .intro-links a').styles(
-          display: .inlineBlock,
-          padding: .symmetric(vertical: 8.px, horizontal: 16.px),
-          radius: .circular(8.px),
-          color: Colors.white,
-          backgroundColor: const Color('#4a3a8a'),
-          fontSize: 0.95.rem,
-          fontWeight: .w600,
-          textDecoration: const TextDecoration(line: TextDecorationLine.none),
-        ),
-        css('.intro .intro-links a:hover').styles(
-          backgroundColor: const Color('#382c69'),
-        ),
         css('.cat-label').styles(
           textTransform: .upperCase,
           fontSize: 0.72.rem,
