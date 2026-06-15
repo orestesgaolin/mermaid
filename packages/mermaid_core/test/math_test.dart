@@ -1,4 +1,7 @@
-/// Tests for the TeX-subset math layout (low-level scene primitives).
+/// Tests for math layout. Math is laid out by the `katex` package and adapted
+/// into mermaid's scene IR (glyphs as filled outline paths, rules as filled
+/// rects). KaTeX-level correctness is verified in katex's own oracle suite;
+/// here we check the adaptation + the flowchart integration.
 library;
 
 import 'package:mermaid_core/src/color.dart';
@@ -23,6 +26,9 @@ List<SceneNode> flatten(List<SceneNode> nodes) => [
       ],
     ];
 
+List<SceneShape> shapes(MathLayout ml) =>
+    flatten(ml.render(const Point(0, 0))).whereType<SceneShape>().toList();
+
 void main() {
   group('detection', () {
     test('hasMath / wholeMath', () {
@@ -33,148 +39,58 @@ void main() {
     });
   });
 
-  group('layoutMath', () {
-    test('superscript raises and shrinks the script', () {
+  group('layoutMath (katex adapter)', () {
+    test('emits filled outline paths, not text glyphs', () {
+      final ml = layoutMath('x', style, measurer, black);
+      final s = shapes(ml);
+      expect(s, isNotEmpty);
+      // Glyphs are filled paths; nothing relies on a math font being present.
+      expect(s.every((n) => n.fill != null), isTrue);
+      expect(s.any((n) => n.geometry is PathGeometry), isTrue);
+      expect(
+          flatten(ml.render(const Point(0, 0))).whereType<SceneText>(), isEmpty);
+    });
+
+    test('superscript raises and widens vs the base', () {
       final base = layoutMath('x', style, measurer, black);
       final sup = layoutMath('x^2', style, measurer, black);
-      // Superscript adds width and extra height above the base.
       expect(sup.size.width, greaterThan(base.size.width));
       expect(sup.size.height, greaterThan(base.size.height));
     });
 
-    test(r'\frac emits a rule line (a stroked path)', () {
+    test(r'\frac emits a filled rule rect (the bar)', () {
       final ml = layoutMath(r'\frac{1}{2}', style, measurer, black);
-      final nodes = ml.render(const Point(0, 0));
-      final rules = flatten(nodes)
-          .whereType<SceneShape>()
-          .where((s) => s.geometry is PathGeometry && s.stroke != null);
-      expect(rules, isNotEmpty);
-      // Numerator and denominator glyphs both present.
-      final texts = flatten(nodes).whereType<SceneText>().map((t) => t.text);
-      expect(texts, containsAll(['1', '2']));
+      final rects =
+          shapes(ml).where((s) => s.geometry is RectGeometry && s.fill != null);
+      expect(rects, isNotEmpty);
     });
 
-    test(r'\sqrt draws a connected radical path over the radicand', () {
-      final ml = layoutMath(r'\sqrt{x}', style, measurer, black);
-      final nodes = ml.render(const Point(0, 0));
-      // Radicand glyph present.
-      expect(flatten(nodes).whereType<SceneText>().map((t) => t.text),
-          contains('x'));
-      // The radical is a single stroked path (checkmark + overline), not a glyph.
-      expect(
-          flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null),
-          isNotEmpty);
+    test('renders a range of constructs without error', () {
+      for (final tex in [
+        r'\sqrt{x+3}',
+        r'\sum_{i=1}^{n} i',
+        r'\begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}',
+        r'\begin{cases} a &x \\ b &y \end{cases}',
+        r'\left(\frac{a}{b}\right)',
+        r'\nabla \hbar \Psi \partial',
+        r'e^{i\pi} + 1 = 0',
+        r'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}',
+      ]) {
+        final ml = layoutMath(tex, style, measurer, black);
+        expect(ml.size.width, greaterThan(0), reason: tex);
+        expect(ml.size.height, greaterThan(0), reason: tex);
+        expect(shapes(ml), isNotEmpty, reason: tex);
+      }
     });
 
-    test('symbol macros map to unicode', () {
-      final ml = layoutMath(r'\pi r', style, measurer, black);
-      final texts = flatten(ml.render(const Point(0, 0)))
-          .whereType<SceneText>()
-          .map((t) => t.text)
-          .join();
-      expect(texts.contains('π'), isTrue);
-    });
-
-    test(r'\text keeps literal spaces', () {
-      final ml = layoutMath(r'\text{if x}', style, measurer, black);
-      final texts =
-          flatten(ml.render(const Point(0, 0))).whereType<SceneText>();
-      expect(texts.map((t) => t.text), contains('if x'));
-    });
-
-    test(r'\begin{cases} renders rows, columns and a brace', () {
-      final ml = layoutMath(
-          r'\begin{cases} a &x \\ b &y \end{cases}', style, measurer, black);
-      final nodes = ml.render(const Point(0, 0));
-      final texts =
-          flatten(nodes).whereType<SceneText>().map((t) => t.text).toSet();
-      expect(texts.containsAll({'a', 'x', 'b', 'y'}), isTrue);
-      // The brace is a stroked path.
-      expect(
-          flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null),
-          isNotEmpty);
-    });
-
-    test(r'\begin{bmatrix} renders all cells', () {
-      final ml = layoutMath(
-          r'\begin{bmatrix} 1 & 2 \\ 3 & 4 \end{bmatrix}', style, measurer, black);
-      final texts = flatten(ml.render(const Point(0, 0)))
-          .whereType<SceneText>()
-          .map((t) => t.text)
-          .toSet();
-      expect(texts.containsAll({'1', '2', '3', '4'}), isTrue);
-    });
-
-    test(r'\left( ... \right) sizes delimiters (stroked paths)', () {
-      final ml =
-          layoutMath(r'\left(\frac{a}{b}\right)', style, measurer, black);
-      final nodes = ml.render(const Point(0, 0));
-      // Two delimiter paths (left paren + right paren) plus the frac rule.
-      final strokes =
-          flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null);
-      expect(strokes.length, greaterThanOrEqualTo(3));
-    });
-
-    test('extended symbols (nabla, hbar, Psi, partial) map to unicode', () {
-      final ml = layoutMath(r'\nabla \hbar \Psi \partial', style, measurer, black);
-      final texts = flatten(ml.render(const Point(0, 0)))
-          .whereType<SceneText>()
-          .map((t) => t.text)
-          .join();
-      expect(texts.contains('∇'), isTrue);
-      expect(texts.contains('ℏ'), isTrue);
-      expect(texts.contains('Ψ'), isTrue);
-      expect(texts.contains('∂'), isTrue);
-    });
-
-    test(r'\begin{array}{l} with \left\{ ... \right. renders rows + brace', () {
-      final ml = layoutMath(
-          r'\left\{\begin{array}{l} a = 1 \\ b = 2 \end{array}\right.',
-          style, measurer, black);
-      final nodes = ml.render(const Point(0, 0));
-      final texts =
-          flatten(nodes).whereType<SceneText>().map((t) => t.text).toSet();
-      expect(texts.containsAll({'a', '1', 'b', '2'}), isTrue);
-      // The left brace is a stroked path.
-      expect(
-          flatten(nodes).whereType<SceneShape>().where((s) => s.stroke != null),
-          isNotEmpty);
-    });
-
-    test('the quadratic formula parses and renders without error', () {
-      final ml = layoutMath(
-          r'x = \frac{-b \pm \sqrt{b^2 - 4ac}}{2a}', style, measurer, black);
-      final texts = flatten(ml.render(const Point(0, 0)))
-          .whereType<SceneText>()
-          .map((t) => t.text)
-          .join();
-      expect(texts.contains('±'), isTrue);
-      expect(ml.size.width, greaterThan(0));
-    });
-
-    test('function names use the roman KaTeX font, variables the math font', () {
-      final ml = layoutMath(r'\sin t', style, measurer, black);
-      final texts =
-          flatten(ml.render(const Point(0, 0))).whereType<SceneText>();
-      // 'sin' renders in KaTeX_Main (roman); the variable 't' in KaTeX_Math.
-      final sin = texts.firstWhere((t) => t.text == 'sin');
-      expect(sin.style.fontFamily, 'KaTeX_Main');
-      expect(texts.any((t) => t.text == 't' && t.style.fontFamily == 'KaTeX_Math'),
-          isTrue);
-    });
-
-    test(r'\overbrace composes with a ^ label', () {
-      final ml = layoutMath(
-          r'\overbrace{a+b}^{\text{sum}}', style, measurer, black);
-      final texts = flatten(ml.render(const Point(0, 0)))
-          .whereType<SceneText>()
-          .map((t) => t.text);
-      expect(texts, contains('sum'));
+    test('a bigger expression produces more shapes than a single glyph', () {
+      expect(shapes(layoutMath(r'\frac{a+b}{c+d}', style, measurer, black)).length,
+          greaterThan(shapes(layoutMath('a', style, measurer, black)).length));
     });
   });
 
   group('flowchart integration', () {
-    test(r'a math node label renders as math, not literal text', () {
+    test('a math node label renders as math shapes, not literal text', () {
       final scene = layoutFlowchart(
         parseFlowchart(r'graph LR' '\n' r'  A["$$x^2$$"]'),
         measurer: measurer,
@@ -182,9 +98,12 @@ void main() {
       );
       final texts =
           flatten(scene.nodes).whereType<SceneText>().map((t) => t.text);
-      // The raw delimiters never reach the scene; 'x' and '2' do.
+      // The math is rendered (as paths) — the raw source never reaches the
+      // scene as literal text.
       expect(texts.any((t) => t.contains(r'$$')), isFalse);
-      expect(texts, containsAll(['x', '2']));
+      expect(texts.any((t) => t.contains('x^2')), isFalse);
+      // Filled outline paths from the math are present.
+      expect(flatten(scene.nodes).whereType<SceneShape>(), isNotEmpty);
     });
   });
 }

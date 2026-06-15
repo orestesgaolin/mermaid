@@ -15,8 +15,10 @@ import 'dart:math' as math;
 import '../color.dart';
 import '../geometry.dart';
 import '../ir/scene.dart';
+import '../ir/scene_utils.dart';
 import '../text/text_measurer.dart';
 import '../text/text_style.dart';
+import 'katex_math.dart';
 
 final _mathRe = RegExp(r'\$\$(.*?)\$\$', dotAll: true);
 
@@ -107,6 +109,18 @@ MathLayout _layoutInline(
 /// Lays out [tex] at [style]'s size. Coordinates are relative to (0,0).
 MathLayout layoutMath(
     String tex, TextStyleSpec style, TextMeasurer measurer, Color color) {
+  // Prefer the faithful KaTeX port (exact metrics, full coverage); fall back
+  // to the built-in subset engine if it can't handle the input.
+  final kx = buildKatexMath(tex, style.fontSize, color);
+  if (kx != null) {
+    return MathLayout(
+      kx.size,
+      kx.ascent,
+      (origin, out) => out.addAll([
+        for (final n in kx.nodes) translateSceneNode(n, origin.x, origin.y),
+      ]),
+    );
+  }
   final box = _row(_Lexer(tex), style, measurer, color, stopOnBrace: false);
   return MathLayout(
     Size(box.width, box.ascent + box.descent),

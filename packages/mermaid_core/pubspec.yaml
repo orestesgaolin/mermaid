@@ -20,6 +20,13 @@ executables:
 dependencies:
   meta: ^1.16.0
   path_parsing: ^1.1.0
+  # Pure-Dart KaTeX port: drives math layout via its box tree.
+  # TODO: once the katex core package is published (under a free pub.dev name,
+  # e.g. katex_dart), depend on the hosted version here and move this path to a
+  # `dependency_overrides:` entry for local co-development — that keeps
+  # mermaid_core publishable (overrides are stripped on publish).
+  katex:
+    path: ../../../katex/packages/katex
 
 dev_dependencies:
   lints: ^6.0.0
