@@ -76,6 +76,28 @@ void main() {
       }
     });
 
+    test('elk routes edges orthogonally (linear), unlike dagre curves', () {
+      final g2 = parseFlowchart('graph TD\n  A-->B\n  A-->C\n  B-->D\n  C-->D');
+      bool anyCubic(String engine) {
+        final scene = layoutFlowchart(g2,
+            measurer: measurer, theme: theme, engine: engine);
+        return _flat(scene.nodes)
+            .whereType<SceneGroup>()
+            .where((g) => (g.id ?? '').startsWith('edge_'))
+            .expand((g) => g.children.whereType<SceneShape>())
+            .whereType<SceneShape>()
+            .map((s) => s.geometry)
+            .whereType<PathGeometry>()
+            .expand((p) => p.commands)
+            .any((c) => c is CubicTo);
+      }
+
+      // dagre uses smooth basis curves (CubicTo); elk uses sharp orthogonal
+      // segments (no CubicTo on the edge lines).
+      expect(anyCubic('dagre'), isTrue);
+      expect(anyCubic('elk'), isFalse);
+    });
+
     test('tidy-tree fans antiparallel edges to opposite sides (P15)', () {
       final scene = layoutFlowchart(
         parseFlowchart('graph TD\n  A-->B{Q}\n  B-->D[Debug]\n  D-->B'),

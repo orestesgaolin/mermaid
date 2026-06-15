@@ -435,11 +435,14 @@ _Fragment _layoutGraph(
         flow: flow, siblingGap: _nodeSpacing, levelGap: _rankSpacing);
     centers.forEach((id, c) => placed[id]?.center = c);
   }
-  // Upstream v11 flowchart does not ship ELK: `layout: elk` logs a warning and
-  // falls back to dagre with curveBasis edges (flowRenderer-v3-unified.ts:36).
-  // We mirror that fallback — elk keeps the dagre placement and the default
-  // basis curves rather than rerouting edges orthogonally, so the `elk` engine
-  // here is intentionally a no-op alias for dagre.
+  // ELK: we don't port elkjs's placement (impractical), but `elk` keeps the
+  // dagre layered placement and reroutes edges ORTHOGONALLY (Manhattan), the
+  // signature ELK look — visibly distinct from dagre's smooth curves. Gated on
+  // no clusters (cluster edge routing stays on dagre). The default `dagre` and
+  // the rest are unaffected.
+  final useElk = engine == 'elk' && sgs.isEmpty;
+  final elkVertical = graph.direction != FlowDirection.lr &&
+      graph.direction != FlowDirection.rl;
 
   // --- 5. Emit scene nodes (in dagre coordinate space; translated later). ---
   final clusterGroups = <SceneNode>[];
@@ -621,6 +624,30 @@ _Fragment _layoutGraph(
         }
       }
     }
+    if (useElk) {
+      // Orthogonal (Manhattan) route between node centres; later clipped to the
+      // shape boundaries. Parallel/antiparallel edges get a per-pair lane
+      // offset so they run on distinct lanes instead of overlapping.
+      var lane = 0.0;
+      final group = pairEdges[pairKey(e.from, e.to)];
+      if (group != null && group.length > 1) {
+        lane = (group.indexOf(i) - (group.length - 1) / 2.0) * 24.0;
+      }
+      final a = source.center, b = target.center;
+      points = elkVertical
+          ? [
+              a,
+              Point(a.x, (a.y + b.y) / 2 + lane),
+              Point(b.x, (a.y + b.y) / 2 + lane),
+              b,
+            ]
+          : [
+              a,
+              Point((a.x + b.x) / 2 + lane, a.y),
+              Point((a.x + b.x) / 2 + lane, b.y),
+              b,
+            ];
+    }
     // Cluster endpoints: the dagre path runs to a representative node deep
     // inside the cluster; cut it back so it meets the cluster border.
     if (clusterTo != null) {
@@ -653,7 +680,10 @@ _Fragment _layoutGraph(
     }
 
     children.add(SceneShape(
-      geometry: PathGeometry(_edgeCurve(points, e.interpolate)),
+      // ELK draws orthogonal edges with sharp corners (linear through the
+      // Manhattan route); other engines use the edge's own interpolation.
+      geometry: PathGeometry(
+          _edgeCurve(points, useElk ? 'linear' : e.interpolate)),
       stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
     ));
     if (e.headTo != ArrowHead.none) {
