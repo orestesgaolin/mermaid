@@ -8,6 +8,11 @@ import '../color.dart';
 import '../geometry.dart';
 import '../text/text_style.dart';
 
+/// Sentinel [SceneGroup.id] marking a laid-out math expression. The hand-drawn
+/// (rough) pass leaves these groups untouched, so math stays crisp instead of
+/// being sketched into illegibility.
+const String mathSceneGroupId = '__mermaid_math__';
+
 class RenderScene {
   const RenderScene({
     required this.size,

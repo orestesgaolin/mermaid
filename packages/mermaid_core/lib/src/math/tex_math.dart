@@ -55,8 +55,17 @@ MathLayout? layoutLabel(
     String label, TextStyleSpec style, TextMeasurer measurer, Color color) {
   if (!hasMath(label)) return null;
   final whole = wholeMath(label);
-  if (whole != null) return layoutMath(whole, style, measurer, color);
-  return _layoutInline(label, style, measurer, color);
+  final ml = whole != null
+      ? layoutMath(whole, style, measurer, color)
+      : _layoutInline(label, style, measurer, color);
+  // Wrap in a marked group so the hand-drawn pass keeps math crisp (it would
+  // otherwise sketch the glyph outlines into illegibility).
+  return MathLayout(
+    ml.size,
+    ml.ascent,
+    (origin, out) =>
+        out.add(SceneGroup(id: mathSceneGroupId, children: ml.render(origin))),
+  );
 }
 
 /// Lays out a single line of mixed text and `$$…$$` math, sharing a baseline.

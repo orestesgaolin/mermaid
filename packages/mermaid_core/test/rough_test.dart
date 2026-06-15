@@ -101,6 +101,36 @@ void main() {
           paths.any((s) => s.stroke?.color == const Color(0xff3366cc)), isTrue);
     });
 
+    test('leaves a math group untouched (crisp math in hand-drawn mode)', () {
+      // A math expression is wrapped in a SceneGroup with mathSceneGroupId; the
+      // rough pass must pass it through verbatim (not sketch its glyphs).
+      final mathChild = SceneShape(
+        geometry: PathGeometry([
+          MoveTo(const Point(0, 0)),
+          LineTo(const Point(10, 0)),
+          const ClosePath(),
+        ]),
+        fill: const Fill(Color(0xff000000)),
+      );
+      final scene = RenderScene(
+        size: const Size(40, 20),
+        nodes: [
+          const SceneShape(
+            geometry: RectGeometry(Rect.fromLTWH(0, 0, 40, 20)),
+            fill: Fill(Color(0xffeeeeff)),
+          ),
+          SceneGroup(id: mathSceneGroupId, children: [mathChild]),
+        ],
+      );
+      final r = roughenScene(scene, seed: 1);
+      final mathGroup = r.nodes
+          .whereType<SceneGroup>()
+          .firstWhere((g) => g.id == mathSceneGroupId);
+      // Same single child, identical geometry — not exploded into sketch strokes.
+      expect(mathGroup.children, hasLength(1));
+      expect(identical(mathGroup.children.single, mathChild), isTrue);
+    });
+
     test('is deterministic for a given seed', () {
       String dump(RenderScene s) => flatten(s.nodes)
           .whereType<SceneShape>()

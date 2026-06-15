@@ -32,6 +32,8 @@ RenderScene roughenScene(RenderScene scene, {int seed = 0}) {
 SceneNode _roughenNode(SceneNode node, int seed) {
   switch (node) {
     case SceneGroup(:final children, :final id, :final semanticLabel):
+      // Math expressions stay crisp — sketching glyph outlines is illegible.
+      if (id == mathSceneGroupId) return node;
       return SceneGroup(
         id: id,
         semanticLabel: semanticLabel,
