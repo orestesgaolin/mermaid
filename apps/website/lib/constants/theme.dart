@@ -1,27 +1,12 @@
 import 'package:jaspr/dom.dart';
 
-// As your CSS styles are defined using just Dart, you can simply
-// use global variables or methods for common things like colors.
-const primaryColor = Color('#01589B');
+/// The site accent — purple, the mermaid dart brand colour. (The sibling katex
+/// comparison site shares this layout but uses a blue accent.)
+const primaryColor = Color('#4a3a8a');
 
-// Defines the global CSS styles for this project.
-//
-// By using the @css annotation, these will be rendered automatically to CSS and included in your page.
+// Base document styling (font + reset) lives in `main.server.dart` so it sits
+// in the shared `<head>` alongside the Inter import; component-level styles are
+// defined next to each component via `@css`. This global rule-set is kept (and
+// referenced by the generated server options) but intentionally empty.
 @css
-List<StyleRule> get styles => [
-  // Special import rule to include to another css file.
-  css.import('https://fonts.googleapis.com/css?family=Roboto'),
-  // Each style rule takes a valid css selector and a set of styles.
-  // Styles are defined using type-safe css bindings and can be freely chained and nested.
-  css('html, body').styles(
-    width: 100.percent,
-    minHeight: 100.vh,
-    padding: .zero,
-    margin: .zero,
-    fontFamily: const .list([FontFamily('Roboto'), FontFamilies.sansSerif]),
-  ),
-  css('h1').styles(
-    margin: .unset,
-    fontSize: 4.rem,
-  ),
-];
+List<StyleRule> get styles => [];

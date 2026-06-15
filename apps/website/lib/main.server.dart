@@ -33,8 +33,8 @@ void main() {
       script(src: 'embed_bridge.js', attributes: {'type': 'module'}),
     ],
     styles: [
-      // Special import rule to include to another css file.
-      css.import('https://fonts.googleapis.com/css?family=Inter:400,600'),
+      // Shared site font with the sibling katex comparison site (Inter).
+      css.import('https://fonts.googleapis.com/css?family=Inter:400,500,600,700'),
       // Each style rule takes a valid css selector and a set of styles.
       // Styles are defined using type-safe css bindings and can be freely chained and nested.
       css('html, body').styles(
@@ -42,9 +42,9 @@ void main() {
         minHeight: 100.vh,
         padding: .zero,
         margin: .zero,
+        color: const Color('#1a1a1a'),
         fontFamily: const .list([FontFamily('Inter'), FontFamilies.sansSerif]),
       ),
-
     ],
     body: App(),
   ));

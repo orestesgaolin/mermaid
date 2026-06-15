@@ -20,18 +20,23 @@ class App extends StatelessComponent {
           margin: .symmetric(horizontal: .auto),
           padding: .all(24.px),
         ),
-        css('.hero-top').styles(
+        css('.site-header').styles(
+          margin: .only(bottom: 24.px),
+        ),
+        // Title row: heading on the left, GitHub pill on the right.
+        css('.header-top').styles(
           display: .flex,
           alignItems: .baseline,
           justifyContent: .spaceBetween,
           flexWrap: .wrap,
           gap: .all(12.px),
         ),
-        css('.hero h1').styles(
-          fontSize: 2.6.rem,
+        css('.site-header h1').styles(
+          fontSize: 2.4.rem,
           margin: .only(bottom: 4.px),
           color: const Color('#4a3a8a'),
         ),
+        // GitHub pill in the header (shared shape with the katex site).
         css('.gh-link').styles(
           padding: .symmetric(vertical: 6.px, horizontal: 14.px),
           radius: .circular(16.px),
@@ -41,6 +46,7 @@ class App extends StatelessComponent {
           color: const Color('#4a3a8a'),
           fontSize: 0.95.rem,
           fontWeight: .w600,
+          whiteSpace: .noWrap,
           textDecoration: const TextDecoration(line: TextDecorationLine.none),
         ),
         css('.gh-link:hover').styles(
@@ -70,9 +76,38 @@ class App extends StatelessComponent {
           fontSize: 0.85.rem,
           color: const Color('#999'),
         ),
-        css('.tagline').styles(
+        css('.subtitle').styles(
           color: const Color('#555566'),
-          margin: .only(top: .zero, bottom: 24.px),
+          fontSize: 1.05.rem,
+          margin: .only(top: 4.px, bottom: .zero),
+        ),
+        // Explanation / "what is this" section at the top (shared shape with
+        // the katex site).
+        css('.intro').styles(
+          maxWidth: 880.px,
+          margin: .only(bottom: 24.px),
+        ),
+        css('.intro p').styles(
+          margin: .only(bottom: 10.px),
+          color: const Color('#444'),
+          fontSize: 1.rem,
+          lineHeight: 1.6.em,
+        ),
+        css('.intro a').styles(color: const Color('#4a3a8a')),
+        css('.intro .intro-links').styles(margin: .only(top: 8.px)),
+        // Primary call-to-action button (accent-filled).
+        css('.intro .intro-links a').styles(
+          display: .inlineBlock,
+          padding: .symmetric(vertical: 8.px, horizontal: 16.px),
+          radius: .circular(8.px),
+          color: Colors.white,
+          backgroundColor: const Color('#4a3a8a'),
+          fontSize: 0.95.rem,
+          fontWeight: .w600,
+          textDecoration: const TextDecoration(line: TextDecorationLine.none),
+        ),
+        css('.intro .intro-links a:hover').styles(
+          backgroundColor: const Color('#382c69'),
         ),
         css('.cat-label').styles(
           textTransform: .upperCase,
@@ -230,7 +265,11 @@ class App extends StatelessComponent {
           raw: {'z-index': '2001'},
         ),
         css('.foot').styles(
-          margin: .only(top: 24.px),
+          margin: .only(top: 32.px),
+          padding: .only(top: 16.px),
+          border: .only(
+            top: BorderSide(color: const Color('#e2e2e2'), width: 1.px),
+          ),
           color: const Color('#777788'),
           fontSize: 0.9.rem,
         ),
