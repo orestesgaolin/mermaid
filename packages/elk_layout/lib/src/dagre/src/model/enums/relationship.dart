@@ -1,0 +1,4 @@
+enum Relationship{
+  inEdges,
+  outEdges
+}

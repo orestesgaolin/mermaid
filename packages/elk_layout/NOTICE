@@ -1,0 +1,21 @@
+elk_layout
+==========
+
+This package is licensed under the MIT License (see LICENSE).
+
+------------------------------------------------------------------------------
+Bundled third-party code
+------------------------------------------------------------------------------
+
+lib/src/dagre/ contains a vendored copy of dart_dagre 1.0.0
+(https://pub.dev/packages/dart_dagre), a Dart port of dagre.js
+(https://github.com/dagrejs/dagre). This code is licensed under the
+Apache License, Version 2.0; the full license text is in
+lib/src/dagre/LICENSE.
+
+It provides the generic layered-graph primitives (cycle breaking, ranking,
+crossing minimization, Brandes–Köpf coordinate assignment, dummy-node
+normalization, and compound/cluster handling) on top of which the ELK-style
+orchestration, spacing model, and orthogonal edge routing in this package are
+built. Local modifications (pure-Dart geometry types, import paths) are noted
+in the source headers.
