@@ -75,6 +75,50 @@ void main() {
             reason: engine);
       }
     });
+
+    test('tidy-tree fans antiparallel edges to opposite sides (P15)', () {
+      final scene = layoutFlowchart(
+        parseFlowchart('graph TD\n  A-->B{Q}\n  B-->D[Debug]\n  D-->B'),
+        measurer: measurer,
+        theme: theme,
+        engine: 'tidy-tree',
+      );
+      // Centroid of an edge group's path (its bow direction).
+      Point centroid(String idPrefix) {
+        final group = _flat(scene.nodes).whereType<SceneGroup>().firstWhere(
+            (g) => (g.id ?? '').startsWith(idPrefix));
+        final geo = group.children.whereType<SceneShape>().first.geometry
+            as PathGeometry;
+        final pts = <Point>[];
+        for (final c in geo.commands) {
+          switch (c) {
+            case MoveTo():
+              pts.add(c.p);
+            case LineTo():
+              pts.add(c.p);
+            case CubicTo():
+              pts..add(c.c1)..add(c.c2)..add(c.p);
+            case QuadTo():
+              pts..add(c.c)..add(c.p);
+            case ClosePath():
+              break;
+          }
+        }
+        var sx = 0.0, sy = 0.0;
+        for (final p in pts) {
+          sx += p.x;
+          sy += p.y;
+        }
+        return Point(sx / pts.length, sy / pts.length);
+      }
+
+      final bd = centroid('edge_B_D');
+      final db = centroid('edge_D_B');
+      // The two curves bow to opposite sides — their centroids are well apart
+      // (the bug routed both on the same line → near-identical centroids).
+      final dx = bd.x - db.x, dy = bd.y - db.y;
+      expect(dx * dx + dy * dy, greaterThan(15 * 15));
+    });
   });
 }
 

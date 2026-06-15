@@ -602,11 +602,22 @@ _Fragment _layoutGraph(
         final pos = group.indexOf(i);
         final spread = pos - (group.length - 1) / 2.0;
         if (spread != 0) {
-          final dir = _direction(source.center, target.center);
+          // Use ONE canonical perpendicular for the whole pair (from the
+          // group's first edge), not each edge's own source→target direction.
+          // For antiparallel edges (B→D and D→B) the per-edge perpendicular
+          // flips with the direction and cancels the spread sign — bending
+          // both to the same side and overlapping them. A shared axis fans
+          // them to opposite sides.
+          final ref = graph.edges[group.first];
+          final refFrom = placed[resolveEndpoint(ref.from).$1]?.center;
+          final refTo = placed[resolveEndpoint(ref.to).$1]?.center;
+          final dir = (refFrom != null && refTo != null)
+              ? _direction(refFrom, refTo)
+              : _direction(source.center, target.center);
           final perp = Point(-dir.y, dir.x);
           final mid = Point((source.center.x + target.center.x) / 2,
               (source.center.y + target.center.y) / 2);
-          points = [source.center, mid + perp * (spread * 24.0), target.center];
+          points = [source.center, mid + perp * (spread * 28.0), target.center];
         }
       }
     }

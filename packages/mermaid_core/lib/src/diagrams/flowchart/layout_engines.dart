@@ -71,8 +71,13 @@ Map<String, Point> tidyTreeLayout(
   // each parent centers over its children (a tidy, non-overlapping tree).
   var cursorAlongSibling = 0.0;
   final placed = <String, Point>{};
+  // Guards against cyclic wiring (e.g. a 2-node cycle with no acyclic entry,
+  // where seen-tracking can still make A and B each other's child) recursing
+  // forever — a node is positioned once.
+  final visited = <_TreeNode>{};
   // Track the running depth (level) position.
   void assign(_TreeNode n, double depthPx, double offset) {
+    if (!visited.add(n)) return;
     n.depth = depthPx;
     if (n.children.isEmpty) {
       n.x = cursorAlongSibling + sibSize(n) / 2;
