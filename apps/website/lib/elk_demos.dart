@@ -149,7 +149,9 @@ String _renderSvg(ElkResult r, Map<String, String> labels) {
             'stroke="$_clusterStroke" stroke-dasharray="4 3"/>');
         final label = labels[n.id];
         if (label != null) {
-          b.writeln('<text x="${_n(ax + 8)}" y="${_n(ay + 16)}" '
+          // Draw the label just above the cluster box so it never overlaps the
+          // child nodes inside.
+          b.writeln('<text x="${_n(ax + 2)}" y="${_n(ay - 5)}" '
               'class="cluster-label">${_esc(label)}</text>');
         }
         drawClusters(n.children, ax, ay);

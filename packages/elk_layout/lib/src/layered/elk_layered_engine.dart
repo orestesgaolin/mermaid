@@ -730,8 +730,10 @@ class _Engine {
         if (link.dummy.graph != nested) continue;
         // The dummy's connection point (its inward port anchor) in nested space,
         // mapped into the cluster's own frame (content origin → +padding).
-        final dummyCrossY =
-            link.dummy.position.y + link.dummy.ports.first.anchor.y;
+        // The dummy's port can be absent if a processor removed it; fall back to
+        // the dummy's own position rather than throwing.
+        final dPort = link.dummy.ports.isEmpty ? null : link.dummy.ports.first;
+        final dummyCrossY = link.dummy.position.y + (dPort?.anchor.y ?? 0);
         link.port.position
           ..x = link.east ? ln.size.x : 0
           ..y = (dummyCrossY - nOy) + _compoundPadding;

@@ -661,11 +661,20 @@ _Fragment _layoutGraph(
           _dropInsideRect(points, clusterRects[clusterFrom]!, fromEnd: false);
     }
     // Clip ends to the actual shape boundary (dagre only clips to the
-    // bounding rect).
-    points[0] = source.shape
-        .intersect(source.center, points.length > 1 ? points[1] : target.center);
-    points[points.length - 1] = target.shape.intersect(
-        target.center, points.length > 1 ? points[points.length - 2] : source.center);
+    // bounding rect). For elk's orthogonal routes, clip *along the segment's
+    // own axis* so the attach stays perpendicular (a centre-based clip lands on
+    // a diamond's slanted edge and bends the segment); dagre's curved edges
+    // keep the centre-based clip.
+    final next0 = points.length > 1 ? points[1] : target.center;
+    final prevN =
+        points.length > 1 ? points[points.length - 2] : source.center;
+    points[0] = useElk
+        ? _clipPerpendicular(source.shape, source.center, points[0], next0)
+        : source.shape.intersect(source.center, next0);
+    points[points.length - 1] = useElk
+        ? _clipPerpendicular(
+            target.shape, target.center, points[points.length - 1], prevN)
+        : target.shape.intersect(target.center, prevN);
 
     final children = <SceneNode>[];
 
@@ -787,11 +796,12 @@ SceneGroup _edgeLabelGroup(
     id: 'edgelabel_${e.from}_${e.to}_$index',
     children: [
       SceneShape(
-        // styles.ts `.edgeLabel rect { opacity: 0.5 }` — CSS opacity multiplies
-        // the fill's existing alpha, so halve the resolved alpha here.
+        // Solid background: ELK routes the edge straight through the label, so a
+        // translucent box (upstream's `.edgeLabel rect { opacity: 0.5 }`) lets
+        // the line bleed through and the text becomes unreadable. Force the
+        // label background fully opaque so it always reads cleanly.
         geometry: RectGeometry(bg, rx: 2, ry: 2),
-        fill: Fill(theme.edgeLabelBackground
-            .withOpacity(theme.edgeLabelBackground.alpha / 255 * 0.5)),
+        fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
       ),
       if (math != null)
         ...math.render(Point(
@@ -1029,6 +1039,19 @@ class _PlacedNode {
   final MathLayout? math;
   final _Shape shape;
   Point center = Point.zero;
+}
+
+/// Clips an orthogonal (ELK) edge end to [shape] while keeping the last segment
+/// perpendicular. Instead of probing from the node centre toward [next] (which,
+/// for a diamond, lands on a slanted edge and bends the segment), probe along
+/// the segment's own axis: same x for a vertical segment, same y for a
+/// horizontal one. [end] is ELK's boundary point; [next] is the adjacent bend.
+Point _clipPerpendicular(_Shape shape, Point center, Point end, Point next) {
+  final dx = (next.x - end.x).abs();
+  final dy = (next.y - end.y).abs();
+  final probe =
+      dx <= dy ? Point(next.x, center.y) : Point(center.x, next.y);
+  return shape.intersect(probe, next);
 }
 
 /// A sized node shape: provides the dagre box, the scene geometry and the

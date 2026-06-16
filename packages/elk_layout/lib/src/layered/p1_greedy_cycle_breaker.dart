@@ -63,16 +63,20 @@ class GreedyCycleBreaker implements ILayoutProcessor {
         unprocessed--;
       }
       if (unprocessed > 0) {
-        var maxOutflow = -1 << 31;
+        // Track the unmarked node(s) with the greatest out-flow. Use an
+        // empty-first check rather than a `-1 << 31` sentinel: on Dart web
+        // (32-bit shifts) `-1 << 31` does not yield a large-negative value, so
+        // the comparison would reject every node and leave maxNodes empty.
+        var maxOutflow = 0;
         final maxNodes = <LNode>[];
         for (final node in nodes) {
           if (_mark[node.id] == 0) {
             final outflow = _outdeg[node.id] - _indeg[node.id];
-            if (outflow >= maxOutflow) {
-              if (outflow > maxOutflow) {
-                maxNodes.clear();
-                maxOutflow = outflow;
-              }
+            if (maxNodes.isEmpty || outflow > maxOutflow) {
+              maxNodes.clear();
+              maxOutflow = outflow;
+              maxNodes.add(node);
+            } else if (outflow == maxOutflow) {
               maxNodes.add(node);
             }
           }

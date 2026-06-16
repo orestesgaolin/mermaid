@@ -222,7 +222,31 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
       return ranks.reduce((a, b) => a + b) / ranks.length;
     }
 
-    ports.sort((a, b) => neighbourRank(a).compareTo(neighbourRank(b)));
+    // Secondary key for ports tied on neighbour node (e.g. two antiparallel
+    // edges B→D and D→B both connect this node to the same neighbour): order
+    // by where each edge attaches on the *other* node, so the two ends stay in
+    // the same vertical order and the edges don't cross at this node. The
+    // neighbour's ports are already placed when its layer precedes this one;
+    // otherwise this reads 0 and the tie falls back to stable order.
+    double connectedPortRank(LPort p) {
+      final ys = <double>[];
+      for (final e in p.incomingEdges) {
+        final o = e.source;
+        if (o != null) ys.add(o.absoluteAnchor.y);
+      }
+      for (final e in p.outgoingEdges) {
+        final o = e.target;
+        if (o != null) ys.add(o.absoluteAnchor.y);
+      }
+      if (ys.isEmpty) return double.maxFinite;
+      return ys.reduce((a, b) => a + b) / ys.length;
+    }
+
+    ports.sort((a, b) {
+      final byNode = neighbourRank(a).compareTo(neighbourRank(b));
+      if (byNode != 0) return byNode;
+      return connectedPortRank(a).compareTo(connectedPortRank(b));
+    });
 
     final nodeWidth = node.size.x;
     final nodeHeight = node.size.y;
