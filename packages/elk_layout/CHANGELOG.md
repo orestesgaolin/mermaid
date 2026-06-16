@@ -1,6 +1,12 @@
 ## 0.1.0
 
 - Initial release.
+- **Ports**: `ElkPort.side` / `ElkPortSide`; edges may reference port ids and
+  attach at computed border points (`ElkPositionedNode.ports`).
+- **elkjs JSON ingestion**: `ElkGraph.fromJson` (and `fromJson` on nodes/edges/
+  ports/labels) parse the elkjs graph JSON shape.
+- **Validation harness** (`tool/validation/`) comparing structural agreement
+  against real elkjs.
 - ELK-style **layered** layout: cycle breaking, network-simplex layering,
   crossing minimization, Brandes–Köpf coordinate assignment.
 - **Orthogonal edge routing** with computed bend points and parallel-edge

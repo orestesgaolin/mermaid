@@ -1,0 +1,11 @@
+# Validation harness artifacts — the scripts, graphs.json, and the committed
+# elkjs golden (used by test/elk_vs_elkjs_test.dart) ship; installed deps and
+# generated SVGs do not.
+tool/validation/node_modules/
+tool/validation/package-lock.json
+tool/validation/output/
+
+# Comparison artifacts at the package root (dev only): a generated SVG and the
+# eclipse-elk reference image (EPL-licensed — must not ship in this MIT package).
+output.svg
+example_layout_complexRouter.svg

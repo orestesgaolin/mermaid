@@ -1,0 +1,109 @@
+<svg viewBox="0 0 1155.0 364.0" xmlns="http://www.w3.org/2000/svg" style="background:white" font-family="Inter,sans-serif">
+<g transform="translate(16.0,16.0)">
+<rect x="236.0" y="0.0" width="671.0" height="332.0" rx="4" fill="#dfe3f7" stroke="#9aa3d8"/>
+<text x="238.0" y="-4.0" font-size="12" fill="#3a3a6a">router</text>
+<rect x="430.0" y="226.0" width="94.0" height="64.0" rx="4" fill="#dfe3f7" stroke="#9aa3d8"/>
+<text x="432.0" y="222.0" font-size="12" fill="#3a3a6a">Interface - fast</text>
+<rect x="544.0" y="186.0" width="351.0" height="69.0" rx="4" fill="#dfe3f7" stroke="#9aa3d8"/>
+<text x="546.0" y="182.0" font-size="12" fill="#3a3a6a">channel1</text>
+<rect x="430.0" y="72.0" width="94.0" height="64.0" rx="4" fill="#dfe3f7" stroke="#9aa3d8"/>
+<text x="432.0" y="68.0" font-size="12" fill="#3a3a6a">Interface - slow</text>
+<rect x="544.0" y="32.0" width="351.0" height="69.0" rx="4" fill="#dfe3f7" stroke="#9aa3d8"/>
+<text x="546.0" y="28.0" font-size="12" fill="#3a3a6a">channel2</text>
+<rect x="0.0" y="42.0" width="126.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="63.0" y="66.0" font-size="12" text-anchor="middle" fill="#22224a">DatagramReader</text>
+<rect x="123.0" y="59.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="146.0" y="42.0" width="70.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="181.0" y="66.0" font-size="12" text-anchor="middle" fill="#22224a">Ramp</text>
+<rect x="143.0" y="59.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="213.0" y="59.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="248.0" y="42.0" width="112.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="304.0" y="66.0" font-size="12" text-anchor="middle" fill="#22224a">QueueControl</text>
+<rect x="245.0" y="59.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="357.0" y="89.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="357.0" y="59.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="357.0" y="29.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="357.0" y="69.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="357.0" y="79.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="357.0" y="49.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="357.0" y="39.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="430.0" y="12.0" width="77.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="468.5" y="36.0" font-size="12" text-anchor="middle" fill="#22224a">Display</text>
+<rect x="427.0" y="29.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="442.0" y="238.0" width="70.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="477.0" y="262.0" font-size="12" text-anchor="middle" fill="#22224a">Sleep</text>
+<rect x="439.0" y="255.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="509.0" y="255.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="509.0" y="265.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="509.0" y="245.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="556.0" y="198.0" width="77.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="594.5" y="222.0" font-size="12" text-anchor="middle" fill="#22224a">Counter</text>
+<rect x="553.0" y="215.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="630.0" y="215.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="653.0" y="203.0" width="133.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="719.5" y="227.0" font-size="12" text-anchor="middle" fill="#22224a">RecordAssembler</text>
+<rect x="650.0" y="215.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="650.0" y="225.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="783.0" y="220.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="806.0" y="203.0" width="77.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="844.5" y="227.0" font-size="12" text-anchor="middle" fill="#22224a">Display</text>
+<rect x="803.0" y="220.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="603.75" y="280.0" width="112.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="659.75" y="304.0" font-size="12" text-anchor="middle" fill="#22224a">Counter - q1</text>
+<rect x="600.75" y="297.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="600.75" y="287.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="712.75" y="297.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="600.75" y="307.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="603.75" y="126.0" width="112.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="659.75" y="150.0" font-size="12" text-anchor="middle" fill="#22224a">Counter - q2</text>
+<rect x="600.75" y="143.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="600.75" y="133.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="712.75" y="143.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="600.75" y="153.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="442.0" y="84.0" width="70.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="477.0" y="108.0" font-size="12" text-anchor="middle" fill="#22224a">Sleep</text>
+<rect x="439.0" y="101.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="509.0" y="101.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="509.0" y="111.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="509.0" y="91.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="556.0" y="44.0" width="77.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="594.5" y="68.0" font-size="12" text-anchor="middle" fill="#22224a">Counter</text>
+<rect x="553.0" y="61.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="630.0" y="61.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="653.0" y="49.0" width="133.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="719.5" y="73.0" font-size="12" text-anchor="middle" fill="#22224a">RecordAssembler</text>
+<rect x="650.0" y="61.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="650.0" y="71.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="783.0" y="66.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="806.0" y="49.0" width="77.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="844.5" y="73.0" font-size="12" text-anchor="middle" fill="#22224a">Display</text>
+<rect x="803.0" y="66.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="927.0" y="66.0" width="196.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="1025.0" y="90.0" font-size="12" text-anchor="middle" fill="#22224a">MonitorValue - q1 length</text>
+<rect x="924.0" y="83.0" width="6" height="6" fill="#5b63b0"/>
+<rect x="927.0" y="126.0" width="196.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="1025.0" y="150.0" font-size="12" text-anchor="middle" fill="#22224a">MonitorValue - q2 length</text>
+<rect x="924.0" y="143.0" width="6" height="6" fill="#5b63b0"/>
+<polyline points="633.0,218.0 653.0,218.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="786.0,223.0 806.0,223.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="633.0,64.0 653.0,64.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="786.0,69.0 806.0,69.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="360.0,32.0 430.0,32.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="360.0,82.0 380.0,82.0 380.0,300.0 603.75,300.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="360.0,52.0 410.0,52.0 410.0,146.0 603.75,146.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="603.75,310.0 370.0,310.0 370.0,92.0 360.0,92.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="603.75,156.0 400.0,156.0 400.0,62.0 360.0,62.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="126.0,62.0 146.0,62.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="360.0,72.0 390.0,72.0 390.0,258.0 430.0,258.0 442.0,258.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="360.0,42.0 420.0,42.0 420.0,104.0 430.0,104.0 442.0,104.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="512.0,258.0 524.0,258.0 534.0,258.0 534.0,218.0 544.0,218.0 556.0,218.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="512.0,104.0 524.0,104.0 534.0,104.0 534.0,64.0 544.0,64.0 556.0,64.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="512.0,268.0 524.0,268.0 534.0,268.0 534.0,290.0 603.75,290.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="512.0,114.0 524.0,114.0 534.0,114.0 534.0,136.0 603.75,136.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="512.0,248.0 524.0,248.0 544.0,248.0 556.0,248.0 643.0,248.0 643.0,228.0 653.0,228.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="512.0,94.0 524.0,94.0 544.0,94.0 556.0,94.0 643.0,94.0 643.0,74.0 653.0,74.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="216.0,62.0 236.0,62.0 248.0,62.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="715.75,300.0 895.0,300.0 907.0,300.0 917.0,300.0 917.0,86.0 927.0,86.0" fill="none" stroke="#444" stroke-width="1.4"/>
+<polyline points="715.75,146.0 895.0,146.0 907.0,146.0 927.0,146.0" fill="none" stroke="#444" stroke-width="1.4"/>
+</g></svg>
+

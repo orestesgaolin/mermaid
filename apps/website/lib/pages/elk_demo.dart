@@ -4,6 +4,7 @@ import 'package:jaspr/jaspr.dart';
 import '../components/elk_flutter_view.dart';
 import '../components/site_nav.dart';
 import '../elk_demos.dart';
+import '../generated/elk_readme.g.dart';
 
 /// The essence of the embedded Flutter demo, shown beside the live canvas.
 const _flutterSnippet = '''// elk_layout is pure Dart, so it runs in Flutter.
@@ -97,83 +98,10 @@ class ElkDemoPage extends StatelessComponent {
         div(classes: 'elk-canvas-pane', [const ElkFlutterView()]),
         pre(classes: 'elk-code elk-code-side', [.text(_flutterSnippet)]),
       ]),
-      section(classes: 'intro', [
-        h2([.text('Why this port matters')]),
-        p([
-          .text('The '),
-          a(
-            [.text('Eclipse Layout Kernel')],
-            href: 'https://eclipse.dev/elk/',
-            target: .blank,
-            attributes: const {'rel': 'noopener noreferrer'},
-          ),
-          .text(' (ELK) has the best open-source layered graph layout, but it '
-              'ships as Java and as '),
-          a(
-            [.text('elkjs')],
-            href: 'https://github.com/kieler/elkjs',
-            target: .blank,
-            attributes: const {'rel': 'noopener noreferrer'},
-          ),
-          .text(' (GWT-compiled JavaScript, asynchronous). Neither runs in a '
-              'pure-Dart program: elkjs needs a JavaScript engine (so it can\'t '
-              'live in a Dart CLI, a Dart-native build, or Flutter web), and '
-              'there is no Java → Dart transpiler.'),
-        ]),
-        p([
-          strong([.text('elk_layout')]),
-          .text(' is a readable Dart implementation of the same '),
-          em([.text('layered')]),
-          .text(' algorithm family — cycle breaking, network-simplex layering, '
-              'crossing minimization, Brandes–Köpf placement — plus an '
-              'orthogonal edge router and compound/cluster support. It is '),
-          strong([.text('synchronous, dependency-free and runs everywhere Dart '
-              'runs')]),
-          .text(': the VM, AOT binaries, Flutter on mobile/desktop, and the '
-              'web.'),
-        ]),
-        h2([.text('What\'s different from the default')]),
-        ul([
-          li([
-            strong([.text('Orthogonal edges')]),
-            .text(' with computed bend points — the right-angle ELK look — '
-                'instead of smooth splines.'),
-          ]),
-          li([
-            strong([.text('ELK spacing model')]),
-            .text(' (a single spacing.baseValue drives node/edge/layer gaps), '
-                'so placement genuinely differs from dagre.'),
-          ]),
-          li([
-            strong([.text('Model-order')]),
-            .text(' crossing constraints to keep siblings in declaration order '
-                'when you ask for it.'),
-          ]),
-          li([
-            strong([.text('Compound graphs')]),
-            .text(': clusters are first-class, sized and positioned, with '
-                'children returned in parent-relative coordinates.'),
-          ]),
-        ]),
-        h2([.text('Using it elsewhere')]),
-        p([
-          .text('The API mirrors the elkjs graph JSON, so it\'s a near-drop-in '
-              'for anything that already speaks ELK:'),
-        ]),
-        pre(classes: 'elk-code', [
-          .text("final result = const ElkLayered().layout(ElkGraph(\n"
-              "  layoutOptions: ElkLayoutOptions(direction: ElkDirection.right),\n"
-              "  children: [ElkNode(id: 'a', width: 80, height: 40), /* … */],\n"
-              "  edges: [ElkEdge(id: 'e1', sources: ['a'], targets: ['b'])],\n"
-              "));"),
-        ]),
-        p([
-          .text('The horizontal example above is exactly the shape a '),
-          strong([.text('package dependency visualization')]),
-          .text(' needs — laying out a pub dependency graph (a pubviz-style '
-              'tool) is a natural next use for this engine.'),
-        ]),
-      ]),
+      // The canonical package documentation (options reference, examples,
+      // validation) rendered from packages/elk_layout/README.md. Regenerate
+      // with `dart run tool/gen_readme_html.dart`.
+      section(classes: 'intro elk-readme', [RawText(elkReadmeHtml)]),
       footer(classes: 'foot', [
         p([
           .text('Rendered from the elk_layout package · part of the '),
@@ -292,6 +220,65 @@ class ElkDemoPage extends StatelessComponent {
           height: 460.px,
           margin: .zero,
           boxSizing: .borderBox,
+        ),
+        // README rendered from markdown: headings, tables, code blocks.
+        css('.elk-readme h2').styles(
+          fontSize: 1.4.rem,
+          color: const Color('#4a3a8a'),
+          margin: .only(top: 28.px, bottom: 6.px),
+        ),
+        css('.elk-readme h3').styles(
+          fontSize: 1.1.rem,
+          color: const Color('#4a3a8a'),
+          margin: .only(top: 18.px, bottom: 4.px),
+        ),
+        css('.elk-readme code').styles(
+          backgroundColor: const Color('#f0edf9'),
+          padding: .symmetric(vertical: 1.px, horizontal: 5.px),
+          radius: .circular(4.px),
+          fontSize: 0.9.em,
+          fontFamily: .list([
+            FontFamily('ui-monospace'),
+            FontFamily('SFMono-Regular'),
+            FontFamily('Menlo'),
+            FontFamilies.monospace,
+          ]),
+        ),
+        css('.elk-readme pre').styles(
+          backgroundColor: const Color('#f6f4fc'),
+          padding: .all(14.px),
+          radius: .circular(8.px),
+          fontSize: 0.85.rem,
+          overflow: .auto,
+          border: .all(
+              style: BorderStyle.solid, color: const Color('#e3ddf5'), width: 1.px),
+        ),
+        css('.elk-readme pre code').styles(
+          backgroundColor: Colors.transparent,
+          padding: .zero,
+        ),
+        css('.elk-readme table').styles(
+          width: 100.percent,
+          margin: .only(top: 8.px, bottom: 12.px),
+          fontSize: 0.92.rem,
+          raw: {'border-collapse': 'collapse'},
+        ),
+        css('.elk-readme th, .elk-readme td').styles(
+          border: .all(
+              style: BorderStyle.solid, color: const Color('#e3ddf5'), width: 1.px),
+          padding: .symmetric(vertical: 6.px, horizontal: 10.px),
+          raw: {'text-align': 'left'},
+        ),
+        css('.elk-readme th').styles(
+          backgroundColor: const Color('#f6f4fc'),
+          color: const Color('#4a3a8a'),
+        ),
+        css('.elk-readme blockquote').styles(
+          margin: .only(top: 10.px, bottom: 10.px),
+          padding: .only(left: 14.px),
+          border: .only(
+              left: BorderSide(color: const Color('#c8bfe8'), width: 3.px)),
+          color: const Color('#555566'),
         ),
       ];
 }

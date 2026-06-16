@@ -85,6 +85,42 @@ class ElkLayoutOptions {
   double get resolvedNodeNodeBetweenLayers =>
       spacingNodeNodeBetweenLayers ?? spacingBaseValue;
 
+  /// Parses an elkjs-style `layoutOptions` map (keys like `elk.direction`,
+  /// `spacing.baseValue`, `elk.layered.nodePlacement.bk.fixedAlignment`).
+  /// Unknown keys are ignored; absent ones keep their defaults.
+  factory ElkLayoutOptions.fromElkJson(Map<String, dynamic> m) {
+    double? asNum(Object? v) =>
+        v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
+    bool asBool(Object? v) => v == true || v == 'true';
+    ElkDirection dir(Object? v) => switch ('$v'.toUpperCase()) {
+          'UP' => ElkDirection.up,
+          'LEFT' => ElkDirection.left,
+          'RIGHT' => ElkDirection.right,
+          _ => ElkDirection.down,
+        };
+    ElkFixedAlignment align(Object? v) => switch ('$v'.toUpperCase()) {
+          'LEFTUP' => ElkFixedAlignment.leftUp,
+          'LEFTDOWN' => ElkFixedAlignment.leftDown,
+          'RIGHTUP' => ElkFixedAlignment.rightUp,
+          'RIGHTDOWN' => ElkFixedAlignment.rightDown,
+          'BALANCED' => ElkFixedAlignment.balanced,
+          _ => ElkFixedAlignment.none,
+        };
+    return ElkLayoutOptions(
+      algorithm: (m['elk.algorithm'] ?? m['algorithm'] ?? 'layered').toString(),
+      direction: dir(m['elk.direction'] ?? m['direction']),
+      spacingBaseValue: asNum(m['spacing.baseValue']) ?? 40,
+      fixedAlignment:
+          align(m['elk.layered.nodePlacement.bk.fixedAlignment']),
+      mergeEdges: asBool(m['elk.layered.mergeEdges']),
+      forceNodeModelOrder:
+          asBool(m['elk.layered.crossingMinimization.forceNodeModelOrder']),
+      spacingNodeNode: asNum(m['spacing.nodeNode']),
+      spacingEdgeNode: asNum(m['spacing.edgeNode']),
+      spacingNodeNodeBetweenLayers: asNum(m['spacing.nodeNodeBetweenLayers']),
+    );
+  }
+
   ElkLayoutOptions copyWith({
     String? algorithm,
     ElkDirection? direction,

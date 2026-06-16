@@ -5,6 +5,8 @@ library;
 
 import 'dart:math' as math;
 
+import 'package:elk_layout/elk_layout.dart' as elk;
+
 import '../../color.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -13,6 +15,7 @@ import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 import '../../vendor/dagre/dart_dagre.dart' as dagre;
+import '../flowchart/elk_adapter.dart';
 import '../flowchart/flow_model.dart' show FlowDirection;
 import 'state_model.dart';
 
@@ -26,8 +29,12 @@ RenderScene layoutStateDiagram(
   StateDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  String engine = 'dagre',
+  elk.ElkLayoutOptions? elkOptions,
 }) {
-  return _StateLayout(diagram, measurer, theme).run();
+  return _StateLayout(diagram, measurer, theme, engine,
+          elkOptions ?? const elk.ElkLayoutOptions())
+      .run();
 }
 
 class _Placed {
@@ -43,7 +50,8 @@ class _Placed {
 }
 
 class _StateLayout {
-  _StateLayout(this.diagram, this.measurer, this.theme)
+  _StateLayout(this.diagram, this.measurer, this.theme, this.engine,
+      this.elkOptions)
       : baseStyle = TextStyleSpec(
           fontFamily: theme.fontFamily,
           fontSize: theme.fontSize,
@@ -52,7 +60,11 @@ class _StateLayout {
   final StateDiagram diagram;
   final TextMeasurer measurer;
   final MermaidTheme theme;
+  final String engine;
+  final elk.ElkLayoutOptions elkOptions;
   final TextStyleSpec baseStyle;
+
+  bool get useElk => engine == 'elk';
 
   final placed = <String, _Placed>{};
   final clusterRects = <String, Rect>{};
@@ -141,21 +153,34 @@ class _StateLayout {
       }
     }
 
-    final result = dagre.layout(
-      g,
-      dagre.DagreConfig(
-        rankDir: switch (diagram.direction) {
-          FlowDirection.tb => dagre.RankDir.ttb,
-          FlowDirection.bt => dagre.RankDir.btt,
-          FlowDirection.lr => dagre.RankDir.ltr,
-          FlowDirection.rl => dagre.RankDir.rtl,
-        },
-        nodeSep: _nodeSpacing,
-        rankSep: _rankSpacing,
-      ),
-    );
-    for (final p in [...placed.values, ...noteBoxes.values]) {
-      p.center = result.graph.nodeMap[p.node.id]!.position!.center;
+    // `elk` runs the standalone ELK layered engine (orthogonal routing,
+    // genuinely different placement); everything else uses dagre.
+    dagre.DagreResult? result;
+    ElkLayoutResult? elkResult;
+    if (useElk) {
+      elkResult = layoutWithElk(g,
+          direction: diagram.direction, options: elkOptions);
+      for (final p in [...placed.values, ...noteBoxes.values]) {
+        final c = elkResult.center(p.node.id);
+        if (c != null) p.center = c;
+      }
+    } else {
+      result = dagre.layout(
+        g,
+        dagre.DagreConfig(
+          rankDir: switch (diagram.direction) {
+            FlowDirection.tb => dagre.RankDir.ttb,
+            FlowDirection.bt => dagre.RankDir.btt,
+            FlowDirection.lr => dagre.RankDir.ltr,
+            FlowDirection.rl => dagre.RankDir.rtl,
+          },
+          nodeSep: _nodeSpacing,
+          rankSep: _rankSpacing,
+        ),
+      );
+      for (final p in [...placed.values, ...noteBoxes.values]) {
+        p.center = result.graph.nodeMap[p.node.id]!.position!.center;
+      }
     }
 
     // --- scene ------------------------------------------------------------------
@@ -326,9 +351,15 @@ class _StateLayout {
         continue;
       }
 
-      final dagreEdge = result.graph.findEdgeById('e$i')!;
-
-      var points = List<Point>.from(dagreEdge.points);
+      dagre.DagreEdge? dagreEdge;
+      List<Point> points;
+      if (useElk) {
+        points = elkResult!.edgePoints('e$i') ??
+            [placed[fromId]!.center, placed[toId]!.center];
+      } else {
+        dagreEdge = result!.graph.findEdgeById('e$i')!;
+        points = List<Point>.from(dagreEdge.points);
+      }
       if (points.length < 2) {
         points = [placed[fromId]!.center, placed[toId]!.center];
       }
@@ -356,7 +387,8 @@ class _StateLayout {
         semanticLabel: t.label,
         children: [
           SceneShape(
-            geometry: PathGeometry(_curveBasis(points)),
+            geometry:
+                PathGeometry(useElk ? _linearPath(points) : _curveBasis(points)),
             stroke: Stroke(color: theme.lineColor, width: 1),
           ),
           SceneShape(
@@ -372,8 +404,8 @@ class _StateLayout {
 
       final labelSize = labelSizes[i];
       if (labelSize != null) {
-        final c = (dagreEdge.labelX != null && dagreEdge.labelY != null)
-            ? Point(dagreEdge.labelX!, dagreEdge.labelY!)
+        final c = (dagreEdge?.labelX != null && dagreEdge?.labelY != null)
+            ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
             : points[points.length ~/ 2];
         labelNodes.add(SceneGroup(id: 'translabel_$i', children: [
           SceneShape(
@@ -591,6 +623,16 @@ Point _intersectRect(Rect rect, Point outside) {
     sy = dy * sx / dx;
   }
   return Point(c.x + sx, c.y + sy);
+}
+
+/// Straight polyline through [pts] — used for elk's orthogonal edge routes
+/// (the points are already axis-aligned, so no smoothing is applied).
+List<PathCommand> _linearPath(List<Point> pts) {
+  if (pts.isEmpty) return const [];
+  return [
+    MoveTo(pts.first),
+    for (var i = 1; i < pts.length; i++) LineTo(pts[i]),
+  ];
 }
 
 List<Point> _dropInsideRect(List<Point> pts, Rect rect,

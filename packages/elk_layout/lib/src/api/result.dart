@@ -47,6 +47,23 @@ class ElkPositionedLabel {
   final double height;
 }
 
+/// A port after layout. [x]/[y] are the top-left corner relative to the owning
+/// node's origin (so the port's absolute position is the node's plus this).
+class ElkPositionedPort {
+  const ElkPositionedPort({
+    required this.id,
+    required this.x,
+    required this.y,
+    this.width = 0,
+    this.height = 0,
+  });
+  final String id;
+  final double x;
+  final double y;
+  final double width;
+  final double height;
+}
+
 /// A node after layout. [x]/[y] are the top-left corner **relative to the
 /// parent node's content origin** (elkjs convention); [children] are nested.
 class ElkPositionedNode {
@@ -58,6 +75,7 @@ class ElkPositionedNode {
     required this.height,
     this.children = const [],
     this.labels = const [],
+    this.ports = const [],
   });
 
   final String id;
@@ -67,6 +85,7 @@ class ElkPositionedNode {
   final double height;
   final List<ElkPositionedNode> children;
   final List<ElkPositionedLabel> labels;
+  final List<ElkPositionedPort> ports;
 }
 
 /// An edge after layout.
@@ -112,6 +131,7 @@ class ElkResult {
           height: n.height,
           children: n.children,
           labels: n.labels,
+          ports: n.ports,
         );
         if (n.children.isNotEmpty) walk(n.children, ax, ay);
       }

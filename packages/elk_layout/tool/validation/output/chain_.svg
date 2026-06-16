@@ -1,0 +1,26 @@
+<svg viewBox="0 0 288.0 296.0" xmlns="http://www.w3.org/2000/svg" style="background:white" font-family="Inter,sans-serif">
+<text x="24.0" y="18" font-size="14" font-weight="600" fill="#4a3a8a">elk_layout (ours)</text>
+<text x="184.0" y="18" font-size="14" font-weight="600" fill="#888">elkjs 0.9.3</text>
+<rect x="24.0" y="28.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="64.0" y="52.0" font-size="11" text-anchor="middle" fill="#22224a">a</text>
+<rect x="24.0" y="88.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="64.0" y="112.0" font-size="11" text-anchor="middle" fill="#22224a">b</text>
+<rect x="24.0" y="148.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="64.0" y="172.0" font-size="11" text-anchor="middle" fill="#22224a">c</text>
+<rect x="24.0" y="208.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="64.0" y="232.0" font-size="11" text-anchor="middle" fill="#22224a">d</text>
+<polyline points="64.0,68.0 64.0,88.0" fill="none" stroke="#444" stroke-width="1.3"/>
+<polyline points="64.0,128.0 64.0,148.0" fill="none" stroke="#444" stroke-width="1.3"/>
+<polyline points="64.0,188.0 64.0,208.0" fill="none" stroke="#444" stroke-width="1.3"/>
+<rect x="184.0" y="28.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="224.0" y="52.0" font-size="11" text-anchor="middle" fill="#22224a">a</text>
+<rect x="184.0" y="88.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="224.0" y="112.0" font-size="11" text-anchor="middle" fill="#22224a">b</text>
+<rect x="184.0" y="148.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="224.0" y="172.0" font-size="11" text-anchor="middle" fill="#22224a">c</text>
+<rect x="184.0" y="208.0" width="80.0" height="40.0" rx="3" fill="#c9cef0" stroke="#5b63b0"/>
+<text x="224.0" y="232.0" font-size="11" text-anchor="middle" fill="#22224a">d</text>
+<polyline points="224.0,68.0 224.0,88.0" fill="none" stroke="#444" stroke-width="1.3"/>
+<polyline points="224.0,128.0 224.0,148.0" fill="none" stroke="#444" stroke-width="1.3"/>
+<polyline points="224.0,188.0 224.0,208.0" fill="none" stroke="#444" stroke-width="1.3"/>
+</svg>

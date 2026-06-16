@@ -142,8 +142,11 @@ void main() {
       expect(dx * dx + dy * dy, greaterThan(15 * 15));
     });
 
-    test('elk lays out subgraphs (no longer falls back to dagre)', () {
-      // Previously elk was gated on `sgs.isEmpty`; now it lays clusters out.
+    test('elk lays out subgraphs via the faithful port (recursive hierarchy)',
+        () {
+      // The faithful ELK port now supports hierarchy (recursive
+      // SEPARATE_CHILDREN), so an elk flowchart with a cluster lays out — the
+      // cluster group is present and edges are orthogonal (no curves).
       final src = '''
 flowchart TB
   A-->B
@@ -155,7 +158,6 @@ flowchart TB
   D-->E''';
       final scene = layoutFlowchart(parseFlowchart(src),
           measurer: measurer, theme: theme, engine: 'elk');
-      // The cluster group is present and edges are orthogonal under elk.
       final groups = _flat(scene.nodes).whereType<SceneGroup>();
       expect(groups.any((g) => g.id == 'S1'), isTrue,
           reason: 'cluster S1 should be laid out under elk');

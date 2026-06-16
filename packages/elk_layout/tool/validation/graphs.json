@@ -1,0 +1,173 @@
+[
+  {
+    "name": "chain (DOWN)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "DOWN" },
+      "children": [
+        { "id": "a", "width": 80, "height": 40 },
+        { "id": "b", "width": 80, "height": 40 },
+        { "id": "c", "width": 80, "height": 40 },
+        { "id": "d", "width": 80, "height": 40 }
+      ],
+      "edges": [
+        { "id": "e1", "sources": ["a"], "targets": ["b"] },
+        { "id": "e2", "sources": ["b"], "targets": ["c"] },
+        { "id": "e3", "sources": ["c"], "targets": ["d"] }
+      ]
+    }
+  },
+  {
+    "name": "branch & merge (DOWN)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "DOWN" },
+      "children": [
+        { "id": "a", "width": 90, "height": 40 },
+        { "id": "b", "width": 90, "height": 40 },
+        { "id": "c", "width": 90, "height": 40 },
+        { "id": "d", "width": 90, "height": 40 },
+        { "id": "e", "width": 90, "height": 40 }
+      ],
+      "edges": [
+        { "id": "e1", "sources": ["a"], "targets": ["b"] },
+        { "id": "e2", "sources": ["a"], "targets": ["c"] },
+        { "id": "e3", "sources": ["b"], "targets": ["d"] },
+        { "id": "e4", "sources": ["c"], "targets": ["d"] },
+        { "id": "e5", "sources": ["d"], "targets": ["e"] }
+      ]
+    }
+  },
+  {
+    "name": "dependency graph (RIGHT)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "RIGHT" },
+      "children": [
+        { "id": "app", "width": 110, "height": 40 },
+        { "id": "ui", "width": 110, "height": 40 },
+        { "id": "core", "width": 110, "height": 40 },
+        { "id": "elk", "width": 110, "height": 40 },
+        { "id": "http", "width": 110, "height": 40 },
+        { "id": "meta", "width": 110, "height": 40 }
+      ],
+      "edges": [
+        { "id": "e1", "sources": ["app"], "targets": ["ui"] },
+        { "id": "e2", "sources": ["app"], "targets": ["core"] },
+        { "id": "e3", "sources": ["ui"], "targets": ["core"] },
+        { "id": "e4", "sources": ["core"], "targets": ["elk"] },
+        { "id": "e5", "sources": ["core"], "targets": ["http"] },
+        { "id": "e6", "sources": ["elk"], "targets": ["meta"] },
+        { "id": "e7", "sources": ["http"], "targets": ["meta"] }
+      ]
+    }
+  },
+  {
+    "name": "tree fan-out (DOWN)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "DOWN" },
+      "children": [
+        { "id": "r", "width": 70, "height": 40 },
+        { "id": "a", "width": 70, "height": 40 },
+        { "id": "b", "width": 70, "height": 40 },
+        { "id": "c", "width": 70, "height": 40 },
+        { "id": "a1", "width": 70, "height": 40 },
+        { "id": "a2", "width": 70, "height": 40 },
+        { "id": "b1", "width": 70, "height": 40 },
+        { "id": "c1", "width": 70, "height": 40 },
+        { "id": "c2", "width": 70, "height": 40 }
+      ],
+      "edges": [
+        { "id": "e1", "sources": ["r"], "targets": ["a"] },
+        { "id": "e2", "sources": ["r"], "targets": ["b"] },
+        { "id": "e3", "sources": ["r"], "targets": ["c"] },
+        { "id": "e4", "sources": ["a"], "targets": ["a1"] },
+        { "id": "e5", "sources": ["a"], "targets": ["a2"] },
+        { "id": "e6", "sources": ["b"], "targets": ["b1"] },
+        { "id": "e7", "sources": ["c"], "targets": ["c1"] },
+        { "id": "e8", "sources": ["c"], "targets": ["c2"] }
+      ]
+    }
+  },
+  {
+    "name": "wide layer (DOWN)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "DOWN" },
+      "children": [
+        { "id": "s", "width": 60, "height": 40 },
+        { "id": "w1", "width": 60, "height": 40 },
+        { "id": "w2", "width": 60, "height": 40 },
+        { "id": "w3", "width": 60, "height": 40 },
+        { "id": "w4", "width": 60, "height": 40 },
+        { "id": "t", "width": 60, "height": 40 }
+      ],
+      "edges": [
+        { "id": "e1", "sources": ["s"], "targets": ["w1"] },
+        { "id": "e2", "sources": ["s"], "targets": ["w2"] },
+        { "id": "e3", "sources": ["s"], "targets": ["w3"] },
+        { "id": "e4", "sources": ["s"], "targets": ["w4"] },
+        { "id": "e5", "sources": ["w1"], "targets": ["t"] },
+        { "id": "e6", "sources": ["w2"], "targets": ["t"] },
+        { "id": "e7", "sources": ["w3"], "targets": ["t"] },
+        { "id": "e8", "sources": ["w4"], "targets": ["t"] }
+      ]
+    }
+  },
+  {
+    "name": "cyclic feedback (RIGHT)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "RIGHT" },
+      "children": [
+        { "id": "a", "width": 70, "height": 40 },
+        { "id": "b", "width": 70, "height": 40 },
+        { "id": "c", "width": 70, "height": 40 },
+        { "id": "d", "width": 70, "height": 40 }
+      ],
+      "edges": [
+        { "id": "e1", "sources": ["a"], "targets": ["b"] },
+        { "id": "e2", "sources": ["b"], "targets": ["c"] },
+        { "id": "e3", "sources": ["c"], "targets": ["d"] },
+        { "id": "e4", "sources": ["d"], "targets": ["b"] }
+      ]
+    }
+  },
+  {
+    "name": "elk layered example (DOWN)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "DOWN" },
+      "children": [
+        { "id": "n1", "width": 50, "height": 40 },
+        { "id": "n2", "width": 50, "height": 40 },
+        { "id": "n3", "width": 50, "height": 40 },
+        { "id": "n4", "width": 50, "height": 40 },
+        { "id": "n5", "width": 50, "height": 40 },
+        { "id": "n6", "width": 50, "height": 40 },
+        { "id": "n7", "width": 50, "height": 40 },
+        { "id": "n8", "width": 50, "height": 40 },
+        { "id": "n10", "width": 50, "height": 40 },
+        { "id": "n11", "width": 50, "height": 40 },
+        { "id": "n12", "width": 50, "height": 40 },
+        { "id": "n13", "width": 50, "height": 40 }
+      ],
+      "edges": [
+        { "id": "e1", "sources": ["n1"], "targets": ["n2"] },
+        { "id": "e2", "sources": ["n2"], "targets": ["n3"] },
+        { "id": "e3", "sources": ["n3"], "targets": ["n4"] },
+        { "id": "e4", "sources": ["n4"], "targets": ["n5"] },
+        { "id": "e5", "sources": ["n5"], "targets": ["n6"] },
+        { "id": "e6", "sources": ["n7"], "targets": ["n8"] },
+        { "id": "e7", "sources": ["n8"], "targets": ["n4"] },
+        { "id": "e8", "sources": ["n4"], "targets": ["n10"] },
+        { "id": "e9", "sources": ["n10"], "targets": ["n11"] },
+        { "id": "e10", "sources": ["n4"], "targets": ["n12"] },
+        { "id": "e11", "sources": ["n4"], "targets": ["n13"] },
+        { "id": "e12", "sources": ["n12"], "targets": ["n13"] },
+        { "id": "e13", "sources": ["n2"], "targets": ["n10"] }
+      ]
+    }
+  }
+]
