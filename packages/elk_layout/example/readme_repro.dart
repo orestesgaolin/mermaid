@@ -23,6 +23,33 @@ void link(String from, String to) {
   _edges.add(ElkEdge(id: 'e${_edges.length}', sources: [sp.id], targets: [tp.id]));
 }
 
+final _sharedPorts = <String, ElkPort>{};
+
+// Wire an edge whose source is a FIXED east-side output port shared across
+// several edges (exactly how the original models q1/q2: one east port P11
+// carries both the MonitorValue output and the feedback to QueueControl). A
+// feedback edge leaving the east side must therefore route all the way around
+// the diagram back to QueueControl's west side.
+void linkVia(String from, String sharedOutId, String to,
+    {bool fixedWestTarget = false}) {
+  final sp = _sharedPorts.putIfAbsent(sharedOutId, () {
+    final p = ElkPort(id: sharedOutId, side: ElkPortSide.east);
+    (_outPorts[from] ??= []).add(p);
+    return p;
+  });
+  // The feedback's target (QueueControl) has its input port fixed on the WEST
+  // side (matching the original's P39/P41). Without this, the cycle-breaker
+  // would flip the reversed edge's port to the east and the feedback would
+  // enter QueueControl from the wrong (right) side instead of looping around to
+  // the left.
+  final tp = fixedWestTarget
+      ? (ElkPort(id: '${to}__iw${_pc}', side: ElkPortSide.west))
+      : ElkPort(id: '${to}__i${_pc}');
+  _pc++;
+  (_inPorts[to] ??= []).add(tp);
+  _edges.add(ElkEdge(id: 'e${_edges.length}', sources: [sp.id], targets: [tp.id]));
+}
+
 ElkNode _leaf(String id, String label) {
   _labels[id] = label;
   final w = (label.length * 7.0 + 28).clamp(70.0, 240.0);
@@ -51,18 +78,19 @@ void main() {
   link('sleepS', 'cntS');
   link('cntS', 'raS');
   link('raS', 'dispS');
-  link('q1', 'monQ1');
-  link('q2', 'monQ2');
   // Each interface also drives its queue-length counter (q1/q2) and supplies the
   // second input of its channel's RecordAssembler (as in the real complexRouter).
   link('sleepF', 'q1');
   link('sleepS', 'q2');
   link('sleepF', 'raF');
   link('sleepS', 'raS');
-  // Feedback: q1/q2 outputs loop back to QueueControl inputs (as in the real
-  // example) — makes the graph cyclic, exercising cycle breaking.
-  link('q1', 'queue');
-  link('q2', 'queue');
+  // q1/q2 each have ONE east output port (matching the original's P11/P22) that
+  // feeds both the MonitorValue and the QueueControl feedback. The feedback thus
+  // leaves the east side and loops around the diagram back to QueueControl.
+  linkVia('q1', 'q1_out', 'monQ1');
+  linkVia('q2', 'q2_out', 'monQ2');
+  linkVia('q1', 'q1_out', 'queue', fixedWestTarget: true);
+  linkVia('q2', 'q2_out', 'queue', fixedWestTarget: true);
 
   final graph = ElkGraph(
     layoutOptions: const ElkLayoutOptions(direction: ElkDirection.right),
@@ -105,6 +133,9 @@ String _renderSvg(ElkResult r) {
   b.writeln('<svg viewBox="0 0 ${r.width + pad * 2} ${r.height + pad * 2}" '
       'xmlns="http://www.w3.org/2000/svg" style="background:white" '
       'font-family="Inter,sans-serif">');
+  b.writeln('<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" '
+      'markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
+      '<path d="M0,0 L10,5 L0,10 z" fill="#444"/></marker></defs>');
   b.writeln('<g transform="translate($pad,$pad)">');
 
   void clusters(List<ElkPositionedNode> ns, double dx, double dy) {
@@ -148,7 +179,7 @@ String _renderSvg(ElkResult r) {
     if (e.sections.isEmpty) continue;
     final pts = e.sections.first.points.map((p) => '${p.x},${p.y}').join(' ');
     b.writeln('<polyline points="$pts" fill="none" stroke="#444" '
-        'stroke-width="1.4"/>');
+        'stroke-width="1.4" marker-end="url(#arrow)"/>');
   }
   b.writeln('</g></svg>');
   return b.toString();
