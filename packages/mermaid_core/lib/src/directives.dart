@@ -28,16 +28,18 @@ MermaidTheme resolveTheme(String source, MermaidTheme base) {
     if (fmVars.isNotEmpty) themeVariables = {...?themeVariables, ...fmVars};
   }
 
-  final directive =
-      RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%').firstMatch(source);
-  if (directive != null) {
+  // Merge ALL `%%{init}%%` directives, not just the first: the website (and
+  // users) may have a separate `{'layout': 'elk'}` directive *before* the
+  // theme one, so reading only the first would miss `theme: dark`.
+  for (final directive in RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%')
+      .allMatches(source)) {
     final config = _looseJson(directive.group(1)!);
     if (config is Map) {
       final name = config['theme'];
       if (name is String) theme = MermaidTheme.named(name);
       final vars = config['themeVariables'];
       if (vars is Map) {
-        themeVariables = vars.map((k, v) => MapEntry('$k', v));
+        themeVariables = {...?themeVariables, ...vars.map((k, v) => MapEntry('$k', v))};
       }
     }
   }

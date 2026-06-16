@@ -52,6 +52,14 @@ const _looks = <(String, String)>[
   ('Hand-drawn', 'handDrawn'),
 ];
 
+/// Diagram types for which an alternate layout engine (ELK / tidy-tree) applies.
+/// The layout picker is hidden for everything else (pie, gantt, sequence, …),
+/// where the engine choice has no effect.
+final _layoutCapableDiagram = RegExp(
+  r'^\s*(flowchart|graph|stateDiagram(?:-v2)?|mindmap)\b',
+  multiLine: true,
+);
+
 class _CompareViewState extends State<CompareView> {
   int _selected = 0;
   String _layout = 'dagre';
@@ -65,6 +73,9 @@ class _CompareViewState extends State<CompareView> {
   final _editor = GlobalNodeKey<web.HTMLTextAreaElement>();
 
   Sample get _sample => samples[_selected];
+
+  /// Whether the current diagram supports an alternate layout engine.
+  bool get _supportsLayout => _layoutCapableDiagram.hasMatch(_source);
 
   @override
   void initState() {
@@ -89,6 +100,8 @@ class _CompareViewState extends State<CompareView> {
       // Hand-drawn persists across samples; a sample that ships hand-drawn
       // flips the toggle on so it stays in sync.
       if (src.contains('handDrawn')) _look = 'handDrawn';
+      // Don't carry a stale ELK/tidy choice into a diagram that can't use it.
+      if (!_layoutCapableDiagram.hasMatch(src)) _layout = 'dagre';
       _source = _decorate(src);
     });
     if (kIsWeb) {
@@ -216,18 +229,19 @@ class _CompareViewState extends State<CompareView> {
         h2([.text(_sample.name)]),
         p(classes: 'doc-desc', [.text(_sample.description)]),
       ]),
-      div(classes: 'layout-row', [
-        span(classes: 'layout-label', [.text('Layout')]),
-        for (final (label, value) in _layouts)
-          button(
-            classes: value == _layout ? 'chip selected' : 'chip',
-            onClick: () => _selectLayout(value),
-            [.text(label)],
-          ),
-        span(classes: 'layout-hint', [
-          .text('applies to flowcharts (graph diagrams)'),
+      if (_supportsLayout)
+        div(classes: 'layout-row', [
+          span(classes: 'layout-label', [.text('Layout')]),
+          for (final (label, value) in _layouts)
+            button(
+              classes: value == _layout ? 'chip selected' : 'chip',
+              onClick: () => _selectLayout(value),
+              [.text(label)],
+            ),
+          span(classes: 'layout-hint', [
+            .text('applies to flowchart, state and mindmap diagrams'),
+          ]),
         ]),
-      ]),
       div(classes: 'layout-row', [
         span(classes: 'layout-label', [.text('Look')]),
         for (final (label, value) in _looks)
