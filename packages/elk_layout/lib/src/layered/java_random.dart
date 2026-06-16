@@ -1,47 +1,72 @@
-/// Faithful port of `java.util.Random` (the linear-congruential generator ELK
-/// uses via `InternalProperties.RANDOM`).
+/// Faithful port of `java.util.Random`'s 48-bit linear-congruential generator,
+/// which ELK uses (via `InternalProperties.RANDOM`) to drive the deliberate
+/// randomization in crossing minimization (randomized first layer + barycenter
+/// perturbation, explored across the `thoroughness` restarts and kept-best).
 ///
-/// ELK's crossing minimization is *deliberately* randomized — the barycenter
-/// heuristic perturbs barycenters and permutes the first layer so that the
-/// `thoroughness` restarts explore different solutions, and the driver keeps
-/// the order with the fewest crossings. To reproduce that algorithm
-/// deterministically (and as close to elkjs — itself GWT-transpiled Java — as
-/// possible) we replicate `java.util.Random`'s exact 48-bit LCG rather than use
-/// Dart's `math.Random`, whose sequence differs.
+/// ELK's barycenter heuristic is non-deterministic by design; reproducing it
+/// faithfully means using the same generator. We replicate `java.util.Random`'s
+/// LCG (multiplier `0x5DEECE66D`, addend `0xB`, modulus `2^48`).
 ///
-/// Reference: `java.util.Random` (OpenJDK) — multiplier `0x5DEECE66D`,
-/// addend `0xB`, modulus `2^48`.
-///
-/// Runs on the native VM (the CLI / `dart test` / SVG backend) where ints are
-/// 64-bit; the modular arithmetic below is exact under 64-bit two's-complement
-/// wraparound because we mask to 48 bits after every step.
+/// IMPORTANT — web safety: this runs on Dart **web** (the Flutter/Jaspr site)
+/// as well as the native VM. On web, Dart `int`s are 53-bit doubles and bitwise
+/// operators are 32-bit, so the naïve `seed * 0x5DEECE66D & ((1<<48)-1)` and
+/// `>> 32` would silently overflow/truncate. All arithmetic here is therefore
+/// done with float-safe 24-bit splitting so every intermediate stays below
+/// `2^53` and no shift exceeds 32 bits — the generator produces identical
+/// results on web and native.
 library;
 
 class JavaRandom {
-  JavaRandom(int seed) : _seed = (seed ^ _multiplier) & _mask;
+  JavaRandom(int seed) {
+    setSeed(seed);
+  }
 
-  static const int _multiplier = 0x5DEECE66D;
-  static const int _addend = 0xB;
-  static const int _mask = (1 << 48) - 1;
+  // java.util.Random constants, as doubles.
+  static const double _multHi = 1502.0; //  floor(0x5DEECE66D / 2^24)
+  static const double _multLo = 15525485.0; // 0x5DEECE66D % 2^24
+  static const double _mult = 25214903917.0; // 0x5DEECE66D
+  static const double _addend = 11.0; // 0xB
+  static const double _two24 = 16777216.0; // 2^24
+  static const double _two48 = 281474976710656.0; // 2^48
 
-  int _seed;
+  /// Current 48-bit state, held as an exact double in [0, 2^48).
+  double _seed = 0;
 
-  /// Mirrors `Random.setSeed(long)`.
+  /// Mirrors `Random.setSeed`: `(seed ^ 0x5DEECE66D) & ((1<<48)-1)`.
   void setSeed(int seed) {
-    _seed = (seed ^ _multiplier) & _mask;
+    var s = seed.toDouble() % _two48;
+    if (s < 0) s += _two48;
+    _seed = _xor48(s, _mult);
   }
 
-  /// Mirrors `Random.next(int bits)`. Returns the top [bits] bits of the
-  /// advanced 48-bit state (an unsigned value in `[0, 2^bits)`).
+  /// Bitwise XOR of two values in `[0, 2^48)`, split into 24-bit halves so each
+  /// `^` operates on a value below `2^24` (well within 32-bit-safe range).
+  static double _xor48(double a, double b) {
+    final aL = (a % _two24).toInt(), aH = (a ~/ _two24).toInt();
+    final bL = (b % _two24).toInt(), bH = (b ~/ _two24).toInt();
+    return (aH ^ bH) * _two24 + (aL ^ bL);
+  }
+
+  /// Advances the state: `_seed = (_seed * 0x5DEECE66D + 0xB) mod 2^48`, with
+  /// the multiplication done in 24-bit pieces (all partials < 2^53).
+  void _advance() {
+    final sH = (_seed ~/ _two24).toDouble(); // < 2^24
+    final sL = _seed % _two24; // < 2^24
+    // Middle term, reduced mod 2^24: (sH*Mlo + sL*Mhi) each < 2^48 / 2^35.
+    final mid = (sH * _multLo + sL * _multHi) % _two24;
+    final low = sL * _multLo; // < 2^48
+    _seed = (mid * _two24 + low + _addend) % _two48;
+  }
+
+  /// Mirrors `Random.next(bits)`: the top [bits] bits of the advanced state,
+  /// extracted by division (not a >32-bit shift). Returns `[0, 2^bits)`.
   int _next(int bits) {
-    _seed = (_seed * _multiplier + _addend) & _mask;
-    return _seed >> (48 - bits);
-  }
-
-  /// Mirrors `Random.next(32)` reinterpreted as a signed 32-bit `int`.
-  int _next32Signed() {
-    final v = _next(32);
-    return v >= 0x80000000 ? v - 0x100000000 : v;
+    _advance();
+    var divisor = 1.0;
+    for (var i = 0; i < 48 - bits; i++) {
+      divisor *= 2;
+    }
+    return (_seed / divisor).floor();
   }
 
   /// Mirrors `Random.nextBoolean()`.
@@ -49,11 +74,9 @@ class JavaRandom {
 
   /// Mirrors `Random.nextDouble()` — 53 bits of precision.
   double nextDouble() =>
-      ((_next(26) << 27) + _next(27)) / (1 << 53).toDouble();
+      (_next(26) * 134217728.0 /* 2^27 */ + _next(27)) /
+      9007199254740992.0 /* 2^53 */;
 
   /// Mirrors `Random.nextFloat()` — 24 bits of precision.
-  double nextFloat() => _next(24) / (1 << 24).toDouble();
-
-  /// Mirrors `Random.nextLong()`.
-  int nextLong() => (_next32Signed() << 32) + _next32Signed();
+  double nextFloat() => _next(24) / _two24;
 }

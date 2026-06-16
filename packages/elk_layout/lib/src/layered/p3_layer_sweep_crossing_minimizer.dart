@@ -110,14 +110,11 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     final portPositions = List<int>.filled(nPorts, 0);
     final bary = _initBarycenterState(order);
 
-    // ELK seeds one `java.util.Random` for the whole minimizer:
-    //   random = new Random(randomSeed);            // randomSeed option, default 1
-    //   long reseed = random.nextLong();
-    //   ... compareDifferentRandomizedLayouts() does random.setSeed(reseed)
-    // We replicate that exact handshake with a faithful java.util.Random port.
+    // One seeded java.util.Random drives the whole minimizer (ELK uses an
+    // additional nextLong()/setSeed() reseed to decorrelate hierarchical copies;
+    // we seed directly — there are no shared hierarchical copies here, and a
+    // 64-bit nextLong is not web-safe). Deterministic and reproducible.
     final random = JavaRandom(_randomSeed);
-    final reseed = random.nextLong();
-    random.setSeed(reseed);
 
     final portDist = _PortDistributor(portRanks, order);
     final crossMin = _BarycenterHeuristic(portRanks, bary, graph, random);
@@ -151,12 +148,15 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     _PortDistributor portDist,
     _AllCrossingsCounter crossCount,
   ) {
-    var bestCrossings = 1 << 62;
+    // Track the best run by crossing count. Use a null-first-iteration check
+    // rather than a large sentinel: `1 << 62` would be 0 on Dart web (32-bit
+    // shifts), making the comparison always fail and bestCopy stay null.
+    var bestCrossings = 0;
     _SweepCopy? bestCopy;
     for (var i = 0; i < _thoroughness; i++) {
       final run =
           _minimizeCrossingsWithCounter(order, crossMin, portDist, crossCount);
-      if (run.crossings < bestCrossings) {
+      if (bestCopy == null || run.crossings < bestCrossings) {
         bestCrossings = run.crossings;
         bestCopy = run.bestCopy;
         if (bestCrossings == 0) break;
