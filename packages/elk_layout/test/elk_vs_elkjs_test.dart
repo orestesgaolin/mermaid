@@ -13,7 +13,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 import 'package:test/test.dart';
 
 class _R {
@@ -27,7 +27,7 @@ void main() {
   final graphsFile = File('tool/validation/graphs.json');
   final goldenFile = File('tool/validation/elkjs_golden.json');
 
-  group('elk_layout vs elkjs 0.9.3 (structural parity)', () {
+  group('elk vs elkjs 0.9.3 (structural parity)', () {
     if (!graphsFile.existsSync() || !goldenFile.existsSync()) {
       test('golden present', () {}, skip: 'run tool/validation/run_elkjs.mjs');
       return;

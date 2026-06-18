@@ -1,12 +1,12 @@
 import 'dart:math' as math;
 
-import 'package:elk_layout/src/dagre/src/graph/graph.dart';
-import 'package:elk_layout/src/dagre/src/model/array.dart';
-import 'package:elk_layout/src/dagre/src/model/graph_point.dart';
-import 'package:elk_layout/src/dagre/src/model/graph_rect.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
-import 'package:elk_layout/src/dagre/src/util/util.dart';
+import 'package:elk/src/dagre/src/graph/graph.dart';
+import 'package:elk/src/dagre/src/model/array.dart';
+import 'package:elk/src/dagre/src/model/graph_point.dart';
+import 'package:elk/src/dagre/src/model/graph_rect.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/util/util.dart';
 
 import 'model/tmp/split.dart' as sp;
 import 'model/enums/dummy.dart';

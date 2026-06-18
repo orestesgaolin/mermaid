@@ -1,6 +1,6 @@
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/rank/util.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/rank/util.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
 import '../graph/graph.dart';
 
 Graph feasibleTree(Graph g) {

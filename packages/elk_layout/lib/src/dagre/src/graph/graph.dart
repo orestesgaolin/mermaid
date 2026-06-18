@@ -1,6 +1,6 @@
 // ignore_for_file: strict_top_level_inference
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
 
 import '../model/graph_label.dart';
 

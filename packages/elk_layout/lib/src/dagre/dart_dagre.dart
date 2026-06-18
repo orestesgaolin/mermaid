@@ -15,10 +15,10 @@
 library dagre;
 
 import 'dart:convert';
-import 'package:elk_layout/src/geometry.dart';
-import 'package:elk_layout/src/dagre/src/model/graph_label.dart';
-import 'package:elk_layout/src/dagre/src/model/graph_point.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
+import 'package:elk/src/geometry.dart';
+import 'package:elk/src/dagre/src/model/graph_label.dart';
+import 'package:elk/src/dagre/src/model/graph_point.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
 import 'src/layout.dart' as layer;
 import 'src/graph/graph.dart';
 import 'src/model/enums/acyclicer.dart';
@@ -48,7 +48,7 @@ DagreResult layout(DagreGraph inputGraph,
   layoutGraph.setDefaultEdgeLabelFun(edgeLabelFun);
   for (var ele in inputGraph.nodeMap.values) {
     final props = <String, double>{widthK: ele.width, heightK: ele.height};
-    // elk_layout extension: carry the node's model (declaration) order so
+    // elk extension: carry the node's model (declaration) order so
     // init_order can keep siblings in input order when asked.
     final mo = config.modelOrder?[ele.id];
     if (mo != null) props[modelOrderK] = mo.toDouble();
@@ -327,11 +327,11 @@ class DagreConfig {
 
   final bool disableOptimalOrderHeuristic;
 
-  /// elk_layout extension: when true, init_order keeps siblings in model
+  /// elk extension: when true, init_order keeps siblings in model
   /// (declaration) order using [modelOrder] indices.
   final bool useModelOrder;
 
-  /// elk_layout extension: node id → model (declaration) order index.
+  /// elk extension: node id → model (declaration) order index.
   final Map<String, int>? modelOrder;
 
   DagreConfig({

@@ -61,7 +61,7 @@ Each asserts: **100% layer-assignment agreement**, **0 overlaps**, **no more
 geometric edge crossings than elkjs** (all 7 graphs are crossing-free in both
 engines), and aspect ratio within ~2× of elkjs. `dart run
 tool/validation/compare.dart` also writes side-by-side SVGs (ours | elkjs) per
-graph for visual diff. mermaid: 412 tests + 184 corpus green; elk_layout: 31
+graph for visual diff. mermaid: 412 tests + 184 corpus green; elk: 31
 tests + 7 parity tests green.
 
 **Crossing minimization is now faithfully randomized.** The earlier port did a

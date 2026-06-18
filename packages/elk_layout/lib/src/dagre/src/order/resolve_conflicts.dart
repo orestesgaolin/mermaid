@@ -1,6 +1,6 @@
 import 'dart:math' as math;
-import 'package:elk_layout/src/dagre/src/model/tmp/resolve_conflicts_result.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/model/tmp/resolve_conflicts_result.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
 import '../graph/graph.dart';
 import '../model/tmp/conflict_info.dart';
 import '../model/tmp/order_inner_result.dart';

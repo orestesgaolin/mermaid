@@ -2,7 +2,7 @@
   "name": "elk-layout-validation",
   "private": true,
   "type": "module",
-  "description": "Runs real elkjs over the shared graph set for comparison against the elk_layout Dart port.",
+  "description": "Runs real elkjs over the shared graph set for comparison against the elk Dart port.",
   "dependencies": {
     "elkjs": "^0.9.3"
   }

@@ -1,7 +1,7 @@
-import 'package:elk_layout/src/dagre/src/graph/graph.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/acyclicer.dart';
-import 'package:elk_layout/src/dagre/src/util/util.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/graph/graph.dart';
+import 'package:elk/src/dagre/src/model/enums/acyclicer.dart';
+import 'package:elk/src/dagre/src/util/util.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
 
 import 'greedy_fas.dart';
 import 'model/props.dart';

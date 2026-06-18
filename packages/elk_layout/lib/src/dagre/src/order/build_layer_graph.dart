@@ -1,5 +1,5 @@
-import 'package:elk_layout/src/dagre/src/model/graph_label.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/model/graph_label.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
 import '../graph/graph.dart';
 import '../model/enums/relationship.dart';
 import '../util/util.dart';

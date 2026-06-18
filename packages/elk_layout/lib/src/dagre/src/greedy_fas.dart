@@ -1,8 +1,8 @@
 import 'dart:math' as math;
-import 'package:elk_layout/src/dagre/src/graph/graph.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
-import 'package:elk_layout/src/dagre/src/util/util.dart';
+import 'package:elk/src/dagre/src/graph/graph.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/util/util.dart';
 
 double Function(Edge) defaultWeightFun = (a) {
   return 1;

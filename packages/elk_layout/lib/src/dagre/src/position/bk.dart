@@ -1,13 +1,13 @@
 import 'dart:math' as math;
-import 'package:elk_layout/src/dagre/src/model/enums/align.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/dummy.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/label_pos.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/model/enums/align.dart';
+import 'package:elk/src/dagre/src/model/enums/dummy.dart';
+import 'package:elk/src/dagre/src/model/enums/label_pos.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
 
 import '../graph/graph.dart';
 import '../model/props.dart';
 import '../util/util.dart';
-import 'package:elk_layout/src/dagre/src/util.dart' as util;
+import 'package:elk/src/dagre/src/util.dart' as util;
 
 Map<String, Map<String, bool>> _findType1Conflicts(Graph g, List<List<String>> layering) {
   Map<String, Map<String, bool>> conflicts = {};

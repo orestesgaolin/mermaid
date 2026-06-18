@@ -1,8 +1,8 @@
-import 'package:elk_layout/src/dagre/dart_dagre.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/relationship.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/order/sort_subgraph.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/dart_dagre.dart';
+import 'package:elk/src/dagre/src/model/enums/relationship.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/order/sort_subgraph.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
 import '../graph/graph.dart';
 import '../model/tmp/resolve_conflicts_result.dart';
 import '../util.dart' as util;

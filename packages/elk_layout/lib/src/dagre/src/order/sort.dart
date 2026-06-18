@@ -1,6 +1,6 @@
-import 'package:elk_layout/src/dagre/src/model/tmp/split.dart';
+import 'package:elk/src/dagre/src/model/tmp/split.dart';
 import '../model/tmp/resolve_conflicts_result.dart';
-import 'package:elk_layout/src/dagre/src/util.dart' as util;
+import 'package:elk/src/dagre/src/util.dart' as util;
 
 ResolveConflictsResult sort(List<ResolveConflictsResult> entries, bool biasRight) {
   Split<ResolveConflictsResult> parts = util.partition<ResolveConflictsResult>(entries, (entry) {

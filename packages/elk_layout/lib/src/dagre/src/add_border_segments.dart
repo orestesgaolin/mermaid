@@ -1,6 +1,6 @@
-import 'package:elk_layout/src/dagre/src/graph/graph.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/dummy.dart';
-import 'package:elk_layout/src/dagre/src/util.dart';
+import 'package:elk/src/dagre/src/graph/graph.dart';
+import 'package:elk/src/dagre/src/model/enums/dummy.dart';
+import 'package:elk/src/dagre/src/util.dart';
 
 import 'model/props.dart';
 

@@ -1,7 +1,7 @@
 // ignore_for_file: unintended_html_in_doc_comment
 import 'dart:convert';
 
-import 'package:elk_layout/src/dagre/src/model/enums/dummy.dart';
+import 'package:elk/src/dagre/src/model/enums/dummy.dart';
 
 extension MapExtension on Map<String, dynamic> {
   Props get toProps {
@@ -254,7 +254,7 @@ const selfEdgesK = "selfEdges";
 
 const labelK = "label";
 
-/// elk_layout extension: per-node model (declaration) order index, and a graph
+/// elk extension: per-node model (declaration) order index, and a graph
 /// label flag that turns on model-order-aware initial ordering in init_order.
 /// Both are absent for plain dagre layouts, so default behavior is unchanged.
 const modelOrderK = "modelOrder";

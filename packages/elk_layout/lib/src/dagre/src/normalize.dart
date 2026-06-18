@@ -1,7 +1,7 @@
-import 'package:elk_layout/src/dagre/src/graph/graph.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/dummy.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/util.dart' as util;
+import 'package:elk/src/dagre/src/graph/graph.dart';
+import 'package:elk/src/dagre/src/model/enums/dummy.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/util.dart' as util;
 import 'model/graph_point.dart';
 
 void run(Graph g) {
@@ -22,7 +22,7 @@ void _normalizeEdge(Graph g, Edge e) {
   if (wRank == vRank + 1) return;
   g.removeEdge2(e);
 
-  // elk_layout extension: propagate the target node's model (declaration)
+  // elk extension: propagate the target node's model (declaration)
   // order onto the edge's dummy chain, so init_order can keep siblings in
   // model order even though the real successor sits behind label-rank dummies.
   final wModelOrder = g.node(w).getD2(modelOrderK);

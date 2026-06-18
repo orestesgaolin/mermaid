@@ -1,10 +1,10 @@
 // Experiment: reproduce the hierarchical dataflow layout from the
-// eclipse-elk README (the "complexRouter" example) with elk_layout, now using
+// eclipse-elk README (the "complexRouter" example) with elk, now using
 // PORTS so edges attach at distinct points on node borders. Run from the
 // package root:
 //
 //   dart run example/readme_repro.dart > /tmp/elk_repro.svg
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 
 final _labels = <String, String>{};
 final _outPorts = <String, List<ElkPort>>{}; // nodeId -> output ports

@@ -1,4 +1,4 @@
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 import 'package:test/test.dart';
 
 /// Returns the bounding rect (l, t, r, b) of a node by id from a result.

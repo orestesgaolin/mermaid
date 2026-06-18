@@ -1,4 +1,4 @@
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 import 'package:test/test.dart';
 
 /// The faithful engine has NO dagre fallback: features it hasn't ported yet

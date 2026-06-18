@@ -1,4 +1,4 @@
-# elk_layout
+# elk
 
 Pure-Dart **layered graph layout** (Sugiyama-style), inspired by the
 [Eclipse Layout Kernel](https://eclipse.dev/elk/) (ELK) and its JavaScript
@@ -25,7 +25,7 @@ port [elkjs](https://github.com/kieler/elkjs).
 ## Quick start
 
 ```dart
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 
 void main() {
   final result = const ElkLayered().layout(ElkGraph(
@@ -166,7 +166,7 @@ cd ../.. && dart run tool/validation/compare.dart
 side-by-side SVG per graph (ours | elkjs) to `tool/validation/output/` for
 visual comparison.
 
-On the bundled graph set, `elk_layout` agrees with elkjs **100% on layer
+On the bundled graph set, `elk` agrees with elkjs **100% on layer
 assignment** (which node lands in which layer along the flow axis) and produces
 **zero node overlaps**, with comparable bounding-box aspect ratios. Within-layer
 ordering differs (different crossing-minimization heuristics; symmetric graphs

@@ -1,6 +1,6 @@
 // A runnable example: lay out a small graph with a cluster and print the
 // resulting node positions and orthogonal edge routes.
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 
 void main() {
   final result = const ElkLayered().layout(ElkGraph(

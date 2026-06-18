@@ -1,7 +1,7 @@
-import 'package:elk_layout/src/dagre/src/graph/graph.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/rank_dir.dart';
-import 'package:elk_layout/src/dagre/src/model/graph_point.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/graph/graph.dart';
+import 'package:elk/src/dagre/src/model/enums/rank_dir.dart';
+import 'package:elk/src/dagre/src/model/graph_point.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
 
 void adjust(Graph g) {
   var rankDir = g.label2?.rankDir;

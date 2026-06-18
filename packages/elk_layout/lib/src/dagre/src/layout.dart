@@ -1,21 +1,21 @@
 import 'dart:math' as math;
-import 'package:elk_layout/src/dagre/dart_dagre.dart';
-import 'package:elk_layout/src/dagre/src/graph/graph.dart';
-import 'package:elk_layout/src/dagre/src/model/enums/dummy.dart';
-import 'package:elk_layout/src/dagre/src/model/graph_label.dart';
-import 'package:elk_layout/src/dagre/src/model/graph_rect.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/model/tmp/self_edge_data.dart';
-import 'package:elk_layout/src/dagre/src/parent_dummy_chains.dart';
-import 'package:elk_layout/src/dagre/src/position/index.dart';
-import 'package:elk_layout/src/dagre/src/util.dart';
-import 'package:elk_layout/src/dagre/src/util.dart' as util;
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
-import 'package:elk_layout/src/dagre/src/acyclic.dart' as acyclic;
-import 'package:elk_layout/src/dagre/src/nesting_graph.dart' as nesting_graph;
-import 'package:elk_layout/src/dagre/src/rank/index.dart';
-import 'package:elk_layout/src/dagre/src/normalize.dart' as normalize;
-import 'package:elk_layout/src/dagre/src/coordinate_system.dart' as coordinate_system;
+import 'package:elk/src/dagre/dart_dagre.dart';
+import 'package:elk/src/dagre/src/graph/graph.dart';
+import 'package:elk/src/dagre/src/model/enums/dummy.dart';
+import 'package:elk/src/dagre/src/model/graph_label.dart';
+import 'package:elk/src/dagre/src/model/graph_rect.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/model/tmp/self_edge_data.dart';
+import 'package:elk/src/dagre/src/parent_dummy_chains.dart';
+import 'package:elk/src/dagre/src/position/index.dart';
+import 'package:elk/src/dagre/src/util.dart';
+import 'package:elk/src/dagre/src/util.dart' as util;
+import 'package:elk/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/acyclic.dart' as acyclic;
+import 'package:elk/src/dagre/src/nesting_graph.dart' as nesting_graph;
+import 'package:elk/src/dagre/src/rank/index.dart';
+import 'package:elk/src/dagre/src/normalize.dart' as normalize;
+import 'package:elk/src/dagre/src/coordinate_system.dart' as coordinate_system;
 
 import 'add_border_segments.dart';
 import 'model/graph_point.dart';
@@ -40,7 +40,7 @@ Graph _buildLayoutGraph(Graph inputGraph) {
   label.ranker = graph.ranker;
   label.rankDir = graph.rankDir;
   label.align = graph.align;
-  // elk_layout extension: preserve the model-order flag across the internal
+  // elk extension: preserve the model-order flag across the internal
   // graph rebuild (it is dropped otherwise, since only known label fields are
   // copied above).
   if (graph[useModelOrderK] == true) {
@@ -59,7 +59,7 @@ Graph _buildLayoutGraph(Graph inputGraph) {
     if (!np.hasOwn(heightK)) {
       np[heightK] = 0;
     }
-    // elk_layout extension: carry the per-node model-order index across the
+    // elk extension: carry the per-node model-order index across the
     // rebuild so init_order can use it.
     final mo = node.getD2(modelOrderK);
     if (mo != null) {

@@ -1,4 +1,4 @@
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 import 'package:test/test.dart';
 
 /// Each consecutive segment of a section is axis-aligned (horizontal or

@@ -1,4 +1,4 @@
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 import 'package:test/test.dart';
 
 ElkGraph _chain(ElkLayoutOptions opts) => ElkGraph(

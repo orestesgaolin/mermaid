@@ -1,6 +1,6 @@
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
-import 'package:elk_layout/src/dagre/src/util/util.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/util/util.dart';
 import '../graph/graph.dart';
 
 List<List<String>> initOrder(Graph g) {
@@ -17,7 +17,7 @@ List<List<String>> initOrder(Graph g) {
     return [];
   }));
 
-  // elk_layout extension: when the graph asks for model order, the initial
+  // elk extension: when the graph asks for model order, the initial
   // layering follows the nodes' declaration order rather than edge-traversal
   // order, so siblings keep their input left-to-right order. A node without a
   // model-order index (dummies, borders) sorts last/stably.

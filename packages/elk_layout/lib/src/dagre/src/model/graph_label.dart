@@ -1,5 +1,5 @@
-import 'package:elk_layout/src/dagre/dart_dagre.dart';
-import 'package:elk_layout/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/dart_dagre.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
 
 class GraphLabel extends Props {
   RankDir rankDir = RankDir.ttb;

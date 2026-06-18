@@ -1,4 +1,4 @@
-name: elk_layout
+name: elk
 description: >-
   Pure Dart layered graph layout (Sugiyama-style), inspired by the Eclipse
   Layout Kernel. Compound/hierarchical graphs, ports and orthogonal edge
@@ -15,7 +15,6 @@ topics:
 environment:
   sdk: ^3.12.0
 resolution: workspace
-
 dependencies:
   meta: ^1.16.0
 

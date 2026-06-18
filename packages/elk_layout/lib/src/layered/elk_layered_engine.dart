@@ -78,7 +78,7 @@ ElkResult layeredLayout(ElkGraph graph) {
   final unsupported = unsupportedElkFeature(graph);
   if (unsupported != null) {
     throw UnsupportedError(
-        'elk_layout: $unsupported is not yet implemented in the faithful ELK '
+        'elk: $unsupported is not yet implemented in the faithful ELK '
         'port (no dagre fallback by design). See lib/src/layered/PORTING.md.');
   }
   final dir = graph.layoutOptions.direction;

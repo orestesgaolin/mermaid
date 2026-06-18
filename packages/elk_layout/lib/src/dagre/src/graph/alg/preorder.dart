@@ -1,4 +1,4 @@
-import 'package:elk_layout/src/dagre/src/model/enums/dfs_order.dart';
+import 'package:elk/src/dagre/src/model/enums/dfs_order.dart';
 
 import 'dfs.dart';
 import '../graph.dart';

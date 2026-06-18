@@ -1,4 +1,4 @@
-// Compares the elk_layout Dart port against real elkjs on the shared graph
+// Compares the elk Dart port against real elkjs on the shared graph
 // set. Run from the package root (after `cd tool/validation && npm install &&
 // node run_elkjs.mjs`):
 //
@@ -11,7 +11,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 
 void main() {
   final dir = File(Platform.script.toFilePath()).parent.path;
@@ -28,7 +28,7 @@ void main() {
 
   final outDir = Directory('$dir/output')..createSync(recursive: true);
 
-  print('Structural agreement: elk_layout (Dart) vs elkjs 0.9.3\n');
+  print('Structural agreement: elk (Dart) vs elkjs 0.9.3\n');
   print('${'graph'.padRight(26)}  flow-order  cross-order  '
       'overlaps(us/elk)  aspect(us/elk)');
   print('-' * 92);
@@ -113,7 +113,7 @@ void main() {
   print('\nSide-by-side SVGs (ours | elkjs) written to ${outDir.path}/');
 }
 
-/// Renders both layouts side by side into one SVG: elk_layout on the left,
+/// Renders both layouts side by side into one SVG: elk on the left,
 /// elkjs on the right, each with its own nodes + edge routes.
 String _sideBySideSvg({
   required Map<String, _R> ours,
@@ -131,7 +131,7 @@ String _sideBySideSvg({
   b.writeln('<svg viewBox="0 0 $w $h" xmlns="http://www.w3.org/2000/svg" '
       'style="background:white" font-family="Inter,sans-serif">');
   b.writeln('<text x="$pad" y="18" font-size="14" font-weight="600" '
-      'fill="#4a3a8a">elk_layout (ours)</text>');
+      'fill="#4a3a8a">elk (ours)</text>');
   b.writeln('<text x="${pad + lw + gap}" y="18" font-size="14" '
       'font-weight="600" fill="#888">elkjs 0.9.3</text>');
   b.write(_panel(ours, oursEdges, clusters, pad, titleH));

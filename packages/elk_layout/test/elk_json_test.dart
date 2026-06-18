@@ -1,6 +1,6 @@
 import 'dart:convert';
 
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 import 'package:test/test.dart';
 
 void main() {

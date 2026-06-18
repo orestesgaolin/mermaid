@@ -1,7 +1,7 @@
-import 'package:elk_layout/src/dagre/src/model/props.dart';
-import 'package:elk_layout/src/dagre/src/order/resolve_conflicts.dart';
-import 'package:elk_layout/src/dagre/src/order/sort.dart';
-import 'package:elk_layout/src/dagre/src/util/list_util.dart';
+import 'package:elk/src/dagre/src/model/props.dart';
+import 'package:elk/src/dagre/src/order/resolve_conflicts.dart';
+import 'package:elk/src/dagre/src/order/sort.dart';
+import 'package:elk/src/dagre/src/util/list_util.dart';
 import '../graph/graph.dart';
 import '../model/tmp/resolve_conflicts_result.dart';
 import 'barycenter.dart';
