@@ -5,7 +5,7 @@ library;
 
 import 'dart:convert';
 
-import 'package:elk_layout/elk_layout.dart' as elk;
+import 'package:elk/elk.dart' as elk;
 
 import 'color.dart';
 import 'theme/theme.dart';

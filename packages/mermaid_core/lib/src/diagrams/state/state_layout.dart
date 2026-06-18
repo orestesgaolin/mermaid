@@ -5,7 +5,7 @@ library;
 
 import 'dart:math' as math;
 
-import 'package:elk_layout/elk_layout.dart' as elk;
+import 'package:elk/elk.dart' as elk;
 
 import '../../color.dart';
 import '../../geometry.dart';

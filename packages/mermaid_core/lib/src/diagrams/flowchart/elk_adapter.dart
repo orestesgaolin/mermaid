@@ -1,4 +1,4 @@
-/// Adapter between the flowchart pipeline and the standalone `elk_layout`
+/// Adapter between the flowchart pipeline and the standalone `elk`
 /// package — the Dart counterpart of upstream `mermaid-layout-elk/render.ts`.
 ///
 /// The flowchart layout already assembles a compound `dagre.DagreGraph` (nodes
@@ -10,7 +10,7 @@
 /// then reused unchanged.
 library;
 
-import 'package:elk_layout/elk_layout.dart' as elk;
+import 'package:elk/elk.dart' as elk;
 
 import '../../geometry.dart';
 import '../../vendor/dagre/dart_dagre.dart' as dagre;
