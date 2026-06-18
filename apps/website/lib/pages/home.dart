@@ -67,7 +67,7 @@ class Home extends StatelessComponent {
           .text('The '),
           strong([.text('ELK layout')]),
           .text(' option is powered by '),
-          strong([.text('elk_layout')]),
+          strong([.text('elk')]),
           .text(' — a standalone, pure-Dart port of the Eclipse Layout '
               'Kernel\'s layered algorithm (orthogonal edges, clusters, no '
               'elkjs, no JavaScript). It is reusable on its own for any graph '

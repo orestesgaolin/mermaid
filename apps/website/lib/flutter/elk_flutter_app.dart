@@ -1,5 +1,5 @@
 /// A Flutter widget embedded into the `/elk` page via `jaspr_flutter_embed`,
-/// demonstrating that `elk_layout` lays out **real Flutter widgets**: each
+/// demonstrating that `elk` lays out **real Flutter widgets**: each
 /// node below is a live Material card placed at the coordinates ELK computes,
 /// with the orthogonal edges drawn by a [CustomPainter]. The whole canvas is
 /// pan/zoomable and the cards are tappable.
@@ -10,7 +10,7 @@ library;
 
 import 'dart:math' as math;
 
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 import 'package:flutter/material.dart';
 
 /// One node's presentation: a label and an icon. Its box size is fixed so the

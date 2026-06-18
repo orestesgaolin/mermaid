@@ -17,7 +17,7 @@ dependencies:
   jaspr: ^0.23.1
   jaspr_flutter_embed: ^0.4.11
   # Standalone ELK layered layout — drives the /elk demo page (no mermaid).
-  elk_layout: ^0.1.0
+  elk: ^0.1.0
   mermaid_core: ^0.1.0
   mermaid_flutter: ^0.1.0
   mermaid_samples: ^0.1.0
@@ -29,7 +29,7 @@ dev_dependencies:
   build_web_compilers: ^4.8.0
   flutter_lints: ^6.0.0
   jaspr_builder: ^0.23.1
-  # Renders the elk_layout README to HTML for the /elk page (build-time only).
+  # Renders the elk README to HTML for the /elk page (build-time only).
   markdown: ^7.3.0
 
 jaspr:

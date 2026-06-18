@@ -7,7 +7,7 @@ import '../elk_demos.dart';
 import '../generated/elk_readme.g.dart';
 
 /// The essence of the embedded Flutter demo, shown beside the live canvas.
-const _flutterSnippet = '''// elk_layout is pure Dart, so it runs in Flutter.
+const _flutterSnippet = '''// elk is pure Dart, so it runs in Flutter.
 final result = const ElkLayered().layout(ElkGraph(
   layoutOptions: ElkLayoutOptions(direction: ElkDirection.down),
   children: [
@@ -33,7 +33,7 @@ Stack(children: [
   CustomPaint(painter: EdgePainter(result.edges)),
 ]);''';
 
-/// The `/elk` route: a standalone demo of the `elk_layout` package — example
+/// The `/elk` route: a standalone demo of the `elk` package — example
 /// graphs laid out without mermaid and drawn straight to SVG, plus an
 /// explanation of why the port exists and how to reuse it.
 class ElkDemoPage extends StatelessComponent {
@@ -46,7 +46,7 @@ class ElkDemoPage extends StatelessComponent {
       const SiteNav(active: SiteRoute.elk),
       header(classes: 'site-header', [
         div(classes: 'header-top', [
-          h1([.text('elk_layout')]),
+          h1([.text('elk')]),
           a(
             classes: 'gh-link',
             href: 'https://github.com/orestesgaolin/mermaid',
@@ -63,7 +63,7 @@ class ElkDemoPage extends StatelessComponent {
       section(classes: 'intro', [
         p([
           .text('Every diagram below was laid out by the standalone '),
-          strong([.text('elk_layout')]),
+          strong([.text('elk')]),
           .text(' package and drawn straight to SVG — '),
           strong([.text('no mermaid, no diagram DSL')]),
           .text('. You hand it a graph of nodes and edges; it returns '
@@ -84,7 +84,7 @@ class ElkDemoPage extends StatelessComponent {
         h2([.text('Laid out as live Flutter widgets')]),
         p([
           .text('Because '),
-          strong([.text('elk_layout')]),
+          strong([.text('elk')]),
           .text(' is pure Dart, it runs inside Flutter too. Below, ELK '
               'positions '),
           em([.text('real, interactive Flutter widgets')]),
@@ -99,12 +99,12 @@ class ElkDemoPage extends StatelessComponent {
         pre(classes: 'elk-code elk-code-side', [.text(_flutterSnippet)]),
       ]),
       // The canonical package documentation (options reference, examples,
-      // validation) rendered from packages/elk_layout/README.md. Regenerate
+      // validation) rendered from packages/elk/README.md. Regenerate
       // with `dart run tool/gen_readme_html.dart`.
       section(classes: 'intro elk-readme', [RawText(elkReadmeHtml)]),
       footer(classes: 'foot', [
         p([
-          .text('Rendered from the elk_layout package · part of the '),
+          .text('Rendered from the elk package · part of the '),
           a(
             [.text('mermaid dart')],
             href: 'https://github.com/orestesgaolin/mermaid',

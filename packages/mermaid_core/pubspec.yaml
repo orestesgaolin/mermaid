@@ -23,7 +23,7 @@ dependencies:
   # Standalone pure-Dart ELK-style layered layout (workspace package), used by
   # the flowchart `layout: elk` engine.
   elk:
-    path: ../elk_layout
+    path: ../elk
   # Pure-Dart KaTeX port: drives math layout via its box tree.
   # TODO: once the katex core package is published (under a free pub.dev name,
   # e.g. katex_dart), depend on the hosted version here and move this path to a

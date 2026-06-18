@@ -1,5 +1,5 @@
 /// The `/elk` page's interactive island: mounts [ElkFlutterApp] (real Flutter
-/// widgets laid out by `elk_layout`) through `jaspr_flutter_embed`'s
+/// widgets laid out by `elk`) through `jaspr_flutter_embed`'s
 /// [FlutterEmbedView], the same mechanism the comparison page uses for the
 /// mermaid renderer.
 library;

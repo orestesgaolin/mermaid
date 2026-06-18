@@ -1,8 +1,8 @@
-// GENERATED — do not edit. Source: packages/elk_layout/README.md
+// GENERATED — do not edit. Source: packages/elk/README.md
 // Regenerate: dart run tool/gen_readme_html.dart
 library;
 
-/// The elk_layout README rendered to HTML (minus its top-level title).
+/// The elk README rendered to HTML (minus its top-level title).
 const elkReadmeHtml = r'''
 <p>Pure-Dart <strong>layered graph layout</strong> (Sugiyama-style), inspired by the
 <a href="https://eclipse.dev/elk/">Eclipse Layout Kernel</a> (ELK) and its JavaScript
@@ -28,7 +28,7 @@ implementation of the same layered algorithm family, so output is <em>ELK-like</
 but not byte-identical to elkjs. See <a href="#validating-against-elkjs">Validation</a>.</p>
 </blockquote>
 <h2 id="quick-start">Quick start</h2>
-<pre><code class="language-dart">import 'package:elk_layout/elk_layout.dart';
+<pre><code class="language-dart">import 'package:elk/elk.dart';
 
 void main() {
   final result = const ElkLayered().layout(ElkGraph(
@@ -202,7 +202,7 @@ cd ../.. &amp;&amp; dart run tool/validation/compare.dart
 <p><code>compare.dart</code> prints a structural-agreement table <strong>and</strong> writes a
 side-by-side SVG per graph (ours | elkjs) to <code>tool/validation/output/</code> for
 visual comparison.</p>
-<p>On the bundled graph set, <code>elk_layout</code> agrees with elkjs <strong>100% on layer
+<p>On the bundled graph set, <code>elk</code> agrees with elkjs <strong>100% on layer
 assignment</strong> (which node lands in which layer along the flow axis) and produces
 <strong>zero node overlaps</strong>, with comparable bounding-box aspect ratios. Within-layer
 ordering differs (different crossing-minimization heuristics; symmetric graphs

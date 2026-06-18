@@ -1,11 +1,11 @@
 /// Example graphs for the ELK demo page, laid out by the standalone
-/// `elk_layout` package (no mermaid) and rendered to inline SVG strings.
+/// `elk` package (no mermaid) and rendered to inline SVG strings.
 ///
 /// Kept separate from the Jaspr page so the layout + SVG logic is plain,
 /// testable Dart; the page injects [ElkDemo.svg] via `raw()`.
 library;
 
-import 'package:elk_layout/elk_layout.dart';
+import 'package:elk/elk.dart';
 
 /// A titled demo: the explanation plus its rendered SVG. [wide] cards span the
 /// full width of the card grid (e.g. the wide left-to-right graph).
@@ -103,7 +103,7 @@ List<ElkDemo> buildElkDemos() {
         'app': 'my_app',
         'ui': 'my_app_ui',
         'core': 'my_core',
-        'elk': 'elk_layout',
+        'elk': 'elk',
         'http': 'http',
         'meta': 'meta',
       },

@@ -21,7 +21,7 @@ class App extends StatelessComponent {
           builder: (context, state) => const Home()),
       Route(
           path: '/elk',
-          title: 'elk_layout — pure-Dart ELK layered layout',
+          title: 'elk — pure-Dart ELK layered layout',
           builder: (context, state) => const ElkDemoPage()),
     ]);
   }
