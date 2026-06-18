@@ -21,7 +21,7 @@ import '../../math/tex_math.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
-import 'package:elk_layout/elk_layout.dart' as elk;
+import 'package:elk/elk.dart' as elk;
 
 import '../../vendor/dagre/dart_dagre.dart' as dagre;
 import 'elk_adapter.dart';
@@ -403,7 +403,7 @@ _Fragment _layoutGraph(
   }
 
   // --- 4. Run layout. -------------------------------------------------------
-  // `elk` runs the real ELK layered algorithm (standalone `elk_layout`
+  // `elk` runs the real ELK layered algorithm (standalone `elk`
   // package, via elk_adapter) over the same compound graph: genuinely
   // different placement from dagre plus orthogonal edge routing, with full
   // cluster support. Everything else uses the vendored dagre.
