@@ -708,9 +708,11 @@ _Fragment _layoutGraph(
 
     final labelSize = edgeLabelSizes[i];
     if (labelSize != null) {
-      final labelCenter = (dagreEdge?.labelX != null && dagreEdge?.labelY != null)
-          ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
-          : _pathMidpoint(points);
+      final labelCenter = useElk
+          ? (elkResult!.labelCenter('e$i') ?? _pathMidpoint(points))
+          : (dagreEdge?.labelX != null && dagreEdge?.labelY != null)
+              ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
+              : _pathMidpoint(points);
       edgeLabelGroups.add(_edgeLabelGroup(
           e, i, labelCenter, labelSize, baseStyle, theme,
           math: edgeMath[i]));

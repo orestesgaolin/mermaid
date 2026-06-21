@@ -309,16 +309,20 @@ class _Engine {
   /// nearest enclosing cluster boundary, or skipped if truly cross-level.
   LGraph buildGraph(List<ElkNode> nodes, List<ElkEdge> edges) {
     final lg = LGraph();
-    // Honor explicit spacing from the public options (the BK placer reads these
-    // graph properties). Unset → ELK's own defaults, which matches elkjs.
-    if (options.spacingNodeNode != null) {
-      lg.setProperty(const Property<double>('bk.spacing.nodeNode'),
-          options.spacingNodeNode!);
-    }
-    if (options.spacingNodeNodeBetweenLayers != null) {
-      lg.setProperty(const Property<double>('bk.spacing.layer'),
-          options.spacingNodeNodeBetweenLayers!);
-    }
+    // Apply the resolved spacing from the public options. These derive from
+    // `spacingBaseValue` (default 40) when not explicitly overridden — ELK's raw
+    // defaults (20/10) are too tight and let dense graphs overlap; the
+    // baseValue-derived spacing (matching mermaid-layout-elk) gives breathing
+    // room. The BK placer reads the node/layer props; the orthogonal router
+    // reads the edge props.
+    lg.setProperty(const Property<double>('bk.spacing.nodeNode'),
+        options.resolvedNodeNode);
+    lg.setProperty(const Property<double>('bk.spacing.layer'),
+        options.resolvedNodeNodeBetweenLayers);
+    lg.setProperty(const Property<double>('p5.spacing.edgeEdge'),
+        options.resolvedEdgeNode);
+    lg.setProperty(const Property<double>('p5.spacing.edgeNode'),
+        options.resolvedEdgeNode);
     // Model order: the crossing minimizer reads these to keep nodes in input
     // declaration order (ELK's considerModelOrder / forceNodeModelOrder).
     if (options.considerModelOrder != ElkConsiderModelOrder.none ||

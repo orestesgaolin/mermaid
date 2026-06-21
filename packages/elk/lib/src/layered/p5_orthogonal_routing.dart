@@ -40,14 +40,17 @@ import 'property.dart';
 // ---------------------------------------------------------------------------
 
 /// Edge-to-edge spacing inside a routing channel (ELK `SPACING_EDGE_EDGE_BETWEEN_LAYERS`).
-/// Default matches ELK's spacing default of 10.
+/// Default 10; the engine overrides it (from `spacingBaseValue`) via the graph
+/// property below.
 const edgeEdgeSpacing = 10.0;
+const _edgeEdgeProp = Property<double>('p5.spacing.edgeEdge', edgeEdgeSpacing);
 
 /// Spacing between an edge and a node across a layer gap
 /// (ELK `SPACING_EDGE_NODE_BETWEEN_LAYERS`, default 10). This is the offset of
 /// the first routing slot from the node border — i.e. the length of the stub by
 /// which every edge leaves its node before turning.
 const edgeNodeSpacing = 10.0;
+const _edgeNodeProp = Property<double>('p5.spacing.edgeNode', edgeNodeSpacing);
 
 /// Node-to-node spacing between adjacent layers (ELK
 /// `SPACING_NODE_NODE_BETWEEN_LAYERS`). The engine stores this on the graph as
@@ -80,7 +83,9 @@ class OrthogonalRoutingGenerator implements ILayoutProcessor {
     // by `edgeNodeSpacing`) and why layers spread apart when many edges route
     // between them. (Our BK placer no longer assigns x — see p4_bk_node_placer.)
     final nodeNodeSpacing = graph.getProperty(_nodeNodeBetweenLayers);
-    final generator = _OrthogonalRoutingGenerator(edgeEdgeSpacing);
+    final edgeEdge = graph.getProperty(_edgeEdgeProp);
+    final edgeNode = graph.getProperty(_edgeNodeProp);
+    final generator = _OrthogonalRoutingGenerator(edgeEdge);
 
     double xpos = 0;
     Layer? leftLayer;
@@ -97,8 +102,8 @@ class OrthogonalRoutingGenerator implements ILayoutProcessor {
         xpos += leftLayer.size.x;
       }
 
-      // The first routing slot sits `edgeNodeSpacing` past the source border.
-      final startPos = leftLayer == null ? xpos : xpos + edgeNodeSpacing;
+      // The first routing slot sits `edgeNode` past the source border.
+      final startPos = leftLayer == null ? xpos : xpos + edgeNode;
       final slotsCount = generator.routeEdges(leftNodes, rightNodes, startPos);
 
       final leftExternal = leftLayer == null ||
@@ -107,9 +112,9 @@ class OrthogonalRoutingGenerator implements ILayoutProcessor {
           rightNodes!.every((n) => n.type == NodeType.externalPort);
 
       if (slotsCount > 0) {
-        var routingWidth = (slotsCount - 1) * edgeEdgeSpacing;
-        if (leftLayer != null) routingWidth += edgeNodeSpacing;
-        if (rightLayer != null) routingWidth += edgeNodeSpacing;
+        var routingWidth = (slotsCount - 1) * edgeEdge;
+        if (leftLayer != null) routingWidth += edgeNode;
+        if (rightLayer != null) routingWidth += edgeNode;
         // Between two real layers, never tighter than the node-node spacing.
         if (routingWidth < nodeNodeSpacing && !leftExternal && !rightExternal) {
           routingWidth = nodeNodeSpacing;

@@ -18,10 +18,12 @@ import 'flow_model.dart';
 
 /// Result of an ELK layout, in flowchart coordinate space (absolute).
 class ElkLayoutResult {
-  ElkLayoutResult(this._nodes, this._edges, this.width, this.height);
+  ElkLayoutResult(
+      this._nodes, this._edges, this._labels, this.width, this.height);
 
   final Map<String, Rect> _nodes; // node/cluster id → absolute rect
   final Map<String, List<Point>> _edges; // edge id (e$i) → orthogonal polyline
+  final Map<String, Point> _labels; // edge id → ELK-placed label center
   final double width;
   final double height;
 
@@ -33,6 +35,11 @@ class ElkLayoutResult {
 
   /// Orthogonal polyline for an edge id (e.g. `e3`), or null.
   List<Point>? edgePoints(String id) => _edges[id];
+
+  /// ELK-placed label center for an edge, or null (e.g. unlabeled, or a
+  /// cross-hierarchy edge whose label isn't positioned yet — caller falls back
+  /// to the path midpoint).
+  Point? labelCenter(String id) => _labels[id];
 }
 
 /// Runs the ELK layered layout over an already-built compound [g].
@@ -57,9 +64,20 @@ ElkLayoutResult layoutWithElk(
   }
 
   final roots = childrenOf[null] ?? const <dagre.DagreNode>[];
+  // Pass each edge's label dimensions (the DagreEdge carries the measured label
+  // size as width/height) so ELK reserves space for the label — inserting a
+  // label dummy spreads the edges apart instead of letting their midpoint
+  // labels pile up — and returns a placed position we use below.
   final edges = [
     for (final e in g.edges)
-      elk.ElkEdge(id: e.id, sources: [e.source], targets: [e.target]),
+      elk.ElkEdge(
+        id: e.id,
+        sources: [e.source],
+        targets: [e.target],
+        labels: e.width > 0 && e.height > 0
+            ? [elk.ElkLabel(width: e.width, height: e.height)]
+            : const [],
+      ),
   ];
 
   final elkGraph = elk.ElkGraph(
@@ -76,16 +94,23 @@ ElkLayoutResult layoutWithElk(
     nodes[id] = Rect.fromLTWH(n.x, n.y, n.width, n.height);
   });
 
-  // Edge polylines (already absolute, orthogonal).
+  // Edge polylines (already absolute, orthogonal) + ELK-placed label centers.
   final edgePoints = <String, List<Point>>{};
+  final labelCenters = <String, Point>{};
   for (final e in result.edges) {
-    if (e.sections.isEmpty) continue;
-    edgePoints[e.id] = [
-      for (final p in e.sections.first.points) Point(p.x, p.y),
-    ];
+    if (e.sections.isNotEmpty) {
+      edgePoints[e.id] = [
+        for (final p in e.sections.first.points) Point(p.x, p.y),
+      ];
+    }
+    if (e.labels.isNotEmpty) {
+      final l = e.labels.first;
+      labelCenters[e.id] = Point(l.x + l.width / 2, l.y + l.height / 2);
+    }
   }
 
-  return ElkLayoutResult(nodes, edgePoints, result.width, result.height);
+  return ElkLayoutResult(
+      nodes, edgePoints, labelCenters, result.width, result.height);
 }
 
 elk.ElkDirection _direction(FlowDirection d) => switch (d) {
