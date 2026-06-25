@@ -160,13 +160,21 @@ code only engages when compound nodes are present):
   model under `layered/hierarchy/` with a unit test. (`GraphInfoHolder` +
   `LayerSweepTypeDecider` are folded into C2, where they are exercised, rather
   than landing as dead code.)
-- **C2** Hierarchy-aware crossing-min orchestration: port `GraphInfoHolder` +
-  `LayerSweepTypeDecider.useBottomUp()`, hoist P3 out of the per-graph recursive
-  pipeline; build the graph list, run the coordinated typed sweep with
-  `setPortOrderOnParentGraph`, gate to compound graphs only. → fixes **#3/#4**.
+- **C2** ✅ Hierarchy-aware crossing-min orchestration.
+  - **C2a** split the per-graph pipeline at P3 into pre-crossmin / crossmin /
+    post-crossmin phases (`layoutHierarchy`), behaviour-identical refactor.
+  - **C2b** added the INCLUDE_CHILDREN top-down coordination
+    (`_coordinateExternalPortOrder`): after crossmin, each compound child's
+    border dummies are reordered to match the parent-assigned order of its
+    external ports, so inner nodes' port order (from `_placeVerticalFreePorts`)
+    follows the parent. → **fixes #3**, improves #4's cross-cluster ordering.
 - **C3** Hierarchical port position/constraint + orthogonal border routing
-  (`HierarchicalPort*` processors) so boundary segments keep `edgeNode`
-  clearance. → fixes **#1**.
+  (`HierarchicalPort*` processors) so back-edge wrap lanes keep `edgeNode`
+  clearance from cluster borders. → fixes **#1** (2px corner hug — diagnosed as
+  BK *cross-layer* compaction of reversed long-edge dummies against a compound
+  node; needs ELK's hierarchical obstacle routing, not an in-layer spacing
+  knob). Also addresses the residual left-then-right detour in #4 (exit-port
+  side selection for cross-cluster edges).
 - **C4** (if needed) faithful `CompoundGraphPre/Postprocessor` outer/inner
   segment model, replacing the ad-hoc `_endpointPort`/`_crossSegments` split.
 
