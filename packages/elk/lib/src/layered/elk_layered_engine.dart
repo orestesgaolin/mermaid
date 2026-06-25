@@ -54,6 +54,10 @@ import 'phase.dart';
 /// padding for a hierarchical node).
 const double _compoundPadding = 12;
 
+/// Extra vertical margin added below a compound label band (so the title isn't
+/// flush against the first child row).
+const double _labelBandMargin = 6;
+
 /// A feature of [graph] the faithful port doesn't implement yet, or null.
 /// Used to fail honestly instead of silently producing a non-ELK layout.
 String? unsupportedElkFeature(ElkGraph graph) {
@@ -303,6 +307,12 @@ class _Engine {
   /// dummy's resolved border position onto the cluster's external [LPort].
   final List<_PortLink> _portLinks = [];
 
+  /// Output-space band (height) reserved at the top of a compound node for its
+  /// label (subgraph title). ELK upstream reserves this via node labels with
+  /// `nodeLabels.placement = INSIDE V_TOP`; we model it as an empty band so
+  /// edges/children never overlap the title. Keyed by the compound [LNode].
+  final Map<LNode, double> _compoundBand = {};
+
   /// Builds an [LGraph] from a level's [nodes] and [edges]. Compound children
   /// recurse into a [LNode.nestedGraph]. Edges are placed in the graph that
   /// directly contains both endpoints; cross-hierarchy edges are routed to the
@@ -376,6 +386,16 @@ class _Engine {
         // Size is computed bottom-up after the nested layout; placeholder now.
         ln.size.x = 0;
         ln.size.y = 0;
+        // Reserve a top band for the compound's label (subgraph title), so no
+        // edge or child is laid out over it (faithful to upstream's INSIDE
+        // V_TOP node-label placement).
+        if (n.labels.isNotEmpty) {
+          var h = 0.0;
+          for (final l in n.labels) {
+            if (l.height > h) h = l.height;
+          }
+          if (h > 0) _compoundBand[ln] = h + _labelBandMargin;
+        }
       } else {
         origSize[ln] = (n.width, n.height);
         // Internal RIGHT space: transpose swaps width/height.
@@ -725,6 +745,18 @@ class _Engine {
       // sides. (Internal space is RIGHT; the nested bbox is already in it.)
       ln.size.x = w + 2 * _compoundPadding;
       ln.size.y = h + 2 * _compoundPadding;
+      // Reserve the label band on the OUTPUT-top side. Output-top maps to the
+      // internal flow axis (X) when transposed (DOWN/UP), else the cross axis
+      // (Y). The children are pushed off the band at extraction; here we only
+      // grow the compound so the parent reserves room for it.
+      final band = _compoundBand[ln] ?? 0;
+      if (band > 0) {
+        if (transpose) {
+          ln.size.x += band;
+        } else {
+          ln.size.y += band;
+        }
+      }
 
       // Cross-hierarchy: copy each boundary dummy's resolved cross position onto
       // the cluster's external port so the parent routes the outer segment to
@@ -877,13 +909,15 @@ class _Engine {
     final ngw = transpose ? nih : niw;
     final ngh = transpose ? niw : nih;
 
+    final band = _compoundBand[ln] ?? 0;
     ElkPoint childOut(double cx, double cy) {
       final nx = cx - nMinX, ny = cy - nMinY;
       var ox = transpose ? ny : nx;
       var oy = transpose ? nx : ny;
       if (dir == ElkDirection.left) ox = ngw - ox;
       if (dir == ElkDirection.up) oy = ngh - oy;
-      return ElkPoint(ox + _compoundPadding, oy + _compoundPadding);
+      // Push children below the reserved label band at output-top.
+      return ElkPoint(ox + _compoundPadding, oy + _compoundPadding + band);
     }
 
     final children = <ElkPositionedNode>[

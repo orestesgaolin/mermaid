@@ -47,6 +47,7 @@ ElkLayoutResult layoutWithElk(
   dagre.DagreGraph g, {
   required FlowDirection direction,
   required elk.ElkLayoutOptions options,
+  Map<String, Size> clusterLabels = const {},
 }) {
   // Build the parent → children map from each node's `parent` link.
   final childrenOf = <String?, List<dagre.DagreNode>>{};
@@ -58,7 +59,17 @@ ElkLayoutResult layoutWithElk(
   elk.ElkNode toElkNode(dagre.DagreNode n) {
     final kids = childrenOf[n.id];
     if (isCompound[n.id] == true && kids != null) {
-      return elk.ElkNode(id: n.id, children: kids.map(toElkNode).toList());
+      // Pass the subgraph title as a node label so ELK reserves a top band for
+      // it (matching upstream mermaid-layout-elk), keeping edges/children off
+      // the title.
+      final label = clusterLabels[n.id];
+      return elk.ElkNode(
+        id: n.id,
+        children: kids.map(toElkNode).toList(),
+        labels: label != null && label.height > 0
+            ? [elk.ElkLabel(width: label.width, height: label.height)]
+            : const [],
+      );
     }
     return elk.ElkNode(id: n.id, width: n.width, height: n.height);
   }

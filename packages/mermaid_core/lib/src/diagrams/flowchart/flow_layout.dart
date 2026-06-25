@@ -410,9 +410,20 @@ _Fragment _layoutGraph(
   final useElk = engine == 'elk';
   dagre.DagreResult? result;
   ElkLayoutResult? elkResult;
+  // Subgraph title sizes, so ELK reserves a top band for each (matching
+  // upstream mermaid-layout-elk, which passes the title as a node label).
+  final clusterTitleStyleForElk = baseStyle.copyWith(fontWeight: 400);
+  final clusterLabels = <String, Size>{
+    for (var i = 0; i < sgs.length; i++)
+      if (!removedSubgraphs.contains(i) && sgs[i].title.isNotEmpty)
+        sgs[i].id: measurer.measure(sgs[i].title, clusterTitleStyleForElk,
+            maxWidth: _wrappingWidth),
+  };
   if (useElk) {
     elkResult = layoutWithElk(g,
-        direction: graph.direction, options: elkOptions);
+        direction: graph.direction,
+        options: elkOptions,
+        clusterLabels: clusterLabels);
     for (final p in placed.values) {
       final c = elkResult.center(p.node.id);
       if (c != null) p.center = c;
@@ -486,12 +497,23 @@ _Fragment _layoutGraph(
         ? Size.zero
         : measurer.measure(sg.title, clusterTitleStyle,
             maxWidth: _wrappingWidth);
-    final rect = Rect.fromLTRB(
-      pos.left - _clusterPadding,
-      pos.top - _clusterPadding - titleSize.height,
-      pos.right + _clusterPadding,
-      pos.bottom + _clusterPadding,
-    );
+    // For ELK the rect already includes a reserved top band for the title (we
+    // passed the title as a node label), so the title sits *inside* the rect.
+    // Dagre doesn't reserve it, so the rect is grown upward by the title height.
+    final rect = useElk
+        ? Rect.fromLTRB(
+            pos.left - _clusterPadding,
+            pos.top - _clusterPadding,
+            pos.right + _clusterPadding,
+            pos.bottom + _clusterPadding,
+          )
+        : Rect.fromLTRB(
+            pos.left - _clusterPadding,
+            pos.top - _clusterPadding - titleSize.height,
+            pos.right + _clusterPadding,
+            pos.bottom + _clusterPadding,
+          );
+    final titleTop = useElk ? pos.top + _clusterPadding : rect.top;
     clusterRects[sg.id] = rect;
     clusterGroups.add(SceneGroup(
       id: sg.id,
@@ -508,7 +530,7 @@ _Fragment _layoutGraph(
             text: sg.title,
             bounds: Rect.fromLTWH(
               rect.center.x - titleSize.width / 2,
-              rect.top,
+              titleTop,
               titleSize.width,
               titleSize.height,
             ),
