@@ -124,6 +124,54 @@ Residual: only **one-level** crossings are split this way; an endpoint nested tw
 or more levels below the LCA falls back to boundary routing (multi-level recursive
 splitting and label positioning on split edges are TODO).
 
+## INCLUDE_CHILDREN faithful port — staged roadmap (in progress)
+
+Goal: replace the recursive **SEPARATE_CHILDREN** approximation (each nested
+graph laid out independently, cross-hierarchy edges split through ad-hoc
+external ports) with ELK's hierarchy-aware **INCLUDE_CHILDREN** so that
+cross-hierarchy edge *ordering* and *clearance* match upstream. This fixes the
+three known cross-hierarchy defects:
+
+- **#3** two edges into a node cross right before entering it (the target's
+  incoming-port order is decided by the child cluster's own crossing-min, which
+  cannot see where the far endpoints sit at the parent level).
+- **#4** a cross-cluster edge exits one side then crosses to the other (same,
+  on the exit side).
+- **#1** a back-edge wrap lane hugs a cluster border (~2px) because the cluster
+  is not treated as an obstacle with `edgeNode` clearance.
+
+ELK mechanism (studied from `org.eclipse.elk.alg.layered`):
+`CompoundGraphPreprocessor` splits cross-hierarchy edges into outer/inner
+segments (external ports + dummies), then the **hierarchy-aware**
+`LayerSweepCrossingMinimizer` runs ONE coordinated pass over all graphs in the
+hierarchy: per graph `LayerSweepTypeDecider.useBottomUp()` picks bottom-up
+(child order drives parent) vs top-down/cross-hierarchical (parent order drives
+child); `setPortOrderOnParentGraph()` propagates a child's external-port order
+up; `SweepCopy` saves/restores the best node+port orders. Then hierarchical port
+processors position the border ports and route the boundary segments with
+clearance; `CompoundGraphPostprocessor` reassembles.
+
+Checkpoints (each must compile, keep elk/core/flutter tests green, and not
+regress the `tool/elk_oracle.sh` comparison; flat graphs must be byte-identical
+so the 7-graph elkjs parity suite + 184 corpus are untouched — hierarchy-aware
+code only engages when compound nodes are present):
+
+- **C1** Foundational utilities ported to our LGraph model: `SweepCopy`
+  (node+port order save/restore), `GraphInfoHolder` (per-graph hierarchy links +
+  aux objects), `LayerSweepTypeDecider.useBottomUp()`. New files under
+  `layered/hierarchy/`. Not yet wired → behaviour unchanged.
+- **C2** Hierarchy-aware crossing-min orchestration: hoist P3 out of the
+  per-graph recursive pipeline; build the graph list, run the coordinated
+  typed sweep with `setPortOrderOnParentGraph`, gate to compound graphs only.
+  → fixes **#3/#4**.
+- **C3** Hierarchical port position/constraint + orthogonal border routing
+  (`HierarchicalPort*` processors) so boundary segments keep `edgeNode`
+  clearance. → fixes **#1**.
+- **C4** (if needed) faithful `CompoundGraphPre/Postprocessor` outer/inner
+  segment model, replacing the ad-hoc `_endpointPort`/`_crossSegments` split.
+
+Status: C1 in progress.
+
 ## Remaining toward full parity
 
 Still throw `UnsupportedError` until ported: **explicit ports**, **self-loops**
