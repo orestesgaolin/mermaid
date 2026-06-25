@@ -96,7 +96,8 @@ LookConfig resolveLook(String source) {
 
 /// Resolves the layout engine name (`dagre` default, or `elk` / `tidy-tree`)
 /// from `layout:` in an `%%{init}%%` directive or frontmatter `config:`. Also
-/// recognizes the `flowchart-elk` diagram keyword (handled by the caller).
+/// honours upstream's `flowchart.defaultRenderer: 'elk'` and recognizes the
+/// `flowchart-elk` diagram keyword (handled by the caller).
 String resolveLayout(String source) {
   var layout = 'dagre';
   final text = source.replaceAll('\r\n', '\n');
@@ -108,12 +109,24 @@ String resolveLayout(String source) {
     final lm = RegExp(r'^\s*layout:\s*([\w-]+)\s*$', multiLine: true)
         .firstMatch(fm.group(1)!);
     if (lm != null) layout = lm.group(1)!;
+    // Upstream `flowchart.defaultRenderer: elk` (YAML frontmatter form).
+    final dr = RegExp(r'''^\s*defaultRenderer:\s*['"]?elk['"]?\s*$''',
+            multiLine: true, caseSensitive: false)
+        .firstMatch(fm.group(1)!);
+    if (dr != null) layout = 'elk';
   }
   for (final m in RegExp(r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%')
       .allMatches(text)) {
     final config = _looseJson(m.group(1)!);
     if (config is Map && config['layout'] is String) {
       layout = config['layout'] as String;
+    }
+    // Upstream `{flowchart: {defaultRenderer: 'elk'}}` selects the elk engine.
+    final flow = config is Map ? config['flowchart'] : null;
+    if (flow is Map && flow['defaultRenderer'] is String) {
+      if ((flow['defaultRenderer'] as String).toLowerCase() == 'elk') {
+        layout = 'elk';
+      }
     }
   }
   return layout;

@@ -31,6 +31,19 @@ void main() {
     test('flowchart-elk keyword selects elk', () {
       expect(resolveLayout('flowchart-elk TD\nA-->B'), 'elk');
     });
+    test('flowchart.defaultRenderer in init directive selects elk', () {
+      expect(
+          resolveLayout(
+              "%%{init: {'flowchart': {'defaultRenderer': 'elk'}}}%%\n"
+              'flowchart TD\nA-->B'),
+          'elk');
+    });
+    test('flowchart.defaultRenderer in frontmatter selects elk', () {
+      expect(
+          resolveLayout('---\nconfig:\n  flowchart:\n'
+              '    defaultRenderer: elk\n---\nflowchart TD\nA-->B'),
+          'elk');
+    });
     test('reads layout from a separate init directive alongside look', () {
       // The website emits layout and look as two separate %%{init}%% lines;
       // all init directives must be merged, not just the first.
