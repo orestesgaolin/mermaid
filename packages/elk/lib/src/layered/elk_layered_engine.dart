@@ -901,9 +901,18 @@ class _Engine {
         // the dummy's own position rather than throwing.
         final dPort = link.dummy.ports.isEmpty ? null : link.dummy.ports.first;
         final dummyCrossY = link.dummy.position.y + (dPort?.anchor.y ?? 0);
+        // For non-transposed flow (LR/RL) the label band is reserved on the
+        // cross axis (size.y), and `childOut` shifts the children down by `band`
+        // at extraction. The external port must shift by the same band, or the
+        // inner segment meets the border at a band-sized offset from the cluster
+        // port — a diagonal kink that the edge clip then snaps to the border
+        // (cross-hierarchy edges appearing to stop at the cluster edge instead
+        // of reaching the inner node). For transposed flow (DOWN/UP) the band is
+        // on the flow axis and produces a clean stub, so no cross-axis shift.
+        final crossBand = transpose ? 0.0 : band;
         link.port.position
           ..x = link.east ? ln.size.x : 0
-          ..y = (dummyCrossY - nOy) + _compoundPadding;
+          ..y = (dummyCrossY - nOy) + _compoundPadding + crossBand;
         // Anchor at the port's own position (size is zero), so the outer edge
         // segment meets the border exactly where the inner segment does.
         link.port.anchor
