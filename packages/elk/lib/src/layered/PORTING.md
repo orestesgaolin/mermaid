@@ -156,14 +156,14 @@ regress the `tool/elk_oracle.sh` comparison; flat graphs must be byte-identical
 so the 7-graph elkjs parity suite + 184 corpus are untouched — hierarchy-aware
 code only engages when compound nodes are present):
 
-- **C1** Foundational utilities ported to our LGraph model: `SweepCopy`
-  (node+port order save/restore), `GraphInfoHolder` (per-graph hierarchy links +
-  aux objects), `LayerSweepTypeDecider.useBottomUp()`. New files under
-  `layered/hierarchy/`. Not yet wired → behaviour unchanged.
-- **C2** Hierarchy-aware crossing-min orchestration: hoist P3 out of the
-  per-graph recursive pipeline; build the graph list, run the coordinated
-  typed sweep with `setPortOrderOnParentGraph`, gate to compound graphs only.
-  → fixes **#3/#4**.
+- **C1** ✅ `SweepCopy` (node+port order save/restore) ported to our LGraph
+  model under `layered/hierarchy/` with a unit test. (`GraphInfoHolder` +
+  `LayerSweepTypeDecider` are folded into C2, where they are exercised, rather
+  than landing as dead code.)
+- **C2** Hierarchy-aware crossing-min orchestration: port `GraphInfoHolder` +
+  `LayerSweepTypeDecider.useBottomUp()`, hoist P3 out of the per-graph recursive
+  pipeline; build the graph list, run the coordinated typed sweep with
+  `setPortOrderOnParentGraph`, gate to compound graphs only. → fixes **#3/#4**.
 - **C3** Hierarchical port position/constraint + orthogonal border routing
   (`HierarchicalPort*` processors) so boundary segments keep `edgeNode`
   clearance. → fixes **#1**.
