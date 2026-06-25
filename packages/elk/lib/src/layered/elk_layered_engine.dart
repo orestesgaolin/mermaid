@@ -91,9 +91,9 @@ ElkResult layeredLayout(ElkGraph graph) {
 
   final engine = _Engine(graph.layoutOptions, transpose, dir);
 
-  // Build the (possibly hierarchical) LGraph; lay it out bottom-up.
+  // Build the (possibly hierarchical) LGraph; lay it out.
   final root = engine.buildGraph(graph.children, graph.edges);
-  engine.layoutRecursive(root);
+  engine.layoutHierarchy(root);
 
   // Extract the root graph into the result tree.
   return engine.extractRoot(root);
@@ -676,70 +676,122 @@ class _Engine {
     return false;
   }
 
-  /// The fixed ELK-default phase+processor pipeline, run over a single graph.
-  void _runPipeline(LGraph lg) {
-    final pipeline = <ILayoutProcessor>[
-      // self-loops detached before everything else
-      SelfLoopPreProcessor(),
-      // before P1
-      EdgeAndLayerConstraintEdgeReverser(),
-      // P1
-      GreedyCycleBreaker(),
-      // before P2
-      LayerConstraintPreprocessor(),
-      LabelDummyInserter(),
-      // P2
-      NetworkSimplexLayerer(),
-      // before P3 (enum order: long-edge split, port side, inverted, port sort)
-      LayerConstraintPostprocessor(),
-      LongEdgeSplitter(),
-      // Set portConstraints = FIXED_SIDE (using intermediate_ports type) for
-      // nodes with declared sides, just before PortSideProcessor reads it.
-      // This must run AFTER EdgeAndLayerConstraintEdgeReverser (which reads the
-      // property using intermediate_constraints' type — safely unset until here).
-      _MarkFixedSideConstraints(_nodesWithFixedSides),
-      PortSideProcessor(),
-      InvertedPortProcessor(),
-      PortListSorter(),
-      // P3 — crossing minimization (barycenter heuristic with randomized
-      // thoroughness restarts, ELK's default CrossMinType.BARYCENTER). The
-      // greedy-switch heuristic is a non-default CrossMinType and is therefore
-      // not part of the default pipeline.
-      LayerSweepCrossingMinimizer(),
-      // before P4
-      InnermostNodeMarginCalculator(),
-      LabelAndNodeSizeProcessor(),
-      // Place NORTH/SOUTH ports (transposed-axis cases) that
-      // LabelAndNodeSizeProcessor doesn't handle.
-      _PlaceNorthSouthPorts(declaredPortsById),
-      InLayerConstraintProcessor(),
-      HyperedgeDummyMerger(),
-      // P4
-      BKNodePlacer(),
-      // before P5
-      LayerSizeAndGraphHeightCalculator(),
-      // P5
-      OrthogonalRoutingGenerator(),
-      // after P5: route self-loops, extract label positions, then rejoin
-      // long-edge/label dummies and restore reversed edges.
-      SelfLoopRouter(),
-      SelfLoopPostProcessor(),
-      LabelDummyRemover(),
-      LongEdgeJoiner(),
-      ReversedEdgeRestorer(),
-    ];
-    for (final p in pipeline) {
+  /// Processors that run *before* crossing minimization (cycle breaking,
+  /// layering, long-edge split, port side assignment + sort). They are
+  /// order-based — they need no node sizes — so they can run on every graph in
+  /// the hierarchy before any placement happens.
+  List<ILayoutProcessor> _preCrossminProcessors() => [
+        // self-loops detached before everything else
+        SelfLoopPreProcessor(),
+        // before P1
+        EdgeAndLayerConstraintEdgeReverser(),
+        // P1
+        GreedyCycleBreaker(),
+        // before P2
+        LayerConstraintPreprocessor(),
+        LabelDummyInserter(),
+        // P2
+        NetworkSimplexLayerer(),
+        // before P3 (enum order: long-edge split, port side, inverted, port sort)
+        LayerConstraintPostprocessor(),
+        LongEdgeSplitter(),
+        // Set portConstraints = FIXED_SIDE (using intermediate_ports type) for
+        // nodes with declared sides, just before PortSideProcessor reads it.
+        // This must run AFTER EdgeAndLayerConstraintEdgeReverser (which reads the
+        // property using intermediate_constraints' type — safely unset until here).
+        _MarkFixedSideConstraints(_nodesWithFixedSides),
+        PortSideProcessor(),
+        InvertedPortProcessor(),
+        PortListSorter(),
+      ];
+
+  /// Processors that run *after* crossing minimization (margins, sizing,
+  /// placement, routing). Placement needs each compound child's size, so this
+  /// segment runs bottom-up.
+  List<ILayoutProcessor> _postCrossminProcessors() => [
+        // before P4
+        InnermostNodeMarginCalculator(),
+        LabelAndNodeSizeProcessor(),
+        // Place NORTH/SOUTH ports (transposed-axis cases) that
+        // LabelAndNodeSizeProcessor doesn't handle.
+        _PlaceNorthSouthPorts(declaredPortsById),
+        InLayerConstraintProcessor(),
+        HyperedgeDummyMerger(),
+        // P4
+        BKNodePlacer(),
+        // before P5
+        LayerSizeAndGraphHeightCalculator(),
+        // P5
+        OrthogonalRoutingGenerator(),
+        // after P5: route self-loops, extract label positions, then rejoin
+        // long-edge/label dummies and restore reversed edges.
+        SelfLoopRouter(),
+        SelfLoopPostProcessor(),
+        LabelDummyRemover(),
+        LongEdgeJoiner(),
+        ReversedEdgeRestorer(),
+      ];
+
+  void _runProcessors(List<ILayoutProcessor> ps, LGraph lg) {
+    for (final p in ps) {
       p.process(lg);
     }
   }
 
-  /// Lays out [lg] bottom-up: every compound child's nested graph is laid out
-  /// first and its size fixed before this graph runs through the pipeline.
-  void layoutRecursive(LGraph lg) {
+  /// Lays out a (possibly hierarchical) graph in three phases. Splitting the
+  /// per-graph pipeline at crossing minimization lets P3 run as ONE
+  /// hierarchy-coordinated pass over all graphs (ELK's INCLUDE_CHILDREN), while
+  /// the order-based pre-P3 work and the size-dependent post-P3 work stay
+  /// per-graph. For a flat graph this is identical to running the single
+  /// pipeline once.
+  void layoutHierarchy(LGraph root) {
+    _phasePreCrossmin(root); // cycle-break → layer → port sides, every graph
+    _phaseCrossmin(root); // hierarchy-coordinated crossing minimization
+    _phasePostCrossmin(root); // size → place → route, bottom-up
+  }
+
+  /// All nested (compound child) graphs of [lg]. A node may be layerless
+  /// (before layering, phase A) or already in a layer (after layering, phases
+  /// B/C), so both are scanned.
+  Iterable<LGraph> _nestedGraphsOf(LGraph lg) sync* {
     for (final ln in lg.layerlessNodes) {
+      if (ln.nestedGraph != null) yield ln.nestedGraph!;
+    }
+    for (final layer in lg.layers) {
+      for (final ln in layer.nodes) {
+        if (ln.nestedGraph != null) yield ln.nestedGraph!;
+      }
+    }
+  }
+
+  /// Phase A: run the pre-crossmin processors on every graph in the hierarchy.
+  void _phasePreCrossmin(LGraph lg) {
+    for (final nested in _nestedGraphsOf(lg)) {
+      _phasePreCrossmin(nested);
+    }
+    _runProcessors(_preCrossminProcessors(), lg);
+  }
+
+  /// Phase B: crossing minimization. C2a runs it per graph (no coordination
+  /// yet — behaviour-identical to the old single pipeline); C2b adds the
+  /// top-down external-port-order coordination here.
+  void _phaseCrossmin(LGraph lg) {
+    LayerSweepCrossingMinimizer().process(lg);
+    for (final nested in _nestedGraphsOf(lg)) {
+      _phaseCrossmin(nested);
+    }
+  }
+
+  /// Phase C: post-crossmin (size + place + route), bottom-up so each compound
+  /// child is laid out and sized before its parent is placed.
+  void _phasePostCrossmin(LGraph lg) {
+    for (final ln in [
+      for (final layer in lg.layers) ...layer.nodes,
+      ...lg.layerlessNodes,
+    ]) {
       final nested = ln.nestedGraph;
       if (nested == null) continue;
-      layoutRecursive(nested);
+      _phasePostCrossmin(nested);
       final (w, h) = _internalBounds(nested);
       // The compound node's internal-space size = nested bbox + padding on all
       // sides. (Internal space is RIGHT; the nested bbox is already in it.)
@@ -780,7 +832,7 @@ class _Engine {
           ..y = 0;
       }
     }
-    _runPipeline(lg);
+    _runProcessors(_postCrossminProcessors(), lg);
   }
 
   /// Internal-space (RIGHT) bounding-box width/height of a laid-out graph,
