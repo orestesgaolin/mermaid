@@ -1073,8 +1073,18 @@ class _PlacedNode {
 Point _clipPerpendicular(_Shape shape, Point center, Point end, Point next) {
   final dx = (next.x - end.x).abs();
   final dy = (next.y - end.y).abs();
-  final probe =
-      dx <= dy ? Point(next.x, center.y) : Point(center.x, next.y);
+  final vertical = dx <= dy;
+  final probe = vertical ? Point(next.x, center.y) : Point(center.x, next.y);
+  if (shape is _PolygonShape) {
+    // For a polygon with slanted edges (diamond, hexagon, trapezoid, …) the
+    // probe trick must NOT move the polygon: probing from `probe` as the centre
+    // shifts the whole shape along the cross axis, so a ray at the segment's
+    // x/y lands on a *displaced* boundary (e.g. off to the side of a diamond's
+    // vertex, leaving a visible gap). Keep the polygon at its true centre and
+    // cast the perpendicular ray from `probe`, so the attach lands on the real
+    // (possibly slanted) boundary at the segment's own axis.
+    return _intersectPolygon(center, shape.points, next, rayFrom: probe);
+  }
   return shape.intersect(probe, next);
 }
 
@@ -1755,12 +1765,16 @@ Point _intersectEllipse(Point c, double rx, double ry, Point point) {
   return Point(c.x + dx, c.y + dy);
 }
 
-Point _intersectPolygon(Point c, List<Point> relativePoints, Point point) {
+Point _intersectPolygon(Point c, List<Point> relativePoints, Point point,
+    {Point? rayFrom}) {
+  // Polygon vertices are centred at `c`; the clip ray runs from `rayFrom` (the
+  // node centre by default, or a perpendicular probe) to `point`.
+  final origin = rayFrom ?? c;
   final intersections = <Point>[];
   for (var i = 0; i < relativePoints.length; i++) {
     final p1 = relativePoints[i] + c;
     final p2 = relativePoints[(i + 1) % relativePoints.length] + c;
-    final hit = _intersectLine(c, point, p1, p2);
+    final hit = _intersectLine(origin, point, p1, p2);
     if (hit != null) intersections.add(hit);
   }
   if (intersections.isEmpty) return c;
