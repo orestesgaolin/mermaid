@@ -193,8 +193,19 @@ code only engages when compound nodes are present):
     for back-edges so the edge attaches to the border facing its far endpoint.
     Forward-only diagrams are byte-identical; back-edge diagrams (orig, simple)
     get compact, non-cluster-cutting routes. Fixes the corner-hug class of #1.
-  - **C3b** (next) `edgeNode` clearance for wrap lanes + fan-in lane ordering
-    (parallel cross-cluster edges into one cluster ordered by target).
+  - **C3b** ✅ Spacing/clearance parity with elkjs:
+    - **fan-in ordering** (`_orderFanIn` in the flow adapter): edges entering one
+      node on one border from the same lateral side get their attach lanes
+      ordered so the fans nest instead of cross.
+    - **perpendicular clip on real boundary**: `_clipPerpendicular` no longer
+      shifts a polygon when probing, so arrows meet slanted shapes (diamond,
+      hexagon) without a gap.
+    - **base-value-derived edge spacings**: `bk.spacing.edgeEdge` (parallel
+      long-edge bundles) and `bk.spacing.nodeEdge` (pass-by edge ↔ cluster
+      clearance) were stuck at the raw default 10; derive both from the base
+      value (≈20) like node-node/edge-node. Removes the "thick bundle" look and
+      the border hugs. (Setting compound-node margins did nothing — BK spaces a
+      dummy-vs-node pair by `nodeEdge`, not by node margins.)
 - **C4** (if needed) faithful `CompoundGraphPre/Postprocessor` outer/inner
   segment model, replacing the ad-hoc `_endpointPort`/`_crossSegments` split.
 
