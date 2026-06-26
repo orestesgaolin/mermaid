@@ -329,6 +329,12 @@ class _Engine {
         options.resolvedNodeNode);
     lg.setProperty(const Property<double>('bk.spacing.layer'),
         options.resolvedNodeNodeBetweenLayers);
+    // Spacing between adjacent long-edge dummy chains during Brandes–Köpf
+    // placement. ELK derives this from baseValue (≈ baseValue·0.5); leaving it
+    // at the raw default (10) packs parallel long edges into a tight bundle that
+    // reads as one thick line. Match the router's edge spacing.
+    lg.setProperty(const Property<double>('bk.spacing.edgeEdge'),
+        options.resolvedEdgeNode);
     lg.setProperty(const Property<double>('p5.spacing.edgeEdge'),
         options.resolvedEdgeNode);
     lg.setProperty(const Property<double>('p5.spacing.edgeNode'),
