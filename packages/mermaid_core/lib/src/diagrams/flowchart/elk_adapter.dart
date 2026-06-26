@@ -120,8 +120,114 @@ ElkLayoutResult layoutWithElk(
     }
   }
 
+  // Fan-in ordering: when several edges enter the same node on the same border
+  // they must attach in an order that lets their orthogonal feeds nest instead
+  // of cross. ELK routes each segment independently, so two edges into one node
+  // can swap lanes and cross right before entering. Re-assign their attach lanes
+  // here (idempotent: an already-nested fan keeps its lanes).
+  final targetOf = {for (final e in edges) e.id: e.targets.first};
+  _orderFanIn(edgePoints, targetOf, nodes);
+
   return ElkLayoutResult(
       nodes, edgePoints, labelCenters, result.width, result.height);
+}
+
+/// Reorders the border-attach lanes of edges that enter the *same node* on the
+/// *same side* coming from the *same lateral direction*, so their orthogonal
+/// feeds nest without crossing. Only such groups are touched, and only their
+/// final attach coordinate is moved (the perpendicular drop and its feed bend),
+/// so node placement and every other edge are untouched. Already-correct fans
+/// are left unchanged (the sort reproduces their lanes).
+void _orderFanIn(
+  Map<String, List<Point>> edgePoints,
+  Map<String, String> targetOf,
+  Map<String, Rect> nodes,
+) {
+  const eps = 1.0;
+  // side: 0=top, 1=bottom, 2=left, 3=right.
+  final groups = <String, List<String>>{};
+  edgePoints.forEach((id, pts) {
+    if (pts.length < 3) return;
+    final tgt = targetOf[id];
+    final r = tgt == null ? null : nodes[tgt];
+    if (r == null) return;
+    final p = pts.last;
+    final onX = p.x > r.left - eps && p.x < r.right + eps;
+    final onY = p.y > r.top - eps && p.y < r.bottom + eps;
+    int? side;
+    if ((p.y - r.top).abs() <= eps && onX) {
+      side = 0;
+    } else if ((p.y - r.bottom).abs() <= eps && onX) {
+      side = 1;
+    } else if ((p.x - r.left).abs() <= eps && onY) {
+      side = 2;
+    } else if ((p.x - r.right).abs() <= eps && onY) {
+      side = 3;
+    }
+    if (side == null) return;
+    (groups['$tgt:$side'] ??= []).add(id);
+  });
+
+  for (final entry in groups.entries) {
+    final ids = entry.value;
+    if (ids.length < 2) continue;
+    final side = int.parse(entry.key.split(':').last);
+    final vertical = side == 0 || side == 1; // drop is vertical → attach is x
+
+    // (id, turn index, attach lane, approach line coord, lateral side).
+    final infos = <(String, int, double, double, int)>[];
+    int? commonLateral;
+    var ok = true;
+    for (final id in ids) {
+      final pts = edgePoints[id]!;
+      final n = pts.length;
+      final attach = vertical ? pts[n - 1].x : pts[n - 1].y;
+      // Walk back through the (possibly multi-point) perpendicular drop to the
+      // turn where the parallel feed meets it.
+      var t = n - 1;
+      while (t - 1 >= 0 &&
+          ((vertical ? pts[t - 1].x : pts[t - 1].y) - attach).abs() <= eps) {
+        t--;
+      }
+      if (t - 1 < 0) { ok = false; break; } // no feed segment
+      final turn = pts[t], feed = pts[t - 1];
+      double approach;
+      int lateral;
+      if (vertical) {
+        if ((feed.y - turn.y).abs() > eps) { ok = false; break; } // feed not ∥
+        approach = turn.y;
+        lateral = feed.x < turn.x ? -1 : 1; // -1: feed comes from the left
+      } else {
+        if ((feed.x - turn.x).abs() > eps) { ok = false; break; }
+        approach = turn.x;
+        lateral = feed.y < turn.y ? -1 : 1; // -1: feed comes from the top
+      }
+      commonLateral ??= lateral;
+      if (lateral != commonLateral) { ok = false; break; }
+      infos.add((id, t, attach, approach, lateral));
+    }
+    if (!ok || infos.length < 2) continue;
+
+    final lanes = [for (final i in infos) i.$3]..sort();
+    // Deepest = feed line closest to the border. top/left: larger coord;
+    // bottom/right: smaller coord.
+    int cmpDeep((String, int, double, double, int) a,
+            (String, int, double, double, int) b) =>
+        (side == 0 || side == 2) ? b.$4.compareTo(a.$4) : a.$4.compareTo(b.$4);
+    final order = [...infos]..sort(cmpDeep); // deepest first
+    // The deepest feed attaches to the lane nearest its lateral source side:
+    // from-left (-1) → smallest coord first; from-right (1) → largest first.
+    final laneOrder = commonLateral == -1 ? lanes : lanes.reversed.toList();
+    for (var k = 0; k < order.length; k++) {
+      final (id, t, _, _, _) = order[k];
+      final pts = edgePoints[id]!;
+      final lane = laneOrder[k];
+      // Move the whole perpendicular drop (turn .. attach) onto the new lane.
+      for (var j = t; j < pts.length; j++) {
+        pts[j] = vertical ? Point(lane, pts[j].y) : Point(pts[j].x, lane);
+      }
+    }
+  }
 }
 
 elk.ElkDirection _direction(FlowDirection d) => switch (d) {
