@@ -440,6 +440,12 @@ class _Engine {
     // declared port; if a port id is found, reuse that LPort.
     final edgeMap = <String, LEdge>{};
     edgesByGraph[lg] = edgeMap;
+    // Coarse topological rank of the direct children at this level, so a
+    // cross-hierarchy edge can tell whether it runs forward (down the flow) or
+    // backward (the far endpoint's cluster lays out on the opposite side). The
+    // external-port side is chosen from this so back-edges attach to the border
+    // facing their far endpoint instead of cutting through the cluster.
+    final childRank = _coarseChildRanks(nodes, byId, portNodeById, ownedHere);
     for (final e in ownedHere) {
       // Resolve source: may be a port id (use its node) or a node id directly.
       final sn = _resolveDirectChild(byId, portNodeById, nodes, e.source);
@@ -484,8 +490,14 @@ class _Engine {
       // follow it; together they form the edge's full polyline after stitching.
       final srcSegs = <LEdge>[];
       final tgtSegs = <LEdge>[];
-      final sp = _endpointPort(ln, sChildElk, e.source, true, srcSegs);
-      final tp = _endpointPort(rn, tChildElk, e.target, false, tgtSegs);
+      // Backward when the target's cluster ranks before the source's — the LCA
+      // segment will travel "up" the flow, so both ends attach to the border
+      // facing the other endpoint.
+      final backward = (childRank[tn] ?? 0) < (childRank[sn] ?? 0);
+      final sp = _endpointPort(ln, sChildElk, e.source, true, srcSegs,
+          backward: backward);
+      final tp = _endpointPort(rn, tChildElk, e.target, false, tgtSegs,
+          backward: backward);
 
       if (sp == null || tp == null) {
         // Endpoint is deeper than one level inside a cluster — not yet ported.
@@ -527,6 +539,49 @@ class _Engine {
     return lg;
   }
 
+  /// Coarse longest-path layer rank of the direct children at one level, over
+  /// the edges owned here (projected to the direct child that contains each
+  /// endpoint). Cycles are tolerated: a DFS skips edges back to a node still on
+  /// the recursion stack, so a back-edge does not inflate ranks. The absolute
+  /// values are unimportant — only the relative order is used, to decide which
+  /// border a cross-hierarchy edge should attach to. This mirrors the gross
+  /// source→sink ordering the network-simplex layerer will produce, computed
+  /// cheaply before any LEdges exist.
+  Map<String, int> _coarseChildRanks(List<ElkNode> nodes,
+      Map<String, LNode> byId, Map<String, LNode> portNodeById,
+      List<ElkEdge> ownedHere) {
+    final adj = {for (final n in nodes) n.id: <String>{}};
+    for (final e in ownedHere) {
+      final s = _resolveDirectChild(byId, portNodeById, nodes, e.source);
+      final t = _resolveDirectChild(byId, portNodeById, nodes, e.target);
+      if (s == null || t == null || s == t) continue;
+      adj[s]?.add(t);
+    }
+    // height[u] = length of the longest forward path FROM u (distance to a
+    // sink). A source has the greatest height; a sink has height 0.
+    final height = <String, int>{};
+    final onStack = <String>{};
+    int visit(String u) {
+      final cached = height[u];
+      if (cached != null) return cached;
+      onStack.add(u);
+      var best = 0;
+      for (final v in adj[u]!) {
+        if (onStack.contains(v)) continue; // back-edge: skip to break cycles
+        final d = 1 + visit(v);
+        if (d > best) best = d;
+      }
+      onStack.remove(u);
+      return height[u] = best;
+    }
+    for (final n in nodes) {
+      visit(n.id);
+    }
+    // Flow rank: sources low, sinks high. A forward edge s→t then has
+    // rank[s] < rank[t] (since height[s] ≥ 1 + height[t]).
+    return {for (final n in nodes) n.id: nodes.length - height[n.id]!};
+  }
+
   /// Returns the [LPort] for [endpoint] on [node] if it is a declared port id,
   /// otherwise creates a new per-edge port with [defaultSide].
   ///
@@ -563,12 +618,21 @@ class _Engine {
   /// - If the endpoint is deeper than one level, returns null (caller falls back
   ///   to boundary routing — faithful multi-level splitting is a TODO).
   LPort? _endpointPort(LNode childLn, ElkNode childElk, String endpoint,
-      bool isSource, List<LEdge> segs) {
+      bool isSource, List<LEdge> segs, {bool backward = false}) {
+    // Which border the cross-hierarchy edge attaches to. For a forward edge a
+    // source exits the DOWNSTREAM side (last layer / EAST) and a target enters
+    // the UPSTREAM side (first layer / WEST). For a back-edge (the far endpoint's
+    // cluster is laid out on the *other* side of this one) both flip, so the
+    // edge attaches to the border that actually faces its far endpoint instead
+    // of wrapping around and cutting through the cluster to reach the opposite
+    // border. `useFirst` is the first-layer (UPSTREAM / WEST) attachment.
+    final useFirst = isSource ? backward : !backward;
+    final clusterSide = useFirst ? PortSide.west : PortSide.east;
+
     final isChildItself =
         childElk.id == endpoint || childElk.ports.any((p) => p.id == endpoint);
     if (isChildItself) {
-      return _resolveOrCreatePort(
-          childLn, endpoint, isSource ? PortSide.east : PortSide.west);
+      return _resolveOrCreatePort(childLn, endpoint, clusterSide);
     }
 
     final nested = childLn.nestedGraph;
@@ -590,18 +654,24 @@ class _Engine {
     if (innerLn == null) return null; // deeper than one level → fallback
 
     // External port on the cluster + external-port dummy inside the nested graph.
-    final p = LPort(childLn)..side = isSource ? PortSide.east : PortSide.west;
+    final p = LPort(childLn)..side = clusterSide;
     p.setProperty(crossHierarchyFixedPort, true);
     childLn.ports.add(p);
     _nodesWithFixedSides.add(childLn);
 
     final d = LNode(nested)..type = NodeType.externalPort;
     d.setProperty(layerConstraint,
-        isSource ? LayerConstraint.lastSeparate : LayerConstraint.firstSeparate);
-    final dPort = LPort(d)..side = isSource ? PortSide.west : PortSide.east;
+        useFirst ? LayerConstraint.firstSeparate : LayerConstraint.lastSeparate);
+    // The dummy's own port faces inward (toward the cluster's content), i.e. the
+    // side opposite the border it sits on.
+    final dPort = LPort(d)..side = useFirst ? PortSide.east : PortSide.west;
     d.ports.add(dPort);
     nested.layerlessNodes.add(d);
-    _portLinks.add(_PortLink(p, d, isSource));
+    // `east` must reflect the actual border the port sits on (first layer → WEST
+    // → x=0; last layer → EAST → x=ln.size.x), so the post-crossmin position
+    // copy places the external port on the same border its inner dummy ended up
+    // on. Using `isSource` here breaks for flipped back-edges.
+    _portLinks.add(_PortLink(p, d, !useFirst));
 
     // Inner segment connecting the real node to the boundary dummy.
     final innerPort = _resolveOrCreatePort(

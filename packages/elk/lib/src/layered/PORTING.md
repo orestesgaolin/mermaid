@@ -181,6 +181,20 @@ code only engages when compound nodes are present):
   node; needs ELK's hierarchical obstacle routing, not an in-layer spacing
   knob). Also addresses the residual left-then-right detour in #4 (exit-port
   side selection for cross-cluster edges).
+  - **C3a** ✅ External-port *side selection by edge direction*. A
+    cross-hierarchy edge's external port used to be pinned to the first layer
+    (entry/top) or last layer (exit/bottom) purely by source-vs-target role. For
+    a **back-edge** (the far endpoint's cluster lays out on the opposite side)
+    that forced the edge to wrap around and cut *through* the cluster to reach
+    the far border (e.g. `GCPC→SLACK` entered BAA's top-left corner and traversed
+    the interior). A coarse longest-path rank of the direct children
+    (`_coarseChildRanks`, cycle-tolerant) now decides forward/back, and the port
+    side (first/last layer + WEST/EAST + the `_PortLink.east` border flag) flips
+    for back-edges so the edge attaches to the border facing its far endpoint.
+    Forward-only diagrams are byte-identical; back-edge diagrams (orig, simple)
+    get compact, non-cluster-cutting routes. Fixes the corner-hug class of #1.
+  - **C3b** (next) `edgeNode` clearance for wrap lanes + fan-in lane ordering
+    (parallel cross-cluster edges into one cluster ordered by target).
 - **C4** (if needed) faithful `CompoundGraphPre/Postprocessor` outer/inner
   segment model, replacing the ad-hoc `_endpointPort`/`_crossSegments` split.
 
