@@ -245,15 +245,6 @@ class _PortLink {
   final bool east;
 }
 
-/// A cluster border dummy with the cross-axis rank its external port's
-/// parent-side neighbour was assigned (used by the INCLUDE_CHILDREN
-/// coordination to order border dummies the way the parent ordered the edges).
-class _RankedDummy {
-  _RankedDummy(this.dummy, this.rank);
-  final LNode dummy;
-  final double rank;
-}
-
 /// Per-run layout engine. Holds the shared options/transform and the mapping
 /// from input ids to [LNode]s so cross-references (edges) can be resolved
 /// within each hierarchy level.
@@ -756,77 +747,19 @@ class _Engine {
   void layoutHierarchy(LGraph root) {
     _phasePreCrossmin(root); // cycle-break → layer → port sides, every graph
     _phaseCrossmin(root); // crossing minimization, every graph
-    _coordinateExternalPortOrder(root); // INCLUDE_CHILDREN: parent drives child
+    // NOTE: INCLUDE_CHILDREN external-port-order coordination is intentionally
+    // NOT applied here. The earlier C2b attempt reordered each cluster's border
+    // dummies to copy the parent-level edge order (`_reorderBorderDummies`).
+    // That did cut a couple of boundary crossings (#3 Claude entry, part of #4),
+    // but on dense real graphs it *lengthened* cross-cluster edges: many edges
+    // were forced to share horizontal tracks in the inter-cluster gap, piling up
+    // into an illegible band (the original BAA/GCP/NB diagram regressed badly).
+    // The band is an edge-length/placement problem, not a crossing-count one, so
+    // an accept-if-fewer-crossings gate would not remove it — the blunt port-order
+    // copy is simply the wrong mechanism. Faithful INCLUDE_CHILDREN settles port
+    // order *and* placement/routing together (ELK's hierarchical sweep), which is
+    // the C3 work. Until then we keep the clean per-graph order; #3/#4 stay open.
     _phasePostCrossmin(root); // size → place → route, bottom-up
-  }
-
-  /// ELK INCLUDE_CHILDREN coordination (top-down). After crossing minimization,
-  /// each compound child's *border dummies* (the external-port dummies pinned to
-  /// its first/last layer) are reordered to match the order the parent assigned
-  /// to the corresponding external ports — i.e. the cross-axis order in which
-  /// the cross-hierarchy edges arrive at the cluster border. Because the inner
-  /// nodes' port order is taken from the neighbouring (border-dummy) order in
-  /// `_placeVerticalFreePorts`, this makes edges enter/leave a cluster in the
-  /// same order their far endpoints sit at the parent level — removing the
-  /// crossings our independent per-graph sweep produced (#3/#4).
-  ///
-  /// Faithful to ELK's bottom-up/top-down hierarchical sweep in effect: the
-  /// parent's order is the authority for a cluster's boundary. We apply it
-  /// top-down (root first) so deeper clusters inherit the coordinated order.
-  void _coordinateExternalPortOrder(LGraph lg) {
-    for (final nested in _nestedGraphsOf(lg).toList()) {
-      _reorderBorderDummies(nested);
-      _coordinateExternalPortOrder(nested);
-    }
-  }
-
-  /// Reorders [nested]'s border dummies (grouped by the layer they sit in) by
-  /// the cross-axis order of their external port's parent-side neighbour.
-  void _reorderBorderDummies(LGraph nested) {
-    // Average within-layer index of the parent-side neighbours of [port].
-    double? parentRank(LPort port, bool east) {
-      final edges = east ? port.outgoingEdges : port.incomingEdges;
-      final idxs = <int>[];
-      for (final e in edges) {
-        final n = east ? e.target?.node : e.source?.node;
-        final i = n?.index ?? -1;
-        if (i >= 0) idxs.add(i);
-      }
-      if (idxs.isEmpty) return null;
-      return idxs.reduce((a, b) => a + b) / idxs.length;
-    }
-
-    // Collect this cluster's border dummies with their desired rank.
-    final ranked = <_RankedDummy>[];
-    for (final link in _portLinks) {
-      if (link.dummy.graph != nested) continue;
-      final rank = parentRank(link.port, link.east);
-      if (rank != null) ranked.add(_RankedDummy(link.dummy, rank));
-    }
-    if (ranked.length < 2) return;
-
-    // Reorder within each border layer independently, keeping the slots that
-    // border dummies occupy (any non-dummy nodes in the layer stay put).
-    final byLayer = <Layer, List<_RankedDummy>>{};
-    for (final r in ranked) {
-      final layer = r.dummy.layer;
-      if (layer != null) (byLayer[layer] ??= []).add(r);
-    }
-    for (final entry in byLayer.entries) {
-      final layer = entry.key;
-      final group = entry.value;
-      if (group.length < 2) continue;
-      final dummySet = {for (final r in group) r.dummy};
-      // Positions (within layer.nodes) currently occupied by these dummies.
-      final slots = <int>[];
-      for (var i = 0; i < layer.nodes.length; i++) {
-        if (dummySet.contains(layer.nodes[i])) slots.add(i);
-      }
-      group.sort((a, b) => a.rank.compareTo(b.rank));
-      for (var k = 0; k < slots.length; k++) {
-        layer.nodes[slots[k]] = group[k].dummy;
-      }
-    }
   }
 
   /// All nested (compound child) graphs of [lg]. A node may be layerless

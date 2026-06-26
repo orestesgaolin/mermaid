@@ -163,11 +163,17 @@ code only engages when compound nodes are present):
 - **C2** ✅ Hierarchy-aware crossing-min orchestration.
   - **C2a** split the per-graph pipeline at P3 into pre-crossmin / crossmin /
     post-crossmin phases (`layoutHierarchy`), behaviour-identical refactor.
-  - **C2b** added the INCLUDE_CHILDREN top-down coordination
+  - **C2b** ⏪ *reverted.* It added INCLUDE_CHILDREN top-down coordination
     (`_coordinateExternalPortOrder`): after crossmin, each compound child's
-    border dummies are reordered to match the parent-assigned order of its
-    external ports, so inner nodes' port order (from `_placeVerticalFreePorts`)
-    follows the parent. → **fixes #3**, improves #4's cross-cluster ordering.
+    border dummies were reordered to copy the parent-assigned order of its
+    external ports. This cut a couple of boundary crossings (**#3** Claude
+    entry, part of **#4**) but on dense real graphs it *lengthened* cross-cluster
+    edges — many were forced to share horizontal tracks in the inter-cluster gap
+    and piled into an illegible band (the BAA/GCP/NB diagram regressed badly).
+    The band is an edge-length/placement problem, not a crossing-count one, so a
+    blunt port-order copy is the wrong mechanism (and an accept-if-fewer-crossings
+    gate would not remove it). Port order must be settled *together with*
+    placement/routing — that is C3. C2b removed; **#3/#4 stay open** for C3.
 - **C3** Hierarchical port position/constraint + orthogonal border routing
   (`HierarchicalPort*` processors) so back-edge wrap lanes keep `edgeNode`
   clearance from cluster borders. → fixes **#1** (2px corner hug — diagnosed as
