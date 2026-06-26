@@ -335,6 +335,12 @@ class _Engine {
     // reads as one thick line. Match the router's edge spacing.
     lg.setProperty(const Property<double>('bk.spacing.edgeEdge'),
         options.resolvedEdgeNode);
+    // Spacing between a pass-by edge (long-edge dummy) and a real/compound node
+    // in the same layer. The raw default (10) lets an edge run flush against a
+    // cluster border (the "hug"); derive it from the base value like the rest so
+    // pass-by edges keep clearance from cluster sides.
+    lg.setProperty(const Property<double>('bk.spacing.nodeEdge'),
+        options.resolvedEdgeNode);
     lg.setProperty(const Property<double>('p5.spacing.edgeEdge'),
         options.resolvedEdgeNode);
     lg.setProperty(const Property<double>('p5.spacing.edgeNode'),
