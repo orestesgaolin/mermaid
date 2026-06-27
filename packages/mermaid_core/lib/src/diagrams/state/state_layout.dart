@@ -374,9 +374,19 @@ class _StateLayout {
           clusterFrom != null ? clusterRects[clusterFrom]! : placed[fromId]!.rect;
       final targetRect =
           clusterTo != null ? clusterRects[clusterTo]! : placed[toId]!.rect;
-      points[0] = _intersectRect(sourceRect, points[1]);
-      points[points.length - 1] =
-          _intersectRect(targetRect, points[points.length - 2]);
+      // ELK routes orthogonally, so clip the end segments perpendicular to the
+      // border (keeping the stub axis-aligned) rather than from the node centre,
+      // which would tilt a near-vertical/near-horizontal stub. Dagre paths are
+      // curves, so keep the centre-based intersect for them.
+      if (useElk) {
+        points[0] = _clipRectPerp(sourceRect, points[0], points[1]);
+        points[points.length - 1] = _clipRectPerp(
+            targetRect, points[points.length - 1], points[points.length - 2]);
+      } else {
+        points[0] = _intersectRect(sourceRect, points[1]);
+        points[points.length - 1] =
+            _intersectRect(targetRect, points[points.length - 2]);
+      }
 
       final endTip = points.last;
       final endDir = _dir(points[points.length - 2], endTip);
@@ -404,16 +414,24 @@ class _StateLayout {
 
       final labelSize = labelSizes[i];
       if (labelSize != null) {
-        final c = (dagreEdge?.labelX != null && dagreEdge?.labelY != null)
-            ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
-            : points[points.length ~/ 2];
+        // ELK places the label via a label dummy; use that centre. Otherwise
+        // dagre's labelX/Y, falling back to the polyline's arc-length midpoint
+        // (NOT the index-midpoint, which lands near an end on an orthogonal
+        // path and overlaps the target node).
+        final c = useElk
+            ? (elkResult!.labelCenter('e$i') ?? _pathMidpoint(points))
+            : (dagreEdge?.labelX != null && dagreEdge?.labelY != null
+                ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
+                : _pathMidpoint(points));
         labelNodes.add(SceneGroup(id: 'translabel_$i', children: [
           SceneShape(
             geometry: RectGeometry(
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
                 rx: 2,
                 ry: 2),
-            fill: Fill(theme.edgeLabelBackground.withOpacity(0.5)),
+            // Opaque background (the theme colour already carries its alpha) so
+            // the edge line doesn't show through the label.
+            fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
           ),
           SceneText(
             text: t.label!,
@@ -633,6 +651,43 @@ List<PathCommand> _linearPath(List<Point> pts) {
     MoveTo(pts.first),
     for (var i = 1; i < pts.length; i++) LineTo(pts[i]),
   ];
+}
+
+/// Clips an orthogonal edge end to [rect]'s border while keeping the last
+/// segment axis-aligned: probes along the segment's own axis (same x for a
+/// vertical approach, same y for a horizontal one) instead of from the centre,
+/// so a near-vertical stub doesn't tilt. [end] is ELK's boundary point, [next]
+/// the adjacent bend.
+Point _clipRectPerp(Rect rect, Point end, Point next) {
+  final vertical = (next.x - end.x).abs() <= (next.y - end.y).abs();
+  if (vertical) {
+    final x = next.x.clamp(rect.left, rect.right).toDouble();
+    return Point(x, next.y < rect.center.y ? rect.top : rect.bottom);
+  }
+  final y = next.y.clamp(rect.top, rect.bottom).toDouble();
+  return Point(next.x < rect.center.x ? rect.left : rect.right, y);
+}
+
+/// The point halfway along [pts] by arc length (not by index). Used to place an
+/// edge label centred on the visible middle of an orthogonal polyline.
+Point _pathMidpoint(List<Point> pts) {
+  if (pts.isEmpty) return Point.zero;
+  if (pts.length == 1) return pts.first;
+  var total = 0.0;
+  for (var i = 1; i < pts.length; i++) {
+    total += pts[i].distanceTo(pts[i - 1]);
+  }
+  var half = total / 2;
+  for (var i = 1; i < pts.length; i++) {
+    final seg = pts[i].distanceTo(pts[i - 1]);
+    if (seg >= half) {
+      final f = seg == 0 ? 0.0 : half / seg;
+      return Point(pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
+          pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f);
+    }
+    half -= seg;
+  }
+  return pts.last;
 }
 
 List<Point> _dropInsideRect(List<Point> pts, Rect rect,
