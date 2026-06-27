@@ -730,8 +730,14 @@ _Fragment _layoutGraph(
 
     final labelSize = edgeLabelSizes[i];
     if (labelSize != null) {
+      // Centre the label ON the edge line. ELK's own label centre is offset to
+      // the side of the edge (it reserves label space beside it), which leaves
+      // the line running through the label's edge rather than its middle. The
+      // polyline's arc-length midpoint lies on the line, so the line passes
+      // through the label centre (its background masks the line) — as upstream
+      // mermaid does. Dagre supplies its own labelX/Y.
       final labelCenter = useElk
-          ? (elkResult!.labelCenter('e$i') ?? _pathMidpoint(points))
+          ? _pathMidpoint(points)
           : (dagreEdge?.labelX != null && dagreEdge?.labelY != null)
               ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
               : _pathMidpoint(points);
