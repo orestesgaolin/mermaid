@@ -426,7 +426,11 @@ List<SceneNode> _roughenShape(SceneShape shape, int seed) {
     if (ops.isNotEmpty) {
       out.add(SceneShape(
         geometry: PathGeometry(_toCommands(ops)),
-        stroke: Stroke(color: shape.fill!.color, width: o.fillWeight * 0.5),
+        // roughjs strokes hachure lines at the full `fillWeight`; halving it
+        // (the old value) left wide gaps so the page showed through as stripes
+        // — illegible over a dark background. Full weight makes the dense lines
+        // read as a solid fill, as upstream does.
+        stroke: Stroke(color: shape.fill!.color, width: o.fillWeight),
       ));
     }
   }
