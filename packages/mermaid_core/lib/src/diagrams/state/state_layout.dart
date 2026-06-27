@@ -414,12 +414,13 @@ class _StateLayout {
 
       final labelSize = labelSizes[i];
       if (labelSize != null) {
-        // ELK places the label via a label dummy; use that centre. Otherwise
-        // dagre's labelX/Y, falling back to the polyline's arc-length midpoint
-        // (NOT the index-midpoint, which lands near an end on an orthogonal
-        // path and overlaps the target node).
+        // Centre the label ON the edge line. ELK's own label centre is offset
+        // to the side of the edge (it reserves label space beside it), so for
+        // ELK use the polyline's arc-length midpoint, which lies on the line
+        // (NOT the index-midpoint, which lands near an end on an orthogonal path
+        // and overlaps the target node). Dagre supplies its own labelX/Y.
         final c = useElk
-            ? (elkResult!.labelCenter('e$i') ?? _pathMidpoint(points))
+            ? _pathMidpoint(points)
             : (dagreEdge?.labelX != null && dagreEdge?.labelY != null
                 ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
                 : _pathMidpoint(points));
