@@ -49,17 +49,22 @@ missing — the external-port dummies aren't ordered by the parent-side geometry
 **Fix:** falls out of G1 (the coordinated sweep orders border dummies by the
 inherited parent order, which then biases the inner crossing-min correctly).
 
-### G3 — Cycle-break / layering tie-break  ★★ (independent)
+### G3 — Cycle-break / layering tie-break  ⛔ PARKED (intractable)
 **Seen in:** d1 (elkjs puts Debug **above** the diamond → short feedback; ours
 puts it below → wrapping back-edge; ours 281px wide vs elkjs 230px).
-**Symptom:** for a 2-cycle (B→D, D→B) we reverse the opposite edge from elkjs,
-so the feedback node is layered on the other side.
-**Root cause:** our GreedyCycleBreaker's tie-break (which edge of a cycle to
-reverse) differs from elkjs's (it depends on DFS/source-sink order and
-out-flow). Independent of the hierarchy work.
-**Fix:** match elkjs `GreedyCycleBreaker` ordering exactly (sources/sinks
-selection + tie-break). Self-contained, medium effort, but touches every cyclic
-diagram so it needs the corpus guard.
+**Symptom:** for a 2-cycle (B→D, D→B) we reverse the opposite edge from elkjs.
+**Root cause:** elkjs's `GreedyCycleBreaker.chooseNodeWithMaxOutflow` picks a
+**random** node among the max-outflow ties via the layout's shared
+`java.util.Random`. The pick is therefore a function of the *global* RNG state
+at cycle-break time, which depends on every prior random draw in the run — not
+something we can reproduce from the seed alone.
+**Investigated & reverted:** added a faithful `JavaRandom.nextInt` and used a
+fresh `Random(1)` for the tie-break. It flipped d1 to match elkjs (281→202,
+Debug above) but **regressed `simple` 193→440** — proof that elkjs's RNG is not
+fresh at this point (same seed, different pick per diagram). Kept the
+deterministic first-node pick (matches more of the corpus); kept `nextInt` as a
+faithful primitive for later. **No deterministic rule matches both d1 and simple
+(first works for simple, last for d1), so this gap is left as-is.**
 
 ### G4 — State-diagram choice/branch placement  ★ (minor, G1-adjacent)
 **Seen in:** st (choice diamond + Connected/Backoff positions differ slightly).
@@ -70,10 +75,9 @@ back-edge.
 
 ## Recommended order
 
-1. **G3** first — self-contained, unblocks d1, lowest risk, good warm-up that
-   proves the corpus-guard loop.
-2. **G1** — the dominant, architectural one. Do it bottom-up and incrementally
-   (children inherit, parent follows), gating each step on the corpus + oracle.
-   G2 and G4 fall out of it.
+1. ~~G3~~ — parked (intractable, RNG-global; see above).
+2. **G1** — the dominant, architectural one (now the top priority). Do it
+   bottom-up and incrementally (children inherit, parent follows), gating each
+   step on the corpus + oracle. G2 and G4 fall out of it.
 
 Everything else (sizing, labels, spacing, clearance, hand-drawn) is at parity.

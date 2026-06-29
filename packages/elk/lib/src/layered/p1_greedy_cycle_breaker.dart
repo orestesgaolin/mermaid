@@ -4,8 +4,13 @@
 /// sinks (to the right) and sources (to the left), breaking ties by maximum
 /// out-flow, then reverses every edge that points backward in that order.
 ///
-/// The only deviation: ELK breaks max-outflow ties with a seeded RNG; we take
-/// the first such node for deterministic output.
+/// Tie-break deviation: ELK chooses a random node among those with maximal
+/// out-flow, using the layout's shared seeded `java.util.Random`. We can't
+/// match that — by cycle-breaking time elkjs's RNG has already been advanced by
+/// global state we don't replicate, so the same seed yields different picks per
+/// diagram (verified: a fresh `Random(1)` matches d1 but diverges on `simple`).
+/// We take the first max-outflow node deterministically, which matches elkjs on
+/// more of the corpus than a fresh-RNG pick does. (See PARITY_GAPS.md G3.)
 library;
 
 import 'lgraph.dart';
@@ -81,7 +86,7 @@ class GreedyCycleBreaker implements ILayoutProcessor {
             }
           }
         }
-        final maxNode = maxNodes.first; // ELK: random tie-break
+        final maxNode = maxNodes.first; // ELK: random tie-break (see header)
         _mark[maxNode.id] = nextLeft++;
         _updateNeighbors(maxNode);
         unprocessed--;

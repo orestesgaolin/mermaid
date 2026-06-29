@@ -79,4 +79,21 @@ class JavaRandom {
 
   /// Mirrors `Random.nextFloat()` — 24 bits of precision.
   double nextFloat() => _next(24) / _two24;
+
+  /// Mirrors `Random.nextInt(bound)` — uniform in `[0, bound)`.
+  int nextInt(int bound) {
+    if (bound <= 0) {
+      throw ArgumentError('bound must be positive');
+    }
+    // Power of two: take the high bits directly.
+    if ((bound & -bound) == bound) {
+      return (bound * _next(31)) >> 31;
+    }
+    int bits, val;
+    do {
+      bits = _next(31);
+      val = bits % bound;
+    } while (bits - val + (bound - 1) < 0);
+    return val;
+  }
 }
