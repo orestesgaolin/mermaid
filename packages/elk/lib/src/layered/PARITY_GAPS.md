@@ -39,6 +39,22 @@ border (elkjs `GraphInfoHolder` + `setPortOrderOnParentGraph`). Large,
 regression-sensitive; this is the same area C2b botched (caused the band), so it
 must inherit child order rather than copy parent order.
 
+**Prototyped & reverted (promising, not yet robust):** flipped `_phaseCrossmin`
+to bottom-up and added `_inheritChildPortOrder` (sort each compound node's
+external ports by their border dummy's within-layer index in the minimized
+child). Result on the corpus:
+- **churn reached width parity** (929→1044px vs elkjs 1054) and most clustered
+  diagrams held parity (nested_td/lr, d2, simple 193≈195, st 233≈227).
+- **but orig regressed** 1091→1323px (elkjs 1027): its BAA cluster spread wide.
+  orig and churn are near-identical (churn just adds Churnkey + one edge), so
+  the wild divergence shows the inheritance isn't stable yet.
+Reverted. **Next:** make the inheritance faithful per-side (entries on one
+border, exits on the other are different child layers — sort within side, and
+likely propagate the order as a FIXED_ORDER port constraint the parent sweep
+respects, rather than only reordering `cn.ports`). The mechanism is right; the
+ordering key / constraint handling needs to match elkjs so it's stable across
+small input changes.
+
 ### G2 — Intra-cluster node ordering  ★★ (same root cause as G1)
 **Seen in:** churn (BAA arranged 3+3 vs elkjs 4+2; which nodes sit adjacent).
 **Symptom:** nodes inside a cluster land in a different within-layer order, so

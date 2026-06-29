@@ -866,9 +866,10 @@ class _Engine {
     _runProcessors(_preCrossminProcessors(), lg);
   }
 
-  /// Phase B: crossing minimization. C2a runs it per graph (no coordination
-  /// yet — behaviour-identical to the old single pipeline); C2b adds the
-  /// top-down external-port-order coordination here.
+  /// Phase B: crossing minimization, per graph. (A bottom-up port-order
+  /// inheritance was prototyped for G1 — it brought the churn diagram to width
+  /// parity but destabilised the near-identical orig diagram, 1091→1323px wide,
+  /// by spreading its BAA cluster. Reverted as not yet robust; see PARITY_GAPS.)
   void _phaseCrossmin(LGraph lg) {
     LayerSweepCrossingMinimizer().process(lg);
     for (final nested in _nestedGraphsOf(lg)) {
