@@ -21,7 +21,7 @@ compared geometrically.
 
 ## Gaps, ranked by impact
 
-### G1 — Cross-hierarchy long/back-edge routing region  ★★★ (dominant)
+### G1 — Cross-hierarchy long/back-edge routing region  ✅ FIXED
 **Seen in:** churn (DOVEAPI→DOVE, the de-identified edges, TM↔* edges), simple
 (F→B), d1 (D→B).
 **Symptom:** a long edge that leaves one cluster and enters another far away
@@ -48,14 +48,21 @@ child). Result on the corpus:
 - **but orig regressed** 1091→1323px (elkjs 1027): its BAA cluster spread wide.
   orig and churn are near-identical (churn just adds Churnkey + one edge), so
   the wild divergence shows the inheritance isn't stable yet.
-Reverted. **Next:** make the inheritance faithful per-side (entries on one
-border, exits on the other are different child layers — sort within side, and
-likely propagate the order as a FIXED_ORDER port constraint the parent sweep
-respects, rather than only reordering `cn.ports`). The mechanism is right; the
-ordering key / constraint handling needs to match elkjs so it's stable across
-small input changes.
+**Resolved (second pass):** the first attempt only *reordered* `cn.ports`, which
+the parent sweep then re-distributed by barycenter — so the inheritance was
+half-applied and unstable. Fix: sort the cross-hierarchy ports **per side**
+(entry dummies and exit dummies are in different child layers, so indices are
+only comparable within a side) **and mark the order fixed** (`p3.portOrderFixed`)
+so the parent sweep keeps it. Result on the corpus:
+- **orig and churn both reach width parity** (orig 1091→1036 vs 1027; churn
+  929→1058 vs 1055) with no BAA spread.
+- DOVEAPI→DOVE now routes straight up the **near** side instead of detouring to
+  the far-left margin.
+- **No regressions:** every other corpus diagram is unchanged and at parity
+  (nested_td/lr, d2, simple 193≈195, st 233≈227, flat_td 268≈265). elk 33 +
+  core 414 green.
 
-### G2 — Intra-cluster node ordering  ★★ (same root cause as G1)
+### G2 — Intra-cluster node ordering  ✅ addressed by G1
 **Seen in:** churn (BAA arranged 3+3 vs elkjs 4+2; which nodes sit adjacent).
 **Symptom:** nodes inside a cluster land in a different within-layer order, so
 the cluster's internal edges and its entry/exit points differ from elkjs.
@@ -89,11 +96,14 @@ back-edge.
 **Root cause:** crossing-min + the same coordination as G1/G2.
 **Fix:** largely subsumed by G1; revisit after.
 
-## Recommended order
+## Status
 
-1. ~~G3~~ — parked (intractable, RNG-global; see above).
-2. **G1** — the dominant, architectural one (now the top priority). Do it
-   bottom-up and incrementally (children inherit, parent follows), gating each
-   step on the corpus + oracle. G2 and G4 fall out of it.
+- **G1 ✅ fixed** — bottom-up crossing-min with per-side, fixed-order child port
+  inheritance. orig + churn at width parity; cross-hierarchy back-edges route the
+  near side.
+- **G2 ✅** — intra-cluster ordering fell out of G1 (no more cluster spread).
+- **G3 ⛔ parked** — cycle-break tie-break is RNG-global, intractable (d1 only).
+- **G4** — re-check state choice placement now that G1 landed; minor if anything.
 
 Everything else (sizing, labels, spacing, clearance, hand-drawn) is at parity.
+Remaining known divergence: d1's feedback-node side (G3), cosmetic.

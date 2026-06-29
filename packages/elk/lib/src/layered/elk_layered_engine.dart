@@ -866,14 +866,53 @@ class _Engine {
     _runProcessors(_preCrossminProcessors(), lg);
   }
 
-  /// Phase B: crossing minimization, per graph. (A bottom-up port-order
-  /// inheritance was prototyped for G1 — it brought the churn diagram to width
-  /// parity but destabilised the near-identical orig diagram, 1091→1323px wide,
-  /// by spreading its BAA cluster. Reverted as not yet robust; see PARITY_GAPS.)
+  /// Phase B: crossing minimization, BOTTOM-UP (elkjs INCLUDE_CHILDREN order).
+  /// Each child is minimized first, then the order its border dummies settled
+  /// into is inherited onto the parent's external ports as a *fixed* order, so
+  /// the parent's sweep places cross-hierarchy edges by where they actually
+  /// attach on each cluster (G1). Fixing the order is essential: without it the
+  /// parent re-distributes the ports by barycenter and the inherited order is
+  /// only half-applied — which is what destabilised orig in the first attempt.
   void _phaseCrossmin(LGraph lg) {
-    LayerSweepCrossingMinimizer().process(lg);
-    for (final nested in _nestedGraphsOf(lg)) {
+    for (final nested in _nestedGraphsOf(lg).toList()) {
       _phaseCrossmin(nested);
+    }
+    _inheritChildPortOrder(lg);
+    LayerSweepCrossingMinimizer().process(lg);
+  }
+
+  /// Property mirror of the crossing-minimizer's `p3.portOrderFixed`: when set
+  /// on a node the sweep keeps its port order instead of re-distributing it.
+  static const _portOrderFixed = Property<bool>('p3.portOrderFixed', false);
+
+  /// Orders each compound child's external ports on [lg] to the order its border
+  /// dummies reached during the child's own crossing-min, and marks that order
+  /// fixed. Sorting is **per side**: entry dummies (one border) and exit dummies
+  /// (the other) live in different child layers, so their within-layer indices
+  /// are only comparable within a side. The crossing-min reads ports per side,
+  /// so placing the cross-hierarchy ports after the others, each side in its
+  /// child-border order, is enough.
+  void _inheritChildPortOrder(LGraph lg) {
+    for (final cn in [
+      for (final layer in lg.layers) ...layer.nodes,
+      ...lg.layerlessNodes,
+    ]) {
+      final ng = cn.nestedGraph;
+      if (ng == null) continue;
+      final links = [for (final l in _portLinks) if (l.dummy.graph == ng) l];
+      if (links.isEmpty) continue;
+      int dummyIndex(LNode d) => d.layer?.nodes.indexOf(d) ?? 0;
+      int sideRank(LPort p) => p.side == PortSide.west ? 0 : 1;
+      final sorted = [...links]..sort((a, b) {
+          final s = sideRank(a.port).compareTo(sideRank(b.port));
+          return s != 0 ? s : dummyIndex(a.dummy).compareTo(dummyIndex(b.dummy));
+        });
+      final crossPorts = {for (final l in links) l.port};
+      final others = [for (final p in cn.ports) if (!crossPorts.contains(p)) p];
+      cn.ports
+        ..clear()
+        ..addAll([...others, for (final l in sorted) l.port]);
+      cn.setProperty(_portOrderFixed, true);
     }
   }
 
