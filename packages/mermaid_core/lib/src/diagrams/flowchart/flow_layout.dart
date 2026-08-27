@@ -27,6 +27,7 @@ import '../../vendor/dagre/dart_dagre.dart' as dagre;
 import 'elk_adapter.dart';
 import 'flow_model.dart';
 import 'layout_engines.dart';
+import 'markdown_label.dart';
 
 /// Upstream flowchart defaults (defaultConfig.ts / flowchart schema).
 const double _nodePadding = 15;
@@ -260,6 +261,17 @@ _Fragment _layoutGraph(
     // phantom node with the subgraph's id; the cluster wins.
     if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
+    if (node.markdown && node.icon == null && !node.label.contains('\n')) {
+      final richLabel = layoutMarkdownLabel(node.label, baseStyle, measurer);
+      placed[node.id] = _PlacedNode(
+        node: node,
+        style: style,
+        labelSize: richLabel.size,
+        richLabel: richLabel,
+        shape: _Shape.forNode(node.shape, richLabel.size),
+      );
+      continue;
+    }
     // A label containing `$$...$$` is laid out as math (whole or inline-mixed).
     final ml = layoutLabel(node.label, baseStyle, measurer, style.textColor);
     if (ml != null) {
@@ -757,6 +769,11 @@ _Fragment _layoutGraph(
       final origin = Point(
           lc.x - p.math!.size.width / 2, lc.y - p.math!.size.height / 2);
       children.addAll(p.math!.render(origin));
+    } else if (p.richLabel != null) {
+      children.addAll(p.richLabel!.render(
+        p.shape.labelCenter(p.center),
+        p.style.textColor,
+      ));
     } else if (p.textSize != null) {
       // Icon node: glyph in the reserved top square, label beneath it.
       final lc = p.shape.labelCenter(p.center);
@@ -790,7 +807,7 @@ _Fragment _layoutGraph(
     }
     nodeGroups.add(SceneGroup(
       id: p.node.id,
-      semanticLabel: p.node.label,
+      semanticLabel: p.richLabel?.plainText ?? p.node.label,
       link: p.node.link,
       tooltip: p.node.tooltip,
       children: children,
@@ -1053,6 +1070,7 @@ class _PlacedNode {
     required this.shape,
     this.textSize,
     this.math,
+    this.richLabel,
   });
 
   final FlowNode node;
@@ -1067,6 +1085,9 @@ class _PlacedNode {
 
   /// Set when the label is a `$$...$$` math span rendered with primitives.
   final MathLayout? math;
+
+  /// Styled inline runs for a Mermaid quoted-backtick Markdown label.
+  final MarkdownLabelLayout? richLabel;
   final _Shape shape;
   Point center = Point.zero;
 }

@@ -526,6 +526,7 @@ class _FlowParser {
         nodes[id] = nodes[id]!.copyWith(
           label: label.isEmpty ? id : label,
           shape: kind,
+          markdown: _isMarkdownLabel(rawLabel),
         );
         shapeParsed = true;
       } else {
@@ -593,7 +594,10 @@ class _FlowParser {
     }
     if (label != null) {
       final normalized = _normalizeLabel(label);
-      node = node.copyWith(label: normalized.isEmpty ? id : normalized);
+      node = node.copyWith(
+        label: normalized.isEmpty ? id : normalized,
+        markdown: _isMarkdownLabel(label),
+      );
     }
     if (icon != null) {
       node = node.copyWith(
@@ -927,6 +931,13 @@ class _FlowParser {
 
   FlowNode _ensureNode(String id) =>
       nodes.putIfAbsent(id, () => FlowNode(id: id, label: id));
+
+  bool _isMarkdownLabel(String raw) {
+    final s = raw.trim();
+    if (s.length < 4 || !s.startsWith('"') || !s.endsWith('"')) return false;
+    final inner = s.substring(1, s.length - 1).trim();
+    return inner.length >= 2 && inner.startsWith('`') && inner.endsWith('`');
+  }
 
   String _normalizeLabel(String raw) {
     var s = raw.trim();

@@ -130,6 +130,7 @@ class FlowNode {
     required this.id,
     required this.label,
     this.shape = FlowNodeShape.plain,
+    this.markdown = false,
     this.classes = const [],
     this.styles = const {},
     this.link,
@@ -143,6 +144,9 @@ class FlowNode {
   /// when the node never declared a label.
   final String label;
   final FlowNodeShape shape;
+
+  /// Whether [label] came from Mermaid's quoted-backtick Markdown syntax.
+  final bool markdown;
 
   /// Iconify reference `"prefix:name"` from `@{ icon: ... }`, if any.
   final String? icon;
@@ -160,6 +164,7 @@ class FlowNode {
   FlowNode copyWith({
     String? label,
     FlowNodeShape? shape,
+    bool? markdown,
     List<String>? classes,
     Map<String, String>? styles,
     String? link,
@@ -170,6 +175,7 @@ class FlowNode {
         id: id,
         label: label ?? this.label,
         shape: shape ?? this.shape,
+        markdown: markdown ?? this.markdown,
         classes: classes ?? this.classes,
         styles: styles ?? this.styles,
         link: link ?? this.link,

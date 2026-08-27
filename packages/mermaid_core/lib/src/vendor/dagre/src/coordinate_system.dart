@@ -65,10 +65,11 @@ void _swapXY(Graph g) {
     var edge = g.edge2(e);
     // Vendored fix: keep the points list typed as List<GraphPoint>.
     edge[pointsK]=List<GraphPoint>.from(edge.get<List<GraphPoint>>(pointsK).map((e) => GraphPoint(e.y, e.x)));
-    var vv=edge.getD2(xK);
-    if(vv!=null&&vv!=0){
-      edge[xK] = edge[yK];
-      edge[yK]=vv;
+    // An edge label centered on the unrotated layout can legitimately have
+    // x == 0. Presence, rather than a non-zero value, determines whether the
+    // edge has label coordinates to rotate (matching dagre.js).
+    if (edge.hasOwn(xK)) {
+      _swapXYOne(edge);
     }
   }
 }

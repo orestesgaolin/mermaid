@@ -224,8 +224,9 @@ void main() {
       expect(n.label, 'first\nsecond\nthird');
     });
     test('markdown string label', () {
-      final n = parseNode('A["`bold text`"]');
-      expect(n.label, 'bold text');
+      final n = parseNode('A["`As an **App developer**`"]');
+      expect(n.label, 'As an **App developer**');
+      expect(n.markdown, isTrue);
     });
     test('bare reference keeps earlier declaration', () {
       final g = parseFlowchart('graph TD;A[The text];A-->B;');
