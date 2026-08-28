@@ -3,7 +3,7 @@ description: >-
   Pure Dart layered graph layout (Sugiyama-style), inspired by the Eclipse
   Layout Kernel. Compound/hierarchical graphs, ports and orthogonal edge
   routing, with an elkjs-style graph API. No Flutter, no I/O — runs anywhere.
-version: 0.1.0
+version: 0.1.1-wip
 repository: https://github.com/orestesgaolin/mermaid
 issue_tracker: https://github.com/orestesgaolin/mermaid/issues
 topics:

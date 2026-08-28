@@ -122,19 +122,20 @@ ElkResult layeredLayout(ElkGraph graph) {
 ///   UP:    transpose + Y mirror
 ///          output-EAST  → large internal-Y → internal-SOUTH
 ///          output-WEST  → internal-NORTH
-///          output-SOUTH → internal-EAST
-///          output-NORTH → internal-WEST
-///          (same as DOWN because UP = transpose + mirror-Y; the Y-mirror is in
-///           the output coordinate, not in the side orientation)
+///          output-SOUTH → internal-WEST
+///          output-NORTH → internal-EAST
 PortSide _outputSideToInternal(
     ElkPortSide side, bool transpose, ElkDirection dir) {
   if (transpose) {
-    // DOWN and UP both swap X↔Y axes (Y-mirror in UP doesn't flip EAST/WEST).
+    // DOWN and UP both swap X↔Y axes. UP additionally mirrors output Y, so
+    // output NORTH/SOUTH map to the opposite internal flow-axis sides.
     return switch (side) {
       ElkPortSide.east => PortSide.south,
       ElkPortSide.west => PortSide.north,
-      ElkPortSide.south => PortSide.east,
-      ElkPortSide.north => PortSide.west,
+      ElkPortSide.south =>
+        dir == ElkDirection.up ? PortSide.west : PortSide.east,
+      ElkPortSide.north =>
+        dir == ElkDirection.up ? PortSide.east : PortSide.west,
     };
   }
   if (dir == ElkDirection.left) {

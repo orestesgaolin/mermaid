@@ -60,5 +60,46 @@ void main() {
       final n = res.nodesById['n']!;
       expect(n.ports.single.x, closeTo(n.width, 0.5)); // east border
     });
+
+    test('explicit north and south port sides are honored for UP flow', () {
+      // UP flow transposes the layout and mirrors output Y,
+      // and that mirror flips NORTH and SOUTH:
+      // the declared north port is the outgoing side,
+      // so the edge must leave the top border of node `n`.
+      final res = const ElkLayered().layout(
+        ElkGraph(
+          layoutOptions: ElkLayoutOptions(direction: .up),
+          children: [
+            ElkNode(
+              id: 'n',
+              width: 80,
+              height: 40,
+              ports: [
+                ElkPort(id: 'north', side: .north),
+                ElkPort(id: 'south', side: .south),
+              ],
+            ),
+            ElkNode(id: 'm', width: 80, height: 40),
+          ],
+          edges: [
+            ElkEdge(id: 'e', sources: ['north'], targets: ['m']),
+          ],
+        ),
+      );
+
+      final n = res.nodesById['n']!;
+      final portsById = {for (final port in n.ports) port.id: port};
+      // Validate the north port sits on the top border.
+      expect(portsById['north']!.y, closeTo(0, 0.5));
+      // Validate the south port sits on the bottom border.
+      expect(portsById['south']!.y, closeTo(n.height, 0.5));
+      // Validate that node `m` is placed above node `n`,
+      // confirming the layout really flows upward.
+      expect(res.nodesById['m']!.y, lessThan(n.y));
+
+      // Validate the edge leaves the top border of node `n`.
+      final start = res.edges.single.sections.first.startPoint;
+      expect(start.y, closeTo(n.y, 0.6));
+    });
   });
 }
