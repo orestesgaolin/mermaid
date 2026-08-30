@@ -1,6 +1,5 @@
 # railroad — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Detector splits into ABNF/EBNF/PEG variants (`abnfDetector.ts`, `ebnfDetector.ts`, `pegDetector.ts`), each parsed by a dedicated grammar under `parser/`; the parser emits `ASTNode`s into `railroadDb.ts:addRule`. AST node kinds: `terminal`, `nonterminal`, `sequence`, `choice`, `optional`, `repetition` (with `min`/`max`/`separator`), `special` (`railroadTypes.ts:ASTNode`).

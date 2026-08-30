@@ -1,6 +1,5 @@
 # treemap — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser is Langium (`upstream/packages/parser/src/language/treemap/treemap.langium`): header `treemap-beta`|`treemap`; rows are `INDENTATION? (Item | ClassDef)`. `Section` = `STRING2 (:::ID2)?`; `Leaf` = `STRING2 (':'|',') MyNumber (:::ID2)?`. Numbers (`NUMBER2`) allow digits, `_`, `.`, `,`. Supports `title`, `accTitle`, `accDescr`, and `classDef`.

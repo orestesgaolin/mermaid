@@ -1,6 +1,5 @@
 # kanban — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser/DB: `kanbanDb.ts:addNode` builds a flat node list keyed by indentation `level`; `getSection` walks back to find the enclosing section. Top-level nodes become `sections` (clusters, `isGroup:true`, `shape:'kanbanSection'`); indented nodes become items (`shape:'kanbanItem'`, `parentId`). Items carry optional `ticket`, `priority`, `assigned`, `icon` and `cssStyles:['text-align: left']`. Shape metadata parsed from `@{ ... }` YAML blocks (`kanbanDb.ts:addNode`).

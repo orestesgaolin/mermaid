@@ -1,6 +1,5 @@
 # gitGraph — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser/AST: `gitGraphAst.ts` builds a `Map<id,Commit>` and `Map<branch,head>`; commits carry `seq`, `parents`, `branch`, `type`, `tags[]` (an array), `customId`, `customType`. Branches have an `order`. Default `mainBranchName='main'`, `mainBranchOrder=0`.

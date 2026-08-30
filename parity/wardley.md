@@ -1,6 +1,5 @@
 # wardley — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser/DB: `wardleyParser.ts:populateDb` consumes a Langium AST (`@mermaid-js/parser` grammar `wardley`) and feeds `WardleyBuilder` (`wardleyBuilder.ts`). Coordinates are normalized to **0–100** via `toPercent` (accepts 0–1 decimals or 0–100); AST order is `[visibility, evolution]` → `(x=evolution, y=visibility)`.

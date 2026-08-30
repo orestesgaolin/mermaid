@@ -1,6 +1,5 @@
 # pie — parity analysis
 **Status:** full-parity (default theme adapts to dark/forest/neutral via theme palette); only unsupported config remains (donutHole/legendPosition/highlightSlice)
-**Last analyzed:** TODO-date
 **Last implemented:** 2026-06-14
 
 ## How mermaid.js implements it

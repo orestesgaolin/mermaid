@@ -1,6 +1,5 @@
 # packet — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Config defaults (`config.schema.yaml` PacketDiagramConfig): `rowHeight=32`, `bitWidth=32`, `bitsPerRow=32`, `paddingX=5`, `paddingY=5`, `showBits=true`.

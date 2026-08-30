@@ -1,6 +1,5 @@
 # architecture — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser: langium grammar `upstream/packages/parser/src/language/architecture/architecture.langium`. Statements: `group id(icon)[title] in parent`, `service id(("iconText") | (icon))[title] in parent`, `junction id in parent`, edges `lhs{group}?:Dir <?-- | -title- >? Dir:rhs{group}?`, and an `align row|column id id ...` directive (line 52).

@@ -1,6 +1,5 @@
 # radar — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Grammar `parser/src/language/radar/radar.langium`: header is **only** `radar-beta` (optionally with `:`). Keywords `axis`, `curve`, `showLegend`, `ticks`, `max`, `min`, `graticule`. Axes/curves use `ID` names plus optional `[ "label" ]`.

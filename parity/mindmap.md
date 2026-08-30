@@ -1,6 +1,5 @@
 # mindmap — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser/DB: `mindmapDb.ts:addNode` builds a tree from indentation; `getType` maps delimiters → 7 node types (`DEFAULT/NO_BORDER`, `ROUNDED_RECT`, `RECT`, `CIRCLE`, `CLOUD`, `BANG`, `HEXAGON`). `decorateNode` attaches `icon` and `class`.

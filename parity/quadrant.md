@@ -1,6 +1,5 @@
 # quadrant — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Config/layout in `quadrant-chart/quadrantBuilder.ts:QuadrantBuilder`. Defaults: `chartWidth=chartHeight=500`, `quadrantPadding=5`, `titleFontSize=20`, `titlePadding=10`, `quadrantLabelFontSize=16`, `xAxisLabelFontSize=16`, `yAxisLabelFontSize=16`, `pointLabelFontSize=12`, `pointRadius=5`, `pointTextPadding=5`, `quadrantTextTopPadding=5`, internal border width 1, external border width 2.

@@ -1,6 +1,5 @@
 # requirement — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser (`parser/requirementDiagram.jison`) maps the type keyword to a **display name** via `yy.RequirementType` (`requirementDb.ts:35`): `requirement`→"Requirement", `functionalRequirement`→"Functional Requirement", `interfaceRequirement`→"Interface Requirement", `performanceRequirement`→"Performance Requirement", `physicalRequirement`→"Physical Requirement", `designConstraint`→"Design Constraint". Risk keywords map to `Low/Medium/High`, verifyMethod to `Analysis/Demonstration/Inspection/Test`.

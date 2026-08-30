@@ -1,6 +1,5 @@
 # timeline — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser: `parser/timeline.jison` — header `timeline | timeline LR | timeline TD`, `title <text>`, `section <text>`, period lines (`period` token = `[^#:\n]+`), and event lines (`event` token = `: <text>`). `timelineDb.js:addTask/addEvent/addSection` build `tasks[]` each with `{section, task, score, events[]}`. Periods are tasks; subsequent `:` lines append to the last task's `events[]`.

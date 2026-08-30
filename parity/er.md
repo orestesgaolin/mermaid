@@ -1,6 +1,5 @@
 # er — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Registered renderer is the **unified** one: `erDiagram.ts` wires `renderer = erRenderer-unified.ts` (the legacy `erRenderer.js` is dead code). `draw()` calls `diag.db.getData()` → generic `render()` pipeline; entities become nodes with `shape: 'erBox'`, relationships become edges (`erRenderer-unified.ts:draw`, `erDb.ts:getData`).

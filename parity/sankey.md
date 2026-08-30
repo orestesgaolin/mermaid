@@ -1,6 +1,5 @@
 # sankey — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser: CSV-ish grammar; `sankeyDB.ts:getGraph` returns `{nodes:[{id}], links:[{source,target,value}]}`. `findOrCreateNode` dedups by id, preserves first-seen order. `sankeyUtils.ts:prepareTextForParsing` trims per-row whitespace and collapses blank lines.

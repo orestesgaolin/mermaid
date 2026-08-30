@@ -1,6 +1,5 @@
 # block — parity analysis
 **Status:** full-parity
-**Last analyzed:** (leave as TODO-date)
 
 ## How mermaid.js implements it
 - Parse/DB: `blockDB.ts` (`typeStr2Type`, `populateBlockDatabase`, `setHierarchy`). Builds a tree under a synthetic `root` composite block; `space` blocks are expanded into N clones (`space:num`).

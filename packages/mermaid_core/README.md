@@ -4,6 +4,9 @@
 backend-independent render scene. It includes an SVG renderer and a
 command-line tool and has no Flutter dependency.
 
+See the [live comparison demo](https://roszkowski.dev/mermaid/) for
+side-by-side output from this implementation and mermaid.js.
+
 The package currently supports 28 diagram types, Mermaid theme directives,
 `look: handDrawn`, icons, math in labels, and alternate ELK and tidy-tree
 layouts. Compatibility notes and known differences from mermaid.js are kept in

@@ -1,6 +1,5 @@
 # flowchart — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Entry/render: `flowchart/flowRenderer-v3-unified.ts:draw` builds `LayoutData` from `flowDb.getData()`, selects the registered layout algorithm (`getRegisteredLayoutAlgorithm(layout)`), and calls the unified `rendering-util/render.ts`. `nodeSpacing`/`rankSpacing` default 50; markers `['point','circle','cross']`; `diagramPadding` default 8 (`setupViewPortForSVG`).

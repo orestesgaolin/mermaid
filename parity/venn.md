@@ -1,6 +1,5 @@
 # venn — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Detector requires the literal `venn-beta` prefix: `vennDetector.ts` (`/^\s*venn-beta/`).

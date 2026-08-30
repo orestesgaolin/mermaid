@@ -256,9 +256,8 @@ y-labels horizontal), class note placement, state self-loop label overlap.
 - [x] **Release prep for mermaid_core**: LICENSE (MIT + mermaid/dagre
   attribution), real README, 0.1.0 CHANGELOG, example/, pubspec metadata
   (description/repository/topics/executables, dropped `publish_to:none`).
-  `dart pub publish --dry-run` → **0 warnings**. NOTE: set the real
-  `repository` URL before publishing (placeholder `makevisible/mermaid_dart`).
-  `mermaid_flutter` can't publish until `mermaid_core` is on pub (path dep).
+  `dart pub publish --dry-run` → **0 warnings**. Hosted dependencies and the
+  repository URL are configured for pub.dev publishing.
 
 ## Requested advanced features (2026-06-13) — scoped roadmap
 

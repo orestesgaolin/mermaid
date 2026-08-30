@@ -27,8 +27,6 @@ void order(Graph g, DagreConfig config) {
   _assignOrder(g, layering);
 
   /// https://github.com/dagrejs/dagre/pull/335/files
-  /// TODO 暂时修复
-  ///
   /// Vendored fix: this early-out must not apply to compound graphs. Cluster
   /// border nodes are only moved to the correct side of their siblings by the
   /// sortSubgraph sweeps below, so skipping them breaks cluster layout.

@@ -1,6 +1,5 @@
 # eventModeling — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Grammar (`upstream/packages/parser/.../event-modeling/event-modeling.langium`): header `eventmodeling`, then any mix of `tf`/`timeframe` (EmTimeFrame) and `rf`/`resetframe` (EmResetFrame) lines, plus `entity`, `data`, `note`, `gwt` declarations. A frame is `tf <NN> <type> <QualifiedName> (->> <frameId>)* ([[dataRef]])? (\`type\`)?{inline}?`. Frame id `EM_FID` is 1–3 digits; entity types: `ui|pcr|processor|cmd|command|rmo|readmodel|evt|event`.

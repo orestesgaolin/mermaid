@@ -1,6 +1,5 @@
 # ishikawa — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser `parser/ishikawa.jison`: header `ishikawa` or `ishikawa-beta`, then indentation-significant lines. Each `SPACELIST TEXT` line calls `addNode(indentLen, text)`; bare `TEXT` calls `addNode(0, text)`. `%%` comment lines tokenized as `SPACELINE`.

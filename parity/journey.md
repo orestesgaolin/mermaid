@@ -1,6 +1,5 @@
 # journey — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Parser/DB: `user-journey/journeyDb.js` — `addSection`, `addTask(descr, ':score:p1,p2')`, `getTasks()` returns tasks each carrying `{section, type, people, task, score}`. `getActors()` → `updateActors()` collects all `people` into a `Set` and returns them **sorted alphabetically** (`[...unique].sort()`). Sections list preserved in order.

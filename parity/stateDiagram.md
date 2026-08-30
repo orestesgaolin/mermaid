@@ -1,6 +1,5 @@
 # stateDiagram — parity analysis
 **Status:** full-parity (default render matches mermaid.js and adapts across themes; only bespoke self-loop routing + port-only history extension remain — neither a default-theme visual gap)
-**Last analyzed:** TODO-date
 **Last implemented:** 2026-06-14
 
 ## How mermaid.js implements it

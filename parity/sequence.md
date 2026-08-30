@@ -1,6 +1,5 @@
 # sequence — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 **Last fixed:** 2026-06-14 (color/stroke parity, stickman, frame title centering, margin model)
 
 ## How mermaid.js implements it

@@ -4,6 +4,9 @@
 `mermaid_core` for parsing and layout, `TextPainter` for text measurement, and
 `CustomPainter` for drawing. It does not use SVG, WebViews, or platform views.
 
+See the [live comparison demo](https://roszkowski.dev/mermaid/) for
+side-by-side output from this implementation and mermaid.js.
+
 ## Basic use
 
 ```dart

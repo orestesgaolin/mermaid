@@ -1,6 +1,5 @@
 # cynefin — parity analysis
 **Status:** full-parity
-**Last analyzed:** TODO-date
 
 ## How mermaid.js implements it
 - Grammar (`upstream/packages/parser/src/language/cynefin/cynefin.langium`): header `cynefin-beta` (bare or colon form). Body is `DomainBlock`s (`DOMAIN_NAME` then quoted `STRING` items), `Transition`s (`from --> to (: "label")?`), plus `TitleAndAccessibilities`. `DOMAIN_NAME` is exactly one of `complex|complicated|clear|chaotic|confusion` (no `disorder` alias).
