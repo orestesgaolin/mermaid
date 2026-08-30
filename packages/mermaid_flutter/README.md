@@ -1,26 +1,10 @@
 # mermaid_flutter
 
-Native **Flutter** rendering for [`mermaid_core`](https://pub.dev/packages/mermaid_core)
-— a pure-Dart port of [mermaid.js](https://github.com/mermaid-js/mermaid).
-It pairs `mermaid_core`'s parser/layout with pixel-accurate text measurement
-(`TextPainter`) and a `CustomPainter` that paints the render scene directly —
-no SVG, no WebView, no platform views.
+`mermaid_flutter` renders Mermaid diagrams with Flutter. It uses
+`mermaid_core` for parsing and layout, `TextPainter` for text measurement, and
+`CustomPainter` for drawing. It does not use SVG, WebViews, or platform views.
 
-## Features
-
-- **`MermaidDiagram` widget** — give it a source string, it parses, lays out
-  and paints the diagram.
-- **`MermaidView` widget** — an interactive viewer around it: pan & zoom, a
-  directional arrow pad, zoom in/out, reset-to-fit, a pan/zoom lock toggle and
-  a fullscreen popup — like mermaid.js on the web.
-- **Exact text metrics** via `FlutterTextMeasurer` (matches the painter), so
-  layout is correct for whatever fonts your app uses.
-- **Live-editing friendly** — keeps the last good render on screen with an
-  error overlay while you type invalid source (`keepLastGoodSceneOnError`).
-- Supports every diagram type and feature `mermaid_core` does: 28 diagram
-  types, theme directives, hand-drawn look, icons, and math.
-
-## Usage
+## Basic use
 
 ```dart
 import 'package:flutter/material.dart';
@@ -43,57 +27,36 @@ graph TD
 }
 ```
 
-The widget sizes itself to the diagram. To fit it into a box, wrap it:
-
-```dart
-FittedBox(child: MermaidDiagram(source: src))                 // scale to fit
-InteractiveViewer(child: MermaidDiagram(source: src))         // pan / zoom
-```
-
-### Interactive viewer
-
-For the full pan/zoom experience (and a fullscreen popup), drop in
-`MermaidView` instead — it fits the diagram to its box and adds on-canvas
-controls:
+`MermaidDiagram` sizes itself to the rendered diagram. `MermaidView` adds a
+fitted interactive view with pan, zoom, reset, lock, directional controls, and
+a fullscreen dialog:
 
 ```dart
 SizedBox(
   height: 480,
-  child: MermaidView(source: src),   // pan, zoom, arrows, reset, popup
+  child: MermaidView(source: source),
 )
 ```
 
-### Theming and errors
+## Themes and errors
 
 ```dart
 MermaidDiagram(
-  source: src,
-  theme: MermaidTheme.darkTheme,        // or .named('forest'), custom copyWith
-  keepLastGoodSceneOnError: true,       // default — great for live editors
+  source: source,
+  theme: MermaidTheme.darkTheme,
+  keepLastGoodSceneOnError: true,
   errorBuilder: (context, error) => Text('$error'),
 )
 ```
 
-A `%%{init}%%` directive or frontmatter `config.theme` in the source still
-overrides the `theme` argument, just like mermaid.js.
+Theme directives in the Mermaid source take precedence over the `theme`
+argument. With `keepLastGoodSceneOnError`, the widget keeps the previous valid
+diagram visible while reporting a new parse error.
 
-## Lower-level API
-
-`MermaidDiagram` is a thin wrapper. You can also drive the pieces directly:
-
-- `FlutterTextMeasurer` — implements `mermaid_core`'s `TextMeasurer`.
-- `ScenePainter` — a `CustomPainter` that paints a `RenderScene`.
-
-```dart
-final scene = Mermaid(measurer: const FlutterTextMeasurer()).render(src);
-CustomPaint(size: scene.size, painter: ScenePainter(scene));
-```
-
-## See also
-
-- [`mermaid_core`](https://pub.dev/packages/mermaid_core) — the pure-Dart
-  engine, plus an SVG renderer and the `mermaid_dart` CLI.
+For lower-level use, `FlutterTextMeasurer` implements the `mermaid_core`
+measurement interface and `ScenePainter` paints a `RenderScene` directly.
 
 ## License
 
-MIT (a port of mermaid.js, MIT).
+MIT. This package is part of a Dart port of mermaid.js, which is also MIT
+licensed.

@@ -1,9 +1,8 @@
-/// Lays out TeX math using the pure-Dart `katex_dart` package and adapts its
+/// Lays out TeX math using `katex_dart` and adapts its
 /// backend-agnostic box tree into mermaid's scene IR.
 ///
-/// `katex_dart` is a faithful KaTeX port (verified against the real KaTeX oracle).
-/// It produces a [BoxNode] tree in em units; here we walk that tree — exactly
-/// as katex's own SVG serializer does — but emit mermaid [SceneShape]/
+/// It produces a [BoxNode] tree in em units; here we walk that tree in the
+/// same way as its SVG serializer, but emit mermaid [SceneShape]/
 /// [SceneText] primitives instead of SVG. Glyphs are emitted as filled outline
 /// **paths** (from katex's bundled glyph outlines), so math renders in both the
 /// SVG and Flutter backends with no font embedding or registration required.
@@ -23,10 +22,10 @@ import '../ir/scene.dart';
 typedef KatexMath = ({Size size, double ascent, List<SceneNode> nodes});
 
 /// Padding (em) around the metric box so glyph ink that overshoots isn't
-/// clipped (mirrors katex_dart's serializer `_contentPadEm`).
+/// clipped (mirrors the katex_dart serializer's `_contentPadEm`).
 const double _padEm = 0.08;
 
-/// Lays out [tex] at [fontSize] px-per-em in [color]. Returns null if katex
+/// Lays out [tex] at [fontSize] px-per-em in [color]. Returns null if katex_dart
 /// can't parse/build it (the caller falls back to its own engine).
 KatexMath? buildKatexMath(String tex, double fontSize, Color color) {
   final kx.BoxNode root;

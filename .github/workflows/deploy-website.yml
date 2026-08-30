@@ -3,11 +3,6 @@ name: Deploy website to GitHub Pages
 # Builds the side-by-side comparison site (Jaspr static + embedded Flutter web,
 # via jaspr_flutter_embed) and publishes apps/website/build/jaspr to Pages.
 #
-# mermaid_core depends on the pure-Dart `katex` package by a relative path
-# (../../../katex/packages/katex), so this checks out BOTH repos as siblings
-# under the workspace — mermaid/ and katex/ — making that path resolve exactly
-# as it does locally.
-#
 # Before the first run: in the repo Settings → Pages, set "Source" to
 # "GitHub Actions".
 
@@ -41,19 +36,10 @@ jobs:
         with:
           path: mermaid
 
-      - name: Checkout katex (cross-repo path dependency of mermaid_core)
-        uses: actions/checkout@v4
-        with:
-          repository: orestesgaolin/katex
-          path: katex
-          # katex is public, so the default token clones it. If it ever goes
-          # private, add a PAT with read access as the KATEX_TOKEN secret.
-          token: ${{ secrets.KATEX_TOKEN || github.token }}
-
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
-          flutter-version: 3.44.0
+          flutter-version: 3.44.9
           channel: stable
           cache: true
 

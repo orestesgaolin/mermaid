@@ -20,12 +20,8 @@ executables:
 dependencies:
   meta: ^1.16.0
   path_parsing: ^1.1.0
-  # Standalone pure-Dart ELK-style layered layout,
-  # used by the flowchart `layout: elk` engine.
-  # Workspace resolution uses the local package in the repository.
   elk: ^0.1.0
-  # Pure-Dart KaTeX port: drives math layout via its box tree.
-  katex_dart: ^0.1.1
+  katex_dart: ^0.1.0
 
 dev_dependencies:
   lints: ^6.0.0

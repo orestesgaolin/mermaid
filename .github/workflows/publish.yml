@@ -1,74 +1,167 @@
-name: Publish to pub.dev
-
-# Publishes the packages to pub.dev in dependency order when a release tag
-# like `v0.1.0` is pushed: mermaid_core first, then mermaid_flutter (which
-# depends on `mermaid_core: ^…`, so core must be live before flutter resolves).
-# A final job generates release notes with `package:changelog_cli` and cuts a
-# GitHub Release. The two packages are versioned in lockstep, so the tag's
-# version must match BOTH pubspecs.
-#
-# ── One-time setup ───────────────────────────────────────────────────────────
-# Authentication uses GitHub Actions OIDC (no secrets stored). On pub.dev, for
-# EACH package (mermaid_core, mermaid_flutter):
-#   Admin → Automated publishing → Enable publishing from GitHub Actions
-#     • Repository:   <owner>/<repo>
-#     • Tag pattern:  v{{version}}
-# pub.dev then trusts tokens minted by this workflow for the matching tag.
+name: Publish Mermaid packages
 
 on:
   push:
-    tags: ['v[0-9]+.[0-9]+.[0-9]+']
+    tags:
+      - 'mermaid-v[0-9]+.[0-9]+.[0-9]+'
+
+permissions:
+  contents: read
 
 jobs:
-  publish-core:
+  prepare:
+    name: Validate release
     runs-on: ubuntu-latest
-    permissions:
-      id-token: write # mint the OIDC token pub.dev verifies
     steps:
       - uses: actions/checkout@v4
-      - uses: dart-lang/setup-dart@v1
-      - name: Resolve workspace
-        run: dart pub get
-      - name: Publish mermaid_core
-        working-directory: packages/mermaid_core
-        run: dart pub publish --force
+        with:
+          fetch-depth: 0
 
-  publish-flutter:
-    # mermaid_flutter depends on mermaid_core, so core must be on pub.dev first.
-    needs: publish-core
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+          cache: true
+
+      - name: Check tag and package versions
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#mermaid-v}"
+          core_version="$(sed -n 's/^version: //p' packages/mermaid_core/pubspec.yaml)"
+          flutter_version="$(sed -n 's/^version: //p' packages/mermaid_flutter/pubspec.yaml)"
+
+          if [[ "$core_version" != "$version" || "$flutter_version" != "$version" ]]; then
+            echo "Tag version:             $version"
+            echo "mermaid_core version:    $core_version"
+            echo "mermaid_flutter version: $flutter_version"
+            exit 1
+          fi
+
+      - name: Check tag commit is on main
+        run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
+
+      - name: Resolve dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: dart analyze packages/mermaid_core packages/mermaid_flutter
+
+      - name: Test mermaid_core
+        run: dart test packages/mermaid_core
+
+      - name: Test mermaid_flutter
+        run: flutter test packages/mermaid_flutter
+
+      - name: Check mermaid_core package
+        working-directory: packages/mermaid_core
+        run: dart pub publish --dry-run
+
+      - name: Check mermaid_flutter package
+        working-directory: packages/mermaid_flutter
+        run: flutter pub publish --dry-run
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#mermaid-v}"
+          dart pub global activate changelog_cli 0.9.1
+          previous="$(git describe --tags --abbrev=0 --match='mermaid-v*' "$GITHUB_SHA^" 2>/dev/null || true)"
+          args=(
+            generate
+            --path .
+            --end "$GITHUB_SHA"
+            --version "$version"
+            --printer markdown
+            --output release-notes.md
+          )
+          if [[ -n "$previous" ]]; then
+            args+=(--start "$previous")
+          fi
+          dart pub global run changelog_cli:changelog_cli "${args[@]}"
+          cat release-notes.md >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-notes
+          path: release-notes.md
+          if-no-files-found: error
+
+  publish:
+    name: Approve and publish
+    needs: prepare
     runs-on: ubuntu-latest
+    environment: pub.dev
     permissions:
+      contents: write
       id-token: write
     steps:
       - uses: actions/checkout@v4
+
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: 3.44.9
           channel: stable
           cache: true
-      - name: Resolve workspace
+
+      # setup-dart exchanges GitHub's OIDC identity for the short-lived
+      # pub.dev token used by both `dart pub` and `flutter pub` below.
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: 3.12.2
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-notes
+
+      - name: Resolve dependencies
         run: flutter pub get
+
+      - name: Publish mermaid_core
+        working-directory: packages/mermaid_core
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#mermaid-v}"
+          if curl --fail --silent https://pub.dev/api/packages/mermaid_core \
+            | jq --exit-status --arg version "$version" 'any(.versions[]; .version == $version)' >/dev/null; then
+            echo "mermaid_core $version is already published"
+          else
+            dart pub publish --force
+          fi
+
+      - name: Wait for mermaid_core on pub.dev
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#mermaid-v}"
+          for attempt in {1..30}; do
+            if curl --fail --silent https://pub.dev/api/packages/mermaid_core \
+              | jq --exit-status --arg version "$version" 'any(.versions[]; .version == $version)' >/dev/null; then
+              exit 0
+            fi
+            echo "Attempt $attempt: waiting for mermaid_core $version"
+            sleep 10
+          done
+          echo "mermaid_core $version did not become available within five minutes"
+          exit 1
+
       - name: Publish mermaid_flutter
         working-directory: packages/mermaid_flutter
-        run: flutter pub publish --force
-
-  github-release:
-    needs: publish-flutter
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write # create the GitHub Release
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0 # full history so changelog_cli can diff from the last tag
-      - uses: dart-lang/setup-dart@v1
-      - name: Generate release notes (changelog_cli)
+        shell: bash
         run: |
-          dart pub global activate changelog_cli
-          export PATH="$HOME/.pub-cache/bin:$PATH"
-          # Conventional-commit notes since the previous tag, as Markdown.
-          changelog_cli generate --auto --printer markdown --output RELEASE_NOTES.md \
-            || changelog_cli generate --auto --printer markdown > RELEASE_NOTES.md
-      - name: Create GitHub Release
+          version="${GITHUB_REF_NAME#mermaid-v}"
+          if curl --fail --silent https://pub.dev/api/packages/mermaid_flutter \
+            | jq --exit-status --arg version "$version" 'any(.versions[]; .version == $version)' >/dev/null; then
+            echo "mermaid_flutter $version is already published"
+          else
+            flutter pub publish --force
+          fi
+
+      - name: Create GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" --title "${GITHUB_REF_NAME}" --notes-file RELEASE_NOTES.md
+        shell: bash
+        run: |
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            echo "GitHub release $GITHUB_REF_NAME already exists"
+          else
+            gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file release-notes.md
+          fi

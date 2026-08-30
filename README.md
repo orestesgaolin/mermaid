@@ -1,8 +1,11 @@
-# mermaid_dart
+# Mermaid for Dart and Flutter
 
-A **pure-Dart, Flutter-first port of [mermaid.js](https://github.com/mermaid-js/mermaid)** — parse a Mermaid source string and render it natively, no JavaScript, no WebView, no SVG round-trip.
+This repository contains a Dart implementation of Mermaid diagram parsing and
+layout, plus renderers for SVG and Flutter. It does not use JavaScript, a
+WebView, or a browser at runtime.
 
-It detects, parses and lays out **28 diagram types** into a backend-agnostic *render scene*, then paints that scene either with Flutter's canvas (`mermaid_flutter`) or as an SVG string / CLI (`mermaid_core`).
+The [comparison site](https://roszkowski.dev/mermaid/) renders the Dart and
+mermaid.js results side by side.
 
 ```dart
 import 'package:flutter/material.dart';
@@ -16,83 +19,65 @@ graph TD
 ''');
 ```
 
-## Supported diagrams (28)
-
-flowchart · sequence · class · state · ER · pie · gantt · quadrant · journey ·
-timeline · xychart · mindmap · requirement · C4 · gitGraph · sankey · packet ·
-block · radar · treemap · kanban · architecture · cynefin · venn · ishikawa ·
-wardley · eventModeling · railroad
-
-Plus `%%{init}%%` / frontmatter **theme directives** (default/dark/forest/neutral
-+ `themeVariables`), the sketchy **`look: handDrawn`** style (a faithful roughjs
-port), iconify-style **icons** on nodes, **math** in labels (`$$…$$`, a TeX
-subset), and the **`elk` / `tidy-tree`** alternate layout engines.
-
 ## Packages
 
-| Package | Pub | What it is |
-|---|---|---|
-| [`mermaid_core`](packages/mermaid_core) | publishable | Pure-Dart engine: detect → parse → typed model → layout → `RenderScene`, an SVG renderer, and the `mermaid_dart` CLI. No Flutter. |
-| [`mermaid_flutter`](packages/mermaid_flutter) | publishable | `MermaidDiagram` widget + `ScenePainter` (a `CustomPainter`) and `TextPainter`-based text measurement for pixel-accurate native rendering. |
-| `mermaid_samples` | internal | Shared catalogue of example diagrams reused by the demo, website and tests. |
+| Package | Purpose |
+| --- | --- |
+| [`elk`](packages/elk) | Pure Dart layered graph layout with compound graphs, ports, and orthogonal routing. |
+| [`mermaid_core`](packages/mermaid_core) | Mermaid parser, layout engine, render scene, SVG renderer, and command-line tool. |
+| [`mermaid_flutter`](packages/mermaid_flutter) | Flutter widgets and a `CustomPainter` renderer for `mermaid_core`. |
+| `mermaid_samples` | Internal sample catalogue used by the demo, website, and tests. |
 
-`mermaid_flutter` depends on `mermaid_core`, so `mermaid_core` publishes first.
+`mermaid_core` supports flowcharts, sequence diagrams, class diagrams, state
+diagrams, ER diagrams, pie charts, Gantt charts, quadrant charts, journeys,
+timelines, XY charts, mindmaps, requirements, C4, git graphs, Sankey diagrams,
+packet diagrams, block diagrams, radar charts, treemaps, Kanban boards,
+architecture diagrams, Cynefin diagrams, Venn diagrams, Ishikawa diagrams,
+Wardley maps, event modeling, and railroad diagrams.
 
-## Apps
+It also supports Mermaid theme directives, `look: handDrawn`, icons, math in
+labels, and the `elk` and `tidy-tree` layout engines.
 
-| App | What it is |
-|---|---|
-| [`apps/demo`](apps/demo) | macOS desktop app: a live source editor with a preview pane and a theme editor, showcasing all 28 types. |
-| [`apps/website`](apps/website) | Static [Jaspr](https://jaspr.site) site rendering mermaid.js (CDN) and this port **side by side** for visual parity comparison — **[live demo](https://roszkowski.dev/mermaid/)**. The Dart renderer is embedded with [`jaspr_flutter_embed`](https://pub.dev/packages/jaspr_flutter_embed), so a single `jaspr build` produces the whole site (Flutter web build included). |
+## Repository layout
 
-## Architecture
+- `apps/demo`: macOS editor and preview app
+- `apps/website`: side-by-side comparison site
+- `packages`: published libraries and shared samples
+- `parity`: notes about compatibility with mermaid.js
 
-An immutable pipeline, each stage independently testable:
+The rendering pipeline is:
 
+```text
+source -> parse -> model -> measure -> layout -> RenderScene -> SVG or Flutter
 ```
-source → parse → typed model → measure (TextMeasurer) → layout → RenderScene IR → backend
-                                                                                   ├── ScenePainter (Flutter)
-                                                                                   └── renderSceneToSvg (SVG/CLI)
-```
-
-The `RenderScene` is a backend-agnostic tree of shapes, paths and text in
-absolute coordinates. Text measurement is pluggable: `ApproximateTextMeasurer`
-(Helvetica metrics, good for SVG and tests) or `FlutterTextMeasurer`
-(`TextPainter`, pixel-accurate in an app).
 
 ## Development
 
-This is a Dart [pub workspace](https://dart.dev/tools/pub/workspaces); resolve
-everything from the root:
+The repository is a [pub workspace](https://dart.dev/tools/pub/workspaces).
+Resolve dependencies from the root:
 
 ```console
-$ dart pub get
+$ flutter pub get
 ```
 
-Common tasks:
+Common checks:
 
 ```console
-# Core engine: analyze, test, corpus validation
-$ dart analyze packages/mermaid_core
+$ dart analyze packages/mermaid_core packages/mermaid_flutter
 $ dart test packages/mermaid_core
-$ cd packages/mermaid_core && dart run tool/validate_corpus.dart
-
-# CLI: render a .mmd to SVG or PNG
-$ cd packages/mermaid_core && dart run bin/mermaid.dart diagram.mmd -o out.svg
-
-# Demo app (macOS)
-$ cd apps/demo && flutter run -d macos
+$ flutter test packages/mermaid_flutter
 ```
 
-## Parity
+Run the command-line renderer from `packages/mermaid_core`:
 
-"Parity" here means a structural render-diff plus matching upstream constants,
-verified against 184 upstream demo fixtures and by manual side-by-side
-comparison with the mermaid.js CDN. Per-diagram parity status and known
-residuals live under [`parity/`](parity).
+```console
+$ dart run bin/mermaid.dart diagram.mmd -o diagram.svg
+```
+
+Release setup and the tag workflow are documented in
+[`RELEASING.md`](RELEASING.md).
 
 ## License
 
-MIT — a port of mermaid.js (MIT). `mermaid_core` vendors a derivative of
-`dart_dagre` (Apache-2.0) under `lib/src/vendor/dagre/`, which keeps its own
-`LICENSE`.
+MIT. The project contains code derived from mermaid.js (MIT) and dart_dagre
+(Apache-2.0); vendored code retains its original license.

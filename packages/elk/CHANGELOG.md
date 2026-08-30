@@ -1,4 +1,4 @@
-## 0.1.1-wip
+## 0.1.1
 
 - Fixed explicit north/south ports attaching to
   the opposite side of nodes in `ElkDirection.up` layouts.
