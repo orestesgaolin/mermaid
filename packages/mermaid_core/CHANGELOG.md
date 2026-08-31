@@ -1,3 +1,12 @@
+## 0.1.2
+
+- Route flowchart edges into subgraphs with bends that more closely match
+  Mermaid.js.
+- Prevent command and read-model nodes from overlapping in Event Modeling
+  diagrams.
+- Align Kanban section titles, card insets, and bottom padding with Mermaid.js.
+- Render C4 database cylinders without a white cutout in the top cap.
+
 ## 0.1.1
 
 - Prevent late font fallback changes on Flutter web from wrapping flowchart

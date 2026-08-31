@@ -1,3 +1,8 @@
+## 0.1.2
+
+- Update `mermaid_core` to 0.1.2 for corrected flowchart, Event Modeling,
+  Kanban, and C4 layouts.
+
 ## 0.1.1
 
 - Make arrow controls move the viewport in the direction shown.
