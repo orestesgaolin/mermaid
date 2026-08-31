@@ -339,6 +339,17 @@ _Fragment _layoutGraph(
 
   // --- 3. Build the dagre graph. -------------------------------------------
   final g = dagre.DagreGraph();
+  // Mermaid adds subgraphs in reverse declaration order before ordinary
+  // vertices. Preserve that insertion order because dagre uses it to break
+  // ties between otherwise symmetrical sibling clusters.
+  for (var i = sgs.length - 1; i >= 0; i--) {
+    if (removedSubgraphs.contains(i)) continue;
+    var p = sgs[i].parentIndex;
+    while (p != null && removedSubgraphs.contains(p)) {
+      p = sgs[p].parentIndex;
+    }
+    g.addNode(dagre.DagreNode(sgs[i].id, parent: p != null ? sgs[p].id : null));
+  }
   for (final p in placed.values) {
     g.addNode(dagre.DagreNode(
       p.node.id,
@@ -346,14 +357,6 @@ _Fragment _layoutGraph(
       height: p.shape.height,
       parent: parentOf[p.node.id],
     ));
-  }
-  for (var i = 0; i < sgs.length; i++) {
-    if (removedSubgraphs.contains(i)) continue;
-    var p = sgs[i].parentIndex;
-    while (p != null && removedSubgraphs.contains(p)) {
-      p = sgs[p].parentIndex;
-    }
-    g.addNode(dagre.DagreNode(sgs[i].id, parent: p != null ? sgs[p].id : null));
   }
   // Dagre cannot target a compound cluster directly; edges to a (non-
   // isolated) subgraph id are routed to a representative member node and the
@@ -434,8 +437,7 @@ _Fragment _layoutGraph(
   final clusterLabels = <String, Size>{
     for (var i = 0; i < sgs.length; i++)
       if (!removedSubgraphs.contains(i) && sgs[i].title.isNotEmpty)
-        sgs[i].id: measurer.measure(sgs[i].title, clusterTitleStyleForElk,
-            maxWidth: _wrappingWidth),
+        sgs[i].id: measurer.measure(sgs[i].title, clusterTitleStyleForElk),
   };
   if (useElk) {
     elkResult = layoutWithElk(g,
@@ -500,6 +502,39 @@ _Fragment _layoutGraph(
   // Clusters, outermost first so nested ones paint on top.
   final clusterRects = <String, Rect>{};
   final clusterTitleStyle = baseStyle.copyWith(fontWeight: 400);
+  final clusterTitleSizes = <String, Size>{
+    for (var i = 0; i < sgs.length; i++)
+      if (!removedSubgraphs.contains(i))
+        sgs[i].id: sgs[i].title.isEmpty
+            ? Size.zero
+            : measurer.measure(sgs[i].title, clusterTitleStyle),
+  };
+  // Dagre's compound boundary includes its own generous top margin. Mermaid
+  // paints the visible border around the title band and first member instead.
+  // Resolve that top edge inside-out so an outer cluster also encloses a
+  // nested cluster's title.
+  final visibleClusterTops = <String, double>{};
+  if (!useElk) {
+    for (var i = sgs.length - 1; i >= 0; i--) {
+      if (removedSubgraphs.contains(i)) continue;
+      final sg = sgs[i];
+      final contentTops = <double>[
+        for (final p in placed.values)
+          if (parentOf[p.node.id] == sg.id)
+            p.center.y - p.shape.height / 2,
+        for (var child = 0; child < sgs.length; child++)
+          if (!removedSubgraphs.contains(child) &&
+              sgs[child].parentIndex == i &&
+              visibleClusterTops.containsKey(sgs[child].id))
+            visibleClusterTops[sgs[child].id]!,
+      ];
+      if (contentTops.isNotEmpty) {
+        visibleClusterTops[sg.id] = contentTops.reduce(math.min) -
+            _clusterPadding -
+            clusterTitleSizes[sg.id]!.height;
+      }
+    }
+  }
   for (var sgIndex = 0; sgIndex < sgs.length; sgIndex++) {
     final sg = sgs[sgIndex];
     if (removedSubgraphs.contains(sgIndex)) {
@@ -511,10 +546,7 @@ _Fragment _layoutGraph(
         ? elkResult!.rect(sg.id)
         : result!.graph.nodeMap[sg.id]?.position;
     if (pos == null) continue;
-    final titleSize = sg.title.isEmpty
-        ? Size.zero
-        : measurer.measure(sg.title, clusterTitleStyle,
-            maxWidth: _wrappingWidth);
+    final titleSize = clusterTitleSizes[sg.id]!;
     // For ELK the rect already includes a reserved top band for the title (we
     // passed the title as a node label), so the title sits *inside* the rect.
     // Dagre doesn't reserve it, so the rect is grown upward by the title height.
@@ -527,7 +559,8 @@ _Fragment _layoutGraph(
           )
         : Rect.fromLTRB(
             pos.left - _clusterPadding,
-            pos.top - _clusterPadding - titleSize.height,
+            visibleClusterTops[sg.id] ??
+                pos.top - _clusterPadding - titleSize.height,
             pos.right + _clusterPadding,
             pos.bottom + _clusterPadding,
           );
@@ -700,6 +733,24 @@ _Fragment _layoutGraph(
       points =
           _dropInsideRect(points, clusterRects[clusterFrom]!, fromEnd: false);
     }
+    // Dagre sizes a compound node around its members, while the painted
+    // cluster grows upward to make room for its title. Move the final bend
+    // outside that visible rect when an edge enters a member from outside;
+    // otherwise the diagonal segment cuts through the yellow title band.
+    var adjustedForCluster = false;
+    if (!useElk && clusterTo == null) {
+      final enteredCluster =
+          _enteredTargetCluster(fromId, toId, parentOf, clusterRects);
+      if (enteredCluster != null) {
+        final adjusted = _bendBeforeCluster(
+          points,
+          clusterRects[enteredCluster]!,
+          graph.direction,
+        );
+        adjustedForCluster = adjusted != points;
+        points = adjusted;
+      }
+    }
     // Clip ends to the actual shape boundary (dagre only clips to the
     // bounding rect). For elk's orthogonal routes, clip *along the segment's
     // own axis* so the attach stays perpendicular (a centre-based clip lands on
@@ -756,7 +807,9 @@ _Fragment _layoutGraph(
       // mermaid does. Dagre supplies its own labelX/Y.
       final labelCenter = useElk
           ? _pathMidpoint(points)
-          : (dagreEdge?.labelX != null && dagreEdge?.labelY != null)
+          : (!adjustedForCluster &&
+                  dagreEdge?.labelX != null &&
+                  dagreEdge?.labelY != null)
               ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
               : _pathMidpoint(points);
       edgeLabelGroups.add(_edgeLabelGroup(
@@ -904,6 +957,86 @@ List<Point> _dropInsideRect(List<Point> pts, Rect rect,
     }
   }
   return list;
+}
+
+/// Returns the outermost target cluster crossed by an edge whose source is
+/// outside that cluster. A shared ancestor is not crossed.
+String? _enteredTargetCluster(
+  String sourceId,
+  String targetId,
+  Map<String, String> parentOf,
+  Map<String, Rect> clusterRects,
+) {
+  final sourceAncestors = <String>{};
+  String? current = parentOf[sourceId];
+  while (current != null) {
+    sourceAncestors.add(current);
+    current = parentOf[current];
+  }
+
+  String? entered;
+  current = parentOf[targetId];
+  while (current != null && !sourceAncestors.contains(current)) {
+    if (clusterRects.containsKey(current)) entered = current;
+    current = parentOf[current];
+  }
+  return entered;
+}
+
+/// Pulls the first point of the terminal axis-aligned run outside the visible
+/// cluster, so the rounded edge completes its bend before the title band.
+List<Point> _bendBeforeCluster(
+  List<Point> points,
+  Rect cluster,
+  FlowDirection direction,
+) {
+  if (points.length < 2) return points;
+
+  final vertical =
+      direction == FlowDirection.tb || direction == FlowDirection.bt;
+  final end = points.last;
+  final clearance = 3 * _clusterPadding;
+  final bend = switch (direction) {
+    FlowDirection.tb => Point(end.x, cluster.top - clearance),
+    FlowDirection.bt => Point(end.x, cluster.bottom + clearance),
+    FlowDirection.lr => Point(cluster.left - clearance, end.y),
+    FlowDirection.rl => Point(cluster.right + clearance, end.y),
+  };
+  final border = switch (direction) {
+    FlowDirection.tb => Point(end.x, cluster.top),
+    FlowDirection.bt => Point(end.x, cluster.bottom),
+    FlowDirection.lr => Point(cluster.left, end.y),
+    FlowDirection.rl => Point(cluster.right, end.y),
+  };
+
+  final progressesTowardTarget = switch (direction) {
+    FlowDirection.tb => bend.y > points.first.y,
+    FlowDirection.bt => bend.y < points.first.y,
+    FlowDirection.lr => bend.x > points.first.x,
+    FlowDirection.rl => bend.x < points.first.x,
+  };
+  if (!progressesTowardTarget) return points;
+
+  bool aligned(Point p) => vertical
+      ? (p.x - end.x).abs() < 0.001
+      : (p.y - end.y).abs() < 0.001;
+
+  var firstAligned = points.length - 1;
+  while (firstAligned > 0 && aligned(points[firstAligned - 1])) {
+    firstAligned--;
+  }
+
+  final adjusted = List<Point>.from(points);
+  if (firstAligned == points.length - 1) {
+    adjusted.insert(firstAligned, bend);
+    adjusted.insert(firstAligned + 1, border);
+  } else {
+    adjusted[firstAligned] = bend;
+    for (var i = firstAligned + 1; i < adjusted.length - 1; i++) {
+      if (aligned(adjusted[i])) adjusted[i] = border;
+    }
+  }
+  return adjusted;
 }
 
 /// Routes a self-edge as a compact loop on the right side of the node,

@@ -3,6 +3,7 @@ library;
 
 import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart';
+import 'package:mermaid_core/src/diagrams/flowchart/flow_parser.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
@@ -184,6 +185,100 @@ void main() {
     test('isolated-direction cluster endpoint clips at border', () {
       expectStopsAtBorder(
           layout(clusterTarget(sgDirection: FlowDirection.lr)));
+    });
+  });
+
+  group('edges entering sibling subgraphs', () {
+    const source = '''
+flowchart TB
+  A0["Tela A"] --> A1["dialog de opcoes<br/>settings.name = null"] --> A2["dialog de loading<br/>settings.name = null"]
+  A2 --> B1
+  A2 --> C1
+  subgraph SEM["SEM await — quebrado"]
+    direction TB
+    B1["push Tela B no topo"] --> B2["cb1 pop → remove Tela B"] --> B3["cb2 pop → remove loading"] --> B4["sobra o dialog de opcoes<br/>Tela B nunca aparece"]
+  end
+  subgraph COM["COM await — funciona por acidente"]
+    direction TB
+    C1["cb1 pop → remove loading"] --> C2["cb2 pop → remove dialog de opcoes"] --> C3["push Tela B sobre Tela A"] --> C4["Tela B visivel"]
+  end
+  B2 -.->|"rota com name null<br/>Logger de rotas grava<br/>'Rota nao encontrada'"| LOG["log: Rota nao encontrada"]
+''';
+
+    test('matches Mermaid sibling order', () {
+      final scene = layout(parseFlowchart(source));
+      final com = groupBounds(groupById(scene, 'COM'));
+      final sem = groupBounds(groupById(scene, 'SEM'));
+      expect(
+        com.center.x,
+        lessThan(sem.center.x),
+      );
+      expect(com.top, closeTo(sem.top, 0.001));
+
+      final firstMember = groupBounds(groupById(scene, 'C1'));
+      expect(firstMember.top - com.top, lessThan(30),
+          reason: 'the visible cluster top should contain only its title band');
+      final comTitle = groupById(scene, 'COM')
+          .children
+          .whereType<SceneText>()
+          .single;
+      expect(comTitle.bounds.height, lessThan(25),
+          reason: 'the cluster title should remain on one line');
+    });
+
+    test('enters each visible cluster after a rounded bend', () {
+      final scene = layout(parseFlowchart(source));
+
+      void expectRoundedVerticalEntry(String edgeId, String clusterId) {
+        final edge = groupById(scene, edgeId);
+        final path = edge.children
+            .whereType<SceneShape>()
+            .map((shape) => shape.geometry)
+            .whereType<PathGeometry>()
+            .single;
+        final cluster = groupBounds(groupById(scene, clusterId));
+
+        Point? cursor;
+        var hasRoundedBendAbove = false;
+        var crossesVertically = false;
+        for (final command in path.commands) {
+          switch (command) {
+            case MoveTo(:final p):
+              cursor = p;
+            case LineTo(:final p):
+              final start = cursor!;
+              if (start.y <= cluster.top && p.y >= cluster.top) {
+                crossesVertically = (start.x - p.x).abs() < 0.001;
+              }
+              cursor = p;
+            case CubicTo(:final c1, :final c2, :final p):
+              final start = cursor!;
+              final allVertical = [c1.x, c2.x, p.x]
+                  .every((x) => (start.x - x).abs() < 0.001);
+              if (p.y < cluster.top &&
+                  !allVertical &&
+                  (p.x - c2.x).abs() < 0.001) {
+                hasRoundedBendAbove = true;
+              }
+              if (start.y <= cluster.top && p.y >= cluster.top) {
+                crossesVertically = allVertical;
+              }
+              cursor = p;
+            case QuadTo(:final p):
+              cursor = p;
+            case ClosePath():
+              break;
+          }
+        }
+
+        expect(hasRoundedBendAbove, isTrue,
+            reason: '$edgeId should keep a rounded bend above $clusterId');
+        expect(crossesVertically, isTrue,
+            reason: '$edgeId should be vertical at the $clusterId border');
+      }
+
+      expectRoundedVerticalEntry('edge_A2_B1_2', 'SEM');
+      expectRoundedVerticalEntry('edge_A2_C1_3', 'COM');
     });
   });
 
