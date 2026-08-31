@@ -32,7 +32,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout mermaid
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           path: mermaid
 
@@ -49,7 +49,7 @@ jobs:
 
       - name: Install Jaspr CLI
         run: |
-          dart pub global activate jaspr_cli
+          dart pub global activate jaspr_cli 0.23.1
           echo "$HOME/.pub-cache/bin" >> "$GITHUB_PATH"
 
       - name: Build static Jaspr site (runs the Flutter web build internally)
@@ -73,7 +73,7 @@ jobs:
           touch apps/website/build/jaspr/.nojekyll
 
       - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: mermaid/apps/website/build/jaspr
 
@@ -86,4 +86,4 @@ jobs:
     steps:
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
