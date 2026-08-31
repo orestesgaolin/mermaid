@@ -1,3 +1,8 @@
+## Unreleased
+
+- Prevent late font fallback changes on Flutter web from wrapping flowchart
+  labels outside their node boxes.
+
 ## 0.1.0
 
 Initial release. Pure Dart port of mermaid.js.

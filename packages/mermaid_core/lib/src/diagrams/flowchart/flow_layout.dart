@@ -43,6 +43,12 @@ const double _rankSpacing = 50;
 const double _doubleCircleGap = 5;
 const double _subroutineFrame = 8;
 
+/// Extra width offered to the painter from space already reserved inside a
+/// node. Flutter web can resolve a fallback font between measurement and
+/// paint; without a little tolerance, a label measured as one line can wrap
+/// to two while the node keeps its one-line height.
+const double _labelPaintTolerance = 16;
+
 RenderScene layoutFlowchart(
   FlowGraph graph, {
   required TextMeasurer measurer,
@@ -794,11 +800,14 @@ _Fragment _layoutGraph(
         color: p.style.textColor,
       ));
     } else {
+      final horizontalSlack = math.max(0, p.shape.width - p.labelSize.width);
+      final paintWidth = p.labelSize.width +
+          math.min(_labelPaintTolerance, horizontalSlack / 2);
       children.add(SceneText(
         text: p.node.label,
         bounds: Rect.fromCenter(
           p.shape.labelCenter(p.center),
-          p.labelSize.width,
+          paintWidth,
           p.labelSize.height,
         ),
         style: baseStyle,

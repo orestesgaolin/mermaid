@@ -12,11 +12,11 @@ import 'mermaid_diagram.dart';
 
 /// Displays a mermaid diagram with interactive pan/zoom controls.
 ///
-/// The diagram is framed to fit on first layout (and re-framed when the source
-/// changes, unless you've panned/zoomed — then your view is kept). Drag to pan
-/// and scroll/pinch to zoom; the on-canvas controls give discrete pan, zoom,
-/// reset and a fullscreen popup. Wrap it in a bounded box (it fills its
-/// parent).
+/// The diagram is framed to fit on first layout and whenever the viewport
+/// changes size. A source change is also re-framed unless you've panned or
+/// zoomed. Drag to pan and scroll/pinch to zoom; the on-canvas controls give
+/// discrete pan, zoom, reset and a fullscreen popup. Wrap it in a bounded box
+/// (it fills its parent).
 class MermaidView extends StatefulWidget {
   const MermaidView({
     super.key,
@@ -118,8 +118,10 @@ class _MermaidViewState extends State<MermaidView> {
     if (cs == null || _viewport == Size.zero) return;
     final pad = widget.padding;
     final s = math
-        .min((_viewport.width - 2 * pad) / cs.width,
-            (_viewport.height - 2 * pad) / cs.height)
+        .min(
+          (_viewport.width - 2 * pad) / cs.width,
+          (_viewport.height - 2 * pad) / cs.height,
+        )
         .clamp(widget.minScale, widget.maxScale);
     final tx = (_viewport.width - cs.width * s) / 2;
     final ty = (_viewport.height - cs.height * s) / 2;
@@ -137,11 +139,12 @@ class _MermaidViewState extends State<MermaidView> {
     final f = target / cur;
     if ((f - 1).abs() < 1e-6) return;
     final c = Offset(_viewport.width / 2, _viewport.height / 2);
-    _tc.value = (Matrix4.identity()
-          ..translateByDouble(c.dx, c.dy, 0, 1)
-          ..scaleByDouble(f, f, f, 1)
-          ..translateByDouble(-c.dx, -c.dy, 0, 1))
-        .multiplied(_tc.value);
+    _tc.value =
+        (Matrix4.identity()
+              ..translateByDouble(c.dx, c.dy, 0, 1)
+              ..scaleByDouble(f, f, f, 1)
+              ..translateByDouble(-c.dx, -c.dy, 0, 1))
+            .multiplied(_tc.value);
   }
 
   /// Pan by ([dx], [dy]) in viewport space.
@@ -193,11 +196,9 @@ class _MermaidViewState extends State<MermaidView> {
         final vp = constraints.biggest;
         if (vp != _viewport) {
           _viewport = vp;
-          // Re-frame on a resize (e.g. expanding to full page) only if the
-          // user hasn't moved the view.
-          if (_fittedMatrix == null || _tc.value == _fittedMatrix) {
-            _didFit = false;
-          }
+          // A transform that made sense in the previous viewport can leave
+          // the diagram off-screen after entering or leaving fullscreen.
+          _didFit = false;
         }
         if (!_didFit) {
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -274,46 +275,62 @@ class _MermaidViewState extends State<MermaidView> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              _CtlButton(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CtlButton(
                   icon: Icons.keyboard_arrow_up,
-                  tooltip: 'Pan up',
-                  onTap: () => _pan(0, -widget.panStep)),
-              const SizedBox(width: 6),
-              _CtlButton(
+                  tooltip: 'Move view up',
+                  onTap: () => _pan(0, widget.panStep),
+                ),
+                const SizedBox(width: 6),
+                _CtlButton(
                   icon: Icons.add,
                   tooltip: 'Zoom in',
-                  onTap: () => _zoom(widget.zoomStep)),
-            ]),
+                  onTap: () => _zoom(widget.zoomStep),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              _CtlButton(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CtlButton(
                   icon: Icons.keyboard_arrow_left,
-                  tooltip: 'Pan left',
-                  onTap: () => _pan(-widget.panStep, 0)),
-              const SizedBox(width: 6),
-              _CtlButton(
+                  tooltip: 'Move view left',
+                  onTap: () => _pan(widget.panStep, 0),
+                ),
+                const SizedBox(width: 6),
+                _CtlButton(
                   icon: Icons.center_focus_strong,
                   tooltip: 'Reset / centre',
-                  onTap: _fit),
-              const SizedBox(width: 6),
-              _CtlButton(
+                  onTap: _fit,
+                ),
+                const SizedBox(width: 6),
+                _CtlButton(
                   icon: Icons.keyboard_arrow_right,
-                  tooltip: 'Pan right',
-                  onTap: () => _pan(widget.panStep, 0)),
-            ]),
+                  tooltip: 'Move view right',
+                  onTap: () => _pan(-widget.panStep, 0),
+                ),
+              ],
+            ),
             const SizedBox(height: 6),
-            Row(mainAxisSize: MainAxisSize.min, children: [
-              _CtlButton(
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _CtlButton(
                   icon: Icons.keyboard_arrow_down,
-                  tooltip: 'Pan down',
-                  onTap: () => _pan(0, widget.panStep)),
-              const SizedBox(width: 6),
-              _CtlButton(
+                  tooltip: 'Move view down',
+                  onTap: () => _pan(0, -widget.panStep),
+                ),
+                const SizedBox(width: 6),
+                _CtlButton(
                   icon: Icons.remove,
                   tooltip: 'Zoom out',
-                  onTap: () => _zoom(1 / widget.zoomStep)),
-            ]),
+                  onTap: () => _zoom(1 / widget.zoomStep),
+                ),
+              ],
+            ),
           ],
         ),
       ),
