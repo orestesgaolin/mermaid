@@ -88,14 +88,34 @@ treemap-beta
     final b = parseKanban('''
 kanban
   todo[To Do]
-    t1[Task one]
+    t1[Design API]
+    t2[Write specs]
   done[Done]
 ''');
     expect(b.columns.length, 2);
     expect(b.columns.first.title, 'To Do');
-    expect(b.columns.first.tasks, ['Task one']);
+    expect(b.columns.first.tasks, ['Design API', 'Write specs']);
     final scene = layoutKanban(b, measurer: measurer, theme: theme);
-    expect(texts(scene), containsAll(['To Do', 'Task one', 'Done']));
+    expect(texts(scene), containsAll(['To Do', 'Design API', 'Done']));
+
+    final rects = flatten(scene.nodes)
+        .whereType<SceneShape>()
+        .where((shape) => shape.geometry is RectGeometry)
+        .toList();
+    final section = (rects.first.geometry as RectGeometry).rect;
+    final cards = rects
+        .where((shape) => shape.fill?.color.value == theme.background.value)
+        .map((shape) => (shape.geometry as RectGeometry).rect)
+        .toList();
+    final title = flatten(scene.nodes)
+        .whereType<SceneText>()
+        .singleWhere((text) => text.text == 'To Do');
+
+    expect(title.bounds.top, section.top,
+        reason: 'the title should sit inside the section header');
+    expect(cards.first.left - section.left, closeTo(7.5, 0.001));
+    expect(section.bottom - cards[1].bottom, closeTo(10, 0.001),
+        reason: 'the section should keep one padding unit below its last card');
   });
 
   test('architecture: groups, services, port edges', () {

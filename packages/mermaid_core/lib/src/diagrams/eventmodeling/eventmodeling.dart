@@ -420,7 +420,7 @@ RenderScene layoutEventModeling(
     final double x;
     if (previousSwimlane == null) {
       x = _contentStartX;
-    } else if (previousSwimlane.index == swimlane.index && swimlane.r != 0) {
+    } else if (swimlane.r != 0) {
       x = swimlane.r + _boxPadding;
     } else if (lastBox == null) {
       x = _contentStartX;
