@@ -346,8 +346,8 @@ RenderScene layoutKanban(
     maxLabelHeight = math.max(maxLabelHeight, ts.height);
   }
 
-  // The section label sits above the box; reserve that band so it never
-  // overlaps neighbouring boards. `labelTop` is the y of the box top.
+  // Upstream places the section label inside the box's top band and starts
+  // cards immediately below the tallest label.
   final labelTop = maxLabelHeight;
 
   for (var ci = 0; ci < board.columns.length; ci++) {
@@ -392,25 +392,24 @@ RenderScene layoutKanban(
     // fill and stroke with `adjuster(cScale, 10)`). rx/ry = 5.
     nodes.add(SceneShape(
       geometry:
-          RectGeometry(Rect.fromLTWH(x, labelTop, _width, boxHeight), rx: 5, ry: 5),
+          RectGeometry(Rect.fromLTWH(x, 0, _width, boxHeight), rx: 5, ry: 5),
       fill: Fill(fill),
       stroke: Stroke(color: fill),
     ));
-    // Section label, on top of the box (outside, above), left-aligned to the
-    // box top — upstream `clusters.js:kanbanSection` translates the label to
-    // `node.y - node.height/2` (the box top).
+    // Section label starts at the section box top and is centered across it.
     final titleSz = titleSizes[ci];
     nodes.add(SceneText(
       text: col.title,
-      bounds: Rect.fromLTWH(
-          x, labelTop - titleSz.height, _width, titleSz.height),
+      bounds: Rect.fromLTWH(x, 0, _width, titleSz.height),
       style: titleStyle,
       color: _sectionTextColor,
     ));
 
     // Cards: white fill, neutral nodeBorder stroke (1px), rx/ry = 5.
     for (final card in cardLayout) {
-      final cardX = x; // items share the section x (upstream `item.x = section.x`)
+      // Upstream shares the section and item center; the narrower card is
+      // therefore inset equally on both sides.
+      final cardX = x + (_width - _cardW) / 2;
       final cardRect = Rect.fromLTWH(cardX, card.y, _cardW, card.totalHeight);
       nodes.add(SceneShape(
         geometry: RectGeometry(cardRect, rx: 5, ry: 5),

@@ -817,8 +817,12 @@ RenderScene layoutC4Diagram(
     switch (n.kind) {
       case C4Kind.db:
         children.add(SceneShape(
-          geometry: _cylinderPath(rect),
+          geometry: _cylinderBodyPath(rect),
           fill: Fill(fill),
+          stroke: Stroke(color: border, width: 0.5),
+        ));
+        children.add(SceneShape(
+          geometry: _cylinderTopSeamPath(rect),
           stroke: Stroke(color: border, width: 0.5),
         ));
       case C4Kind.queue:
@@ -930,7 +934,7 @@ RenderScene layoutC4Diagram(
 
 // Cylinder (database) outline — top ellipse + body, mirroring the upstream
 // `system_db` path (cap height ~10px).
-PathGeometry _cylinderPath(Rect r) {
+PathGeometry _cylinderBodyPath(Rect r) {
   const cap = 10.0;
   final l = r.left, t = r.top, b = r.bottom;
   final cx = r.center.x;
@@ -942,7 +946,18 @@ PathGeometry _cylinderPath(Rect r) {
     CubicTo(Point(r.right, b), Point(cx, b), Point(cx, b)),
     CubicTo(Point(cx, b), Point(l, b), Point(l, b - cap)),
     LineTo(Point(l, t + cap)),
-    // Top ellipse front edge.
+    const ClosePath(),
+  ]);
+}
+
+/// Front edge of the database cylinder's top cap. Keeping this open path in a
+/// separate stroke-only shape avoids Flutter treating it as part of the fill
+/// contour and cutting a white half-ellipse out of the cap.
+PathGeometry _cylinderTopSeamPath(Rect r) {
+  const cap = 10.0;
+  final l = r.left, t = r.top;
+  final cx = r.center.x;
+  return PathGeometry([
     MoveTo(Point(l, t + cap)),
     CubicTo(Point(l, t + 2 * cap), Point(cx, t + 2 * cap), Point(cx, t + 2 * cap)),
     CubicTo(Point(cx, t + 2 * cap), Point(r.right, t + 2 * cap),

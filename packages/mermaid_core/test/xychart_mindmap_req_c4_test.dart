@@ -215,6 +215,31 @@ C4Context
         isTrue,
       );
     });
+    test('database cap is filled by the body and stroked separately', () {
+      final s = layoutC4Diagram(
+        parseC4Diagram('''
+C4Context
+  Enterprise_Boundary(b0, "Bank") {
+    SystemDb_Ext(mainframe, "Mainframe", "Stores core banking records")
+  }
+'''),
+        measurer: measurer,
+        theme: theme,
+      );
+      final database = flatten(s.nodes)
+          .whereType<SceneGroup>()
+          .singleWhere((group) => group.id == 'mainframe');
+      final paths = database.children
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is PathGeometry)
+          .toList();
+
+      expect(paths, hasLength(2));
+      final body = paths.singleWhere((shape) => shape.fill != null);
+      final seam = paths.singleWhere((shape) => shape.fill == null);
+      expect((body.geometry as PathGeometry).commands.last, isA<ClosePath>());
+      expect(seam.stroke, isNotNull);
+    });
     test('garbage throws', () {
       expect(() => parseC4Diagram('C4Context\nnonsense here'),
           throwsA(isA<MermaidParseException>()));

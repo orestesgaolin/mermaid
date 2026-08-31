@@ -3,6 +3,7 @@
 library;
 
 import 'package:mermaid_core/src/detect.dart';
+import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/mermaid.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
@@ -84,6 +85,7 @@ eventmodeling
 tf 01 ui CartUI
 tf 02 cmd AddItem
 tf 03 evt ItemAdded
+tf 04 rmo CartSummary
 ''');
     // Upstream conceptual swimlanes: UI/Automation, Command/Read Model, Events.
     expect(
@@ -92,6 +94,18 @@ tf 03 evt ItemAdded
         ['CartUI', 'AddItem', 'UI/Automation', 'Command/Read Model'],
       ),
     );
+
+    Rect entityRect(int fill) => (_flat(s.nodes)
+            .whereType<SceneShape>()
+            .singleWhere((shape) =>
+                shape.fill?.color.value == fill &&
+                shape.geometry is RectGeometry)
+            .geometry as RectGeometry)
+        .rect;
+    final command = entityRect(0xffbcd6fe);
+    final readModel = entityRect(0xffd3f1a2);
+    expect(command.right, lessThan(readModel.left),
+        reason: 'returning to a populated lane should append after its boxes');
   });
 
   test('railroad renders rule alternatives', () {
