@@ -94,8 +94,9 @@ void main() {
       expect(tester.binding.hasScheduledFrame, isFalse);
     });
 
-    testWidgets('repaints only when the scene identity changes',
-        (tester) async {
+    testWidgets('repaints only when the scene identity changes', (
+      tester,
+    ) async {
       final scene = buildTestScene();
       final samePainter = ScenePainter(scene);
       expect(samePainter.shouldRepaint(ScenePainter(scene)), isFalse);
@@ -136,12 +137,86 @@ void main() {
       expect(wrapped.width, lessThanOrEqualTo(80));
       expect(wrapped.height, greaterThan(unconstrained.height));
     });
+
+    test('measured flowchart labels keep their height when painted', () {
+      for (final text in [
+        'cb1 pop → remove Tela B',
+        'cb2 pop → remove dialog de opcoes',
+        'sobra o dialog de opcoes\nTela B nunca aparece',
+      ]) {
+        final measured = measurer.measure(text, style, maxWidth: 200);
+        final painter = TextPainter(
+          text: TextSpan(text: text, style: textStyleFromSpec(style)),
+          textDirection: TextDirection.ltr,
+          textScaler: TextScaler.noScaling,
+        )..layout(minWidth: measured.width + 1, maxWidth: measured.width + 1);
+        expect(
+          painter.height,
+          lessThanOrEqualTo(measured.height),
+          reason: text,
+        );
+        painter.dispose();
+      }
+    });
+
+    test('flowchart boxes contain labels after soft wrapping', () {
+      const source = '''flowchart TB
+  subgraph COM["COM await — funciona por acidente"]
+    direction TB
+    C1["cb1 pop → remove loading"] --> C2["cb2 pop → remove dialog de opcoes"]
+  end''';
+      final scene = core.Mermaid(measurer: measurer).render(source);
+
+      core.SceneGroup group(String id, List<core.SceneNode> nodes) {
+        for (final node in nodes) {
+          if (node case core.SceneGroup(:final children)) {
+            if (node.id == id) return node;
+            try {
+              return group(id, children);
+            } on StateError {
+              // Continue searching sibling groups.
+            }
+          }
+        }
+        throw StateError('No scene group $id');
+      }
+
+      for (final id in ['C1', 'C2']) {
+        final node = group(id, scene.nodes);
+        final rect =
+            (node.children.whereType<core.SceneShape>().first.geometry
+                    as core.RectGeometry)
+                .rect;
+        final text = node.children.whereType<core.SceneText>().single.bounds;
+        final measured = measurer.measure(
+          node.semanticLabel!,
+          style,
+          maxWidth: 200,
+        );
+        expect(
+          text.width,
+          greaterThan(measured.width),
+          reason: '$id should retain paint-time wrap tolerance',
+        );
+        expect(
+          rect.contains(core.Point(text.left, text.top)),
+          isTrue,
+          reason: '$id label top-left',
+        );
+        expect(
+          rect.contains(core.Point(text.right, text.bottom)),
+          isTrue,
+          reason: '$id label bottom-right',
+        );
+      }
+    });
   });
 
   group('font family parsing', () {
     test('strips quotes, keeps order, drops generic keywords', () {
-      final parsed =
-          parseCssFontFamily('"trebuchet ms", verdana, arial, sans-serif');
+      final parsed = parseCssFontFamily(
+        '"trebuchet ms", verdana, arial, sans-serif',
+      );
       expect(parsed.family, 'trebuchet ms');
       expect(parsed.fallback, ['verdana', 'arial']);
     });
