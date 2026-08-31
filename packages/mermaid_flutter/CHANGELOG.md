@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Make arrow controls move the viewport in the direction shown.
 - Re-fit the diagram after viewport size changes, including when closing the

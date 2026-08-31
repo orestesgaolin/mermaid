@@ -1,4 +1,4 @@
-## Unreleased
+## 0.1.1
 
 - Prevent late font fallback changes on Flutter web from wrapping flowchart
   labels outside their node boxes.
