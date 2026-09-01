@@ -734,6 +734,11 @@ _Fragment _layoutGraph(
 
   // Edges and their labels.
   final selfLoopCount = <String, int>{};
+  final edgeLabelObstacles = [
+    for (final p in placed.values)
+      if (!syntheticIds.contains(p.node.id))
+        Rect.fromCenter(p.center, p.shape.width, p.shape.height).inflate(4),
+  ];
   // Group edges by unordered endpoint pair so straight-line engines (tidy-tree)
   // can fan out parallel/antiparallel edges instead of overlapping them into a
   // single line with arrowheads at both ends.
@@ -783,12 +788,11 @@ _Fragment _layoutGraph(
 
     // elk routes its own orthogonal polyline; dagre supplies one through its
     // dummy chain.
-    dagre.DagreEdge? dagreEdge;
     List<Point> points;
     if (useElk) {
       points = elkResult!.edgePoints('e$i') ?? [source.center, target.center];
     } else {
-      dagreEdge = result!.graph.findEdgeById('e$i')!;
+      final dagreEdge = result!.graph.findEdgeById('e$i')!;
       points = List<Point>.from(dagreEdge.points);
     }
     if (points.length < 2) {
@@ -837,7 +841,6 @@ _Fragment _layoutGraph(
     // cluster grows upward to make room for its title. Move the final bend
     // outside that visible rect when an edge enters a member from outside;
     // otherwise the diagonal segment cuts through the yellow title band.
-    var adjustedForCluster = false;
     if (!useElk && clusterTo == null) {
       final enteredCluster =
           _enteredTargetCluster(fromId, toId, parentOf, clusterRects);
@@ -847,7 +850,6 @@ _Fragment _layoutGraph(
           clusterRects[enteredCluster]!,
           graph.direction,
         );
-        adjustedForCluster = adjusted != points;
         points = adjusted;
       }
     }
@@ -882,11 +884,13 @@ _Fragment _layoutGraph(
       points[0] = startTip - startDir * _markerShorten(e.headFrom);
     }
 
-    children.add(SceneShape(
+    final pathGeometry = PathGeometry(
       // ELK draws orthogonal edges with sharp corners (linear through the
       // Manhattan route); other engines use the edge's own interpolation.
-      geometry: PathGeometry(
-          _edgeCurve(points, useElk ? 'linear' : e.interpolate)),
+      _edgeCurve(points, useElk ? 'linear' : e.interpolate),
+    );
+    children.add(SceneShape(
+      geometry: pathGeometry,
       stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
     ));
     if (e.headTo != ArrowHead.none) {
@@ -899,19 +903,13 @@ _Fragment _layoutGraph(
 
     final labelSize = edgeLabelSizes[i];
     if (labelSize != null) {
-      // Centre the label ON the edge line. ELK's own label centre is offset to
-      // the side of the edge (it reserves label space beside it), which leaves
-      // the line running through the label's edge rather than its middle. The
-      // polyline's arc-length midpoint lies on the line, so the line passes
-      // through the label centre (its background masks the line) — as upstream
-      // mermaid does. Dagre supplies its own labelX/Y.
-      final labelCenter = useElk
-          ? _pathMidpoint(points)
-          : (!adjustedForCluster &&
-                  dagreEdge?.labelX != null &&
-                  dagreEdge?.labelY != null)
-              ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
-              : _pathMidpoint(points);
+      // Anchor the label to the final painted path. Dagre's label coordinates
+      // describe its route before shape clipping, marker shortening, and our
+      // curve interpolation, so long skip edges can otherwise leave the label
+      // far from the visible midpoint.
+      final anchor = _pathArcMidpoint(pathGeometry);
+      final labelCenter = _nudgeEdgeLabel(
+          anchor.point, anchor.tangent, labelSize, edgeLabelObstacles);
       edgeLabelGroups.add(_edgeLabelGroup(
           e, i, labelCenter, labelSize, baseStyle, theme,
           math: edgeMath[i]));
@@ -2232,12 +2230,149 @@ CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
       Point((p0.x + 4 * p1.x + p.x) / 6, (p0.y + 4 * p1.y + p.y) / 6),
     );
 
-Point _pathMidpoint(List<Point> pts) {
-  if (pts.isEmpty) return Point.zero;
-  if (pts.length.isOdd) return pts[pts.length ~/ 2];
-  final a = pts[pts.length ~/ 2 - 1];
-  final b = pts[pts.length ~/ 2];
-  return Point((a.x + b.x) / 2, (a.y + b.y) / 2);
+/// Returns the 50% arc-length point of the final emitted path.
+///
+/// Curves are flattened with deterministic, platform-neutral sampling. The
+/// sample count follows the control-polygon length, bounded to keep layout
+/// cost predictable for large diagrams.
+({Point point, Point tangent}) _pathArcMidpoint(PathGeometry path) {
+  final segments = <(Point, Point)>[];
+  Point? current;
+  Point? subpathStart;
+
+  void addSegment(Point end) {
+    final start = current;
+    if (start != null && start != end) segments.add((start, end));
+    current = end;
+  }
+
+  for (final command in path.commands) {
+    switch (command) {
+      case MoveTo(:final p):
+        current = p;
+        subpathStart = p;
+      case LineTo(:final p):
+        addSegment(p);
+      case QuadTo(:final c, :final p):
+        final start = current;
+        if (start == null) {
+          current = p;
+          continue;
+        }
+        final steps = _curveSampleCount([start, c, p]);
+        for (var i = 1; i <= steps; i++) {
+          final t = i / steps;
+          final u = 1 - t;
+          addSegment(Point(
+            u * u * start.x + 2 * u * t * c.x + t * t * p.x,
+            u * u * start.y + 2 * u * t * c.y + t * t * p.y,
+          ));
+        }
+      case CubicTo(:final c1, :final c2, :final p):
+        final start = current;
+        if (start == null) {
+          current = p;
+          continue;
+        }
+        final steps = _curveSampleCount([start, c1, c2, p]);
+        for (var i = 1; i <= steps; i++) {
+          final t = i / steps;
+          final u = 1 - t;
+          addSegment(Point(
+            u * u * u * start.x +
+                3 * u * u * t * c1.x +
+                3 * u * t * t * c2.x +
+                t * t * t * p.x,
+            u * u * u * start.y +
+                3 * u * u * t * c1.y +
+                3 * u * t * t * c2.y +
+                t * t * t * p.y,
+          ));
+        }
+      case ClosePath():
+        final start = subpathStart;
+        if (start != null) addSegment(start);
+    }
+  }
+
+  if (segments.isEmpty) {
+    return (point: current ?? Point.zero, tangent: const Point(1, 0));
+  }
+  final lengths = <double>[];
+  var total = 0.0;
+  for (final segment in segments) {
+    final length = _distance(segment.$1, segment.$2);
+    lengths.add(length);
+    total += length;
+  }
+  if (total == 0) {
+    return (point: segments.first.$1, tangent: const Point(1, 0));
+  }
+
+  final target = total / 2;
+  var walked = 0.0;
+  for (var i = 0; i < segments.length; i++) {
+    final length = lengths[i];
+    if (walked + length >= target) {
+      final segment = segments[i];
+      final t = (target - walked) / length;
+      return (
+        point: Point(
+          segment.$1.x + (segment.$2.x - segment.$1.x) * t,
+          segment.$1.y + (segment.$2.y - segment.$1.y) * t,
+        ),
+        tangent: _direction(segment.$1, segment.$2),
+      );
+    }
+    walked += length;
+  }
+  return (
+    point: segments.last.$2,
+    tangent: _direction(segments.last.$1, segments.last.$2),
+  );
+}
+
+Point _nudgeEdgeLabel(
+    Point anchor, Point tangent, Size labelSize, List<Rect> obstacles) {
+  const padding = 4.0;
+  Rect labelRect(Point center) => Rect.fromCenter(
+      center, labelSize.width + padding * 2, labelSize.height + padding * 2);
+  bool isClear(Point center) {
+    final rect = labelRect(center);
+    return obstacles.every((obstacle) => !_rectsOverlap(rect, obstacle));
+  }
+
+  if (isClear(anchor)) return anchor;
+  final normal = Point(-tangent.y, tangent.x);
+  // Keep collision handling local to the arc midpoint. This prevents a return
+  // to Dagre's distant reserved label coordinate on long skip edges.
+  for (var distance = 8.0; distance <= 96; distance += 8) {
+    final positive = anchor + normal * distance;
+    if (isClear(positive)) return positive;
+    final negative = anchor - normal * distance;
+    if (isClear(negative)) return negative;
+  }
+  return anchor;
+}
+
+bool _rectsOverlap(Rect a, Rect b) =>
+    a.left < b.right &&
+    b.left < a.right &&
+    a.top < b.bottom &&
+    b.top < a.bottom;
+
+int _curveSampleCount(List<Point> controlPolygon) {
+  var length = 0.0;
+  for (var i = 1; i < controlPolygon.length; i++) {
+    length += _distance(controlPolygon[i - 1], controlPolygon[i]);
+  }
+  return (length / 8).ceil().clamp(8, 64);
+}
+
+double _distance(Point a, Point b) {
+  final dx = b.x - a.x;
+  final dy = b.y - a.y;
+  return math.sqrt(dx * dx + dy * dy);
 }
 
 // --- Bounds & translation ----------------------------------------------------
