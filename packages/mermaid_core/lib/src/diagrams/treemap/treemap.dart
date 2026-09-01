@@ -231,6 +231,7 @@ String _group(String intPart) {
 const _sectionHeaderHeight = 25.0;
 const _sectionInnerPadding = 10.0;
 const _innerPadding = 10.0;
+const _goldenRatio = 1.618033988749895;
 
 RenderScene layoutTreemap(
   Treemap map, {
@@ -302,78 +303,76 @@ RenderScene layoutTreemap(
   final minDisplay = isComplex ? 8.0 : 10.0;
   final spacing = isComplex ? 1.0 : 2.0;
 
-  // Squarified treemap (Bruls/Huizing/van Wijk): pack children into rows laid
-  // out along the shorter side, choosing rows that minimize the worst aspect
-  // ratio. Produces near-square cells. [gap] is the inner padding between cells.
+  // D3's golden-ratio squarifier. [rect] is the tiling area after the parent's
+  // directional padding has been applied; [gap] becomes half-padding on each
+  // child, exactly as d3-hierarchy's padding stack does.
   List<Rect> squarify(List<TreemapNode> children, Rect rect, double gap) {
     final n = children.length;
     final placed = List<Rect?>.filled(n, null);
     if (n == 0) return const [];
-    final totalV = children.fold(0.0, (a, c) => a + math.max(c.total, 0.0001));
-    final area = math.max(rect.width, 0.0) * math.max(rect.height, 0.0);
-    if (area <= 0 || totalV <= 0) {
+    var remainingValue = children.fold(0.0, (a, c) => a + math.max(c.total, 0));
+    if (rect.width <= 0 || rect.height <= 0 || remainingValue <= 0) {
       return [for (var i = 0; i < n; i++) Rect.fromLTWH(rect.left, rect.top, 0, 0)];
-    }
-    final areas = [
-      for (final c in children) math.max(c.total, 0.0001) / totalV * area
-    ];
-
-    double worst(List<double> row, double length) {
-      if (row.isEmpty) return double.infinity;
-      var sum = 0.0, maxA = 0.0, minA = double.infinity;
-      for (final a in row) {
-        sum += a;
-        if (a > maxA) maxA = a;
-        if (a < minA) minA = a;
-      }
-      final s2 = sum * sum;
-      final l2 = length * length;
-      return math.max(l2 * maxA / s2, s2 / (l2 * minA));
     }
 
     var x = rect.left, y = rect.top, fw = rect.width, fh = rect.height;
-    var index = 0;
+    var i0 = 0;
+    while (i0 < n) {
+      final dx = fw;
+      final dy = fh;
+      var i1 = i0;
+      var sumValue = math.max(children[i1++].total, 0);
+      while (sumValue == 0 && i1 < n) {
+        sumValue = math.max(children[i1++].total, 0);
+      }
+      var minValue = sumValue;
+      var maxValue = sumValue;
+      final alpha = math.max(dy / dx, dx / dy) /
+          (remainingValue * _goldenRatio);
+      var beta = sumValue * sumValue * alpha;
+      var minRatio = math.max(maxValue / beta, beta / minValue);
 
-    void commitRow(List<int> rowIdx, List<double> rowAreas) {
-      final rowSum = rowAreas.fold(0.0, (a, b) => a + b);
-      if (fw >= fh) {
-        final rw = rowSum / fh;
-        var cy = y;
-        for (var k = 0; k < rowIdx.length; k++) {
-          final ch = rowAreas[k] / rowSum * fh;
-          placed[rowIdx[k]] = Rect.fromLTWH(x, cy, rw, ch);
-          cy += ch;
+      for (; i1 < n; i1++) {
+        final nodeValue = math.max(children[i1].total, 0);
+        sumValue += nodeValue;
+        minValue = math.min(minValue, nodeValue);
+        maxValue = math.max(maxValue, nodeValue);
+        beta = sumValue * sumValue * alpha;
+        final newRatio = math.max(maxValue / beta, beta / minValue);
+        if (newRatio > minRatio) {
+          sumValue -= nodeValue;
+          break;
         }
-        x += rw;
-        fw -= rw;
-      } else {
-        final rh = rowSum / fw;
+        minRatio = newRatio;
+      }
+
+      if (dx < dy) {
+        final rh = remainingValue == 0 ? dy : dy * sumValue / remainingValue;
         var cx = x;
-        for (var k = 0; k < rowIdx.length; k++) {
-          final cw = rowAreas[k] / rowSum * fw;
-          placed[rowIdx[k]] = Rect.fromLTWH(cx, y, cw, rh);
+        for (var i = i0; i < i1; i++) {
+          final cw = sumValue == 0
+              ? dx
+              : dx * math.max(children[i].total, 0) / sumValue;
+          placed[i] = Rect.fromLTWH(cx, y, cw, rh);
           cx += cw;
         }
         y += rh;
         fh -= rh;
+      } else {
+        final rw = remainingValue == 0 ? dx : dx * sumValue / remainingValue;
+        var cy = y;
+        for (var i = i0; i < i1; i++) {
+          final ch = sumValue == 0
+              ? dy
+              : dy * math.max(children[i].total, 0) / sumValue;
+          placed[i] = Rect.fromLTWH(x, cy, rw, ch);
+          cy += ch;
+        }
+        x += rw;
+        fw -= rw;
       }
-    }
-
-    while (index < areas.length) {
-      final shortest = math.min(fw, fh);
-      final rowIdx = <int>[index];
-      final rowAreas = <double>[areas[index]];
-      var i = index + 1;
-      while (i < areas.length) {
-        final cur = worst(rowAreas, shortest);
-        final next = worst([...rowAreas, areas[i]], shortest);
-        if (next > cur) break;
-        rowAreas.add(areas[i]);
-        rowIdx.add(i);
-        i++;
-      }
-      commitRow(rowIdx, rowAreas);
-      index = i;
+      remainingValue -= sumValue;
+      i0 = i1;
     }
 
     // Apply the inner gap by shrinking each cell symmetrically by gap/2,
@@ -454,14 +453,17 @@ RenderScene layoutTreemap(
           labelColor: lblColor,
         );
 
-        // Recurse into the inner rect: remove header + section padding
-        // (paddingTop = 35, paddingLeft/Right/Bottom = 10).
-        const top = _sectionHeaderHeight + _sectionInnerPadding;
+        // D3 subtracts half the sibling padding before tiling, then restores it
+        // when each child is positioned. Since [squarify] performs the latter,
+        // this rect uses 5px/30px rather than applying the full padding twice.
+        const halfInner = _innerPadding / 2;
+        const left = _sectionInnerPadding - halfInner;
+        const top = _sectionHeaderHeight + _sectionInnerPadding - halfInner;
         final inner = Rect.fromLTWH(
-          cellRect.left + _sectionInnerPadding,
+          cellRect.left + left,
           cellRect.top + top,
-          math.max(0, cellRect.width - 2 * _sectionInnerPadding),
-          math.max(0, cellRect.height - top - _sectionInnerPadding),
+          math.max(0, cellRect.width - 2 * left),
+          math.max(0, cellRect.height - top - left),
         );
         if (inner.width > 0 && inner.height > 0) {
           layout(child, inner, depth + 1);
@@ -470,7 +472,17 @@ RenderScene layoutTreemap(
     }
   }
 
-  layout(root, Rect.fromLTWH(0, titleH, w, h), 0);
+  // The synthetic root is a branch too. Its header remains invisible, but D3
+  // still reserves the same top and outer padding before laying out sections.
+  const halfInner = _innerPadding / 2;
+  final rootTileRect = Rect.fromLTWH(
+    _sectionInnerPadding - halfInner,
+    titleH + _sectionHeaderHeight + _sectionInnerPadding - halfInner,
+    w - 2 * (_sectionInnerPadding - halfInner),
+    h - (_sectionHeaderHeight + _sectionInnerPadding - halfInner) -
+        (_sectionInnerPadding - halfInner),
+  );
+  layout(root, rootTileRect, 0);
 
   if (titleH > 0) {
     final titleStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 14);
@@ -484,15 +496,11 @@ RenderScene layoutTreemap(
     ));
   }
 
-  final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, w, h);
   const m = 8.0; // diagramPadding default
   return RenderScene(
-    size: Size(bounds.width + 2 * m, bounds.height + 2 * m),
+    size: Size(w + 2 * m, h + titleH + 2 * m),
     background: theme.background,
-    nodes: [
-      for (final n in nodes)
-        translateSceneNode(n, m - bounds.left, m - bounds.top)
-    ],
+    nodes: [for (final n in nodes) translateSceneNode(n, m, m)],
   );
 }
 

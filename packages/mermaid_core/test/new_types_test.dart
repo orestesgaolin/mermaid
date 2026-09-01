@@ -84,6 +84,40 @@ treemap-beta
     expect(texts(scene).any((s) => s.contains('A')), isTrue);
   });
 
+  test('treemap: root and section padding match d3 hierarchy', () {
+    final scene = layoutTreemap(
+      parseTreemap('''
+treemap-beta
+"Frontend"
+    "UI": 40
+    "State": 25
+"Backend"
+    "API": 35
+    "DB": 20
+'''),
+      measurer: measurer,
+      theme: theme,
+    );
+    final sections = flatten(scene.nodes)
+        .whereType<SceneShape>()
+        .where((shape) => shape.stroke?.width == 2)
+        .map((shape) => (shape.geometry as RectGeometry).rect)
+        .toList();
+
+    expect(sections, hasLength(2));
+    expect(sections.first.top, greaterThanOrEqualTo(8 + 35));
+    expect(sections.first.left, greaterThanOrEqualTo(8 + 10));
+
+    final leaves = flatten(scene.nodes)
+        .whereType<SceneShape>()
+        .where((shape) => shape.stroke?.width == 3)
+        .map((shape) => (shape.geometry as RectGeometry).rect)
+        .toList();
+    expect(leaves, hasLength(4));
+    expect(leaves[0].left, leaves[1].left);
+    expect(leaves[2].top, leaves[3].top);
+  });
+
   test('kanban: columns and tasks by indentation', () {
     final b = parseKanban('''
 kanban
