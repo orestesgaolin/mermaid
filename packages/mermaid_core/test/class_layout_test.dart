@@ -88,6 +88,9 @@ void main() {
     final s = layout('A --> B : uses');
     final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
     expect(texts, contains('uses'));
+    final label = group(s, 'rellabel_0');
+    final background = label.children.whereType<SceneShape>().single;
+    expect(background.fill?.color.alpha, 255);
   });
 
   test('direction LR orders boxes horizontally', () {
@@ -104,6 +107,36 @@ void main() {
     for (final id in ['Circle', 'Square']) {
       expect(cluster.contains(sceneNodeBounds(group(s, id))!.center), isTrue);
     }
+  });
+
+  test('disjoint namespace clusters do not overlap across relations', () {
+    final s = layout('''
+namespace Shapes {
+  class Shape
+  class Circle
+  class Square
+}
+namespace Vehicles {
+  class Vehicle
+  class Car
+  class Bike
+}
+Shape <|-- Circle
+Shape <|-- Square
+Vehicle <|-- Car
+Vehicle <|-- Bike
+Car --> Circle : Logo Shape
+Bike --> Square : Logo Shape
+''');
+    final shapes = sceneNodeBounds(group(s, 'namespace_Shapes'))!;
+    final vehicles = sceneNodeBounds(group(s, 'namespace_Vehicles'))!;
+    final overlaps = shapes.left < vehicles.right &&
+        shapes.right > vehicles.left &&
+        shapes.top < vehicles.bottom &&
+        shapes.bottom > vehicles.top;
+
+    expect(overlaps, isFalse);
+    expect(vehicles.contains(sceneNodeBounds(group(s, 'Car'))!.center), isTrue);
   });
 
   test('note for class renders yellow box with dashed connector', () {

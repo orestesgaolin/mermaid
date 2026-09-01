@@ -156,6 +156,51 @@ class _ClassLayout {
       b.center = result.graph.nodeMap[b.node.id]!.position!.center;
     }
 
+    // Dagre keeps members inside their compound parent, but cross-namespace
+    // relations can still leave two top-level compound bounds overlapping.
+    // Separate disjoint namespaces on the cross axis before emitting geometry.
+    final nodeOffsets = <String, Point>{};
+    final occupiedNamespaces = <({Rect rect, Set<String> members})>[];
+    for (final ns in diagram.namespaces) {
+      final members = ns.classIds.where(boxes.containsKey).toSet();
+      if (members.isEmpty || occupiedNamespaces.any(
+          (placed) => placed.members.intersection(members).isNotEmpty)) {
+        continue;
+      }
+      Rect? bounds;
+      for (final id in members) {
+        final rect = boxes[id]!.rectAt(boxes[id]!.center);
+        bounds = bounds == null ? rect : bounds.union(rect);
+      }
+      if (bounds == null) continue;
+      final titleSize = measurer.measure(ns.label, baseStyle);
+      var clusterRect = Rect.fromLTRB(bounds.left - 12,
+          bounds.top - 16 - titleSize.height, bounds.right + 12,
+          bounds.bottom + 12);
+      var dx = 0.0, dy = 0.0;
+      for (final placed in occupiedNamespaces) {
+        final overlaps = clusterRect.left < placed.rect.right &&
+            clusterRect.right > placed.rect.left &&
+            clusterRect.top < placed.rect.bottom &&
+            clusterRect.bottom > placed.rect.top;
+        if (!overlaps) continue;
+        if (diagram.direction == FlowDirection.tb ||
+            diagram.direction == FlowDirection.bt) {
+          dx = math.max(dx, placed.rect.right + _nodeSpacing - clusterRect.left);
+        } else {
+          dy = math.max(dy, placed.rect.bottom + _nodeSpacing - clusterRect.top);
+        }
+      }
+      if (dx != 0 || dy != 0) {
+        for (final id in members) {
+          boxes[id]!.center = boxes[id]!.center + Point(dx, dy);
+          nodeOffsets[id] = Point(dx, dy);
+        }
+        clusterRect = clusterRect.translate(dx, dy);
+      }
+      occupiedNamespaces.add((rect: clusterRect, members: members));
+    }
+
     final clusterNodes = <SceneNode>[];
     final edgeNodes = <SceneNode>[];
     final labelNodes = <SceneNode>[];
@@ -198,6 +243,16 @@ class _ClassLayout {
       final to = boxes[r.to]!;
       var points = List<Point>.from(dagreEdge.points);
       if (points.length < 2) points = [from.center, to.center];
+      final fromOffset = nodeOffsets[r.from] ?? Point.zero;
+      final toOffset = nodeOffsets[r.to] ?? Point.zero;
+      if (fromOffset != Point.zero || toOffset != Point.zero) {
+        points = [
+          for (var pi = 0; pi < points.length; pi++)
+            points[pi] +
+                fromOffset * (1 - pi / (points.length - 1)) +
+                toOffset * (pi / (points.length - 1)),
+        ];
+      }
       points[0] = _intersectRect(from.rectAt(from.center), points[1]);
       points[points.length - 1] =
           _intersectRect(to.rectAt(to.center), points[points.length - 2]);
@@ -232,7 +287,8 @@ class _ClassLayout {
       final labelSize = labelSizes[i];
       if (labelSize != null) {
         final c = (dagreEdge.labelX != null && dagreEdge.labelY != null)
-            ? Point(dagreEdge.labelX!, dagreEdge.labelY!)
+            ? Point(dagreEdge.labelX!, dagreEdge.labelY!) +
+                (fromOffset + toOffset) * 0.5
             : points[points.length ~/ 2];
         labelNodes.add(SceneGroup(id: 'rellabel_$i', children: [
           SceneShape(
@@ -240,8 +296,9 @@ class _ClassLayout {
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
                 rx: 2,
                 ry: 2),
-            // Upstream `.classLabel .box { fill: mainBkg; opacity: 0.5 }`.
-            fill: Fill(theme.mainBkg.withOpacity(0.5)),
+            // Mermaid 11's unified renderer uses the opaque generic edge-label
+            // background rather than the legacy translucent `.classLabel` box.
+            fill: Fill(theme.mainBkg),
           ),
           SceneText(
             text: r.label!,
