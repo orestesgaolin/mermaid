@@ -454,10 +454,11 @@ class _Sized {
 }
 
 class _GridLayout {
-  _GridLayout(this.cells, this.width, this.height);
+  _GridLayout(this.cells, this.width, this.height, this.columns);
   final List<_Sized> cells;
-  final double width;
+  double width;
   final double height;
+  final int columns;
 }
 
 RenderScene layoutBlock(
@@ -653,11 +654,15 @@ _GridLayout _layoutGrid(
     col = 0;
     for (final s in row) {
       final spanW = s.item.span * cellW + (s.item.span - 1) * _cellGap;
-      // Upstream `setBlockSizes` equalizes every sibling leaf to the uniform
-      // cell size; groups keep their own (already laid-out) extent.
-      if (s.item is BlockNode) {
-        s.width = spanW;
-        s.height = rh;
+      // Upstream `setBlockSizes` equalizes every sibling, including composite
+      // groups. When a group grows, its own children grow to fill it too.
+      s.width = spanW;
+      if (s.item is BlockNode) s.height = rh;
+      if (s.childLayout != null) {
+        _expandGridWidth(
+          s.childLayout!,
+          math.max(0, spanW - 2 * _pad),
+        );
       }
       s.center = Point(rx + spanW / 2, y + rh / 2);
       rx += spanW + _cellGap;
@@ -667,7 +672,36 @@ _GridLayout _layoutGrid(
     y += rh + _cellGap;
   }
   x = maxX;
-  return _GridLayout(sized, x, y - _cellGap);
+  return _GridLayout(sized, x, y - _cellGap, cols);
+}
+
+void _expandGridWidth(_GridLayout grid, double targetWidth) {
+  if (targetWidth <= grid.width || grid.cells.isEmpty) return;
+  final cellW = math.max(
+    0,
+    (targetWidth - (grid.columns - 1) * _cellGap) / grid.columns,
+  );
+  var col = 0;
+  var rx = 0.0;
+  for (final cell in grid.cells) {
+    if (col + cell.item.span > grid.columns && col > 0) {
+      col = 0;
+      rx = 0;
+    }
+    final spanW = cell.item.span * cellW +
+        (cell.item.span - 1) * _cellGap;
+    cell.width = spanW;
+    cell.center = Point(rx + spanW / 2, cell.center.y);
+    if (cell.childLayout != null) {
+      _expandGridWidth(
+        cell.childLayout!,
+        math.max(0, spanW - 2 * _pad),
+      );
+    }
+    rx += spanW + _cellGap;
+    col += cell.item.span;
+  }
+  grid.width = targetWidth;
 }
 
 List<SceneNode> _drawNode(BlockNode n, Point c, double w, double h,

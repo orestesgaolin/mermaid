@@ -7,6 +7,7 @@ import 'package:mermaid_core/src/diagrams/block/block.dart';
 import 'package:mermaid_core/src/diagrams/kanban/kanban.dart';
 import 'package:mermaid_core/src/diagrams/radar/radar.dart';
 import 'package:mermaid_core/src/diagrams/treemap/treemap.dart';
+import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
@@ -54,6 +55,43 @@ block-beta
     expect(d.edges.single.arrowTo, isTrue);
     final scene = layoutBlock(d, measurer: measurer, theme: theme);
     expect(texts(scene), containsAll(['A', 'B']));
+  });
+
+  test('block: spanning groups and their children fill the parent row', () {
+    final scene = layoutBlock(
+      parseBlock('''
+block-beta
+  columns 3
+  A["Input"] B["Process"] C["Output"]
+  block:group:3
+    D["Worker 1"] E["Worker 2"]
+  end
+'''),
+      measurer: measurer,
+      theme: theme,
+    );
+
+    Rect nodeRect(String id) {
+      final group = flatten(scene.nodes)
+          .whereType<SceneGroup>()
+          .firstWhere((node) => node.id == id);
+      return (group.children.whereType<SceneShape>().first.geometry
+              as RectGeometry)
+          .rect;
+    }
+
+    final topLeft = nodeRect('A').left;
+    final topRight = nodeRect('C').right;
+    final groupRect = (scene.nodes.whereType<SceneShape>().single.geometry
+            as RectGeometry)
+        .rect;
+    expect(groupRect.left, topLeft);
+    expect(groupRect.right, topRight);
+
+    final worker1 = nodeRect('D');
+    final worker2 = nodeRect('E');
+    expect(worker1.left, groupRect.left + 8);
+    expect(worker2.right, groupRect.right - 8);
   });
 
   test('radar: axes, curves, range', () {
