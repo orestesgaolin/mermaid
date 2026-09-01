@@ -107,7 +107,7 @@ List<double> _parseCurveEntries(
 }
 
 RadarChart parseRadar(String source) {
-  final title = frontmatterTitle(source);
+  var title = frontmatterTitle(source);
   final text = stripMetadata(source);
   final lines = text.split('\n');
   final axes = <String>[]; // display labels
@@ -132,7 +132,12 @@ RadarChart parseRadar(String source) {
       if (rest.trim().isEmpty) continue;
       line = rest.trim();
     }
-    var m = RegExp(r'^axis\s+(.+)$').firstMatch(line);
+    var m = RegExp(r'^title\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      title ??= m.group(1)!.trim();
+      continue;
+    }
+    m = RegExp(r'^axis\s+(.+)$').firstMatch(line);
     if (m != null) {
       for (final part in m.group(1)!.split(',')) {
         if (part.trim().isNotEmpty) {

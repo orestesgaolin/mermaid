@@ -239,7 +239,9 @@ RenderScene layoutTreemap(
   required MermaidTheme theme,
 }) {
   final nodes = <SceneNode>[];
-  const w = 960.0, h = 500.0;
+  // Mermaid's default treemap config supplies nodeWidth=100 and nodeHeight=40;
+  // the renderer multiplies both by SECTION_INNER_PADDING (10).
+  const w = 1000.0, h = 400.0;
   var titleH = 0.0;
   if (map.title != null && map.title!.isNotEmpty) titleH = 30;
 

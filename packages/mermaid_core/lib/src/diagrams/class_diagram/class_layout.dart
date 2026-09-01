@@ -253,6 +253,20 @@ class _ClassLayout {
                 toOffset * (pi / (points.length - 1)),
         ];
       }
+      // Cross-namespace links are laid out before the namespace overlap pass
+      // moves their endpoints apart. Restore a short vertical approach to the
+      // destination so Mermaid's unified renderer port choice is preserved;
+      // otherwise interpolation can turn the final segment sideways.
+      if (parentOf[r.from] != null &&
+          parentOf[r.to] != null &&
+          parentOf[r.from] != parentOf[r.to] &&
+          points.length >= 2) {
+        final verticalDirection = from.center.y <= to.center.y ? -1.0 : 1.0;
+        points[points.length - 2] = Point(
+          to.center.x,
+          to.center.y + verticalDirection * (to.height / 2 + _rankSpacing / 2),
+        );
+      }
       points[0] = _intersectRect(from.rectAt(from.center), points[1]);
       points[points.length - 1] =
           _intersectRect(to.rectAt(to.center), points[points.length - 2]);

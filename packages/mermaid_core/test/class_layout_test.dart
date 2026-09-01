@@ -139,6 +139,37 @@ Bike --> Square : Logo Shape
     expect(vehicles.contains(sceneNodeBounds(group(s, 'Car'))!.center), isTrue);
   });
 
+  test('cross-namespace relations enter destination boxes vertically', () {
+    final s = layout('''
+namespace Shapes {
+  class Circle
+  class Square
+}
+namespace Vehicles {
+  class Car
+  class Bike
+}
+Car --> Circle : Logo Shape
+Bike --> Square : Logo Shape
+''');
+
+    for (final entry in [('rel_Car_Circle_0', 'Circle'), ('rel_Bike_Square_1', 'Square')]) {
+      final path = flatten(group(s, entry.$1).children)
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PathGeometry>()
+          .first;
+      final endpoint = (path.commands.last as LineTo).p;
+      final destination = sceneNodeBounds(group(s, entry.$2))!;
+
+      expect(endpoint.x, closeTo(destination.center.x, 0.001));
+      expect(
+        endpoint.y,
+        anyOf(closeTo(destination.top, 0.001), closeTo(destination.bottom, 0.001)),
+      );
+    }
+  });
+
   test('note for class renders yellow box with dashed connector', () {
     final s = layout('class A\nnote for A "remember"');
     final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);

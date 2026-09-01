@@ -97,6 +97,7 @@ block-beta
   test('radar: axes, curves, range', () {
     final c = parseRadar('''
 radar-beta
+  title Skills
   axis a["A"], b["B"], c["C"]
   curve x["X"]{1, 2, 3}
   max 5
@@ -105,8 +106,9 @@ radar-beta
     expect(c.axes, ['A', 'B', 'C']);
     expect(c.curves.single.values, [1, 2, 3]);
     expect(c.max, 5);
+    expect(c.title, 'Skills');
     final scene = layoutRadar(c, measurer: measurer, theme: theme);
-    expect(texts(scene), containsAll(['A', 'B', 'C', 'X']));
+    expect(texts(scene), containsAll(['Skills', 'A', 'B', 'C', 'X']));
   });
 
   test('treemap: hierarchy and summed branches', () {
@@ -152,8 +154,32 @@ treemap-beta
         .map((shape) => (shape.geometry as RectGeometry).rect)
         .toList();
     expect(leaves, hasLength(4));
-    expect(leaves[0].left, leaves[1].left);
+    expect(leaves[0].top, leaves[1].top);
     expect(leaves[2].top, leaves[3].top);
+  });
+
+  test('treemap uses the configured default aspect ratio for leaf rows', () {
+    final scene = layoutTreemap(
+      parseTreemap('''
+treemap-beta
+"Frontend"
+    "UI": 40
+    "State": 25
+"Backend"
+    "API": 35
+    "DB": 20
+'''),
+      measurer: measurer,
+      theme: theme,
+    );
+    final labels = {
+      for (final text in scene.nodes.whereType<SceneText>())
+        if (const {'UI', 'State'}.contains(text.text)) text.text: text.bounds.center,
+    };
+
+    expect(labels.keys, containsAll(['UI', 'State']));
+    expect(labels['UI']!.y, closeTo(labels['State']!.y, 0.001));
+    expect(labels['UI']!.x, lessThan(labels['State']!.x));
   });
 
   test('kanban: columns and tasks by indentation', () {

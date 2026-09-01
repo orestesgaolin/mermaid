@@ -5,22 +5,7 @@ the Flutter render is the review target unless noted otherwise.
 
 ## Confirmed differences
 
-- `curated-subgraphs` (`packages/mermaid_samples:subgraphs`)
-  - The sibling cluster-title baselines do not align with Mermaid.js.
-- `curated-ishikawa` (`packages/mermaid_samples:ishikawa`)
-  - `Technology` and `People` use a different vertical text baseline from
-    Mermaid.js even though the box-padding constants match.
-- `curated-radar` (`packages/mermaid_samples:radar`)
-  - Flutter omits the diagram title, `Skills`.
-- `curated-treemap` (`packages/mermaid_samples:treemap`)
-  - `API` and `DB` now match, but Flutter stacks `UI` and `State` vertically;
-    Mermaid.js places them side by side.
-- `curated-venn` (`packages/mermaid_samples:venn`)
-  - Flutter renders `Skills overlap` much smaller and lighter than Mermaid.js.
-- `upstream-class-11`
-  (`packages/mermaid_core/test/fixtures/upstream_class/11.mmd`)
-  - Relation arrows enter `Circle` and `Square` from the side in Flutter;
-    Mermaid.js routes them into the top edge.
+No unresolved differences remain from the first two visual feedback passes.
 
 ## Resolved in this branch
 
@@ -36,15 +21,17 @@ the Flutter render is the review target unless noted otherwise.
 - `upstream-c4-05`: deployment boundaries are solid and reserve measured space
   for their complete headers.
 - `upstream-er-03`: table-cell text now has balanced horizontal padding.
-
-## Partially resolved in this branch
-
-- `curated-treemap`: ported D3-style squarification and padding; `API` and `DB`
-  now match, but the `UI` / `State` row decision is still wrong.
-- `curated-venn`: singleton labels now share the union-label baseline, but the
-  title typography is still incorrect.
-- `upstream-class-11`: disjoint namespaces no longer overlap and relation-label
-  backgrounds are opaque, but relation ports still differ.
+- `curated-subgraphs`: cluster titles now use Mermaid's HTML-label line-height
+  baseline without changing the cluster layout band.
+- `curated-ishikawa`: boxed cause labels use Mermaid's middle-baseline offset.
+- `curated-radar`: body-level titles are parsed and `Skills` is rendered.
+- `curated-treemap`: the effective 1000×400 default layout restores the
+  side-by-side `UI` / `State` row as well as the `API` / `DB` row.
+- `curated-venn`: singleton labels share the union baseline and the title uses
+  Mermaid's stylesheet-resolved 32px size.
+- `upstream-class-11`: namespaces do not overlap, relation-label backgrounds
+  are opaque, and cross-namespace relations enter `Circle` and `Square`
+  vertically.
 
 ## Source-aligned differences needing font-metric review
 

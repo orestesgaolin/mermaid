@@ -568,9 +568,11 @@ RenderScene layoutVenn(
 
   final children = <SceneNode>[...nodes];
 
-  // Title: 32*scale centered at y=32*scale (within the reserved header band).
+  // Mermaid's `.venn-title` stylesheet fixes the rendered font at 32px,
+  // overriding the scaled `font-size` presentation attribute from its
+  // renderer. The position and reserved header band remain scaled.
   if (d.title != null && d.title!.isNotEmpty) {
-    final style = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 32 * scale);
+    final style = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 32);
     final ts = measurer.measure(d.title!, style);
     children.add(SceneText(
       text: d.title!,

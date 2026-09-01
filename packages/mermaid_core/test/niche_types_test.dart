@@ -73,6 +73,21 @@ venn-beta
     expect(labels['Backend'], closeTo(labels['Full-stack']!, 0.001));
   });
 
+  test('venn title uses the stylesheet font size', () {
+    final s = _m.render('''
+venn-beta
+  title Skills overlap
+  set Frontend
+  set Backend
+''');
+    final title = _flat(s.nodes)
+        .whereType<SceneText>()
+        .singleWhere((text) => text.text == 'Skills overlap');
+
+    expect(title.style.fontSize, 32);
+    expect(title.style.fontWeight, 400);
+  });
+
   test('ishikawa renders problem head and categories', () {
     final s = _m.render('''
 ishikawa-beta
