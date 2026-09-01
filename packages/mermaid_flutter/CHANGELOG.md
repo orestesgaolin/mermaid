@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Add paint-only flowchart node and link overrides to `MermaidDiagram` and
+  `MermaidView`, reusing the parsed and laid-out base scene.
 - Add `MermaidViewController` for observable viewport transforms, animated or
   immediate fit, and node focus by id.
 - Add `MermaidDiagram.onSceneChanged` for post-layout scene geometry access.

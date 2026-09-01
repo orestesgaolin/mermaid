@@ -66,9 +66,12 @@ class EditorPage extends StatefulWidget {
 
 class _EditorPageState extends State<EditorPage> {
   late final TextEditingController _controller;
+  final MermaidViewController _viewController = MermaidViewController();
   Timer? _debounce;
   int _sampleIndex = 0;
   String _renderedSource = samples.first.source;
+  String? _selectedNodeId;
+  (String, String, int)? _selectedEdge;
 
   @override
   void initState() {
@@ -80,6 +83,7 @@ class _EditorPageState extends State<EditorPage> {
   void dispose() {
     _debounce?.cancel();
     _controller.dispose();
+    _viewController.dispose();
     super.dispose();
   }
 
@@ -87,7 +91,11 @@ class _EditorPageState extends State<EditorPage> {
     _debounce?.cancel();
     _debounce = Timer(const Duration(milliseconds: 250), () {
       if (!mounted) return;
-      setState(() => _renderedSource = text);
+      setState(() {
+        _renderedSource = text;
+        _selectedNodeId = null;
+        _selectedEdge = null;
+      });
     });
   }
 
@@ -97,6 +105,8 @@ class _EditorPageState extends State<EditorPage> {
       _sampleIndex = index;
       _controller.text = samples[index].source;
       _renderedSource = samples[index].source;
+      _selectedNodeId = null;
+      _selectedEdge = null;
     });
   }
 
@@ -133,6 +143,11 @@ class _EditorPageState extends State<EditorPage> {
               ),
               onPressed: () => Scaffold.of(context).openEndDrawer(),
             ),
+          ),
+          IconButton(
+            tooltip: 'Fit diagram',
+            icon: const Icon(Icons.fit_screen),
+            onPressed: () => _viewController.fitAll(),
           ),
           IconButton(
             tooltip:
@@ -240,13 +255,88 @@ class _EditorPageState extends State<EditorPage> {
 
   Widget _buildPreviewPane() {
     final background = Color(_mermaidTheme.background.value);
-    // The interactive viewer: pan/zoom, arrow pad, zoom, reset and a
-    // fullscreen popup — like mermaid.js on the web.
-    return MermaidView(
-      source: _renderedSource,
-      theme: _mermaidTheme,
-      backgroundColor: background,
-      errorBuilder: (context, error) => _ErrorBanner(error: error),
+    final colors = Theme.of(context).colorScheme;
+    final selectedNode = _selectedNodeId;
+    final selectedEdge = _selectedEdge;
+    final nodeOverrides = selectedNode == null
+        ? const <String, core.FlowNodePaintOverride>{}
+        : <String, core.FlowNodePaintOverride>{
+            selectedNode: core.FlowNodePaintOverride(
+              fill: core.Color(colors.primaryContainer.toARGB32()),
+              stroke: core.Color(colors.primary.toARGB32()),
+              strokeWidth: 4,
+              textColor: core.Color(colors.onPrimaryContainer.toARGB32()),
+            ),
+          };
+    final linkOverrides = selectedEdge == null
+        ? const <int, core.FlowLinkPaintOverride>{}
+        : <int, core.FlowLinkPaintOverride>{
+            selectedEdge.$3: core.FlowLinkPaintOverride(
+              stroke: core.Color(colors.primary.toARGB32()),
+              strokeWidth: 5,
+            ),
+          };
+    // The interactive viewer uses one controller so selection, highlighting,
+    // and viewport commands stay synchronized.
+    return Stack(
+      children: [
+        Positioned.fill(
+          child: MermaidView(
+            source: _renderedSource,
+            controller: _viewController,
+            theme: _mermaidTheme,
+            backgroundColor: background,
+            allowFullscreen: false,
+            nodePaintOverrides: nodeOverrides,
+            linkPaintOverrides: linkOverrides,
+            onNodeTap: (id, _) {
+              setState(() {
+                _selectedNodeId = id;
+                _selectedEdge = null;
+              });
+              unawaited(_viewController.focusNode(id, animate: true));
+            },
+            onEdgeTap: (from, to, index) => setState(() {
+              _selectedNodeId = null;
+              _selectedEdge = (from, to, index);
+            }),
+            errorBuilder: (context, error) => _ErrorBanner(error: error),
+          ),
+        ),
+        if (selectedNode != null || selectedEdge != null)
+          Positioned(
+            left: 12,
+            top: 12,
+            child: Material(
+              elevation: 2,
+              color: colors.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      selectedNode != null
+                          ? 'Node: $selectedNode'
+                          : 'Edge ${selectedEdge!.$3}: '
+                              '${selectedEdge.$1} → ${selectedEdge.$2}',
+                    ),
+                    IconButton(
+                      tooltip: 'Clear highlight',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(Icons.close, size: 18),
+                      onPressed: () => setState(() {
+                        _selectedNodeId = null;
+                        _selectedEdge = null;
+                      }),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }

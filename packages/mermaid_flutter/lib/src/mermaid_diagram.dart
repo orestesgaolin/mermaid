@@ -1,11 +1,17 @@
 /// High-level widget: mermaid source in, painted diagram out.
 library;
 
+import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 
 import 'flutter_text_measurer.dart';
 import 'scene_painter.dart';
+
+typedef MermaidSceneRenderer = core.RenderScene Function(
+  String source,
+  core.MermaidTheme theme,
+);
 
 /// Renders a mermaid diagram from [source].
 ///
@@ -25,6 +31,9 @@ class MermaidDiagram extends StatefulWidget {
     this.onNodeTap,
     this.onEdgeTap,
     this.onSceneChanged,
+    this.nodePaintOverrides = const {},
+    this.linkPaintOverrides = const {},
+    this.sceneRenderer,
   });
 
   /// Called when a diagram node is tapped, with its id and optional click link
@@ -49,6 +58,20 @@ class MermaidDiagram extends StatefulWidget {
   /// callback to update widget state.
   final ValueChanged<core.RenderScene>? onSceneChanged;
 
+  /// Resolved paint-only flowchart node updates keyed by node id.
+  ///
+  /// Updating this map reuses the parsed and laid-out base scene. Source and
+  /// theme changes still run the complete renderer.
+  final Map<String, core.FlowNodePaintOverride> nodePaintOverrides;
+
+  /// Resolved paint-only flowchart edge updates keyed by Mermaid link index.
+  final Map<int, core.FlowLinkPaintOverride> linkPaintOverrides;
+
+  /// Optional full-scene renderer, useful for instrumentation and custom
+  /// renderer ownership. A change to this callback rebuilds the base scene,
+  /// so callers must retain the same callback instance across widget rebuilds.
+  final MermaidSceneRenderer? sceneRenderer;
+
   /// Mermaid diagram source text.
   final String source;
 
@@ -72,29 +95,88 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
   String? _builtSource;
   core.MermaidTheme? _builtTheme;
   core.RenderScene? _scene;
+  core.RenderScene? _baseScene;
   Object? _error;
   core.RenderScene? _deliveredScene;
   int _sceneGeneration = 0;
+  MermaidSceneRenderer? _builtRenderer;
+  Map<String, core.FlowNodePaintOverride> _builtNodeOverrides = const {};
+  Map<int, core.FlowLinkPaintOverride> _builtLinkOverrides = const {};
 
   void _rebuildSceneIfNeeded() {
-    if (_builtSource == widget.source && _builtTheme == widget.theme) {
-      return;
+    final renderer = widget.sceneRenderer;
+    final rebuildBase = _builtSource != widget.source ||
+        _builtTheme != widget.theme ||
+        _builtRenderer != renderer;
+    if (rebuildBase) {
+      _builtSource = widget.source;
+      _builtTheme = widget.theme;
+      _builtRenderer = renderer;
+      _sceneGeneration++;
+      try {
+        _baseScene = renderer?.call(widget.source, widget.theme) ??
+            core.Mermaid(
+              measurer: const FlutterTextMeasurer(),
+              theme: widget.theme,
+            ).render(widget.source);
+        _error = null;
+      } catch (error) {
+        // Keep the last good render visible during editing.
+        _error = error;
+        if (!widget.keepLastGoodSceneOnError) {
+          _baseScene = null;
+          _scene = null;
+        }
+      }
     }
-    _builtSource = widget.source;
-    _builtTheme = widget.theme;
-    _sceneGeneration++;
-    try {
-      _scene = core.Mermaid(
-        measurer: const FlutterTextMeasurer(),
-        theme: widget.theme,
-      ).render(widget.source);
-      _error = null;
-    } catch (error) {
-      // Keep _scene: the last good render stays visible during editing.
-      _error = error;
-      if (!widget.keepLastGoodSceneOnError) _scene = null;
+
+    final nodeOverrides = {
+      for (final entry in widget.nodePaintOverrides.entries)
+        entry.key: _snapshotNodeOverride(entry.value),
+    };
+    final linkOverrides = {
+      for (final entry in widget.linkPaintOverrides.entries)
+        entry.key: _snapshotLinkOverride(entry.value),
+    };
+    final overridesChanged = !mapEquals(_builtNodeOverrides, nodeOverrides) ||
+        !mapEquals(_builtLinkOverrides, linkOverrides);
+    if ((rebuildBase && _error == null) || overridesChanged) {
+      _builtNodeOverrides = nodeOverrides;
+      _builtLinkOverrides = linkOverrides;
+      final base = _baseScene;
+      if (base != null) {
+        _scene = core.applyFlowchartPaintOverrides(
+          base,
+          nodes: nodeOverrides,
+          links: linkOverrides,
+        );
+      }
     }
   }
+
+  core.FlowNodePaintOverride _snapshotNodeOverride(
+    core.FlowNodePaintOverride value,
+  ) =>
+      core.FlowNodePaintOverride(
+        fill: value.fill,
+        stroke: value.stroke,
+        strokeWidth: value.strokeWidth,
+        strokeDash: value.strokeDash == null
+            ? null
+            : List.unmodifiable(value.strokeDash!),
+        textColor: value.textColor,
+      );
+
+  core.FlowLinkPaintOverride _snapshotLinkOverride(
+    core.FlowLinkPaintOverride value,
+  ) =>
+      core.FlowLinkPaintOverride(
+        stroke: value.stroke,
+        strokeWidth: value.strokeWidth,
+        strokeDash: value.strokeDash == null
+            ? null
+            : List.unmodifiable(value.strokeDash!),
+      );
 
   /// Finds the topmost (last-painted) node group with an id/link whose bounds
   /// contain [p]. Returns (id, link) or null.

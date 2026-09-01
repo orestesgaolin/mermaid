@@ -81,11 +81,17 @@ class SceneEdgeMetadata {
 enum SceneGroupRole { node, cluster, edge, edgeLabel, annotation, internal }
 
 class SceneShape extends SceneNode {
-  const SceneShape({required this.geometry, this.fill, this.stroke});
+  const SceneShape({
+    required this.geometry,
+    this.fill,
+    this.stroke,
+    this.paintRole = ScenePaintRole.none,
+  });
 
   final ShapeGeometry geometry;
   final Fill? fill;
   final Stroke? stroke;
+  final ScenePaintRole paintRole;
 }
 
 class SceneText extends SceneNode {
@@ -97,6 +103,7 @@ class SceneText extends SceneNode {
     this.align = TextAlignH.center,
     this.rotation = 0,
     this.underline = false,
+    this.paintRole = ScenePaintRole.none,
   });
 
   /// May contain `\n`; backends wrap to [bounds].width using the same rules
@@ -115,6 +122,22 @@ class SceneText extends SceneNode {
 
   /// Underline the text (e.g. static class members in UML).
   final bool underline;
+  final ScenePaintRole paintRole;
+}
+
+/// Logical paint target retained after flowchart layout.
+enum ScenePaintRole {
+  none,
+  nodeBody,
+  nodeFill,
+  nodeStroke,
+  nodeLabel,
+  nodeLabelFill,
+  nodeLabelStroke,
+  edgeStroke,
+  edgeMarker,
+  edgeMarkerFill,
+  edgeMarkerStroke,
 }
 
 enum TextAlignH { left, center, right }

@@ -122,10 +122,16 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
           edge: edge,
           children: [for (final c in children) translateSceneNode(c, dx, dy)],
         ),
-      SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
+      SceneShape(
+        :final geometry,
+        :final fill,
+        :final stroke,
+        :final paintRole
+      ) => SceneShape(
           geometry: translateGeometry(geometry, dx, dy),
           fill: _translateFill(fill, dx, dy),
           stroke: stroke,
+          paintRole: paintRole,
         ),
       SceneText(
         :final text,
@@ -133,7 +139,8 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
         :final style,
         :final color,
         :final align,
-        :final underline
+        :final underline,
+        :final paintRole
       ) =>
         SceneText(
           text: text,
@@ -143,6 +150,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
           align: align,
           rotation: node.rotation,
           underline: underline,
+          paintRole: paintRole,
         ),
     };
 

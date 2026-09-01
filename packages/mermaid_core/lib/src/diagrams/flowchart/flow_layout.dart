@@ -925,12 +925,17 @@ _Fragment _layoutGraph(
     children.add(SceneShape(
       geometry: pathGeometry,
       stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
+      paintRole: ScenePaintRole.edgeStroke,
     ));
     if (e.headTo != ArrowHead.none) {
-      children.addAll(_marker(e.headTo, endTip, endDir, style.markerColor));
+      children.addAll(_withPaintRole(
+          _marker(e.headTo, endTip, endDir, style.markerColor),
+          ScenePaintRole.edgeMarker));
     }
     if (e.headFrom != ArrowHead.none) {
-      children.addAll(_marker(e.headFrom, startTip, startDir, style.markerColor));
+      children.addAll(_withPaintRole(
+          _marker(e.headFrom, startTip, startDir, style.markerColor),
+          ScenePaintRole.edgeMarker));
     }
     edgeGroups.add(SceneGroup(
       id: groupId,
@@ -958,27 +963,35 @@ _Fragment _layoutGraph(
   // Nodes.
   for (final p in placed.values) {
     if (syntheticIds.contains(p.node.id)) continue;
-    final children = <SceneNode>[...p.shape.build(p.center, p.style)];
+    final children = <SceneNode>[
+      ..._withPaintRole(
+          p.shape.build(p.center, p.style), ScenePaintRole.nodeBody),
+    ];
     if (p.math != null) {
       // Math label: paint glyphs/rules centered in the node.
       final lc = p.shape.labelCenter(p.center);
       final origin = Point(
           lc.x - p.math!.size.width / 2, lc.y - p.math!.size.height / 2);
-      children.addAll(p.math!.render(origin));
+      children.addAll(_withPaintRole(
+          p.math!.render(origin), ScenePaintRole.nodeLabel));
     } else if (p.richLabel != null) {
-      children.addAll(p.richLabel!.render(
-        p.shape.labelCenter(p.center),
-        p.style.textColor,
-      ));
+      children.addAll(_withPaintRole(
+          p.richLabel!.render(
+            p.shape.labelCenter(p.center),
+            p.style.textColor,
+          ),
+          ScenePaintRole.nodeLabel));
     } else if (p.textSize != null) {
       // Icon node: glyph in the reserved top square, label beneath it.
       final lc = p.shape.labelCenter(p.center);
       final contentTop = lc.y - p.labelSize.height / 2;
-      children.addAll(renderIcon(
-        p.node.icon!,
-        Rect.fromLTWH(p.center.x - _iconSize / 2, contentTop, _iconSize, _iconSize),
-        p.style.textColor,
-      ));
+      children.addAll(_withPaintRole(
+          renderIcon(
+            p.node.icon!,
+            Rect.fromLTWH(p.center.x - _iconSize / 2, contentTop, _iconSize, _iconSize),
+            p.style.textColor,
+          ),
+          ScenePaintRole.nodeLabel));
       children.add(SceneText(
         text: p.paintText ?? p.node.label,
         bounds: Rect.fromCenter(
@@ -988,6 +1001,7 @@ _Fragment _layoutGraph(
         ),
         style: baseStyle,
         color: p.style.textColor,
+        paintRole: ScenePaintRole.nodeLabel,
       ));
     } else {
       final horizontalSlack = math.max(0, p.shape.width - p.labelSize.width);
@@ -1002,6 +1016,7 @@ _Fragment _layoutGraph(
         ),
         style: baseStyle,
         color: p.style.textColor,
+        paintRole: ScenePaintRole.nodeLabel,
       ));
     }
     nodeGroups.add(SceneGroup(
@@ -1215,12 +1230,17 @@ List<Point> _bendBeforeCluster(
   children.add(SceneShape(
     geometry: PathGeometry([MoveTo(pathStart), CubicTo(c1, c2, pathEnd)]),
     stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
+    paintRole: ScenePaintRole.edgeStroke,
   ));
   if (e.headTo != ArrowHead.none) {
-    children.addAll(_marker(e.headTo, end, endDir, style.markerColor));
+    children.addAll(_withPaintRole(
+        _marker(e.headTo, end, endDir, style.markerColor),
+        ScenePaintRole.edgeMarker));
   }
   if (e.headFrom != ArrowHead.none) {
-    children.addAll(_marker(e.headFrom, start, startDir, style.markerColor));
+    children.addAll(_withPaintRole(
+        _marker(e.headFrom, start, startDir, style.markerColor),
+        ScenePaintRole.edgeMarker));
   }
   // Cubic apex (t = 0.5): (p0 + 3c1 + 3c2 + p3) / 8.
   final apexX = (start.x + 3 * c1.x + 3 * c2.x + end.x) / 8;
@@ -2191,6 +2211,55 @@ List<SceneNode> _marker(ArrowHead head, Point tip, Point dir, Color color) {
   }
 }
 
+List<SceneNode> _withPaintRole(
+        Iterable<SceneNode> nodes, ScenePaintRole role) =>
+    [for (final node in nodes) _withNodePaintRole(node, role)];
+
+SceneNode _withNodePaintRole(SceneNode node, ScenePaintRole role) =>
+    switch (node) {
+      SceneGroup(
+        :final id,
+        role: final groupRole,
+        :final semanticLabel,
+        :final link,
+        :final tooltip,
+        :final edge,
+        :final children
+      ) => SceneGroup(
+          id: id,
+          role: groupRole,
+          semanticLabel: semanticLabel,
+          link: link,
+          tooltip: tooltip,
+          edge: edge,
+          children: [for (final child in children) _withNodePaintRole(child, role)],
+        ),
+      SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
+          geometry: geometry,
+          fill: fill,
+          stroke: stroke,
+          paintRole: role,
+        ),
+      SceneText(
+        :final text,
+        :final bounds,
+        :final style,
+        :final color,
+        :final align,
+        :final rotation,
+        :final underline
+      ) => SceneText(
+          text: text,
+          bounds: bounds,
+          style: style,
+          color: color,
+          align: align,
+          rotation: rotation,
+          underline: underline,
+          paintRole: role,
+        ),
+    };
+
 /// Dispatches to the d3 curve named by `linkStyle … interpolate` (basis is
 /// the default). Interpolating families (natural/cardinal/catmullRom/
 /// monotone/bump) are approximated by a Catmull-Rom spline through the points.
@@ -2497,10 +2566,16 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
           edge: edge,
           children: [for (final c in children) _translateNode(c, dx, dy)],
         ),
-      SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
+      SceneShape(
+        :final geometry,
+        :final fill,
+        :final stroke,
+        :final paintRole
+      ) => SceneShape(
           geometry: _translateGeometry(geometry, dx, dy),
           fill: fill,
           stroke: stroke,
+          paintRole: paintRole,
         ),
       SceneText(
         :final text,
@@ -2509,7 +2584,8 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
         :final color,
         :final align,
         :final rotation,
-        :final underline
+        :final underline,
+        :final paintRole
       ) =>
         SceneText(
           text: text,
@@ -2519,6 +2595,7 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
           align: align,
           rotation: rotation,
           underline: underline,
+          paintRole: paintRole,
         ),
     };
 

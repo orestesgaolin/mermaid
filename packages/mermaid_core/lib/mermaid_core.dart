@@ -15,6 +15,7 @@ export 'src/diagrams/er/er_parser.dart';
 export 'src/diagrams/flowchart/flow_layout.dart';
 export 'src/diagrams/flowchart/flow_model.dart';
 export 'src/diagrams/flowchart/flow_parser.dart';
+export 'src/diagrams/flowchart/flow_restyle.dart';
 export 'src/diagrams/gantt/gantt_layout.dart';
 export 'src/diagrams/gantt/gantt_model.dart';
 export 'src/diagrams/gantt/gantt_parser.dart';

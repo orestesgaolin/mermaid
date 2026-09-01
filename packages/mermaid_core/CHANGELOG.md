@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Add paint-only flowchart node and link overrides that preserve existing
+  scene geometry.
 - Add structured flowchart edge metadata and scene-space path distance
   measurement for precise interaction layers.
 

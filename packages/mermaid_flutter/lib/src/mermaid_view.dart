@@ -116,6 +116,8 @@ class MermaidView extends StatefulWidget {
     this.keepLastGoodSceneOnError = true,
     this.onNodeTap,
     this.onEdgeTap,
+    this.nodePaintOverrides = const {},
+    this.linkPaintOverrides = const {},
     this.minScale = 0.2,
     this.maxScale = 8.0,
     this.zoomStep = 1.25,
@@ -150,6 +152,12 @@ class MermaidView extends StatefulWidget {
 
   /// See [MermaidDiagram.onEdgeTap].
   final void Function(String fromId, String toId, int linkIndex)? onEdgeTap;
+
+  /// See [MermaidDiagram.nodePaintOverrides].
+  final Map<String, core.FlowNodePaintOverride> nodePaintOverrides;
+
+  /// See [MermaidDiagram.linkPaintOverrides].
+  final Map<int, core.FlowLinkPaintOverride> linkPaintOverrides;
 
   /// Zoom bounds and the factor applied per zoom-button press.
   final double minScale;
@@ -426,6 +434,8 @@ class _MermaidViewState extends State<MermaidView>
                 keepLastGoodSceneOnError: widget.keepLastGoodSceneOnError,
                 onNodeTap: widget.onNodeTap,
                 onEdgeTap: widget.onEdgeTap,
+                nodePaintOverrides: widget.nodePaintOverrides,
+                linkPaintOverrides: widget.linkPaintOverrides,
                 minScale: widget.minScale,
                 maxScale: widget.maxScale,
                 backgroundColor: widget.backgroundColor ?? Colors.white,
@@ -491,6 +501,8 @@ class _MermaidViewState extends State<MermaidView>
                       keepLastGoodSceneOnError: widget.keepLastGoodSceneOnError,
                       onNodeTap: widget.onNodeTap,
                       onEdgeTap: widget.onEdgeTap,
+                      nodePaintOverrides: widget.nodePaintOverrides,
+                      linkPaintOverrides: widget.linkPaintOverrides,
                       onSceneChanged: _handleSceneChanged,
                     ),
                   ),

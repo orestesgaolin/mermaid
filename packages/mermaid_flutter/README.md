@@ -11,6 +11,7 @@ side-by-side output from this implementation and mermaid.js.
 
 ```dart
 import 'package:flutter/material.dart';
+import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 class Example extends StatelessWidget {
@@ -61,12 +62,42 @@ controller.addListener(() {
 A controller attaches to one view at a time. Remove the view before reusing
 the controller elsewhere, and dispose the controller when its owner is done.
 
+Flowchart highlights can change without parsing or laying out the source
+again. Use resolved node ids and Mermaid link declaration indices:
+
+```dart
+MermaidView(
+  source: structuralSource,
+  controller: controller,
+  nodePaintOverrides: {
+    currentNodeId: const core.FlowNodePaintOverride(
+      fill: core.Color(0xffffcc00),
+      stroke: core.Color(0xffcc3300),
+      textColor: core.Color(0xff112233),
+    ),
+  },
+  linkPaintOverrides: {
+    activeLinkIndex: const core.FlowLinkPaintOverride(
+      stroke: core.Color(0xff0066ff),
+      strokeWidth: 4,
+    ),
+  },
+  onNodeTap: (id, _) => controller.focusNode(id),
+  onEdgeTap: (from, to, linkIndex) {
+    // Show transition metadata and update linkPaintOverrides.
+  },
+)
+```
+
+Changing `source` or `theme` still performs a complete render. The demo app
+combines these overrides with node focus, edge metadata, and fit controls.
+
 ## Themes and errors
 
 ```dart
 MermaidDiagram(
   source: source,
-  theme: MermaidTheme.darkTheme,
+  theme: core.MermaidTheme.darkTheme,
   keepLastGoodSceneOnError: true,
   errorBuilder: (context, error) => Text('$error'),
 )

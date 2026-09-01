@@ -454,6 +454,7 @@ List<SceneNode> _roughenShape(SceneShape shape, int seed) {
         // — illegible over a dark background. Full weight makes the dense lines
         // read as a solid fill, as upstream does.
         stroke: Stroke(color: shape.fill!.color, width: o.fillWeight),
+        paintRole: _roughFillRole(shape.paintRole),
       ));
     }
   }
@@ -475,11 +476,26 @@ List<SceneNode> _roughenShape(SceneShape shape, int seed) {
     out.add(SceneShape(
       geometry: PathGeometry(_toCommands(ops)),
       stroke: Stroke(color: strokeColor, width: width, dash: shape.stroke?.dash),
+      paintRole: _roughStrokeRole(shape.paintRole),
     ));
   }
 
   return out;
 }
+
+ScenePaintRole _roughFillRole(ScenePaintRole role) => switch (role) {
+      ScenePaintRole.nodeBody => ScenePaintRole.nodeFill,
+      ScenePaintRole.nodeLabel => ScenePaintRole.nodeLabelFill,
+      ScenePaintRole.edgeMarker => ScenePaintRole.edgeMarkerFill,
+      _ => role,
+    };
+
+ScenePaintRole _roughStrokeRole(ScenePaintRole role) => switch (role) {
+      ScenePaintRole.nodeBody => ScenePaintRole.nodeStroke,
+      ScenePaintRole.nodeLabel => ScenePaintRole.nodeLabelStroke,
+      ScenePaintRole.edgeMarker => ScenePaintRole.edgeMarkerStroke,
+      _ => role,
+    };
 
 /// Roughen an open path (e.g. a flowchart edge): flatten beziers to points,
 /// then sketch the polyline with doubled lines.

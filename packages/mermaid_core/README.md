@@ -56,6 +56,29 @@ The guarantee is about resolved geometry, not byte-identical `RenderScene`,
 SVG, or PNG output. Paint data, serialization details, raster backends, and
 platform font availability can differ while geometry remains unchanged.
 
+For live flowchart highlighting, apply resolved paint updates to an existing
+scene without parsing or laying it out again:
+
+```dart
+final highlighted = applyFlowchartPaintOverrides(
+  scene,
+  nodes: const {
+    'current_step': FlowNodePaintOverride(
+      fill: Color(0xffffcc00),
+      stroke: Color(0xffcc3300),
+      textColor: Color(0xff112233),
+    ),
+  },
+  links: const {
+    3: FlowLinkPaintOverride(stroke: Color(0xff0066ff), strokeWidth: 4),
+  },
+);
+```
+
+Node ids and link indices that are not present in the scene are ignored. Text,
+topology, spacing, interpolation, and font-metric changes still require a full
+render.
+
 ## Command-line tool
 
 Activate the package globally:
