@@ -8,7 +8,9 @@ import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
+import 'package:mermaid_core/src/render/svg_renderer.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
+import 'package:mermaid_core/src/text/text_style.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
 
@@ -460,6 +462,61 @@ void main() {
       expect(titleText.style.fontWeight, lessThan(700));
       final a = groupBounds(findGroup(scene, 'A'));
       expect(titleText.bounds.bottom, lessThanOrEqualTo(a.top));
+    });
+
+    test('node labels resolve portable preferred and hard line breaks', () {
+      const labels = {
+        'identifier': 'br_recommendation_summary',
+        'prose': 'This flowchart label should wrap at a normal word boundary',
+        'hyphen': 'a-very-long-hyphenated-flowchart-label-with-more-words',
+        'unbroken': 'WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW',
+      };
+      final scene = layout(FlowGraph(
+        direction: FlowDirection.tb,
+        nodes: {
+          for (final entry in labels.entries)
+            entry.key: node(entry.key, label: entry.value),
+        },
+        edges: const [],
+      ));
+
+      SceneText label(String id) => textsIn(findGroup(scene, id)).single;
+      expect(label('identifier').text, 'br_recommendation_\nsummary');
+      expect(label('identifier').text.replaceAll('\n', ''), labels['identifier']);
+
+      final proseLines = label('prose').text.split('\n');
+      expect(proseLines.length, greaterThan(1));
+      expect(proseLines.join(' '), labels['prose']);
+      expect(proseLines, everyElement(isNot(endsWith(' '))));
+
+      final hyphenLines = label('hyphen').text.split('\n');
+      expect(hyphenLines.length, greaterThan(1));
+      expect(hyphenLines.take(hyphenLines.length - 1),
+          everyElement(endsWith('-')));
+      expect(hyphenLines.join(), labels['hyphen']);
+
+      const style = TextStyleSpec(
+        fontFamily: '"trebuchet ms", verdana, arial, sans-serif',
+        fontSize: 16,
+      );
+      for (final id in labels.keys) {
+        for (final line in label(id).text.split('\n')) {
+          expect(measurer.measure(line, style).width, lessThanOrEqualTo(300),
+              reason: '$id line "$line" exceeds the flowchart wrap width');
+        }
+      }
+      final hardLines = label('unbroken').text.split('\n');
+      expect(hardLines.length, greaterThan(1));
+      expect(hardLines.join(), labels['unbroken']);
+      for (final line in hardLines) {
+        expect(measurer.measure(line, style).width, lessThanOrEqualTo(200));
+      }
+
+      final svg = renderSceneToSvg(scene);
+      expect(svg, contains('br_recommendation_</tspan>'));
+      expect(svg, contains('summary</tspan>'));
+      expect(findGroup(scene, 'identifier').semanticLabel,
+          labels['identifier']);
     });
   });
 }

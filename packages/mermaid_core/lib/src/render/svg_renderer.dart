@@ -2,8 +2,8 @@
 ///
 /// Pure serialization — every layout/styling decision was already made when
 /// the scene was built, so this stays trivially in sync with the Flutter
-/// painter. Soft-wrapped text is emitted per explicit `\n` line (the
-/// measurer's soft wrap points are not part of the IR yet).
+/// painter. Resolved wrapping is emitted per explicit `\n` line; soft wrap
+/// points that a layout leaves implicit are not available to this backend.
 library;
 
 import '../color.dart';

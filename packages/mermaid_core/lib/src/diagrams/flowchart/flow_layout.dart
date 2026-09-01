@@ -49,6 +49,105 @@ const double _subroutineFrame = 8;
 /// to two while the node keeps its one-line height.
 const double _labelPaintTolerance = 16;
 
+/// A preferred identifier/word boundary may widen the label this far beyond
+/// [_wrappingWidth]. This avoids hard-breaking a complete component merely to
+/// enforce the soft target (notably with Flutter test's wide Ahem font).
+const double _preferredWrapWidth = _wrappingWidth * 1.5;
+
+/// Text and dimensions after resolving portable flowchart label breaks.
+///
+/// SceneText must contain the resolved newlines because Flutter and SVG cannot
+/// otherwise agree on soft-wrap opportunities. In particular, Flutter does not
+/// treat `_` as a word boundary while identifiers commonly use it as one.
+class _WrappedLabel {
+  const _WrappedLabel(this.text, this.size);
+
+  final String text;
+  final Size size;
+}
+
+_WrappedLabel _wrapLabel(
+    String text, TextStyleSpec style, TextMeasurer measurer) {
+  final lines = <String>[];
+  for (final hardLine in text.split('\n')) {
+    lines.addAll(_wrapLabelLine(hardLine, style, measurer));
+  }
+  final resolved = lines.join('\n');
+  return _WrappedLabel(resolved, measurer.measure(resolved, style));
+}
+
+List<String> _wrapLabelLine(
+    String line, TextStyleSpec style, TextMeasurer measurer) {
+  if (measurer.measure(line, style).width <= _wrappingWidth) return [line];
+
+  var remaining = line.runes.map(String.fromCharCode).toList();
+  final result = <String>[];
+  while (remaining.isNotEmpty) {
+    if (measurer.measure(remaining.join(), style).width <= _wrappingWidth) {
+      result.add(remaining.join());
+      break;
+    }
+
+    var fitting = 0;
+    for (var i = 1; i <= remaining.length; i++) {
+      if (measurer.measure(remaining.take(i).join(), style).width >
+          _wrappingWidth) {
+        break;
+      }
+      fitting = i;
+    }
+    // A positive max width should fit at least one rune, but guarantee forward
+    // progress for unusual measurers or very large glyph metrics.
+    if (fitting == 0) fitting = 1;
+
+    var split = 0;
+    for (var i = 0; i < fitting; i++) {
+      if (_preferredLabelBreak(remaining[i])) split = i + 1;
+    }
+
+    final preferredWidth = split == 0
+        ? 0.0
+        : measurer.measure(remaining.take(split).join(), style).width;
+    if (split == 0 || preferredWidth < _wrappingWidth * 0.6) {
+      // The only strict boundary may be so early that it creates an avoidable
+      // extra line (for example `br_`). Prefer the first nearby later boundary
+      // and let the node widen within the documented limit.
+      for (var i = fitting; i < remaining.length; i++) {
+        final candidate = remaining.take(i + 1).join();
+        if (measurer.measure(candidate, style).width > _preferredWrapWidth) {
+          break;
+        }
+        if (_preferredLabelBreak(remaining[i])) {
+          split = i + 1;
+          break;
+        }
+      }
+    }
+
+    if (split == 0) {
+      split = fitting;
+      // Avoid a tiny final fragment when a hard break is unavoidable.
+      final tail = remaining.length - split;
+      if (tail > 0 && tail < 4 && split > 4 - tail) {
+        split -= 4 - tail;
+      }
+    }
+
+    final part = remaining.take(split).join().trimRight();
+    if (part.isNotEmpty) result.add(part);
+    remaining = remaining.skip(split).toList();
+    while (remaining.isNotEmpty && _isLabelWhitespace(remaining.first)) {
+      remaining.removeAt(0);
+    }
+  }
+  return result.isEmpty ? [''] : result;
+}
+
+bool _preferredLabelBreak(String rune) =>
+    rune == '_' || rune == '-' || _isLabelWhitespace(rune);
+
+bool _isLabelWhitespace(String rune) => RegExp(r'^\s$').hasMatch(rune);
+
 RenderScene layoutFlowchart(
   FlowGraph graph, {
   required TextMeasurer measurer,
@@ -290,8 +389,8 @@ _Fragment _layoutGraph(
       );
       continue;
     }
-    final textSize =
-        measurer.measure(node.label, baseStyle, maxWidth: _wrappingWidth);
+    final wrappedLabel = _wrapLabel(node.label, baseStyle, measurer);
+    final textSize = wrappedLabel.size;
     // An icon reserves a square area above the label; inflate the sizing box.
     final hasIcon = node.icon != null && lookupIcon(node.icon!) != null;
     final boxSize = hasIcon
@@ -303,6 +402,7 @@ _Fragment _layoutGraph(
       style: style,
       labelSize: boxSize,
       textSize: hasIcon ? textSize : null,
+      paintText: wrappedLabel.text,
       shape: _Shape.forNode(node.shape, boxSize),
     );
   }
@@ -843,7 +943,7 @@ _Fragment _layoutGraph(
         p.style.textColor,
       ));
       children.add(SceneText(
-        text: p.node.label,
+        text: p.paintText ?? p.node.label,
         bounds: Rect.fromCenter(
           Point(p.center.x, contentTop + _iconSize + _iconGap + p.textSize!.height / 2),
           p.textSize!.width,
@@ -857,7 +957,7 @@ _Fragment _layoutGraph(
       final paintWidth = p.labelSize.width +
           math.min(_labelPaintTolerance, horizontalSlack / 2);
       children.add(SceneText(
-        text: p.node.label,
+        text: p.paintText ?? p.node.label,
         bounds: Rect.fromCenter(
           p.shape.labelCenter(p.center),
           paintWidth,
@@ -1211,6 +1311,7 @@ class _PlacedNode {
     required this.labelSize,
     required this.shape,
     this.textSize,
+    this.paintText,
     this.math,
     this.richLabel,
   });
@@ -1224,6 +1325,9 @@ class _PlacedNode {
   /// The label's own measured size; differs from [labelSize] only when an
   /// icon reserves space above the text. Null ⇒ same as [labelSize].
   final Size? textSize;
+
+  /// Plain label text with portable, explicit line breaks for paint backends.
+  final String? paintText;
 
   /// Set when the label is a `$$...$$` math span rendered with primitives.
   final MathLayout? math;

@@ -159,7 +159,7 @@ void main() {
       }
     });
 
-    test('flowchart boxes contain labels after soft wrapping', () {
+    test('flowchart boxes contain labels after resolved wrapping', () {
       const source = '''flowchart TB
   subgraph COM["COM await — funciona por acidente"]
     direction TB
@@ -188,15 +188,12 @@ void main() {
                     as core.RectGeometry)
                 .rect;
         final text = node.children.whereType<core.SceneText>().single.bounds;
-        final measured = measurer.measure(
-          node.semanticLabel!,
-          style,
-          maxWidth: 200,
-        );
+        final label = node.children.whereType<core.SceneText>().single;
+        final measured = measurer.measure(label.text, style);
         expect(
           text.width,
-          greaterThan(measured.width),
-          reason: '$id should retain paint-time wrap tolerance',
+          greaterThanOrEqualTo(measured.width),
+          reason: '$id should contain its resolved label lines',
         );
         expect(
           rect.contains(core.Point(text.left, text.top)),
@@ -209,6 +206,36 @@ void main() {
           reason: '$id label bottom-right',
         );
       }
+    });
+
+    testWidgets('flowchart identifier breaks are explicit before painting',
+        (tester) async {
+      const source = '''flowchart TD
+  br_recommendation_summary["br_recommendation_summary"]''';
+      final scene = core.Mermaid(measurer: measurer).render(source);
+      final node = scene.nodes
+          .whereType<core.SceneGroup>()
+          .singleWhere((group) => group.id == 'br_recommendation_summary');
+      final label = node.children.whereType<core.SceneText>().single;
+
+      final lines = label.text.split('\n');
+      expect(lines.length, greaterThan(1));
+      expect(lines.join(), 'br_recommendation_summary');
+      expect(lines, everyElement(isNotEmpty));
+      expect(lines.last.length, greaterThan(1));
+      expect(lines.any((line) => line.endsWith('_')), isTrue);
+      expect(node.semanticLabel, 'br_recommendation_summary');
+
+      await tester.pumpWidget(
+        Directionality(
+          textDirection: TextDirection.ltr,
+          child: CustomPaint(
+            painter: ScenePainter(scene),
+            size: Size(scene.size.width, scene.size.height),
+          ),
+        ),
+      );
+      expect(tester.takeException(), isNull);
     });
   });
 
