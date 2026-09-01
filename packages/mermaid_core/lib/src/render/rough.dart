@@ -31,13 +31,29 @@ RenderScene roughenScene(RenderScene scene, {int seed = 0}) {
 
 SceneNode _roughenNode(SceneNode node, int seed) {
   switch (node) {
-    case SceneGroup(:final children, :final id, :final semanticLabel):
+    case SceneGroup(
+        :final children,
+        :final id,
+        :final semanticLabel,
+        :final link,
+        :final tooltip,
+      ):
       // Math expressions stay crisp — sketching glyph outlines is illegible.
       if (id == mathSceneGroupId) return node;
+      // Mermaid's arrowheads remain SVG markers in hand-drawn mode. Roughening
+      // their tiny filled polygons turns them into sparse hachure strokes that
+      // are easily obscured by the target node. Flowchart edge groups always
+      // store the path first and any marker shapes after it.
+      final edge = id?.startsWith('edge_') ?? false;
       return SceneGroup(
         id: id,
         semanticLabel: semanticLabel,
-        children: [for (final c in children) _roughenNode(c, seed)],
+        link: link,
+        tooltip: tooltip,
+        children: [
+          for (var i = 0; i < children.length; i++)
+            if (edge && i > 0) children[i] else _roughenNode(children[i], seed),
+        ],
       );
     case SceneText():
       return node;
