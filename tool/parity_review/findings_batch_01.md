@@ -5,10 +5,7 @@ the Flutter render is the review target unless noted otherwise.
 
 ## Confirmed differences
 
-- `curated-subgraphs` (`packages/mermaid_samples:subgraphs`)
-  - `Stage One` is too close to the top edge.
-  - There is too little padding around the `Stage One` / `Stage Two` labels and
-    between the lower boxes and the subgraph boundary.
+- None remaining from this batch.
 
 ## Resolved in this branch
 
@@ -33,6 +30,12 @@ the Flutter render is the review target unless noted otherwise.
 
 ## Source-aligned differences needing font-metric review
 
+- `curated-subgraphs`: a pinned Mermaid 11.17.2 CLI capture does not reproduce
+  the reported padding defect. Mermaid.js uses a cluster at `y=8`, height 124;
+  Dart uses `y=8`, height 121, and both titles start at `y=8`. Dart's member
+  boxes sit slightly higher because Flutter's text line height is shorter than
+  Mermaid's HTML-label line height; this is a shared typography question, not
+  a cluster-padding constant.
 - `curated-ishikawa`: Mermaid 11.17.2 uses the same 20px horizontal and 2px
   vertical cause-label padding already used by Dart. The regenerated labels
   have visible inset and no longer touch their boxes.
