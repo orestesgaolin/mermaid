@@ -64,7 +64,11 @@ MathLayout? layoutLabel(
     ml.size,
     ml.ascent,
     (origin, out) =>
-        out.add(SceneGroup(id: mathSceneGroupId, children: ml.render(origin))),
+        out.add(SceneGroup(
+          id: mathSceneGroupId,
+          role: SceneGroupRole.internal,
+          children: ml.render(origin),
+        )),
   );
 }
 

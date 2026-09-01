@@ -17,6 +17,42 @@ Rect? sceneBounds(Iterable<SceneNode> nodes) {
   return acc;
 }
 
+extension RenderSceneBounds on RenderScene {
+  /// Bounds of non-empty diagram-node groups, keyed by stable node id.
+  ///
+  /// Coordinates are in scene space: x increases right, y increases down, and
+  /// no Flutter viewport transformation has been applied. Bounds use the same
+  /// [sceneBounds] calculation as interaction hit testing.
+  ///
+  /// Nested nodes are reported independently. If an id occurs more than once,
+  /// the last-painted occurrence wins. Empty groups and groups whose role is
+  /// not [SceneGroupRole.node] are omitted.
+  Map<String, Rect> get nodeBounds {
+    final result = <String, Rect>{};
+
+    void walk(Iterable<SceneNode> nodes) {
+      for (final node in nodes) {
+        if (node is! SceneGroup) continue;
+        final id = node.id;
+        if (id != null && node.role == SceneGroupRole.node) {
+          final bounds = sceneBounds(node.children);
+          if (bounds != null) result[id] = bounds;
+        }
+        walk(node.children);
+      }
+    }
+
+    walk(nodes);
+    return Map.unmodifiable(result);
+  }
+
+  /// Scene-space bounds for [id], or null when no non-empty node has that id.
+  Rect? boundsOf(String id) => nodeBounds[id];
+
+  /// Explicit alias for [boundsOf].
+  Rect? boundsOfNode(String id) => boundsOf(id);
+}
+
 Rect? sceneNodeBounds(SceneNode node) => switch (node) {
       SceneGroup(:final children) => sceneBounds(children),
       SceneShape(:final geometry) => geometryBounds(geometry),
@@ -70,6 +106,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
     switch (node) {
       SceneGroup(
         :final id,
+        :final role,
         :final semanticLabel,
         :final link,
         :final tooltip,
@@ -77,6 +114,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
       ) =>
         SceneGroup(
           id: id,
+          role: role,
           semanticLabel: semanticLabel,
           link: link,
           tooltip: tooltip,

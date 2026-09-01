@@ -668,6 +668,7 @@ _Fragment _layoutGraph(
     clusterRects[sg.id] = rect;
     clusterGroups.add(SceneGroup(
       id: sg.id,
+      role: SceneGroupRole.cluster,
       semanticLabel: sg.title.isEmpty ? null : sg.title,
       children: [
         SceneShape(
@@ -726,6 +727,7 @@ _Fragment _layoutGraph(
         [for (final n in cluster.fragment.nodes) _translateNode(n, dx, dy)]);
     clusterGroups.add(SceneGroup(
       id: cluster.subgraph.id,
+      role: SceneGroupRole.cluster,
       semanticLabel:
           cluster.subgraph.title.isEmpty ? null : cluster.subgraph.title,
       children: children,
@@ -757,7 +759,11 @@ _Fragment _layoutGraph(
     if (e.stroke == EdgeStroke.invisible) {
       // Keep an (empty) group so the edge still participates in spacing and
       // hit-testing structure, but paint nothing.
-      edgeGroups.add(SceneGroup(id: groupId, children: const []));
+      edgeGroups.add(SceneGroup(
+        id: groupId,
+        role: SceneGroupRole.edge,
+        children: const [],
+      ));
       continue;
     }
     final (fromId, clusterFrom) = resolveEndpoint(e.from);
@@ -775,8 +781,12 @@ _Fragment _layoutGraph(
       selfLoopCount[fromId] = loopIndex + 1;
       final (loopNodes, labelCenter) = _selfLoop(
           source, e, style, loopIndex, edgeLabelSizes[i]);
-      edgeGroups
-          .add(SceneGroup(id: groupId, semanticLabel: e.label, children: loopNodes));
+      edgeGroups.add(SceneGroup(
+        id: groupId,
+        role: SceneGroupRole.edge,
+        semanticLabel: e.label,
+        children: loopNodes,
+      ));
       final labelSize = edgeLabelSizes[i];
       if (labelSize != null) {
         edgeLabelGroups.add(_edgeLabelGroup(
@@ -899,7 +909,12 @@ _Fragment _layoutGraph(
     if (e.headFrom != ArrowHead.none) {
       children.addAll(_marker(e.headFrom, startTip, startDir, style.markerColor));
     }
-    edgeGroups.add(SceneGroup(id: groupId, semanticLabel: e.label, children: children));
+    edgeGroups.add(SceneGroup(
+      id: groupId,
+      role: SceneGroupRole.edge,
+      semanticLabel: e.label,
+      children: children,
+    ));
 
     final labelSize = edgeLabelSizes[i];
     if (labelSize != null) {
@@ -1001,6 +1016,7 @@ SceneGroup _edgeLabelGroup(
       labelCenter, labelSize.width + 2 * pad, labelSize.height + 2 * pad);
   return SceneGroup(
     id: 'edgelabel_${e.from}_${e.to}_$index',
+    role: SceneGroupRole.edgeLabel,
     children: [
       SceneShape(
         // Solid background: ELK routes the edge straight through the label, so a
@@ -2435,6 +2451,7 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
     switch (node) {
       SceneGroup(
         :final id,
+        :final role,
         :final semanticLabel,
         :final link,
         :final tooltip,
@@ -2442,6 +2459,7 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
       ) =>
         SceneGroup(
           id: id,
+          role: role,
           semanticLabel: semanticLabel,
           link: link,
           tooltip: tooltip,

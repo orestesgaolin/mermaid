@@ -36,6 +36,7 @@ class SceneGroup extends SceneNode {
   const SceneGroup({
     required this.children,
     this.id,
+    this.role = SceneGroupRole.node,
     this.semanticLabel,
     this.link,
     this.tooltip,
@@ -43,6 +44,12 @@ class SceneGroup extends SceneNode {
 
   /// Stable identifier (e.g. flowchart node id) for hit-testing/interactivity.
   final String? id;
+
+  /// Structural role used by bounds lookup and interaction layers.
+  ///
+  /// The default preserves the historic meaning of an id-carrying group as a
+  /// diagram node. Renderers must explicitly tag non-node groups.
+  final SceneGroupRole role;
 
   /// Accessibility label for this group, if any.
   final String? semanticLabel;
@@ -54,6 +61,8 @@ class SceneGroup extends SceneNode {
   final String? tooltip;
   final List<SceneNode> children;
 }
+
+enum SceneGroupRole { node, cluster, edge, edgeLabel, annotation, internal }
 
 class SceneShape extends SceneNode {
   const SceneShape({required this.geometry, this.fill, this.stroke});

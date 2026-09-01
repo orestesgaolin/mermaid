@@ -175,7 +175,10 @@ class _ClassLayout {
       final titleSize = measurer.measure(ns.label, baseStyle);
       final rect = Rect.fromLTRB(acc.left - 12, acc.top - 16 - titleSize.height,
           acc.right + 12, acc.bottom + 12);
-      clusterNodes.add(SceneGroup(id: 'namespace_${ns.id}', children: [
+      clusterNodes.add(SceneGroup(
+        id: 'namespace_${ns.id}',
+        role: SceneGroupRole.cluster,
+        children: [
         SceneShape(
           geometry: RectGeometry(rect),
           fill: Fill(theme.clusterBkg),
@@ -188,7 +191,8 @@ class _ClassLayout {
           style: baseStyle,
           color: theme.titleColor,
         ),
-      ]));
+        ],
+      ));
     }
 
     for (var i = 0; i < diagram.relations.length; i++) {
@@ -226,6 +230,7 @@ class _ClassLayout {
       children.addAll(_marker(r.endTo, endTip, endDir));
       edgeNodes.add(SceneGroup(
           id: 'rel_${r.from}_${r.to}_$i',
+          role: SceneGroupRole.edge,
           semanticLabel: r.label,
           children: children));
 
@@ -234,7 +239,10 @@ class _ClassLayout {
         final c = (dagreEdge.labelX != null && dagreEdge.labelY != null)
             ? Point(dagreEdge.labelX!, dagreEdge.labelY!)
             : points[points.length ~/ 2];
-        labelNodes.add(SceneGroup(id: 'rellabel_$i', children: [
+        labelNodes.add(SceneGroup(
+          id: 'rellabel_$i',
+          role: SceneGroupRole.edgeLabel,
+          children: [
           SceneShape(
             geometry: RectGeometry(
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
@@ -249,7 +257,8 @@ class _ClassLayout {
             style: baseStyle,
             color: theme.textColor,
           ),
-        ]));
+          ],
+        ));
       }
       final cardStyle = baseStyle.copyWith(fontSize: _cardinalityFontSize);
       void cardinality(String? card, Point tip, Point dir) {
@@ -282,7 +291,10 @@ class _ClassLayout {
         ));
       }
       final rect = noteBox.rectAt(noteBox.center);
-      boxNodes.add(SceneGroup(id: '__note$i', children: [
+      boxNodes.add(SceneGroup(
+        id: '__note$i',
+        role: SceneGroupRole.annotation,
+        children: [
         SceneShape(
           geometry: RectGeometry(rect),
           // Upstream classDb sets `fill: noteBkgColor; stroke: noteBorderColor`.
@@ -296,7 +308,8 @@ class _ClassLayout {
           // Upstream `.noteLabel .nodeLabel { color: noteTextColor }`.
           color: theme.noteTextColor,
         ),
-      ]));
+        ],
+      ));
     }
 
     for (final b in boxes.values) {

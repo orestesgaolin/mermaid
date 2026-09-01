@@ -184,6 +184,7 @@ class _ErLayout {
 
       edgeNodes.add(SceneGroup(
         id: 'rel_${r.from}_${r.to}_$i',
+        role: SceneGroupRole.edge,
         semanticLabel: r.label.isEmpty ? null : r.label,
         children: [
           SceneShape(
@@ -208,7 +209,10 @@ class _ErLayout {
             ? Point(points[1].x + 8 + labelSize.width / 2,
                 (points[1].y + points[2].y) / 2)
             : _midpoint(points);
-        labelNodes.add(SceneGroup(id: 'rellabel_$i', children: [
+        labelNodes.add(SceneGroup(
+          id: 'rellabel_$i',
+          role: SceneGroupRole.edgeLabel,
+          children: [
           SceneShape(
             geometry: RectGeometry(
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 2)),
@@ -222,7 +226,8 @@ class _ErLayout {
             // `.edgeLabel .label` fill = nodeBorder.
             color: theme.nodeBorder,
           ),
-        ]));
+          ],
+        ));
       }
     }
 

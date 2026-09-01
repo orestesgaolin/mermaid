@@ -127,7 +127,7 @@ RenderScene layoutPieChart(
     final size = measurer.measure(text, legendStyle);
     final legendY = center.y + i * legendHeight - legendOffset;
     final color = palette[i % palette.length];
-    nodes.add(SceneGroup(id: 'legend_$i', children: [
+    nodes.add(SceneGroup(id: 'legend_$i', role: SceneGroupRole.internal, children: [
       SceneShape(
         geometry: RectGeometry(
             Rect.fromLTWH(legendX, legendY, _legendRectSize, _legendRectSize)),

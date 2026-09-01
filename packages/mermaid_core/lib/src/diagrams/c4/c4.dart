@@ -715,7 +715,11 @@ RenderScene layoutC4Diagram(
         color: fontColor,
       ));
     }
-    clusterNodes.add(SceneGroup(id: 'boundary_${b.id}', children: children));
+    clusterNodes.add(SceneGroup(
+      id: 'boundary_${b.id}',
+      role: SceneGroupRole.cluster,
+      children: children,
+    ));
   }
 
   // ---- Relations ----
@@ -761,6 +765,7 @@ RenderScene layoutC4Diagram(
     }
     edgeNodes.add(SceneGroup(
         id: 'rel_${r.from}_${r.to}_$i',
+        role: SceneGroupRole.edge,
         semanticLabel: r.label,
         children: children));
 

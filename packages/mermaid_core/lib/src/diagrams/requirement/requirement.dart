@@ -363,13 +363,20 @@ RenderScene layoutRequirementDiagram(
         stroke: Stroke(color: theme.relationColor, width: 1.3),
       ));
     }
-    nodes.add(
-        SceneGroup(id: 'rel_$i', semanticLabel: r.label, children: children));
+    nodes.add(SceneGroup(
+      id: 'rel_$i',
+      role: SceneGroupRole.edge,
+      semanticLabel: r.label,
+      children: children,
+    ));
     final size = labelSizes[i]!;
     final mid = pts[pts.length ~/ 2];
     // Upstream label: `relationLabelColor` (=actorTextColor) on
     // `relationLabelBackground` (=labelBackground='rgba(232,232,232,0.8)').
-    nodes.add(SceneGroup(id: 'rellabel_$i', children: [
+    nodes.add(SceneGroup(
+      id: 'rellabel_$i',
+      role: SceneGroupRole.edgeLabel,
+      children: [
       SceneShape(
         geometry: RectGeometry(
             Rect.fromCenter(mid, size.width + 4, size.height + 2)),
@@ -381,7 +388,8 @@ RenderScene layoutRequirementDiagram(
         style: baseStyle,
         color: theme.relationLabelColor,
       ),
-    ]));
+      ],
+    ));
   }
 
   diagram.nodes.forEach((id, n) {

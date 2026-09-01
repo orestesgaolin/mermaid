@@ -504,6 +504,7 @@ class _SequenceLayout {
 
     eventNodes.add(SceneGroup(
       id: 'msg_${msg.from}_${msg.to}',
+      role: SceneGroupRole.edge,
       semanticLabel: msg.text.isEmpty ? null : msg.text,
       children: children,
     ));
@@ -547,6 +548,7 @@ class _SequenceLayout {
     ];
     eventNodes.add(SceneGroup(
       id: 'msg_${msg.from}_${msg.from}',
+      role: SceneGroupRole.edge,
       semanticLabel: msg.text.isEmpty ? null : msg.text,
       children: children,
     ));
@@ -652,6 +654,7 @@ class _SequenceLayout {
     y += _boxMargin;
     eventNodes.add(SceneGroup(
       id: 'note',
+      role: SceneGroupRole.annotation,
       semanticLabel: note.text,
       children: [
         SceneShape(
@@ -706,7 +709,10 @@ class _SequenceLayout {
     final tabW = kwSize.width + 2 * _boxTextMargin + 8;
     final tabH = kwSize.height + 4;
 
-    frames.add(SceneGroup(id: 'frame_$keyword', children: [
+    frames.add(SceneGroup(
+      id: 'frame_$keyword',
+      role: SceneGroupRole.cluster,
+      children: [
       SceneShape(
         geometry: RectGeometry(rect),
         // Upstream .loopLine: stroke-width 2, dash 2,2, labelBoxBorderColor.
@@ -718,7 +724,8 @@ class _SequenceLayout {
               [MoveTo(Point(rect.left, dy)), LineTo(Point(rect.right, dy))]),
           stroke: Stroke(color: theme.labelBoxBorderColor, width: 2, dash: const [2, 2]),
         ),
-    ]));
+      ],
+    ));
     // Tab and labels paint above everything (activation bars would occlude
     // centered divider labels otherwise).
     final labelChildren = <SceneNode>[
@@ -777,8 +784,11 @@ class _SequenceLayout {
           .add(_frameLabel('[$label]', Point(rect.center.x, dy + 3),
               centered: true));
     }
-    frameLabels
-        .add(SceneGroup(id: 'framelabel_$keyword', children: labelChildren));
+    frameLabels.add(SceneGroup(
+      id: 'framelabel_$keyword',
+      role: SceneGroupRole.internal,
+      children: labelChildren,
+    ));
   }
 
   SceneText _frameLabel(String text, Point topLeft, {bool centered = false}) {

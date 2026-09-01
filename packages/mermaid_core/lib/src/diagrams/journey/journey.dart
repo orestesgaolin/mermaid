@@ -244,7 +244,10 @@ RenderScene layoutJourney(
       final sectionWidth =
           _boxWidth * count + _diagramMarginX * (count - 1);
       final size = measurer.measure(section.name, baseStyle);
-      nodes.add(SceneGroup(id: 'section_$sectionIndex', children: [
+      nodes.add(SceneGroup(
+        id: 'section_$sectionIndex',
+        role: SceneGroupRole.cluster,
+        children: [
         SceneShape(
           geometry: RectGeometry(
               Rect.fromLTWH(sectionX, sectionY, sectionWidth, _boxHeight),
@@ -262,7 +265,8 @@ RenderScene layoutJourney(
           style: baseStyle,
           color: textColor,
         ),
-      ]));
+        ],
+      ));
     }
     for (final t in section.tasks) {
       final taskX = globalIndex * _taskMargin + globalIndex * _boxWidth +

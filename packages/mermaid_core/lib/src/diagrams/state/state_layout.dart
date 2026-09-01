@@ -221,7 +221,11 @@ class _StateLayout {
       clusterRects[s.id] = rect;
       final titleY = rect.top + 4;
       final dividerY = titleY + titleSize.height + 4;
-      clusterNodes.add(SceneGroup(id: s.id, semanticLabel: s.label, children: [
+      clusterNodes.add(SceneGroup(
+        id: s.id,
+        role: SceneGroupRole.cluster,
+        semanticLabel: s.label,
+        children: [
         // Outer rect uses compositeTitleBackground (= mainBkg) so the title
         // band is tinted; inner region below the divider uses the background.
         SceneShape(
@@ -249,7 +253,8 @@ class _StateLayout {
           ]),
           stroke: Stroke(color: theme.nodeBorder),
         ),
-      ]));
+        ],
+      ));
 
       // Concurrency regions: dashed dividers in the gaps between region groups.
       if (s.regions.length > 1) {
@@ -346,6 +351,7 @@ class _StateLayout {
         ];
         edgeNodes.add(SceneGroup(
             id: 'trans_${t.from}_${t.to}_$i',
+            role: SceneGroupRole.edge,
             semanticLabel: t.label,
             children: children));
         continue;
@@ -394,6 +400,7 @@ class _StateLayout {
 
       edgeNodes.add(SceneGroup(
         id: 'trans_${t.from}_${t.to}_$i',
+        role: SceneGroupRole.edge,
         semanticLabel: t.label,
         children: [
           SceneShape(
@@ -424,7 +431,10 @@ class _StateLayout {
             : (dagreEdge?.labelX != null && dagreEdge?.labelY != null
                 ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
                 : _pathMidpoint(points));
-        labelNodes.add(SceneGroup(id: 'translabel_$i', children: [
+        labelNodes.add(SceneGroup(
+          id: 'translabel_$i',
+          role: SceneGroupRole.edgeLabel,
+          children: [
           SceneShape(
             geometry: RectGeometry(
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
@@ -440,7 +450,8 @@ class _StateLayout {
             style: baseStyle,
             color: theme.textColor,
           ),
-        ]));
+          ],
+        ));
       }
     }
 
@@ -457,7 +468,10 @@ class _StateLayout {
           stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
         ));
       }
-      stateNodes.add(SceneGroup(id: '__note$i', children: [
+      stateNodes.add(SceneGroup(
+        id: '__note$i',
+        role: SceneGroupRole.annotation,
+        children: [
         SceneShape(
           geometry: RectGeometry(b.rect),
           fill: Fill(theme.noteBkgColor),
@@ -469,7 +483,8 @@ class _StateLayout {
           style: baseStyle,
           color: theme.noteTextColor,
         ),
-      ]));
+        ],
+      ));
     }
 
     for (final p in placed.values) {

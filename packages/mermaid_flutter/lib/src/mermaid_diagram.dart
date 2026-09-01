@@ -25,9 +25,10 @@ class MermaidDiagram extends StatefulWidget {
     this.onNodeTap,
   });
 
-  /// Called when a node/group is tapped, with its id and optional click link
-  /// (from a flowchart `click`/`href`). Only fires for groups carrying an id
-  /// or a link. Use it to open links or drive selection.
+  /// Called when a diagram node is tapped, with its id and optional click link
+  /// (from a flowchart `click`/`href`). Only [core.SceneGroupRole.node] groups
+  /// carrying an id or link are interactive here; clusters, annotations, edge
+  /// strokes, and edge labels do not invoke this callback.
   final void Function(String id, String? link)? onNodeTap;
 
   /// Mermaid diagram source text.
@@ -74,14 +75,15 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     }
   }
 
-  /// Finds the topmost (last-painted) group with an id/link whose bounds
+  /// Finds the topmost (last-painted) node group with an id/link whose bounds
   /// contain [p]. Returns (id, link) or null.
   (String, String?)? _hitTest(List<core.SceneNode> nodes, Offset p) {
     (String, String?)? found;
     void walk(List<core.SceneNode> ns) {
       for (final n in ns) {
         if (n is core.SceneGroup) {
-          if (n.id != null || n.link != null) {
+          if (n.role == core.SceneGroupRole.node &&
+              (n.id != null || n.link != null)) {
             final b = core.sceneBounds(n.children);
             if (b != null &&
                 p.dx >= b.left &&
