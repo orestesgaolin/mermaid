@@ -9,21 +9,18 @@ the Flutter render is the review target unless noted otherwise.
   - `Stage One` is too close to the top edge.
   - There is too little padding around the `Stage One` / `Stage Two` labels and
     between the lower boxes and the subgraph boundary.
-- `curated-ishikawa` (`packages/mermaid_samples:ishikawa`)
-  - `Technology` and `People` have insufficient padding.
-  - Their text baseline is too low and touches the bottom edge.
-- `curated-wardley` (`packages/mermaid_samples:wardley`)
-  - Mermaid.js renders `Visibility` and `Evolution` in bold.
-- `curated-handdrawn` (`packages/mermaid_samples:handdrawn`)
-  - The edge from `Debug` to `Is it working?` is partially hidden behind the
-    diamond.
 
 ## Resolved in this branch
 
 - `curated-block`: spanning groups now participate in sibling-width
   equalization, and their children expand with them.
+- `curated-handdrawn`: edge paths remain sketchy while their arrow markers stay
+  crisp, so the `Debug` return marker remains visible at the diamond boundary.
 - `curated-kanban` and `curated-radar`: updated the shared default color scale
   to Mermaid 11.17.2 values.
+- `curated-railroad`: generic monospace is retained for Flutter platform font
+  resolution, and the screenshot harness loads a deterministic monospace font
+  instead of Flutter's solid-block Ahem test glyphs.
 - `curated-treemap`: ported D3's golden-ratio squarification and padding stack;
   `API` and `DB` now use the same side-by-side split as Mermaid.js.
 - `curated-venn`: singleton labels now sit in their exclusive regions on the
@@ -37,10 +34,11 @@ the Flutter render is the review target unless noted otherwise.
 ## Source-aligned differences needing font-metric review
 
 - `curated-ishikawa`: Mermaid 11.17.2 uses the same 20px horizontal and 2px
-  vertical cause-label padding already used by Dart.
+  vertical cause-label padding already used by Dart. The regenerated labels
+  have visible inset and no longer touch their boxes.
 - `curated-wardley`: both renderers request bold axis labels; the remaining
   visual difference is in font measurement or rasterization rather than the
-  diagram style constants.
+  diagram style constants. The regenerated Flutter axis titles are bold.
 
 ## Reference limitations or acceptable differences
 
@@ -49,6 +47,5 @@ the Flutter render is the review target unless noted otherwise.
   Mermaid.js uses hard corners.
 - `curated-cynefin`: Mermaid.js does not render the source, so it cannot serve
   as a parity reference for this case.
-- `curated-railroad`: Mermaid.js does not render the source, so the Dart output
-  cannot be judged as parity against this reference case. Flutter's black text
-  boxes remain a separate rendering defect.
+- `curated-railroad`: Mermaid.js does not render the source, so the diagram
+  geometry still cannot be judged as parity against this reference case.
