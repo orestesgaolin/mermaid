@@ -37,6 +37,25 @@ coordinates. `renderSceneToSvg` serializes that scene to SVG.
 tests. Flutter applications should use the `TextPainter`-based measurer from
 `mermaid_flutter` when their layout must match Flutter font rendering.
 
+## Flowchart geometry determinism
+
+Repeated rendering of the same flowchart layout identity produces identical
+scene size, node bounds, path commands, and text bounds. This contract applies
+to Dagre and ELK layouts and to the hand-drawn look when its seed is fixed.
+
+The layout identity includes the parsed topology and declaration order, node
+and edge labels, text measurer and font metrics, selected engine and its
+options, direction and spacing configuration, and theme values that affect
+text measurement or shape size. Edge interpolation is also geometry input. A
+change outside that identity, such as a fill or stroke color applied to
+existing nodes and links, does not change geometry. Class or style statements
+are not automatically paint-only: they can reference new node ids, and theme
+font changes affect measurement.
+
+The guarantee is about resolved geometry, not byte-identical `RenderScene`,
+SVG, or PNG output. Paint data, serialization details, raster backends, and
+platform font availability can differ while geometry remains unchanged.
+
 ## Command-line tool
 
 Activate the package globally:
