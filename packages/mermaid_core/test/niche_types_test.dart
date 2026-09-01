@@ -55,6 +55,39 @@ venn-beta
     expect(_texts(s), containsAll(['Frontend', 'Backend', 'APIs']));
   });
 
+  test('venn aligns equal-set and union labels on one baseline', () {
+    final s = _m.render('''
+venn-beta
+  set Frontend
+  set Backend
+  union Frontend,Backend["Full-stack"]
+''');
+    final labels = {
+      for (final text in _flat(s.nodes).whereType<SceneText>())
+        if (const {'Frontend', 'Backend', 'Full-stack'}.contains(text.text))
+          text.text: text.bounds.center.y,
+    };
+
+    expect(labels.keys, containsAll(['Frontend', 'Backend', 'Full-stack']));
+    expect(labels['Frontend'], closeTo(labels['Full-stack']!, 0.001));
+    expect(labels['Backend'], closeTo(labels['Full-stack']!, 0.001));
+  });
+
+  test('venn title uses the stylesheet font size', () {
+    final s = _m.render('''
+venn-beta
+  title Skills overlap
+  set Frontend
+  set Backend
+''');
+    final title = _flat(s.nodes)
+        .whereType<SceneText>()
+        .singleWhere((text) => text.text == 'Skills overlap');
+
+    expect(title.style.fontSize, 32);
+    expect(title.style.fontWeight, 400);
+  });
+
   test('ishikawa renders problem head and categories', () {
     final s = _m.render('''
 ishikawa-beta

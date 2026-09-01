@@ -253,5 +253,11 @@ void main() {
       expect(parsed.family, isNull);
       expect(parsed.fallback, isEmpty);
     });
+
+    test('retains monospace for platform font resolution', () {
+      final parsed = parseCssFontFamily('monospace');
+      expect(parsed.family, 'monospace');
+      expect(parsed.fallback, isEmpty);
+    });
   });
 }

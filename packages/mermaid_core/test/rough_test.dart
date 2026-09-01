@@ -153,5 +153,24 @@ void main() {
       expect(flatten(hand.nodes).length,
           greaterThan(flatten(classic.nodes).length));
     });
+
+    test('handDrawn keeps flowchart arrow markers crisp', () {
+      const m = Mermaid(measurer: ApproximateTextMeasurer());
+      final hand = m.render('''
+%%{init: {'look':'handDrawn'}}%%
+graph TD
+  A[Start] --> B{Is it working?}
+  B --> D[Debug]
+  D --> B
+''');
+      final returnEdge = flatten(hand.nodes)
+          .whereType<SceneGroup>()
+          .firstWhere((group) => group.id == 'edge_D_B_2');
+
+      expect(returnEdge.children, hasLength(2));
+      expect(returnEdge.children.first, isA<SceneGroup>());
+      expect(returnEdge.children.last, isA<SceneShape>());
+      expect((returnEdge.children.last as SceneShape).fill, isNotNull);
+    });
   });
 }

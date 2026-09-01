@@ -542,7 +542,9 @@ class _LayoutContext {
       fill: Fill(theme.mainBkg),
       stroke: Stroke(color: theme.lineColor, width: 2),
     ));
-    _drawMultilineText(wrapped, x, cy, labelStyle, TextAlignH.center);
+    // SVG's middle dominant baseline paints Trebuchet's glyphs about one
+    // pixel above the center of its measured label box.
+    _drawMultilineText(wrapped, x, cy - 1, labelStyle, TextAlignH.center);
     return boxRect.left;
   }
 

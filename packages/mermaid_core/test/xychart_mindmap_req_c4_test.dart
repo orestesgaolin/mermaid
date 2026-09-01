@@ -240,6 +240,42 @@ C4Context
       expect((body.geometry as PathGeometry).commands.last, isA<ClosePath>());
       expect(seam.stroke, isNotNull);
     });
+    test('deployment nodes reserve their header and use solid borders', () {
+      final s = layoutC4Diagram(
+        parseC4Diagram('''
+C4Deployment
+  Deployment_Node(mob, "Customer's mobile device", "Apple IOS or Android") {
+    Container(mobile, "Mobile App", "Xamarin", "Customer application")
+  }
+'''),
+        measurer: measurer,
+        theme: theme,
+      );
+      final boundary = flatten(s.nodes)
+          .whereType<SceneGroup>()
+          .singleWhere((group) => group.id == 'boundary_mob');
+      final mobile = flatten(s.nodes)
+          .whereType<SceneGroup>()
+          .singleWhere((group) => group.id == 'mobile');
+      final boundaryRect = (boundary.children
+              .whereType<SceneShape>()
+              .single
+              .geometry as RectGeometry)
+          .rect;
+      final mobileRect = (mobile.children
+              .whereType<SceneShape>()
+              .first
+              .geometry as RectGeometry)
+          .rect;
+      final type = boundary.children
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == '[Apple IOS or Android]');
+
+      expect(boundary.children.whereType<SceneShape>().single.stroke?.dash,
+          isNull);
+      expect(type.bounds.bottom, lessThan(mobileRect.top));
+      expect(boundaryRect.contains(mobileRect.center), isTrue);
+    });
     test('garbage throws', () {
       expect(() => parseC4Diagram('C4Context\nnonsense here'),
           throwsA(isA<MermaidParseException>()));

@@ -42,6 +42,11 @@ SceneNode _roughenNode(SceneNode node, int seed) {
       ):
       // Math expressions stay crisp — sketching glyph outlines is illegible.
       if (id == mathSceneGroupId) return node;
+      // Mermaid's arrowheads remain SVG markers in hand-drawn mode. Roughening
+      // their tiny filled polygons turns them into sparse hachure strokes that
+      // are easily obscured by the target node. Flowchart edge groups always
+      // store the path first and any marker shapes after it.
+      final isEdge = edge != null || (id?.startsWith('edge_') ?? false);
       return SceneGroup(
         id: id,
         role: role,
@@ -49,7 +54,13 @@ SceneNode _roughenNode(SceneNode node, int seed) {
         link: link,
         tooltip: tooltip,
         edge: edge,
-        children: [for (final c in children) _roughenNode(c, seed)],
+        children: [
+          for (var i = 0; i < children.length; i++)
+            if (isEdge && i > 0)
+              children[i]
+            else
+              _roughenNode(children[i], seed),
+        ],
       );
     case SceneText():
       return node;

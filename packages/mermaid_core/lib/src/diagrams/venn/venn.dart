@@ -516,8 +516,9 @@ RenderScene layoutVenn(
       fontSize: 48 * scale,
     );
     final ls = measurer.measure(labelText, labelStyle);
-    // venn.js seats the set label at the top of the circle.
-    final lp = Point(circle.x, circle.y - circle.radius + ls.height * 0.7);
+    // Approximate venn.js' exclusive-region text centre by moving away from
+    // the other sets. Equal horizontal sets then share the union's baseline.
+    final lp = _setLabelCenter(id, circle, fitted);
     nodes.add(SceneText(
       text: labelText,
       bounds: Rect.fromCenter(lp, ls.width, ls.height),
@@ -567,9 +568,11 @@ RenderScene layoutVenn(
 
   final children = <SceneNode>[...nodes];
 
-  // Title: 32*scale centered at y=32*scale (within the reserved header band).
+  // Mermaid's `.venn-title` stylesheet fixes the rendered font at 32px,
+  // overriding the scaled `font-size` presentation attribute from its
+  // renderer. The position and reserved header band remain scaled.
   if (d.title != null && d.title!.isNotEmpty) {
-    final style = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 32 * scale);
+    final style = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 32);
     final ts = measurer.measure(d.title!, style);
     children.add(SceneText(
       text: d.title!,
@@ -600,6 +603,25 @@ String _setLabel(List<VennSubset> subsets, String id) {
     }
   }
   return id;
+}
+
+Point _setLabelCenter(
+    String id, _Circle circle, Map<String, _Circle> circles) {
+  final others = circles.entries.where((entry) => entry.key != id).toList();
+  if (others.isEmpty) return Point(circle.x, circle.y);
+
+  final otherX =
+      others.fold(0.0, (sum, entry) => sum + entry.value.x) / others.length;
+  final otherY =
+      others.fold(0.0, (sum, entry) => sum + entry.value.y) / others.length;
+  final dx = circle.x - otherX;
+  final dy = circle.y - otherY;
+  final distance = math.sqrt(dx * dx + dy * dy);
+  if (distance == 0) return Point(circle.x, circle.y);
+
+  final offset = circle.radius * 0.45;
+  return Point(circle.x + dx / distance * offset,
+      circle.y + dy / distance * offset);
 }
 
 /// Centroid of the overlap region: the average of the two nearest boundary

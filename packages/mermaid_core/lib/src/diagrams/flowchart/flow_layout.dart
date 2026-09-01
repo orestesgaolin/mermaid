@@ -673,7 +673,11 @@ _Fragment _layoutGraph(
             pos.right + _clusterPadding,
             pos.bottom + _clusterPadding,
           );
-    final titleTop = useElk ? pos.top + _clusterPadding : rect.top;
+    // HTML labels use line-height 1.5 upstream. Center Flutter's shorter
+    // measured line box inside that visual line height without growing the
+    // cluster's layout band.
+    final titleTop = (useElk ? pos.top + _clusterPadding : rect.top) +
+        (clusterTitleStyle.fontSize * 1.5 - titleSize.height) / 2;
     clusterRects[sg.id] = rect;
     clusterGroups.add(SceneGroup(
       id: sg.id,
@@ -719,7 +723,9 @@ _Fragment _layoutGraph(
           text: cluster.subgraph.title,
           bounds: Rect.fromLTWH(
             rect.center.x - cluster.titleSize.width / 2,
-            rect.top,
+            rect.top +
+                (clusterTitleStyle.fontSize * 1.5 - cluster.titleSize.height) /
+                    2,
             cluster.titleSize.width,
             cluster.titleSize.height,
           ),

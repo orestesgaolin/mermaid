@@ -118,6 +118,24 @@ void main() {
         isTrue,
       );
     });
+    test('attribute cells keep right-side padding', () {
+      final scene = layoutErDiagram(
+        parseErDiagram('erDiagram\nCAR {\nstring registrationNumber PK\n}'),
+        measurer: measurer,
+        theme: theme,
+      );
+      final entity = scene.nodes.whereType<SceneGroup>().single;
+      final outerRect = entity.children
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .map((shape) => (shape.geometry as RectGeometry).rect)
+          .reduce((a, b) => a.width * a.height > b.width * b.height ? a : b);
+      final key = entity.children
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == 'PK');
+
+      expect(outerRect.right - key.bounds.right, closeTo(5, 0.001));
+    });
   });
 
   group('pie parser', () {

@@ -92,6 +92,7 @@ class C4Boundary {
     this.type = '',
     this.description = '',
     this.parent,
+    this.isNode = false,
     this.bgColor,
     this.borderColor,
     this.fontColor,
@@ -102,6 +103,9 @@ class C4Boundary {
   final String type;
   final String description;
   final String? parent;
+
+  /// Deployment/Node boundaries use a solid border upstream.
+  final bool isNode;
 
   /// `UpdateBoundaryStyle` overrides ($bgColor / $borderColor / $fontColor).
   final Color? bgColor;
@@ -119,6 +123,7 @@ class C4Boundary {
         type: type,
         description: description,
         parent: parent,
+        isNode: isNode,
         bgColor: bgColor ?? this.bgColor,
         borderColor: borderColor ?? this.borderColor,
         fontColor: fontColor ?? this.fontColor,
@@ -267,6 +272,7 @@ C4Diagram parseC4Diagram(String source) {
         type: a.length > 2 ? a[2] : defaultType,
         description: a.length > 3 ? a[3] : '',
         parent: boundaryStack.isEmpty ? null : boundaryStack.last,
+        isNode: fn == 'Deployment_Node' || fn.startsWith('Node'),
       ));
       boundaryStack.add(id);
       continue;
@@ -509,6 +515,22 @@ RenderScene layoutC4Diagram(
   final boundaryTypeStyle =
       TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
 
+  double boundaryHeaderHeight(C4Boundary boundary) {
+    var height = 6.0;
+    if (boundary.label.isNotEmpty) {
+      height += measurer.measure(boundary.label, boundaryLabelStyle).height + 2;
+    }
+    if (boundary.type.isNotEmpty) {
+      height +=
+          measurer.measure('[${boundary.type}]', boundaryTypeStyle).height + 2;
+    }
+    if (boundary.description.isNotEmpty) {
+      height +=
+          measurer.measure(boundary.description, boundaryTypeStyle).height + 2;
+    }
+    return height + 8;
+  }
+
   final textLimit = _confWidth - _shapePadding * 2;
 
   // Measure each shape and compute its box (min 216x60, grows to content).
@@ -620,14 +642,16 @@ RenderScene layoutC4Diagram(
           x = originX + _diagramMarginX;
           rowMaxBottom = rowStartY;
         }
+        final headerHeight = boundaryHeaderHeight(subs[bi]);
         final inner = layoutContainer(
-            subs[bi].id, x + 14, rowStartY + 14 + 24);
+            subs[bi].id, x + 14, rowStartY + 14 + headerHeight);
         Rect rect;
         if (inner == null) {
-          rect = Rect.fromLTWH(x, rowStartY, _confWidth, _confHeight);
+          rect = Rect.fromLTWH(x, rowStartY, _confWidth,
+              math.max(_confHeight, headerHeight + 28));
         } else {
           rect = Rect.fromLTRB(
-              inner.left - 14, inner.top - 14 - 24, inner.right + 14,
+              inner.left - 14, inner.top - 14 - headerHeight, inner.right + 14,
               inner.bottom + 14);
         }
         boundaryRects[subs[bi].id] = rect;
@@ -678,7 +702,8 @@ RenderScene layoutC4Diagram(
       SceneShape(
         geometry: RectGeometry(rect, rx: 2.5, ry: 2.5),
         fill: b.bgColor != null ? Fill(b.bgColor!) : null,
-        stroke: Stroke(color: borderColor, dash: const [7, 7]),
+        stroke: Stroke(
+            color: borderColor, dash: b.isNode ? null : const [7, 7]),
       ),
     ];
     // Label near the top of the cluster rect (upstream label.Y).

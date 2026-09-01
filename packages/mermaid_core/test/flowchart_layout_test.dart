@@ -345,7 +345,8 @@ void main() {
         expect(nb.bottom, lessThanOrEqualTo(clusterRect.bottom));
       }
       // Cluster title rendered.
-      expect(textsIn(cluster).map((t) => t.text), contains('Inner work'));
+      final title = textsIn(cluster).singleWhere((t) => t.text == 'Inner work');
+      expect(title.bounds.top - clusterRect.top, closeTo(2, 0.001));
       // Z-order: cluster group precedes member node groups in scene.nodes.
       final order = scene.nodes.whereType<SceneGroup>().map((g) => g.id).toList();
       expect(order.indexOf('sub1'), lessThan(order.indexOf('B')));

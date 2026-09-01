@@ -6,12 +6,14 @@ library;
 import 'package:flutter/painting.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 
-/// CSS generic family keywords that have no direct Flutter equivalent; they
-/// are skipped so the engine's default fallback chain applies.
+/// CSS generic family keywords that have no useful direct Flutter equivalent;
+/// they are skipped so the engine's default fallback chain applies.
+///
+/// `monospace` is intentionally retained: Flutter's platform font manager can
+/// resolve it, and dropping it silently turns syntax/data labels proportional.
 const Set<String> _genericFamilies = {
   'sans-serif',
   'serif',
-  'monospace',
   'cursive',
   'fantasy',
   'system-ui',
