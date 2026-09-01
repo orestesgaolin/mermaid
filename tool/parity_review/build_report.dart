@@ -383,7 +383,7 @@ const liveReferences = $liveReferenceJson;
 const targets = [...document.querySelectorAll('.mermaid-live')];
 if (targets.length) {
   try {
-    const module = await import('https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs');
+    const module = await import('https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs');
     const mermaid = module.default;
     mermaid.initialize({ startOnLoad: false, theme: 'default' });
     for (let index = 0; index < targets.length; index++) {
