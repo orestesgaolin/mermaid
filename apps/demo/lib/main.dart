@@ -270,6 +270,7 @@ class _EditorPageState extends State<EditorPage> {
             backgroundColor: background,
             nodePaintOverrides: _nodeOverrides(selectedNode, colors),
             linkPaintOverrides: _linkOverrides(selectedEdge, colors),
+            nodeTooltipBuilder: (context, id) => _NodeTooltip(nodeId: id),
             onRequestFullscreen: () => unawaited(_openFullscreen()),
             onNodeTap: (id, _) {
               setState(() {
@@ -359,6 +360,8 @@ class _EditorPageState extends State<EditorPage> {
                       allowFullscreen: false,
                       nodePaintOverrides: _nodeOverrides(selectedNode, colors),
                       linkPaintOverrides: _linkOverrides(selectedEdge, colors),
+                      nodeTooltipBuilder: (context, id) =>
+                          _NodeTooltip(nodeId: id),
                       onNodeTap: (id, _) {
                         updateDialog(() {
                           selectedNode = id;
@@ -472,7 +475,7 @@ class _SelectionCard extends StatelessWidget {
                   : selectedEdge != null
                       ? 'Edge ${selectedEdge!.$3}: '
                           '${selectedEdge!.$1} → ${selectedEdge!.$2}'
-                      : 'Tap a flowchart node to focus, or an edge to inspect',
+                      : 'Hover for node ids · tap to focus · tap edges to inspect',
             ),
             if (hasSelection)
               IconButton(
@@ -518,6 +521,29 @@ class _ViewportStatus extends StatelessWidget {
           );
         },
       );
+}
+
+class _NodeTooltip extends StatelessWidget {
+  const _NodeTooltip({required this.nodeId});
+
+  final String nodeId;
+
+  @override
+  Widget build(BuildContext context) => Material(
+    elevation: 3,
+    color: Theme.of(context).colorScheme.inverseSurface,
+    borderRadius: BorderRadius.circular(6),
+    child: Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      child: Text(
+        'Node id: $nodeId',
+        style: TextStyle(
+          color: Theme.of(context).colorScheme.onInverseSurface,
+          fontSize: 12,
+        ),
+      ),
+    ),
+  );
 }
 
 class _ErrorBanner extends StatelessWidget {

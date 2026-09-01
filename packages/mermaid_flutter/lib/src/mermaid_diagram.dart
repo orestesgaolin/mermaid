@@ -1,6 +1,8 @@
 /// High-level widget: mermaid source in, painted diagram out.
 library;
 
+import 'dart:math' as math;
+
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
@@ -12,6 +14,10 @@ typedef MermaidSceneRenderer = core.RenderScene Function(
   String source,
   core.MermaidTheme theme,
 );
+
+/// Builds the tooltip shown for a hovered Mermaid node.
+typedef MermaidNodeTooltipBuilder =
+    Widget Function(BuildContext context, String id);
 
 /// Renders a mermaid diagram from [source].
 ///
@@ -29,6 +35,9 @@ class MermaidDiagram extends StatefulWidget {
     this.errorBuilder,
     this.keepLastGoodSceneOnError = true,
     this.onNodeTap,
+    this.onNodeHover,
+    this.hoverCursor = SystemMouseCursors.click,
+    this.nodeTooltipBuilder,
     this.onEdgeTap,
     this.onSceneChanged,
     this.nodePaintOverrides = const {},
@@ -41,6 +50,18 @@ class MermaidDiagram extends StatefulWidget {
   /// carrying an id or link are interactive here; clusters, annotations, edge
   /// strokes, and edge labels do not invoke this callback.
   final void Function(String id, String? link)? onNodeTap;
+
+  /// Called when the pointer enters a different hit-testable node, and with
+  /// null when it leaves the current node.
+  final ValueChanged<String?>? onNodeHover;
+
+  /// Cursor used while the pointer is over a hit-testable node.
+  final MouseCursor hoverCursor;
+
+  /// Builds an optional overlay anchored below the hovered node.
+  ///
+  /// The overlay ignores pointer events and does not affect diagram geometry.
+  final MermaidNodeTooltipBuilder? nodeTooltipBuilder;
 
   /// Called when a flowchart edge stroke or label is tapped.
   ///
@@ -102,6 +123,48 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
   MermaidSceneRenderer? _builtRenderer;
   Map<String, core.FlowNodePaintOverride> _builtNodeOverrides = const {};
   Map<int, core.FlowLinkPaintOverride> _builtLinkOverrides = const {};
+  String? _hoveredNodeId;
+  final _tooltipController = OverlayPortalController(
+    debugLabel: 'Mermaid node tooltip',
+  );
+
+  @override
+  void didUpdateWidget(MermaidDiagram oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final sceneChanged =
+        oldWidget.source != widget.source ||
+        oldWidget.theme != widget.theme ||
+        oldWidget.sceneRenderer != widget.sceneRenderer;
+    if (_hoveredNodeId != null && sceneChanged) {
+      _hoveredNodeId = null;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted && _hoveredNodeId == null) {
+          _tooltipController.hide();
+          widget.onNodeHover?.call(null);
+        }
+      });
+    } else if (oldWidget.nodeTooltipBuilder != widget.nodeTooltipBuilder) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        if (_hoveredNodeId != null && widget.nodeTooltipBuilder != null) {
+          _tooltipController.show();
+        } else {
+          _tooltipController.hide();
+        }
+      });
+    }
+  }
+
+  void _updateHoveredNode(String? id) {
+    if (_hoveredNodeId == id) return;
+    setState(() => _hoveredNodeId = id);
+    if (id != null && widget.nodeTooltipBuilder != null) {
+      _tooltipController.show();
+    } else {
+      _tooltipController.hide();
+    }
+    widget.onNodeHover?.call(id);
+  }
 
   void _rebuildSceneIfNeeded() {
     final renderer = widget.sceneRenderer;
@@ -222,9 +285,9 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
             case core.SceneGroup(:final children):
               walk(children);
             case core.SceneShape(
-                geometry: final core.PathGeometry path,
-                :final stroke,
-              ):
+              geometry: final core.PathGeometry path,
+              :final stroke,
+            ):
               if (stroke != null &&
                   stroke.width > 0 &&
                   stroke.color.alpha > 0 &&
@@ -323,6 +386,24 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
         child: paint,
       );
     }
+
+    final hoveredNodeId = _hoveredNodeId;
+    final tooltipBuilder = widget.nodeTooltipBuilder;
+    final hasNodeInteraction =
+        onNodeTap != null ||
+        widget.onNodeHover != null ||
+        tooltipBuilder != null;
+    if (hasNodeInteraction) {
+      paint = MouseRegion(
+        cursor: hoveredNodeId == null ? MouseCursor.defer : widget.hoverCursor,
+        onHover: (event) {
+          final hit = _hitTest(scene.nodes, event.localPosition);
+          _updateHoveredNode(hit?.$1);
+        },
+        onExit: (_) => _updateHoveredNode(null),
+        child: paint,
+      );
+    }
     Widget diagram = SizedBox(
       width: scene.size.width,
       height: scene.size.height,
@@ -333,6 +414,34 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
         child: paint,
       ),
     );
+
+    if (tooltipBuilder != null) {
+      diagram = OverlayPortal.overlayChildLayoutBuilder(
+        controller: _tooltipController,
+        overlayChildBuilder: (context, info) {
+          final id = _hoveredNodeId;
+          final bounds = id == null ? null : scene.boundsOfNode(id);
+          if (id == null || bounds == null) return const SizedBox.shrink();
+          final below =
+              MatrixUtils.transformPoint(
+                info.childPaintTransform,
+                Offset(bounds.left, bounds.bottom),
+              ) +
+              const Offset(0, 8);
+          final above =
+              MatrixUtils.transformPoint(
+                info.childPaintTransform,
+                Offset(bounds.left, bounds.top),
+              ) -
+              const Offset(0, 8);
+          return CustomSingleChildLayout(
+            delegate: _NodeTooltipLayoutDelegate(below: below, above: above),
+            child: IgnorePointer(child: tooltipBuilder(context, id)),
+          );
+        },
+        child: diagram,
+      );
+    }
 
     if (error != null) {
       // Stale render: dim it and pin a compact error chip on top.
@@ -355,6 +464,39 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     }
     return diagram;
   }
+}
+
+class _NodeTooltipLayoutDelegate extends SingleChildLayoutDelegate {
+  const _NodeTooltipLayoutDelegate({required this.below, required this.above});
+
+  static const _margin = 8.0;
+
+  final Offset below;
+  final Offset above;
+
+  @override
+  BoxConstraints getConstraintsForChild(BoxConstraints constraints) {
+    return BoxConstraints.loose(
+      Size(
+        math.max(0, constraints.maxWidth - _margin * 2),
+        math.max(0, constraints.maxHeight - _margin * 2),
+      ),
+    );
+  }
+
+  @override
+  Offset getPositionForChild(Size size, Size childSize) {
+    final maxX = math.max(_margin, size.width - childSize.width - _margin);
+    final x = below.dx.clamp(_margin, maxX).toDouble();
+    final belowFits = below.dy + childSize.height <= size.height - _margin;
+    final proposedY = belowFits ? below.dy : above.dy - childSize.height;
+    final maxY = math.max(_margin, size.height - childSize.height - _margin);
+    return Offset(x, proposedY.clamp(_margin, maxY).toDouble());
+  }
+
+  @override
+  bool shouldRelayout(_NodeTooltipLayoutDelegate oldDelegate) =>
+      oldDelegate.below != below || oldDelegate.above != above;
 }
 
 class _ErrorChip extends StatelessWidget {

@@ -92,6 +92,24 @@ MermaidView(
 Changing `source` or `theme` still performs a complete render. The demo app
 combines these overrides with node focus, edge metadata, and fit controls.
 
+Desktop and web applications can expose node hover state without adding a
+widget per node. Hover uses the same scene bounds and paint-order precedence as
+node taps. The tooltip is an overlay and does not change diagram geometry.
+
+```dart
+MermaidView(
+  source: source,
+  onNodeHover: (id) => hoveredNodeId.value = id,
+  hoverCursor: SystemMouseCursors.click,
+  nodeTooltipBuilder: (context, id) => Card(
+    child: Padding(
+      padding: const EdgeInsets.all(8),
+      child: Text('Node $id'),
+    ),
+  ),
+)
+```
+
 ## Themes and errors
 
 ```dart

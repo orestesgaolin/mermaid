@@ -1,3 +1,5 @@
+import 'dart:ui' show PointerDeviceKind;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
@@ -13,13 +15,31 @@ void main() {
     await tester.pumpWidget(const MermaidDemoApp());
     await tester.pumpAndSettle();
     expect(
-      find.text('Tap a flowchart node to focus, or an edge to inspect'),
+      find.text('Hover for node ids · tap to focus · tap edges to inspect'),
       findsOneWidget,
     );
     expect(find.textContaining('Viewport '), findsOneWidget);
     expect(find.byIcon(Icons.open_in_full), findsOneWidget);
 
     var scene = _paintedScene(tester);
+    final initialViewport = find.byType(InteractiveViewer);
+    final initialB = scene.boundsOfNode('B')!.center;
+    final initialBViewport = MatrixUtils.transformPoint(
+      tester
+          .widget<InteractiveViewer>(initialViewport)
+          .transformationController!
+          .value,
+      Offset(initialB.x, initialB.y),
+    );
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: const Offset(1390, 890));
+    await mouse.moveTo(tester.getTopLeft(initialViewport) + initialBViewport);
+    await tester.pump();
+    expect(find.text('Node id: B'), findsOneWidget);
+    await mouse.removePointer();
+    await tester.pump();
+    expect(find.text('Node id: B'), findsNothing);
+
     await _tapScenePoint(tester, scene.boundsOfNode('B')!.center);
     await tester.pumpAndSettle();
 
@@ -87,6 +107,31 @@ void main() {
     expect(find.textContaining('Viewport '), findsNWidgets(2));
 
     scene = _paintedScene(tester, within: dialog);
+    final fullscreenViewport = find.descendant(
+      of: dialog,
+      matching: find.byType(InteractiveViewer),
+    );
+    final fullscreenB = scene.boundsOfNode('B')!.center;
+    final fullscreenBViewport = MatrixUtils.transformPoint(
+      tester
+          .widget<InteractiveViewer>(fullscreenViewport)
+          .transformationController!
+          .value,
+      Offset(fullscreenB.x, fullscreenB.y),
+    );
+    final fullscreenMouse = await tester.createGesture(
+      kind: PointerDeviceKind.mouse,
+    );
+    await fullscreenMouse.addPointer(location: const Offset(1390, 890));
+    await fullscreenMouse.moveTo(
+      tester.getTopLeft(fullscreenViewport) + fullscreenBViewport,
+    );
+    await tester.pump();
+    expect(find.text('Node id: B'), findsOneWidget);
+    await fullscreenMouse.removePointer();
+    await tester.pump();
+    expect(find.text('Node id: B'), findsNothing);
+
     await _tapScenePoint(
       tester,
       scene.boundsOfNode('B')!.center,
@@ -105,10 +150,6 @@ void main() {
     expect(
       fullscreenBody.fill?.color.value,
       colors.primaryContainer.toARGB32(),
-    );
-    final fullscreenViewport = find.descendant(
-      of: dialog,
-      matching: find.byType(InteractiveViewer),
     );
     final fullscreenCenter = MatrixUtils.transformPoint(
       tester

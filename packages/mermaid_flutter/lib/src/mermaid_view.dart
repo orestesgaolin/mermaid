@@ -115,6 +115,9 @@ class MermaidView extends StatefulWidget {
     this.errorBuilder,
     this.keepLastGoodSceneOnError = true,
     this.onNodeTap,
+    this.onNodeHover,
+    this.hoverCursor = SystemMouseCursors.click,
+    this.nodeTooltipBuilder,
     this.onEdgeTap,
     this.nodePaintOverrides = const {},
     this.linkPaintOverrides = const {},
@@ -149,6 +152,15 @@ class MermaidView extends StatefulWidget {
 
   /// See [MermaidDiagram.onNodeTap].
   final void Function(String id, String? link)? onNodeTap;
+
+  /// See [MermaidDiagram.onNodeHover].
+  final ValueChanged<String?>? onNodeHover;
+
+  /// See [MermaidDiagram.hoverCursor].
+  final MouseCursor hoverCursor;
+
+  /// See [MermaidDiagram.nodeTooltipBuilder].
+  final MermaidNodeTooltipBuilder? nodeTooltipBuilder;
 
   /// See [MermaidDiagram.onEdgeTap].
   final void Function(String fromId, String toId, int linkIndex)? onEdgeTap;
@@ -433,6 +445,9 @@ class _MermaidViewState extends State<MermaidView>
                 errorBuilder: widget.errorBuilder,
                 keepLastGoodSceneOnError: widget.keepLastGoodSceneOnError,
                 onNodeTap: widget.onNodeTap,
+                onNodeHover: widget.onNodeHover,
+                hoverCursor: widget.hoverCursor,
+                nodeTooltipBuilder: widget.nodeTooltipBuilder,
                 onEdgeTap: widget.onEdgeTap,
                 nodePaintOverrides: widget.nodePaintOverrides,
                 linkPaintOverrides: widget.linkPaintOverrides,
@@ -500,6 +515,9 @@ class _MermaidViewState extends State<MermaidView>
                       errorBuilder: widget.errorBuilder,
                       keepLastGoodSceneOnError: widget.keepLastGoodSceneOnError,
                       onNodeTap: widget.onNodeTap,
+                      onNodeHover: widget.onNodeHover,
+                      hoverCursor: widget.hoverCursor,
+                      nodeTooltipBuilder: widget.nodeTooltipBuilder,
                       onEdgeTap: widget.onEdgeTap,
                       nodePaintOverrides: widget.nodePaintOverrides,
                       linkPaintOverrides: widget.linkPaintOverrides,
