@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 Widget _host(Widget child) => MaterialApp(
@@ -19,6 +20,194 @@ Matrix4 _transform(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('controller focuses a real node at the viewport center', (
+    tester,
+  ) async {
+    const source = 'graph LR\nA[Start]-->B[Current step]-->C[Finish]';
+    final controller = MermaidViewController();
+    String? tappedNode;
+    addTearDown(controller.dispose);
+    await tester.pumpWidget(
+      _host(
+        MermaidView(
+          source: source,
+          controller: controller,
+          onNodeTap: (id, _) => tappedNode = id,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final focus = controller.focusNode('B', zoom: 1.5, animate: false);
+    await tester.pump();
+    await tester.pump();
+    expect(await focus, isTrue);
+
+    final scene = core.Mermaid(
+      measurer: const FlutterTextMeasurer(),
+    ).render(source);
+    final nodeCenter = scene.boundsOf('B')!.center;
+    final viewportPoint = MatrixUtils.transformPoint(
+      controller.transformation,
+      Offset(nodeCenter.x, nodeCenter.y),
+    );
+    expect(viewportPoint.dx, closeTo(300, 1e-6));
+    expect(viewportPoint.dy, closeTo(200, 1e-6));
+    expect(controller.transformation.getMaxScaleOnAxis(), closeTo(1.5, 1e-9));
+    await tester.tapAt(tester.getCenter(find.byType(InteractiveViewer)));
+    expect(tappedNode, 'B');
+  });
+
+  testWidgets('controller uses new source bounds and defines no-op results', (
+    tester,
+  ) async {
+    final detached = MermaidViewController();
+    addTearDown(detached.dispose);
+    expect(await detached.focusNode('A'), isFalse);
+    expect(await detached.fitAll(), isFalse);
+
+    final controller = MermaidViewController();
+    addTearDown(controller.dispose);
+    var source = 'graph LR\nA-->B';
+    late StateSetter updateSource;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              updateSource = setState;
+              return SizedBox(
+                width: 600,
+                height: 400,
+                child: MermaidView(source: source, controller: controller),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(
+      await _runControllerCommand(tester, controller.focusNode('missing')),
+      isFalse,
+    );
+    expect(await controller.focusNode('A', zoom: double.nan), isFalse);
+    updateSource(() => source = 'graph LR\nA-->B-->C[New current step]');
+    final focus = controller.focusNode('C', animate: false);
+    await tester.pump();
+    await tester.pump();
+    expect(await focus, isTrue);
+
+    final scene = core.Mermaid(
+      measurer: const FlutterTextMeasurer(),
+    ).render(source);
+    final center = scene.boundsOf('C')!.center;
+    final viewportPoint = MatrixUtils.transformPoint(
+      controller.transformation,
+      Offset(center.x, center.y),
+    );
+    expect(viewportPoint, const Offset(300, 200));
+
+    updateSource(() => source = 'graph TD\nthis is not valid mermaid');
+    final staleFocus = controller.focusNode('C', animate: false);
+    await tester.pump();
+    await tester.pump();
+    expect(await staleFocus, isFalse);
+  });
+
+  testWidgets(
+    'controller animation and built-in controls share one transform',
+    (tester) async {
+      final controller = MermaidViewController();
+      var notifications = 0;
+      controller.addListener(() => notifications++);
+      addTearDown(controller.dispose);
+      await tester.pumpWidget(
+        _host(MermaidView(source: 'graph TD\nA-->B', controller: controller)),
+      );
+      await tester.pumpAndSettle();
+
+      final beforeButton = controller.transformation;
+      final notificationsBeforeButton = notifications;
+      await tester.tap(find.byIcon(Icons.add));
+      await tester.pump();
+      expect(
+        controller.transformation.getMaxScaleOnAxis(),
+        greaterThan(beforeButton.getMaxScaleOnAxis()),
+      );
+      expect(controller.transformation, equals(_transform(tester)));
+      expect(notifications, greaterThan(notificationsBeforeButton));
+
+      final fit = controller.fitAll(animate: true);
+      await tester.pump();
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 125));
+      expect(controller.transformation, isNot(equals(beforeButton)));
+      await tester.pumpAndSettle();
+      expect(await fit, isTrue);
+      final fitted = controller.transformation;
+
+      await tester.tap(find.byIcon(Icons.keyboard_arrow_left));
+      await tester.pump();
+      expect(controller.transformation, isNot(equals(fitted)));
+      await tester.tap(find.byIcon(Icons.center_focus_strong));
+      await tester.pump();
+      expect(controller.transformation, equals(fitted));
+    },
+  );
+
+  testWidgets('controller swap cancels a pending command and permits reuse', (
+    tester,
+  ) async {
+    final first = MermaidViewController();
+    final second = MermaidViewController();
+    addTearDown(first.dispose);
+    addTearDown(second.dispose);
+    var controller = first;
+    late StateSetter swap;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              swap = setState;
+              return SizedBox(
+                width: 600,
+                height: 400,
+                child: MermaidView(
+                  source: 'graph LR\nA-->B',
+                  controller: controller,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    final pending = first.focusNode('B', animate: false);
+    swap(() => controller = second);
+    await tester.pump();
+    await tester.pump();
+    expect(await pending, isFalse);
+    expect(first.isAttached, isFalse);
+    expect(second.isAttached, isTrue);
+    expect(
+      await _runControllerCommand(
+        tester,
+        second.focusNode('B', animate: false),
+      ),
+      isTrue,
+    );
+
+    swap(() => controller = first);
+    await tester.pump();
+    expect(first.isAttached, isTrue);
+    expect(second.isAttached, isFalse);
+  });
+
   testWidgets('renders the diagram with interactive controls', (tester) async {
     await tester.pumpWidget(
       _host(const MermaidView(source: 'graph TD\nA-->B')),
@@ -137,4 +326,13 @@ void main() {
     expect(find.byIcon(Icons.add), findsNothing);
     expect(find.byType(InteractiveViewer), findsOneWidget);
   });
+}
+
+Future<bool> _runControllerCommand(
+  WidgetTester tester,
+  Future<bool> command,
+) async {
+  await tester.pump();
+  await tester.pump();
+  return command;
 }

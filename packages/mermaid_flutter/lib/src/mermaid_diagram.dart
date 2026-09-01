@@ -23,6 +23,7 @@ class MermaidDiagram extends StatefulWidget {
     this.errorBuilder,
     this.keepLastGoodSceneOnError = true,
     this.onNodeTap,
+    this.onSceneChanged,
   });
 
   /// Called when a diagram node is tapped, with its id and optional click link
@@ -30,6 +31,15 @@ class MermaidDiagram extends StatefulWidget {
   /// carrying an id or link are interactive here; clusters, annotations, edge
   /// strokes, and edge labels do not invoke this callback.
   final void Function(String id, String? link)? onNodeTap;
+
+  /// Called after the frame when a new source and theme produce a render scene.
+  ///
+  /// This is primarily useful to coordinate scene-space geometry with a
+  /// surrounding viewport. The callback is not repeated for ordinary widget
+  /// rebuilds that reuse the same scene, and it is not called for a failed
+  /// render that keeps the last good scene visible. It is safe for this
+  /// callback to update widget state.
+  final ValueChanged<core.RenderScene>? onSceneChanged;
 
   /// Mermaid diagram source text.
   final String source;
@@ -55,6 +65,8 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
   core.MermaidTheme? _builtTheme;
   core.RenderScene? _scene;
   Object? _error;
+  core.RenderScene? _deliveredScene;
+  int _sceneGeneration = 0;
 
   void _rebuildSceneIfNeeded() {
     if (_builtSource == widget.source && _builtTheme == widget.theme) {
@@ -62,6 +74,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     }
     _builtSource = widget.source;
     _builtTheme = widget.theme;
+    _sceneGeneration++;
     try {
       _scene = core.Mermaid(
         measurer: const FlutterTextMeasurer(),
@@ -116,6 +129,23 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       return _DefaultErrorPanel(error: error);
     }
 
+    if (error == null &&
+        widget.onSceneChanged != null &&
+        !identical(_deliveredScene, scene)) {
+      final generation = _sceneGeneration;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted &&
+            generation == _sceneGeneration &&
+            !identical(_deliveredScene, scene)) {
+          final callback = widget.onSceneChanged;
+          if (callback != null) {
+            _deliveredScene = scene;
+            callback(scene);
+          }
+        }
+      });
+    }
+
     final background = scene.background;
     Widget paint = CustomPaint(
       painter: ScenePainter(scene),
@@ -154,7 +184,8 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
             top: 0,
             child: ConstrainedBox(
               constraints: BoxConstraints(
-                  maxWidth: scene.size.width.clamp(200.0, 460.0)),
+                maxWidth: scene.size.width.clamp(200.0, 460.0),
+              ),
               child: _ErrorChip(error: error),
             ),
           ),

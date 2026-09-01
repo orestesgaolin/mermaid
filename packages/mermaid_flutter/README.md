@@ -41,6 +41,26 @@ SizedBox(
 )
 ```
 
+Use `MermaidViewController` when an application needs to follow a changing
+node or control the viewport. Controller commands wait for the updated diagram
+layout and return `false` when the view is detached, layout is unavailable, or
+the node id is unknown.
+
+```dart
+final controller = MermaidViewController();
+
+MermaidView(source: source, controller: controller);
+
+await controller.focusNode('current_step', zoom: 1.5);
+await controller.fitAll(animate: false);
+controller.addListener(() {
+  final matrix = controller.transformation; // A read-only snapshot.
+});
+```
+
+A controller attaches to one view at a time. Remove the view before reusing
+the controller elsewhere, and dispose the controller when its owner is done.
+
 ## Themes and errors
 
 ```dart

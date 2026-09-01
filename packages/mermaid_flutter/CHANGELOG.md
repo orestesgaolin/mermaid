@@ -1,3 +1,9 @@
+## Unreleased
+
+- Add `MermaidViewController` for observable viewport transforms, animated or
+  immediate fit, and node focus by id.
+- Add `MermaidDiagram.onSceneChanged` for post-layout scene geometry access.
+
 ## 0.1.2
 
 - Update `mermaid_core` to 0.1.2 for corrected flowchart, Event Modeling,
