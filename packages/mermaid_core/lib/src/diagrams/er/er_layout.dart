@@ -352,7 +352,9 @@ class _ErLayout {
           final size = measurer.measure(text, baseStyle);
           children.add(SceneText(
             text: text,
-            bounds: Rect.fromLTWH(x + _cellPadX, y + (rowH - size.height) / 2,
+            // Upstream starts text at PADDING / 2 so both sides keep space.
+            bounds: Rect.fromLTWH(x + _cellPadX / 2,
+                y + (rowH - size.height) / 2,
                 size.width, size.height),
             style: baseStyle,
             color: style.color ?? theme.textColor,
