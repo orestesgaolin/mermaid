@@ -32,6 +32,8 @@ No unresolved differences remain from the first two visual feedback passes.
 - `upstream-class-11`: namespaces do not overlap, relation-label backgrounds
   are opaque, and cross-namespace relations enter `Circle` and `Square`
   vertically.
+- `upstream-flowcharts-07`: legacy Font Awesome markers are consumed instead
+  of appearing as literal `fa:fa-*` label text.
 
 ## Source-aligned differences needing font-metric review
 

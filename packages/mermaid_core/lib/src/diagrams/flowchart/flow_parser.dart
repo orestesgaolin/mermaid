@@ -949,6 +949,13 @@ class _FlowParser {
       s = s.substring(1, s.length - 1);
     }
     s = s.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+    final withoutLegacyIcons = s.replaceAll(
+      RegExp(r'fa[bklrs]?:fa-[\w-]+'),
+      '',
+    );
+    if (withoutLegacyIcons != s) {
+      s = withoutLegacyIcons.replaceAll(RegExp(r'[ \t]+'), ' ');
+    }
     return s.trim();
   }
 }

@@ -219,6 +219,17 @@ void main() {
       expect(n.label, 'quoted; text (with) [brackets]');
       expect(n.shape, FlowNodeShape.rect);
     });
+    test('legacy Font Awesome tokens do not become label text', () {
+      expect(
+        parseNode(r'A["fa:fa-cogs DBServer\:SQLAgent"]').label,
+        r'DBServer\:SQLAgent',
+      );
+      expect(parseNode('A[1051 AAA fa:fa-check]').label, '1051 AAA');
+      expect(parseNode('A[before fas:fa-server after]').label, 'before after');
+    });
+    test('ordinary colon labels are preserved', () {
+      expect(parseNode('A[Server:Service 1]').label, 'Server:Service 1');
+    });
     test('br tag becomes newline', () {
       final n = parseNode('A[first<br/>second<br >third]');
       expect(n.label, 'first\nsecond\nthird');
