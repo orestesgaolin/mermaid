@@ -86,6 +86,13 @@ void main() {
         ..addFont(Future.value(ByteData.view(bytes.buffer)));
       await loader.load();
     }
+    const monoPath = '/System/Library/Fonts/SFNSMono.ttf';
+    if (File(monoPath).existsSync()) {
+      final bytes = File(monoPath).readAsBytesSync();
+      final loader = FontLoader('monospace')
+        ..addFont(Future.value(ByteData.view(bytes.buffer)));
+      await loader.load();
+    }
   });
 
   test('builds the first parity review batch', () async {
