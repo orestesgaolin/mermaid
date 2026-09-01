@@ -23,6 +23,44 @@ void main() {
     expect(MermaidTheme.named('nope').mainBkg, MermaidTheme.defaultTheme.mainBkg);
   });
 
+  test('default color scales match Mermaid 11', () {
+    const theme = MermaidTheme.defaultTheme;
+
+    expect(
+      [
+        theme.cScale0,
+        theme.cScale1,
+        theme.cScale2,
+        theme.cScale3,
+        theme.cScale4,
+        theme.cScale5,
+        theme.cScale6,
+        theme.cScale7,
+        theme.cScale8,
+        theme.cScale9,
+        theme.cScale10,
+        theme.cScale11,
+      ],
+      const [
+        Color(0xff8686ff),
+        Color(0xffffff78),
+        Color(0xffd7ff86),
+        Color(0xffc286ff),
+        Color(0xffff86ff),
+        Color(0xffff86c2),
+        Color(0xffff8686),
+        Color(0xffffc286),
+        Color(0xffc2ff86),
+        Color(0xff86ffc2),
+        Color(0xff86ffff),
+        Color(0xff86c2ff),
+      ],
+    );
+    expect(theme.cScaleInv2, const Color(0xffd0b9ff));
+    expect(theme.cScalePeer0, const Color(0xff3939ff));
+    expect(theme.cScalePeer11, const Color(0xff399cff));
+  });
+
   test('themeVariables override colors; primaryColor drives mainBkg', () {
     final t = resolveTheme(
         '%%{init: {"theme": "base", "themeVariables": '
