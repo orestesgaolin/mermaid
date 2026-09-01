@@ -258,24 +258,6 @@ class _EditorPageState extends State<EditorPage> {
     final colors = Theme.of(context).colorScheme;
     final selectedNode = _selectedNodeId;
     final selectedEdge = _selectedEdge;
-    final nodeOverrides = selectedNode == null
-        ? const <String, core.FlowNodePaintOverride>{}
-        : <String, core.FlowNodePaintOverride>{
-            selectedNode: core.FlowNodePaintOverride(
-              fill: core.Color(colors.primaryContainer.toARGB32()),
-              stroke: core.Color(colors.primary.toARGB32()),
-              strokeWidth: 4,
-              textColor: core.Color(colors.onPrimaryContainer.toARGB32()),
-            ),
-          };
-    final linkOverrides = selectedEdge == null
-        ? const <int, core.FlowLinkPaintOverride>{}
-        : <int, core.FlowLinkPaintOverride>{
-            selectedEdge.$3: core.FlowLinkPaintOverride(
-              stroke: core.Color(colors.primary.toARGB32()),
-              strokeWidth: 5,
-            ),
-          };
     // The interactive viewer uses one controller so selection, highlighting,
     // and viewport commands stay synchronized.
     return Stack(
@@ -286,9 +268,9 @@ class _EditorPageState extends State<EditorPage> {
             controller: _viewController,
             theme: _mermaidTheme,
             backgroundColor: background,
-            allowFullscreen: false,
-            nodePaintOverrides: nodeOverrides,
-            linkPaintOverrides: linkOverrides,
+            nodePaintOverrides: _nodeOverrides(selectedNode, colors),
+            linkPaintOverrides: _linkOverrides(selectedEdge, colors),
+            onRequestFullscreen: () => unawaited(_openFullscreen()),
             onNodeTap: (id, _) {
               setState(() {
                 _selectedNodeId = id;
@@ -303,42 +285,239 @@ class _EditorPageState extends State<EditorPage> {
             errorBuilder: (context, error) => _ErrorBanner(error: error),
           ),
         ),
-        if (selectedNode != null || selectedEdge != null)
-          Positioned(
-            left: 12,
-            top: 12,
-            child: Material(
-              elevation: 2,
-              color: colors.surfaceContainerHigh,
-              borderRadius: BorderRadius.circular(8),
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 10),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(
-                      selectedNode != null
-                          ? 'Node: $selectedNode'
-                          : 'Edge ${selectedEdge!.$3}: '
-                              '${selectedEdge.$1} → ${selectedEdge.$2}',
-                    ),
-                    IconButton(
-                      tooltip: 'Clear highlight',
-                      visualDensity: VisualDensity.compact,
-                      icon: const Icon(Icons.close, size: 18),
-                      onPressed: () => setState(() {
-                        _selectedNodeId = null;
-                        _selectedEdge = null;
-                      }),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+        Positioned(
+          left: 12,
+          top: 12,
+          child: _SelectionCard(
+            selectedNode: selectedNode,
+            selectedEdge: selectedEdge,
+            onClear: () => setState(() {
+              _selectedNodeId = null;
+              _selectedEdge = null;
+            }),
           ),
+        ),
+        Positioned(
+          left: 12,
+          bottom: 12,
+          child: _ViewportStatus(controller: _viewController),
+        ),
       ],
     );
   }
+
+  Map<String, core.FlowNodePaintOverride> _nodeOverrides(
+    String? selectedNode,
+    ColorScheme colors,
+  ) =>
+      selectedNode == null
+          ? const {}
+          : {
+              selectedNode: core.FlowNodePaintOverride(
+                fill: core.Color(colors.primaryContainer.toARGB32()),
+                stroke: core.Color(colors.primary.toARGB32()),
+                strokeWidth: 4,
+                textColor: core.Color(colors.onPrimaryContainer.toARGB32()),
+              ),
+            };
+
+  Map<int, core.FlowLinkPaintOverride> _linkOverrides(
+    (String, String, int)? selectedEdge,
+    ColorScheme colors,
+  ) =>
+      selectedEdge == null
+          ? const {}
+          : {
+              selectedEdge.$3: core.FlowLinkPaintOverride(
+                stroke: core.Color(colors.primary.toARGB32()),
+                strokeWidth: 5,
+              ),
+            };
+
+  Future<void> _openFullscreen() async {
+    final fullscreenController = MermaidViewController();
+    var selectedNode = _selectedNodeId;
+    var selectedEdge = _selectedEdge;
+    try {
+      await showDialog<void>(
+        context: context,
+        barrierColor: Colors.black54,
+        builder: (dialogContext) => StatefulBuilder(
+          builder: (dialogContext, updateDialog) {
+            final colors = Theme.of(dialogContext).colorScheme;
+            return Dialog(
+              insetPadding: const EdgeInsets.all(24),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: MermaidView(
+                      source: _renderedSource,
+                      controller: fullscreenController,
+                      theme: _mermaidTheme,
+                      backgroundColor: Color(_mermaidTheme.background.value),
+                      allowFullscreen: false,
+                      nodePaintOverrides: _nodeOverrides(selectedNode, colors),
+                      linkPaintOverrides: _linkOverrides(selectedEdge, colors),
+                      onNodeTap: (id, _) {
+                        updateDialog(() {
+                          selectedNode = id;
+                          selectedEdge = null;
+                        });
+                        if (mounted) {
+                          setState(() {
+                            _selectedNodeId = id;
+                            _selectedEdge = null;
+                          });
+                        }
+                        unawaited(
+                          fullscreenController.focusNode(id, animate: true),
+                        );
+                      },
+                      onEdgeTap: (from, to, index) {
+                        updateDialog(() {
+                          selectedNode = null;
+                          selectedEdge = (from, to, index);
+                        });
+                        if (mounted) {
+                          setState(() {
+                            _selectedNodeId = null;
+                            _selectedEdge = (from, to, index);
+                          });
+                        }
+                      },
+                      errorBuilder: (context, error) =>
+                          _ErrorBanner(error: error),
+                    ),
+                  ),
+                  Positioned(
+                    left: 12,
+                    top: 12,
+                    child: _SelectionCard(
+                      selectedNode: selectedNode,
+                      selectedEdge: selectedEdge,
+                      onClear: () {
+                        updateDialog(() {
+                          selectedNode = null;
+                          selectedEdge = null;
+                        });
+                        if (mounted) {
+                          setState(() {
+                            _selectedNodeId = null;
+                            _selectedEdge = null;
+                          });
+                        }
+                      },
+                    ),
+                  ),
+                  Positioned(
+                    left: 12,
+                    bottom: 12,
+                    child: _ViewportStatus(controller: fullscreenController),
+                  ),
+                  Positioned(
+                    right: 8,
+                    top: 8,
+                    child: IconButton.filledTonal(
+                      tooltip: 'Close fullscreen',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(dialogContext).pop(),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        ),
+      );
+    } finally {
+      fullscreenController.dispose();
+    }
+  }
+}
+
+class _SelectionCard extends StatelessWidget {
+  const _SelectionCard({
+    required this.selectedNode,
+    required this.selectedEdge,
+    required this.onClear,
+  });
+
+  final String? selectedNode;
+  final (String, String, int)? selectedEdge;
+  final VoidCallback onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = Theme.of(context).colorScheme;
+    final hasSelection = selectedNode != null || selectedEdge != null;
+    return Material(
+      elevation: 2,
+      color: colors.surfaceContainerHigh,
+      borderRadius: BorderRadius.circular(8),
+      child: Padding(
+        padding: EdgeInsets.only(left: 10, right: hasSelection ? 2 : 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasSelection ? Icons.ads_click : Icons.touch_app_outlined,
+              size: 18,
+              color: colors.primary,
+            ),
+            const SizedBox(width: 8),
+            Text(
+              selectedNode != null
+                  ? 'Node: $selectedNode · focused and restyled'
+                  : selectedEdge != null
+                      ? 'Edge ${selectedEdge!.$3}: '
+                          '${selectedEdge!.$1} → ${selectedEdge!.$2}'
+                      : 'Tap a flowchart node to focus, or an edge to inspect',
+            ),
+            if (hasSelection)
+              IconButton(
+                tooltip: 'Clear highlight',
+                visualDensity: VisualDensity.compact,
+                icon: const Icon(Icons.close, size: 18),
+                onPressed: onClear,
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ViewportStatus extends StatelessWidget {
+  const _ViewportStatus({required this.controller});
+
+  final MermaidViewController controller;
+
+  @override
+  Widget build(BuildContext context) => AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          final matrix = controller.transformation;
+          final zoom = (matrix.getMaxScaleOnAxis() * 100).round();
+          final x = matrix.storage[12].round();
+          final y = matrix.storage[13].round();
+          return Tooltip(
+            message: 'Observed through MermaidViewController.transformation',
+            child: Material(
+              elevation: 1,
+              color: Theme.of(context).colorScheme.surfaceContainerHigh,
+              borderRadius: BorderRadius.circular(8),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                child: Text(
+                  'Viewport $zoom% · pan $x, $y',
+                  style: Theme.of(context).textTheme.labelMedium,
+                ),
+              ),
+            ),
+          );
+        },
+      );
 }
 
 class _ErrorBanner extends StatelessWidget {

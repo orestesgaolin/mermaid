@@ -45,6 +45,7 @@ void main() {
     var theme = core.MermaidTheme.defaultTheme;
     var nodeOverrides = const <String, core.FlowNodePaintOverride>{};
     var linkOverrides = const <int, core.FlowLinkPaintOverride>{};
+    final deliveredScenes = <core.RenderScene>[];
     late StateSetter update;
 
     core.RenderScene renderer(String value, core.MermaidTheme valueTheme) {
@@ -67,6 +68,7 @@ void main() {
                 sceneRenderer: renderer,
                 nodePaintOverrides: nodeOverrides,
                 linkPaintOverrides: linkOverrides,
+                onSceneChanged: deliveredScenes.add,
               );
             },
           ),
@@ -75,7 +77,9 @@ void main() {
     );
     await tester.pump();
     expect(fullRenders, 1);
+    expect(deliveredScenes, hasLength(1));
     final base = _paintedScene(tester);
+    expect(deliveredScenes.single, same(base));
 
     update(() {
       nodeOverrides = const {
@@ -94,6 +98,11 @@ void main() {
     });
     await tester.pump();
     expect(fullRenders, 1);
+    expect(
+      deliveredScenes,
+      hasLength(1),
+      reason: 'paint-only changes do not publish new geometry',
+    );
     final highlighted = _paintedScene(tester);
     expect(highlighted, isNot(same(base)));
     expect(highlighted.size, base.size);
@@ -120,6 +129,7 @@ void main() {
     });
     await tester.pump();
     expect(fullRenders, 1);
+    expect(deliveredScenes, hasLength(1));
     expect(_paintedScene(tester), same(base));
 
     update(() {
@@ -127,12 +137,14 @@ void main() {
     });
     await tester.pump();
     expect(fullRenders, 2, reason: 'font metrics require a complete render');
+    expect(deliveredScenes, hasLength(2));
 
     update(() {
       source = StringBuffer('${source.toString()} --> N50[Step 50]');
     });
     await tester.pump();
     expect(fullRenders, 3, reason: 'structural source changes require a complete render');
+    expect(deliveredScenes, hasLength(3));
   });
 }
 

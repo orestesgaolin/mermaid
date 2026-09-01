@@ -97,7 +97,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
   core.RenderScene? _scene;
   core.RenderScene? _baseScene;
   Object? _error;
-  core.RenderScene? _deliveredScene;
+  int _deliveredSceneGeneration = -1;
   int _sceneGeneration = 0;
   MermaidSceneRenderer? _builtRenderer;
   Map<String, core.FlowNodePaintOverride> _builtNodeOverrides = const {};
@@ -278,18 +278,20 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       return _DefaultErrorPanel(error: error);
     }
 
+    final callbackScene = _baseScene;
     if (error == null &&
+        callbackScene != null &&
         widget.onSceneChanged != null &&
-        !identical(_deliveredScene, scene)) {
+        _deliveredSceneGeneration != _sceneGeneration) {
       final generation = _sceneGeneration;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (mounted &&
             generation == _sceneGeneration &&
-            !identical(_deliveredScene, scene)) {
+            _deliveredSceneGeneration != generation) {
           final callback = widget.onSceneChanged;
           if (callback != null) {
-            _deliveredScene = scene;
-            callback(scene);
+            _deliveredSceneGeneration = generation;
+            callback(callbackScene);
           }
         }
       });

@@ -12,12 +12,18 @@ void main() {
     addTearDown(() => tester.binding.setSurfaceSize(null));
     await tester.pumpWidget(const MermaidDemoApp());
     await tester.pumpAndSettle();
+    expect(
+      find.text('Tap a flowchart node to focus, or an edge to inspect'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('Viewport '), findsOneWidget);
+    expect(find.byIcon(Icons.open_in_full), findsOneWidget);
 
     var scene = _paintedScene(tester);
     await _tapScenePoint(tester, scene.boundsOfNode('B')!.center);
     await tester.pumpAndSettle();
 
-    expect(find.text('Node: B'), findsOneWidget);
+    expect(find.textContaining('Node: B'), findsOneWidget);
     scene = _paintedScene(tester);
     final colors = Theme.of(
       tester.element(find.byType(MermaidView)),
@@ -48,6 +54,10 @@ void main() {
         from: tester.getSize(viewport).center(Offset.zero),
       ),
     );
+    expect(
+      _viewportStatusText(tester),
+      startsWith('Viewport ${(_viewportScale(tester) * 100).round()}%'),
+    );
 
     final edgeLabel = _groups(scene.nodes).firstWhere(
       (group) =>
@@ -68,11 +78,94 @@ void main() {
     ).firstWhere((shape) => shape.paintRole == core.ScenePaintRole.edgeStroke);
     expect(stroke.stroke?.color.value, colors.primary.toARGB32());
     expect(stroke.stroke?.width, 5);
+
+    await tester.tap(find.byIcon(Icons.open_in_full));
+    await tester.pumpAndSettle();
+    final dialog = find.byType(Dialog);
+    expect(dialog, findsOneWidget);
+    expect(find.byType(MermaidView), findsNWidgets(2));
+    expect(find.textContaining('Viewport '), findsNWidgets(2));
+
+    scene = _paintedScene(tester, within: dialog);
+    await _tapScenePoint(
+      tester,
+      scene.boundsOfNode('B')!.center,
+      within: dialog,
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('Node: B'), findsNWidgets(2));
+    scene = _paintedScene(tester, within: dialog);
+    final fullscreenNode = _groups(
+      scene.nodes,
+    ).firstWhere((group) => group.id == 'B');
+    final fullscreenBody = _shapes(
+      fullscreenNode.children,
+    ).firstWhere((shape) => shape.paintRole == core.ScenePaintRole.nodeBody);
+    expect(
+      fullscreenBody.fill?.color.value,
+      colors.primaryContainer.toARGB32(),
+    );
+    final fullscreenViewport = find.descendant(
+      of: dialog,
+      matching: find.byType(InteractiveViewer),
+    );
+    final fullscreenCenter = MatrixUtils.transformPoint(
+      tester
+          .widget<InteractiveViewer>(fullscreenViewport)
+          .transformationController!
+          .value,
+      Offset(
+        scene.boundsOfNode('B')!.center.x,
+        scene.boundsOfNode('B')!.center.y,
+      ),
+    );
+    expect(
+      fullscreenCenter,
+      within(
+        distance: 0.01,
+        from: tester.getSize(fullscreenViewport).center(Offset.zero),
+      ),
+    );
+    expect(
+      _viewportStatusText(tester, within: dialog),
+      startsWith(
+        'Viewport ${(_viewportScale(tester, within: dialog) * 100).round()}%',
+      ),
+    );
+    await tester.tap(find.byTooltip('Close fullscreen'));
+    await tester.pumpAndSettle();
+    expect(find.byType(Dialog), findsNothing);
+    expect(find.textContaining('Node: B'), findsOneWidget);
   });
 }
 
-Future<void> _tapScenePoint(WidgetTester tester, core.Point point) async {
-  final viewport = find.byType(InteractiveViewer);
+double _viewportScale(WidgetTester tester, {Finder? within}) {
+  final viewport = within == null
+      ? find.byType(InteractiveViewer)
+      : find.descendant(of: within, matching: find.byType(InteractiveViewer));
+  return tester
+      .widget<InteractiveViewer>(viewport)
+      .transformationController!
+      .value
+      .getMaxScaleOnAxis();
+}
+
+String _viewportStatusText(WidgetTester tester, {Finder? within}) {
+  final status = within == null
+      ? find.textContaining('Viewport ')
+      : find.descendant(of: within, matching: find.textContaining('Viewport '));
+  return tester.widget<Text>(status).data!;
+}
+
+Future<void> _tapScenePoint(
+  WidgetTester tester,
+  core.Point point, {
+  Finder? within,
+}) async {
+  final viewport = within == null
+      ? find.byType(InteractiveViewer)
+      : find.descendant(of: within, matching: find.byType(InteractiveViewer));
   final controller = tester
       .widget<InteractiveViewer>(viewport)
       .transformationController!;
@@ -83,12 +176,12 @@ Future<void> _tapScenePoint(WidgetTester tester, core.Point point) async {
   await tester.tapAt(tester.getTopLeft(viewport) + transformed);
 }
 
-core.RenderScene _paintedScene(WidgetTester tester) {
+core.RenderScene _paintedScene(WidgetTester tester, {Finder? within}) {
+  final diagram = within == null
+      ? find.byType(MermaidDiagram)
+      : find.descendant(of: within, matching: find.byType(MermaidDiagram));
   final paints = tester.widgetList<CustomPaint>(
-    find.descendant(
-      of: find.byType(MermaidDiagram),
-      matching: find.byType(CustomPaint),
-    ),
+    find.descendant(of: diagram, matching: find.byType(CustomPaint)),
   );
   final paint = paints.singleWhere((value) => value.painter is ScenePainter);
   return (paint.painter! as ScenePainter).scene;

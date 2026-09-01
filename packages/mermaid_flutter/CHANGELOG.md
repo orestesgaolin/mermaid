@@ -4,7 +4,8 @@
   `MermaidView`, reusing the parsed and laid-out base scene.
 - Add `MermaidViewController` for observable viewport transforms, animated or
   immediate fit, and node focus by id.
-- Add `MermaidDiagram.onSceneChanged` for post-layout scene geometry access.
+- Add `MermaidDiagram.onSceneChanged` for post-layout scene geometry access;
+  paint-only override changes do not emit a new geometry callback.
 - Add `onEdgeTap` to `MermaidDiagram` and `MermaidView`, with precise stroke
   and label hit testing and stable Mermaid link indices.
 
