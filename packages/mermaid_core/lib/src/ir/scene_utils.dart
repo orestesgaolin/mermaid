@@ -110,6 +110,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
         :final semanticLabel,
         :final link,
         :final tooltip,
+        :final edge,
         :final children
       ) =>
         SceneGroup(
@@ -118,6 +119,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
           semanticLabel: semanticLabel,
           link: link,
           tooltip: tooltip,
+          edge: edge,
           children: [for (final c in children) translateSceneNode(c, dx, dy)],
         ),
       SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
@@ -143,6 +145,96 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
           underline: underline,
         ),
     };
+
+/// Shortest scene-space distance from [point] to the painted path centreline.
+///
+/// Lines are measured exactly. Quadratic and cubic curves are adaptively
+/// flattened until their control points are within [flatness] of the chord.
+/// Returns positive infinity when the path contains no drawable segment.
+double distanceToPath(PathGeometry path, Point point, {double flatness = 0.5}) {
+  if (!flatness.isFinite || flatness <= 0) {
+    throw ArgumentError.value(flatness, 'flatness', 'must be finite and > 0');
+  }
+  var distance = double.infinity;
+  Point? current;
+  Point? subpathStart;
+
+  void segment(Point a, Point b) {
+    distance = math.min(distance, _distanceToSegment(point, a, b));
+  }
+
+  void quadratic(Point p0, Point c, Point p1, int depth) {
+    if (depth >= 12 || _distanceToSegment(c, p0, p1) <= flatness) {
+      segment(p0, p1);
+      return;
+    }
+    final p01 = _midpoint(p0, c);
+    final p12 = _midpoint(c, p1);
+    final mid = _midpoint(p01, p12);
+    quadratic(p0, p01, mid, depth + 1);
+    quadratic(mid, p12, p1, depth + 1);
+  }
+
+  void cubic(Point p0, Point c1, Point c2, Point p1, int depth) {
+    final flat = math.max(
+      _distanceToSegment(c1, p0, p1),
+      _distanceToSegment(c2, p0, p1),
+    );
+    if (depth >= 12 || flat <= flatness) {
+      segment(p0, p1);
+      return;
+    }
+    final p01 = _midpoint(p0, c1);
+    final p12 = _midpoint(c1, c2);
+    final p23 = _midpoint(c2, p1);
+    final p012 = _midpoint(p01, p12);
+    final p123 = _midpoint(p12, p23);
+    final mid = _midpoint(p012, p123);
+    cubic(p0, p01, p012, mid, depth + 1);
+    cubic(mid, p123, p23, p1, depth + 1);
+  }
+
+  for (final command in path.commands) {
+    switch (command) {
+      case MoveTo(:final p):
+        current = p;
+        subpathStart = p;
+      case LineTo(:final p):
+        if (current != null) segment(current, p);
+        current = p;
+      case QuadTo(:final c, :final p):
+        if (current != null) quadratic(current, c, p, 0);
+        current = p;
+      case CubicTo(:final c1, :final c2, :final p):
+        if (current != null) cubic(current, c1, c2, p, 0);
+        current = p;
+      case ClosePath():
+        if (current != null && subpathStart != null) {
+          segment(current, subpathStart);
+          current = subpathStart;
+        }
+    }
+  }
+  return distance;
+}
+
+Point _midpoint(Point a, Point b) => Point((a.x + b.x) / 2, (a.y + b.y) / 2);
+
+double _distanceToSegment(Point p, Point a, Point b) {
+  final dx = b.x - a.x;
+  final dy = b.y - a.y;
+  final lengthSquared = dx * dx + dy * dy;
+  if (lengthSquared == 0) {
+    return math.sqrt(
+      (p.x - a.x) * (p.x - a.x) + (p.y - a.y) * (p.y - a.y),
+    );
+  }
+  final t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared)
+      .clamp(0.0, 1.0);
+  final x = a.x + t * dx;
+  final y = a.y + t * dy;
+  return math.sqrt((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y));
+}
 
 /// Translates a fill's gradient coordinates (a solid fill is returned as-is).
 Fill? _translateFill(Fill? fill, double dx, double dy) {

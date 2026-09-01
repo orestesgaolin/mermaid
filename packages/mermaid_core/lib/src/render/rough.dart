@@ -35,7 +35,10 @@ SceneNode _roughenNode(SceneNode node, int seed) {
         :final children,
         :final id,
         :final role,
-        :final semanticLabel
+        :final semanticLabel,
+        :final link,
+        :final tooltip,
+        :final edge
       ):
       // Math expressions stay crisp — sketching glyph outlines is illegible.
       if (id == mathSceneGroupId) return node;
@@ -43,6 +46,9 @@ SceneNode _roughenNode(SceneNode node, int seed) {
         id: id,
         role: role,
         semanticLabel: semanticLabel,
+        link: link,
+        tooltip: tooltip,
+        edge: edge,
         children: [for (final c in children) _roughenNode(c, seed)],
       );
     case SceneText():

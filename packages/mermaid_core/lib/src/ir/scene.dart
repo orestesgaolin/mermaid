@@ -40,6 +40,7 @@ class SceneGroup extends SceneNode {
     this.semanticLabel,
     this.link,
     this.tooltip,
+    this.edge,
   });
 
   /// Stable identifier (e.g. flowchart node id) for hit-testing/interactivity.
@@ -59,7 +60,22 @@ class SceneGroup extends SceneNode {
 
   /// Hover/tap tooltip text.
   final String? tooltip;
+
+  /// Typed flow edge identity used by interaction layers.
+  final SceneEdgeMetadata? edge;
   final List<SceneNode> children;
+}
+
+class SceneEdgeMetadata {
+  const SceneEdgeMetadata({
+    required this.fromId,
+    required this.toId,
+    required this.linkIndex,
+  });
+
+  final String fromId;
+  final String toId;
+  final int linkIndex;
 }
 
 enum SceneGroupRole { node, cluster, edge, edgeLabel, annotation, internal }

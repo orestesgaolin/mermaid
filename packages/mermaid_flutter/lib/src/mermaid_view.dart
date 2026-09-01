@@ -115,6 +115,7 @@ class MermaidView extends StatefulWidget {
     this.errorBuilder,
     this.keepLastGoodSceneOnError = true,
     this.onNodeTap,
+    this.onEdgeTap,
     this.minScale = 0.2,
     this.maxScale = 8.0,
     this.zoomStep = 1.25,
@@ -146,6 +147,9 @@ class MermaidView extends StatefulWidget {
 
   /// See [MermaidDiagram.onNodeTap].
   final void Function(String id, String? link)? onNodeTap;
+
+  /// See [MermaidDiagram.onEdgeTap].
+  final void Function(String fromId, String toId, int linkIndex)? onEdgeTap;
 
   /// Zoom bounds and the factor applied per zoom-button press.
   final double minScale;
@@ -421,6 +425,7 @@ class _MermaidViewState extends State<MermaidView>
                 errorBuilder: widget.errorBuilder,
                 keepLastGoodSceneOnError: widget.keepLastGoodSceneOnError,
                 onNodeTap: widget.onNodeTap,
+                onEdgeTap: widget.onEdgeTap,
                 minScale: widget.minScale,
                 maxScale: widget.maxScale,
                 backgroundColor: widget.backgroundColor ?? Colors.white,
@@ -485,6 +490,7 @@ class _MermaidViewState extends State<MermaidView>
                       errorBuilder: widget.errorBuilder,
                       keepLastGoodSceneOnError: widget.keepLastGoodSceneOnError,
                       onNodeTap: widget.onNodeTap,
+                      onEdgeTap: widget.onEdgeTap,
                       onSceneChanged: _handleSceneChanged,
                     ),
                   ),

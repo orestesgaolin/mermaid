@@ -162,7 +162,8 @@ RenderScene layoutFlowchart(
   );
   final fragment = _layoutGraph(
       graph, measurer, theme, baseStyle, engine,
-      elkOptions: elkOptions ?? const elk.ElkLayoutOptions());
+      elkOptions: elkOptions ?? const elk.ElkLayoutOptions(),
+      originalLinkIndices: List<int>.generate(graph.edges.length, (i) => i));
   var sceneNodes = fragment.nodes;
   var bounds = fragment.bounds;
 
@@ -241,6 +242,7 @@ _Fragment _layoutGraph(
   TextStyleSpec baseStyle,
   String engine, {
   required elk.ElkLayoutOptions elkOptions,
+  required List<int> originalLinkIndices,
 }) {
   // --- 0. Subgraphs with their own direction become recursive fragments. ---
   // dagre has no per-cluster rankdir, so (like upstream mermaid) such a
@@ -304,6 +306,15 @@ _Fragment _layoutGraph(
         parentIndex: orig.parentIndex == root ? null : remap[orig.parentIndex!],
       ));
     }
+    final subEdges = <FlowEdge>[];
+    final subLinkIndices = <int>[];
+    for (var i = 0; i < graph.edges.length; i++) {
+      final edge = graph.edges[i];
+      if (memberIds.contains(edge.from) && memberIds.contains(edge.to)) {
+        subEdges.add(edge);
+        subLinkIndices.add(originalLinkIndices[i]);
+      }
+    }
     final fragment = _layoutGraph(
       FlowGraph(
         direction: effDir[root],
@@ -311,10 +322,7 @@ _Fragment _layoutGraph(
           for (final e in graph.nodes.entries)
             if (memberIds.contains(e.key)) e.key: e.value,
         },
-        edges: [
-          for (final e in graph.edges)
-            if (memberIds.contains(e.from) && memberIds.contains(e.to)) e,
-        ],
+        edges: subEdges,
         subgraphs: subSgs,
         classDefs: graph.classDefs,
       ),
@@ -326,6 +334,7 @@ _Fragment _layoutGraph(
       // doesn't model clusters, stays on dagre for the fragment).
       engine == 'elk' ? 'elk' : 'dagre',
       elkOptions: elkOptions,
+      originalLinkIndices: subLinkIndices,
     );
     final titleSize = sgs[root].title.isEmpty
         ? Size.zero
@@ -755,13 +764,20 @@ _Fragment _layoutGraph(
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
     if (isAbsorbedEdge(e)) continue; // Rendered inside the cluster fragment.
+    final linkIndex = originalLinkIndices[i];
     final groupId = 'edge_${e.from}_${e.to}_$i';
+    final metadata = SceneEdgeMetadata(
+      fromId: e.from,
+      toId: e.to,
+      linkIndex: linkIndex,
+    );
     if (e.stroke == EdgeStroke.invisible) {
       // Keep an (empty) group so the edge still participates in spacing and
       // hit-testing structure, but paint nothing.
       edgeGroups.add(SceneGroup(
         id: groupId,
         role: SceneGroupRole.edge,
+        edge: metadata,
         children: const [],
       ));
       continue;
@@ -785,12 +801,13 @@ _Fragment _layoutGraph(
         id: groupId,
         role: SceneGroupRole.edge,
         semanticLabel: e.label,
+        edge: metadata,
         children: loopNodes,
       ));
       final labelSize = edgeLabelSizes[i];
       if (labelSize != null) {
         edgeLabelGroups.add(_edgeLabelGroup(
-            e, i, labelCenter, labelSize, baseStyle, theme,
+            e, i, linkIndex, labelCenter, labelSize, baseStyle, theme,
             math: edgeMath[i]));
       }
       continue;
@@ -913,6 +930,7 @@ _Fragment _layoutGraph(
       id: groupId,
       role: SceneGroupRole.edge,
       semanticLabel: e.label,
+      edge: metadata,
       children: children,
     ));
 
@@ -926,7 +944,7 @@ _Fragment _layoutGraph(
       final labelCenter = _nudgeEdgeLabel(
           anchor.point, anchor.tangent, labelSize, edgeLabelObstacles);
       edgeLabelGroups.add(_edgeLabelGroup(
-          e, i, labelCenter, labelSize, baseStyle, theme,
+          e, i, linkIndex, labelCenter, labelSize, baseStyle, theme,
           math: edgeMath[i]));
     }
   }
@@ -1004,7 +1022,8 @@ _Fragment _layoutGraph(
 
 SceneGroup _edgeLabelGroup(
   FlowEdge e,
-  int index,
+  int idIndex,
+  int linkIndex,
   Point labelCenter,
   Size labelSize,
   TextStyleSpec baseStyle,
@@ -1015,8 +1034,13 @@ SceneGroup _edgeLabelGroup(
   final bg = Rect.fromCenter(
       labelCenter, labelSize.width + 2 * pad, labelSize.height + 2 * pad);
   return SceneGroup(
-    id: 'edgelabel_${e.from}_${e.to}_$index',
+    id: 'edgelabel_${e.from}_${e.to}_$idIndex',
     role: SceneGroupRole.edgeLabel,
+    edge: SceneEdgeMetadata(
+      fromId: e.from,
+      toId: e.to,
+      linkIndex: linkIndex,
+    ),
     children: [
       SceneShape(
         // Solid background: ELK routes the edge straight through the label, so a
@@ -2455,6 +2479,7 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
         :final semanticLabel,
         :final link,
         :final tooltip,
+        :final edge,
         :final children
       ) =>
         SceneGroup(
@@ -2463,6 +2488,7 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
           semanticLabel: semanticLabel,
           link: link,
           tooltip: tooltip,
+          edge: edge,
           children: [for (final c in children) _translateNode(c, dx, dy)],
         ),
       SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(

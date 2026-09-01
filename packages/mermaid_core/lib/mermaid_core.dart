@@ -38,7 +38,7 @@ export 'src/diagrams/xychart/xychart.dart';
 export 'src/geometry.dart';
 export 'src/ir/scene.dart';
 export 'src/ir/scene_utils.dart'
-    show RenderSceneBounds, sceneBounds, geometryBounds;
+    show RenderSceneBounds, sceneBounds, geometryBounds, distanceToPath;
 export 'src/mermaid.dart';
 export 'src/parse_error.dart';
 export 'src/render/svg_renderer.dart';

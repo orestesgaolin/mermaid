@@ -3,6 +3,8 @@
 - Add `MermaidViewController` for observable viewport transforms, animated or
   immediate fit, and node focus by id.
 - Add `MermaidDiagram.onSceneChanged` for post-layout scene geometry access.
+- Add `onEdgeTap` to `MermaidDiagram` and `MermaidView`, with precise stroke
+  and label hit testing and stable Mermaid link indices.
 
 ## 0.1.2
 

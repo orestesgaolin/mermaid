@@ -1,3 +1,8 @@
+## Unreleased
+
+- Add structured flowchart edge metadata and scene-space path distance
+  measurement for precise interaction layers.
+
 ## 0.1.2
 
 - Route flowchart edges into subgraphs with bends that more closely match

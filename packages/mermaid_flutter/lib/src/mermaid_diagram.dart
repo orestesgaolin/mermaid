@@ -23,6 +23,7 @@ class MermaidDiagram extends StatefulWidget {
     this.errorBuilder,
     this.keepLastGoodSceneOnError = true,
     this.onNodeTap,
+    this.onEdgeTap,
     this.onSceneChanged,
   });
 
@@ -31,6 +32,13 @@ class MermaidDiagram extends StatefulWidget {
   /// carrying an id or link are interactive here; clusters, annotations, edge
   /// strokes, and edge labels do not invoke this callback.
   final void Function(String id, String? link)? onNodeTap;
+
+  /// Called when a flowchart edge stroke or label is tapped.
+  ///
+  /// Stroke hit testing extends 8 logical pixels in scene space beyond the
+  /// painted half-width. Dashed strokes use a continuous centreline hit area.
+  /// Node hit regions take precedence when they overlap an edge.
+  final void Function(String fromId, String toId, int linkIndex)? onEdgeTap;
 
   /// Called after the frame when a new source and theme produce a render scene.
   ///
@@ -116,6 +124,65 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     return found;
   }
 
+  core.SceneEdgeMetadata? _hitTestEdge(
+    List<core.SceneNode> nodes,
+    Offset position,
+  ) {
+    core.SceneEdgeMetadata? found;
+    final point = core.Point(position.dx, position.dy);
+
+    bool strokeHit(core.SceneGroup group) {
+      if (group.children.isEmpty) return false;
+      var hit = false;
+      void walk(Iterable<core.SceneNode> children) {
+        for (final child in children) {
+          switch (child) {
+            case core.SceneGroup(:final children):
+              walk(children);
+            case core.SceneShape(
+                geometry: final core.PathGeometry path,
+                :final stroke,
+              ):
+              if (stroke != null &&
+                  stroke.width > 0 &&
+                  stroke.color.alpha > 0 &&
+                  core.distanceToPath(path, point) <= 8 + stroke.width / 2) {
+                hit = true;
+              }
+            case core.SceneShape():
+            case core.SceneText():
+          }
+        }
+      }
+
+      // Flowchart edge groups emit the main path first. Marker geometry is not
+      // part of the stroke target; in hand-drawn scenes the first child becomes
+      // a nested group containing the rough path strokes.
+      walk([group.children.first]);
+      return hit;
+    }
+
+    void walk(Iterable<core.SceneNode> children) {
+      for (final child in children) {
+        if (child is! core.SceneGroup) continue;
+        final edge = child.edge;
+        if (edge != null) {
+          final hit = switch (child.role) {
+            core.SceneGroupRole.edgeLabel =>
+              core.sceneBounds(child.children)?.contains(point) ?? false,
+            core.SceneGroupRole.edge => strokeHit(child),
+            _ => false,
+          };
+          if (hit) found = edge;
+        }
+        walk(child.children);
+      }
+    }
+
+    walk(nodes);
+    return found;
+  }
+
   @override
   Widget build(BuildContext context) {
     _rebuildSceneIfNeeded();
@@ -152,12 +219,22 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       size: Size(scene.size.width, scene.size.height),
     );
     final onNodeTap = widget.onNodeTap;
-    if (onNodeTap != null) {
+    final onEdgeTap = widget.onEdgeTap;
+    if (onNodeTap != null || onEdgeTap != null) {
       paint = GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapUp: (d) {
           final hit = _hitTest(scene.nodes, d.localPosition);
-          if (hit != null) onNodeTap(hit.$1, hit.$2);
+          if (hit != null) {
+            if (onNodeTap != null) onNodeTap(hit.$1, hit.$2);
+            return;
+          }
+          if (onEdgeTap != null) {
+            final edge = _hitTestEdge(scene.nodes, d.localPosition);
+            if (edge != null) {
+              onEdgeTap(edge.fromId, edge.toId, edge.linkIndex);
+            }
+          }
         },
         child: paint,
       );
