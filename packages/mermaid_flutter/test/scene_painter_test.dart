@@ -259,5 +259,20 @@ void main() {
       expect(parsed.family, 'monospace');
       expect(parsed.fallback, isEmpty);
     });
+
+    test('text styles append cross-platform symbol fallbacks', () {
+      final style = textStyleFromSpec(
+        const core.TextStyleSpec(fontFamily: 'trebuchet ms', fontSize: 16),
+      );
+      expect(
+        style.fontFamilyFallback,
+        containsAll([
+          'Arial Unicode MS',
+          'Apple Symbols',
+          'Segoe UI Symbol',
+          'Noto Sans Symbols 2',
+        ]),
+      );
+    });
   });
 }

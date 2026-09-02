@@ -86,6 +86,14 @@ void main() {
         ..addFont(Future.value(ByteData.view(bytes.buffer)));
       await loader.load();
     }
+    const symbolsPath =
+        '/System/Library/Fonts/Supplemental/Arial Unicode.ttf';
+    if (File(symbolsPath).existsSync()) {
+      final bytes = File(symbolsPath).readAsBytesSync();
+      final loader = FontLoader('Arial Unicode MS')
+        ..addFont(Future.value(ByteData.view(bytes.buffer)));
+      await loader.load();
+    }
     const monoPath = '/System/Library/Fonts/SFNSMono.ttf';
     if (File(monoPath).existsSync()) {
       final bytes = File(monoPath).readAsBytesSync();

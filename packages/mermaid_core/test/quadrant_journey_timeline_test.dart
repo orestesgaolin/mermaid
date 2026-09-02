@@ -6,8 +6,12 @@ import 'package:mermaid_core/src/detect.dart';
 import 'package:mermaid_core/src/diagrams/journey/journey.dart';
 import 'package:mermaid_core/src/diagrams/quadrant/quadrant.dart';
 import 'package:mermaid_core/src/diagrams/timeline/timeline.dart';
+import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
+import 'package:mermaid_core/src/ir/scene_utils.dart';
+import 'package:mermaid_core/src/mermaid.dart';
 import 'package:mermaid_core/src/parse_error.dart';
+import 'package:mermaid_core/src/render/svg_renderer.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
@@ -64,6 +68,154 @@ quadrantChart
           .single;
       expect(dot('High').center.x, greaterThan(dot('Low').center.x));
       expect(dot('High').center.y, lessThan(dot('Low').center.y));
+    });
+    test('fixture config, trailing arrow, and axes match the fixed viewport', () {
+      const source = '''
+%%{init: {"quadrantChart": {"chartWidth": 600, "chartHeight": 600} } }%%
+quadrantChart
+  title Analytics and Business Intelligence Platforms
+  x-axis "Completeness of Vision ❤" -->
+  y-axis Ability to Execute
+  quadrant-1 Leaders
+  quadrant-2 Challengers
+  quadrant-3 Niche
+  quadrant-4 Visionaries
+  Microsoft: [0.75, 0.75]
+  Salesforce: [0.55, 0.60]
+  IBM: [0.51, 0.40]
+  Incorta: [0.20, 0.30]
+''';
+      const renderer = Mermaid(measurer: ApproximateTextMeasurer());
+      final scene = renderer.render(source);
+
+      expect(scene.size, const Size(600, 600));
+      expect(
+        texts(scene),
+        containsAll(['Completeness of Vision ❤ →', 'Ability to Execute']),
+      );
+      expect(texts(scene).where((text) => text.contains('"')), isEmpty);
+      expect(texts(scene).where((text) => text.contains('-->')), isEmpty);
+      expect(
+        renderSceneToSvg(scene),
+        contains('width="600" height="600" viewBox="0 0 600 600"'),
+      );
+
+      final regionBounds = flatten(scene.nodes)
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .reduce((a, b) => a.union(b));
+      expect(regionBounds.left, 31);
+      expect(regionBounds.right, 595);
+      expect(regionBounds.top, 45);
+      expect(regionBounds.bottom, 569);
+
+      final yAxis = flatten(scene.nodes)
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == 'Ability to Execute');
+      final yBounds = sceneNodeBounds(yAxis)!;
+      expect(yBounds.right, lessThanOrEqualTo(regionBounds.left));
+      expect(yBounds.bottom, closeTo(regionBounds.bottom, 0.0001));
+      expect(yBounds.top, greaterThanOrEqualTo(0));
+
+      final microsoft = flatten(scene.nodes)
+          .whereType<SceneGroup>()
+          .singleWhere((group) => group.id == 'point_Microsoft')
+          .children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<CircleGeometry>()
+          .single;
+      expect(
+        microsoft.center.x,
+        closeTo(regionBounds.left + regionBounds.width * 0.75, 0.0001),
+      );
+      expect(
+        microsoft.center.y,
+        closeTo(regionBounds.bottom - regionBounds.height * 0.75, 0.0001),
+      );
+    });
+    test('frontmatter and all init directives merge quadrant config', () {
+      const source = '''
+---
+config:
+  quadrantChart:
+    chartWidth: 550
+    chartHeight: 520
+    quadrantPadding: 9
+---
+%%{init: {"quadrantChart": {"chartHeight": 600}}}%%
+%%{init: {"quadrantChart": {"chartWidth": 620}}}%%
+quadrantChart
+  A: [0.5, 0.5]
+''';
+      final config = QuadrantConfig.fromSource(source);
+      expect(config.chartWidth, 620);
+      expect(config.chartHeight, 600);
+      expect(config.quadrantPadding, 9);
+      expect(
+        const Mermaid(measurer: ApproximateTextMeasurer()).render(source).size,
+        const Size(620, 600),
+      );
+    });
+    test('allows explicit zero quadrant padding', () {
+      const source = '''
+%%{init: {"quadrantChart": {"quadrantPadding": 0}}}%%
+quadrantChart
+  A: [0.5, 0.5]
+''';
+      expect(QuadrantConfig.fromSource(source).quadrantPadding, 0);
+    });
+    test('axis delimiters are quote-aware and reject a missing left label', () {
+      final chart = parseQuadrantChart('''
+quadrantChart
+  x-axis "Progress --> Quality" --> "Business value"
+  y-axis "Ability --> confidence"
+''');
+      expect(chart.xAxisLeft, 'Progress --> Quality');
+      expect(chart.xAxisRight, 'Business value');
+      expect(chart.yAxisBottom, 'Ability --> confidence');
+      expect(chart.yAxisTop, isNull);
+      expect(
+        () => parseQuadrantChart('quadrantChart\nx-axis --> Right'),
+        throwsA(isA<MermaidParseException>()),
+      );
+    });
+    test('rejects dimensions that cannot contain visible chart bands', () {
+      const source = '''
+%%{init: {"quadrantChart": {"chartWidth": 20, "chartHeight": 20}}}%%
+quadrantChart
+  title Too small
+  x-axis Left --> Right
+  y-axis Bottom --> Top
+  A: [0.5, 0.5]
+''';
+      expect(
+        () => const Mermaid(
+          measurer: ApproximateTextMeasurer(),
+        ).render(source),
+        throwsA(
+          isA<ArgumentError>().having(
+            (error) => error.message,
+            'message',
+            contains('too small'),
+          ),
+        ),
+      );
+    });
+    test('ignores diagram-shaped YAML outside frontmatter config', () {
+      const source = '''
+---
+quadrantChart:
+  chartWidth: 900
+config:
+  theme: default
+---
+quadrantChart
+  A: [0.5, 0.5]
+''';
+      expect(QuadrantConfig.fromSource(source).chartWidth, 500);
     });
     test('garbage throws', () {
       expect(() => parseQuadrantChart('quadrantChart\n???'),

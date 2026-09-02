@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Honor quadrant chart dimensions and padding, normalize quoted/trailing-arrow
+  axis labels, and keep rotated axes inside the configured viewport.
 - Add paint-only flowchart node and link overrides that preserve existing
   scene geometry.
 - Add structured flowchart edge metadata and scene-space path distance

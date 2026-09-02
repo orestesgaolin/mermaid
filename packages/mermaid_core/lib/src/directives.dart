@@ -94,6 +94,32 @@ LookConfig resolveLook(String source) {
   return LookConfig(look: look, handDrawnSeed: seed);
 }
 
+/// Resolves a diagram-specific config object from frontmatter and every init
+/// directive. Later values replace earlier values, matching Mermaid's config
+/// merge order.
+Map<String, Object?> resolveDiagramConfig(String source, String diagramKey) {
+  final result = <String, Object?>{};
+  final text = source.replaceAll('\r\n', '\n');
+
+  final fm = RegExp(r'^\s*---[ \t]*\n([\s\S]*?)\n[ \t]*---[ \t]*\n')
+      .firstMatch(text);
+  if (fm != null) {
+    result.addAll(_frontmatterConfigBlock(fm.group(1)!, diagramKey));
+  }
+
+  for (final match
+      in RegExp(
+        r'%%\{\s*init(?:ialize)?\s*:\s*([\s\S]*?)\s*\}%%',
+      ).allMatches(text)) {
+    final config = _looseJson(match.group(1)!);
+    if (config is! Map || config[diagramKey] is! Map) continue;
+    result.addAll(
+      (config[diagramKey] as Map).map((key, value) => MapEntry('$key', value)),
+    );
+  }
+  return Map.unmodifiable(result);
+}
+
 /// Resolves the layout engine name (`dagre` default, or `elk` / `tidy-tree`)
 /// from `layout:` in an `%%{init}%%` directive or frontmatter `config:`. Also
 /// honours upstream's `flowchart.defaultRenderer: 'elk'` and recognizes the
@@ -245,6 +271,47 @@ Map<String, Object?> _frontmatterThemeVariables(String body) {
     out[m.group(1)!] = v;
   }
   return out;
+}
+
+Map<String, Object?> _frontmatterConfigBlock(String body, String name) {
+  final lines = body.split('\n');
+  final out = <String, Object?>{};
+  int? configIndent;
+  int? diagramIndent;
+  int? propertyIndent;
+  for (final raw in lines) {
+    if (raw.trim().isEmpty) continue;
+    final indent = raw.length - raw.trimLeft().length;
+    final line = raw.trim();
+    if (configIndent == null) {
+      if (line == 'config:') configIndent = indent;
+      continue;
+    }
+    if (indent <= configIndent) break;
+    if (diagramIndent == null) {
+      if (line == '$name:') diagramIndent = indent;
+      continue;
+    }
+    if (indent <= diagramIndent) break;
+    propertyIndent ??= indent;
+    if (indent != propertyIndent) continue;
+    final match = RegExp(r'^([A-Za-z_]\w*)\s*:\s*(.+)$').firstMatch(line);
+    if (match == null) continue;
+    out[match.group(1)!] = _parseYamlScalar(match.group(2)!.trim());
+  }
+  return out;
+}
+
+Object? _parseYamlScalar(String value) {
+  if (value.length >= 2 &&
+      ((value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'")))) {
+    return value.substring(1, value.length - 1);
+  }
+  if (value == 'true') return true;
+  if (value == 'false') return false;
+  if (value == 'null') return null;
+  return num.tryParse(value) ?? value;
 }
 
 /// Mermaid directives use loose JSON (single quotes, bare keys); normalize

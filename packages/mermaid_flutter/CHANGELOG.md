@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Add platform symbol-font fallbacks for Unicode diagram labels.
 - Add paint-only flowchart node and link overrides to `MermaidDiagram` and
   `MermaidView`, reusing the parsed and laid-out base scene.
 - Add desktop/web node hover callbacks, node-only cursors, and optional tooltip

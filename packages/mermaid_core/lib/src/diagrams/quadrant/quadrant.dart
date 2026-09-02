@@ -5,9 +5,9 @@ library;
 
 import '../../color.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
-import '../../ir/scene_utils.dart';
 import '../../parse_error.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
@@ -37,6 +37,52 @@ class QuadrantChart {
 
   /// classDef name -> styles, applied to points referencing it via `:::name`.
   final Map<String, QuadrantPointStyle> classes;
+}
+
+/// Layout dimensions resolved from `config.quadrantChart`.
+class QuadrantConfig {
+  const QuadrantConfig({
+    this.chartWidth = 500,
+    this.chartHeight = 500,
+    this.quadrantPadding = 5,
+  });
+
+  /// Fixed scene and chart width in logical pixels.
+  final double chartWidth;
+
+  /// Fixed scene and chart height in logical pixels.
+  final double chartHeight;
+
+  /// Inset between the scene edge and reserved axis/title space.
+  final double quadrantPadding;
+
+  /// Resolves frontmatter first, then applies every init directive in order.
+  factory QuadrantConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'quadrantChart');
+    double positive(String key, double fallback) {
+      final value = values[key];
+      if (value is num) {
+        final resolved = value.toDouble();
+        if (resolved.isFinite && resolved > 0) return resolved;
+      }
+      return fallback;
+    }
+
+    double nonNegative(String key, double fallback) {
+      final value = values[key];
+      if (value is num) {
+        final resolved = value.toDouble();
+        if (resolved.isFinite && resolved >= 0) return resolved;
+      }
+      return fallback;
+    }
+
+    return QuadrantConfig(
+      chartWidth: positive('chartWidth', 500),
+      chartHeight: positive('chartHeight', 500),
+      quadrantPadding: nonNegative('quadrantPadding', 5),
+    );
+  }
 }
 
 /// Inline / classDef style for a point (upstream `StylesObject`).
@@ -191,16 +237,18 @@ QuadrantChart parseQuadrantChart(String source) {
       classes[m.group(1)!] = _parseStyles(_splitStyles(m.group(2)!), i + 1);
       continue;
     }
-    m = RegExp(r'^x-axis\s+(.+?)(?:\s*-->\s*(.+))?$').firstMatch(line);
+    m = RegExp(r'^x-axis\s+(.+)$').firstMatch(line);
     if (m != null) {
-      xl = m.group(1)!.trim();
-      xr = m.group(2)?.trim();
+      final axis = _parseAxisText(m.group(1)!, i + 1);
+      xl = axis.$1;
+      xr = axis.$2;
       continue;
     }
-    m = RegExp(r'^y-axis\s+(.+?)(?:\s*-->\s*(.+))?$').firstMatch(line);
+    m = RegExp(r'^y-axis\s+(.+)$').firstMatch(line);
     if (m != null) {
-      yb = m.group(1)!.trim();
-      yt = m.group(2)?.trim();
+      final axis = _parseAxisText(m.group(1)!, i + 1);
+      yb = axis.$1;
+      yt = axis.$2;
       continue;
     }
     m = RegExp(r'^quadrant-([1-4])\s+(.+)$').firstMatch(line);
@@ -242,10 +290,49 @@ QuadrantChart parseQuadrantChart(String source) {
   );
 }
 
+(String, String?) _parseAxisText(String raw, int lineNo) {
+  final delimiter = _axisDelimiter(raw);
+  if (delimiter == null) return (_unquote(raw.trim()), null);
+  final left = _unquote(raw.substring(0, delimiter.$1).trim());
+  if (left.isEmpty) {
+    throw MermaidParseException(
+      'axis delimiter requires a label before it',
+      line: lineNo,
+    );
+  }
+  final right = _unquote(raw.substring(delimiter.$2).trim());
+  return right.isEmpty ? ('$left →', null) : (left, right);
+}
+
+(int, int)? _axisDelimiter(String text) {
+  var quoted = false;
+  for (var i = 0; i < text.length; i++) {
+    if (text.codeUnitAt(i) == 0x22) {
+      quoted = !quoted;
+      continue;
+    }
+    if (quoted || text.codeUnitAt(i) != 0x2d) continue;
+    var end = i;
+    while (end < text.length && text.codeUnitAt(end) == 0x2d) {
+      end++;
+    }
+    if (end - i >= 2 &&
+        end < text.length &&
+        text.codeUnitAt(end) == 0x3e) {
+      return (i, end + 1);
+    }
+  }
+  return null;
+}
+
+String _unquote(String text) {
+  if (text.length >= 2 && text.startsWith('"') && text.endsWith('"')) {
+    return text.substring(1, text.length - 1);
+  }
+  return text;
+}
+
 // Upstream QuadrantBuilder default config (quadrantBuilder.ts).
-const _chartWidth = 500.0;
-const _chartHeight = 500.0;
-const _quadrantPadding = 5.0;
 const _titlePadding = 10.0;
 const _titleFontSize = 20.0;
 const _xAxisLabelPadding = 5.0;
@@ -290,6 +377,7 @@ RenderScene layoutQuadrantChart(
   QuadrantChart chart, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  QuadrantConfig config = const QuadrantConfig(),
 }) {
   final nodes = <SceneNode>[];
 
@@ -312,15 +400,21 @@ RenderScene layoutQuadrantChart(
       showYAxis ? _yAxisLabelPadding * 2 + _yAxisLabelFontSize : 0.0;
   final titleTopSpace = showTitle ? _titleFontSize + _titlePadding * 2 : 0.0;
 
-  final quadrantLeft = _quadrantPadding + yAxisLeftSpace;
-  final quadrantTop = _quadrantPadding + xAxisTopSpace + titleTopSpace;
+  final quadrantLeft = config.quadrantPadding + yAxisLeftSpace;
+  final quadrantTop = config.quadrantPadding + xAxisTopSpace + titleTopSpace;
   final quadrantWidth =
-      _chartWidth - _quadrantPadding * 2 - yAxisLeftSpace;
-  final quadrantHeight = _chartHeight -
-      _quadrantPadding * 2 -
+      config.chartWidth - config.quadrantPadding * 2 - yAxisLeftSpace;
+  final quadrantHeight = config.chartHeight -
+      config.quadrantPadding * 2 -
       xAxisTopSpace -
       xAxisBottomSpace -
       titleTopSpace;
+  if (quadrantWidth <= 0 || quadrantHeight <= 0) {
+    throw ArgumentError(
+      'quadrantChart dimensions ${config.chartWidth}x${config.chartHeight} '
+      'are too small for the configured padding and visible title/axes.',
+    );
+  }
   final quadrantHalfWidth = quadrantWidth / 2;
   final quadrantHalfHeight = quadrantHeight / 2;
 
@@ -458,7 +552,10 @@ RenderScene layoutQuadrantChart(
 
   final xAxisY = xAxisTop
       ? _xAxisLabelPadding + titleTopSpace
-      : _xAxisLabelPadding + quadrantTop + quadrantHeight + _quadrantPadding;
+      : _xAxisLabelPadding +
+          quadrantTop +
+          quadrantHeight +
+          config.quadrantPadding;
 
   void xLabel(String? text, double baseX) {
     if (text == null || text.isEmpty || !showXAxis) return;
@@ -483,15 +580,16 @@ RenderScene layoutQuadrantChart(
   void yLabel(String? text, double anchorY) {
     if (text == null || text.isEmpty || !showYAxis) return;
     final size = measurer.measure(text, yAxisStyle);
-    nodes.add(_anchoredText(
+    final center = Point(
+      _yAxisLabelPadding + size.height / 2,
+      drawYMiddle ? anchorY : anchorY - size.width / 2,
+    );
+    nodes.add(SceneText(
       text: text,
-      x: _yAxisLabelPadding,
-      y: anchorY,
-      size: size,
+      bounds: Rect.fromCenter(center, size.width, size.height),
       style: yAxisStyle,
       color: theme.quadrantYAxisTextFill,
-      left: !drawYMiddle,
-      top: true,
+      align: TextAlignH.left,
       rotation: -90,
     ));
   }
@@ -513,7 +611,7 @@ RenderScene layoutQuadrantChart(
     final size = measurer.measure(chart.title!, style);
     nodes.add(_anchoredText(
       text: chart.title!,
-      x: _chartWidth / 2,
+      x: config.chartWidth / 2,
       y: _titlePadding,
       size: size,
       style: style,
@@ -523,13 +621,9 @@ RenderScene layoutQuadrantChart(
     ));
   }
 
-  final bounds = sceneBounds(nodes)!;
-  const pad = 5.0;
-  final dx = pad - bounds.left;
-  final dy = pad - bounds.top;
   return RenderScene(
-    size: Size(bounds.width + 2 * pad, bounds.height + 2 * pad),
+    size: Size(config.chartWidth, config.chartHeight),
     background: theme.background,
-    nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
+    nodes: nodes,
   );
 }

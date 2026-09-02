@@ -19,6 +19,15 @@ const Set<String> _genericFamilies = {
   'system-ui',
 };
 
+/// Common platform symbol fonts used after the source's CSS family list.
+/// Missing families are skipped by Flutter's font manager.
+const List<String> _symbolFallbackFamilies = [
+  'Arial Unicode MS',
+  'Apple Symbols',
+  'Segoe UI Symbol',
+  'Noto Sans Symbols 2',
+];
+
 /// Parses a CSS font-family list (e.g. `"trebuchet ms", verdana, sans-serif`)
 /// into a primary family and a fallback list. Quotes are stripped and generic
 /// keywords are skipped.
@@ -56,10 +65,15 @@ const double kMermaidTextHeightFactor = 1.2;
 /// painted text have identical metrics.
 TextStyle textStyleFromSpec(core.TextStyleSpec spec, {Color? color}) {
   final families = parseCssFontFamily(spec.fontFamily);
+  final fallback = [...families.fallback];
+  final known = {for (final family in fallback) family.toLowerCase()};
+  for (final family in _symbolFallbackFamilies) {
+    if (known.add(family.toLowerCase())) fallback.add(family);
+  }
   return TextStyle(
     color: color,
     fontFamily: families.family,
-    fontFamilyFallback: families.fallback.isEmpty ? null : families.fallback,
+    fontFamilyFallback: fallback,
     fontSize: spec.fontSize,
     fontWeight: fontWeightFromCss(spec.fontWeight),
     fontStyle: spec.italic ? FontStyle.italic : FontStyle.normal,

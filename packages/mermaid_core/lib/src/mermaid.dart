@@ -101,7 +101,9 @@ class Mermaid {
             measurer: measurer, theme: theme);
       case DiagramType.quadrant:
         return layoutQuadrantChart(parseQuadrantChart(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer,
+            theme: theme,
+            config: QuadrantConfig.fromSource(source));
       case DiagramType.journey:
         return layoutJourney(parseJourney(source),
             measurer: measurer, theme: theme);
