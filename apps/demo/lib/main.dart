@@ -271,6 +271,7 @@ class _EditorPageState extends State<EditorPage> {
             nodePaintOverrides: _nodeOverrides(selectedNode, colors),
             linkPaintOverrides: _linkOverrides(selectedEdge, colors),
             nodeTooltipBuilder: (context, id) => _NodeTooltip(nodeId: id),
+            semanticNodes: true,
             onRequestFullscreen: () => unawaited(_openFullscreen()),
             onNodeTap: (id, _) {
               setState(() {
@@ -362,6 +363,7 @@ class _EditorPageState extends State<EditorPage> {
                       linkPaintOverrides: _linkOverrides(selectedEdge, colors),
                       nodeTooltipBuilder: (context, id) =>
                           _NodeTooltip(nodeId: id),
+                      semanticNodes: true,
                       onNodeTap: (id, _) {
                         updateDialog(() {
                           selectedNode = id;

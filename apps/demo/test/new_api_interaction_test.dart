@@ -20,6 +20,8 @@ void main() {
     );
     expect(find.textContaining('Viewport '), findsOneWidget);
     expect(find.byIcon(Icons.open_in_full), findsOneWidget);
+    expect(find.bySemanticsLabel('Start'), findsOneWidget);
+    expect(find.bySemanticsIdentifier('A'), findsOneWidget);
 
     var scene = _paintedScene(tester);
     final initialViewport = find.byType(InteractiveViewer);
@@ -40,7 +42,7 @@ void main() {
     await tester.pump();
     expect(find.text('Node id: B'), findsNothing);
 
-    await _tapScenePoint(tester, scene.boundsOfNode('B')!.center);
+    await tester.tap(find.bySemanticsIdentifier('B'));
     await tester.pumpAndSettle();
 
     expect(find.textContaining('Node: B'), findsOneWidget);
@@ -132,10 +134,11 @@ void main() {
     await tester.pump();
     expect(find.text('Node id: B'), findsNothing);
 
-    await _tapScenePoint(
-      tester,
-      scene.boundsOfNode('B')!.center,
-      within: dialog,
+    await tester.tap(
+      find.descendant(
+        of: dialog,
+        matching: find.bySemanticsIdentifier('B'),
+      ),
     );
     await tester.pumpAndSettle();
 
@@ -178,7 +181,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
     expect(find.textContaining('Node: B'), findsOneWidget);
-  });
+  }, semanticsEnabled: true);
 }
 
 double _viewportScale(WidgetTester tester, {Finder? within}) {

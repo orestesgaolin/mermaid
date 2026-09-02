@@ -110,6 +110,25 @@ MermaidView(
 )
 ```
 
+Accessibility nodes are opt-in. Each id-carrying diagram node exposes its
+human label, stable id, and painted bounds. A tap action is included when
+`onNodeTap` is supplied. Decorative groups, edges, and edge labels are omitted.
+Flowchart traversal follows source declaration order.
+
+```dart
+MermaidView(
+  source: source,
+  semanticNodes: true,
+  onNodeTap: (id, link) {
+    // Screen-reader activation and pointer taps use the same callback.
+  },
+)
+```
+
+Widget tests can use `find.bySemanticsLabel('Start')` or
+`find.bySemanticsIdentifier('node_id')`. The option is off by default, so
+existing rendering and interaction costs do not change.
+
 ## Themes and errors
 
 ```dart

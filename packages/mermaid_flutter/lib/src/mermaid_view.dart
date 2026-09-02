@@ -118,6 +118,7 @@ class MermaidView extends StatefulWidget {
     this.onNodeHover,
     this.hoverCursor = SystemMouseCursors.click,
     this.nodeTooltipBuilder,
+    this.semanticNodes = false,
     this.onEdgeTap,
     this.nodePaintOverrides = const {},
     this.linkPaintOverrides = const {},
@@ -161,6 +162,9 @@ class MermaidView extends StatefulWidget {
 
   /// See [MermaidDiagram.nodeTooltipBuilder].
   final MermaidNodeTooltipBuilder? nodeTooltipBuilder;
+
+  /// See [MermaidDiagram.semanticNodes].
+  final bool semanticNodes;
 
   /// See [MermaidDiagram.onEdgeTap].
   final void Function(String fromId, String toId, int linkIndex)? onEdgeTap;
@@ -448,6 +452,7 @@ class _MermaidViewState extends State<MermaidView>
                 onNodeHover: widget.onNodeHover,
                 hoverCursor: widget.hoverCursor,
                 nodeTooltipBuilder: widget.nodeTooltipBuilder,
+                semanticNodes: widget.semanticNodes,
                 onEdgeTap: widget.onEdgeTap,
                 nodePaintOverrides: widget.nodePaintOverrides,
                 linkPaintOverrides: widget.linkPaintOverrides,
@@ -518,6 +523,7 @@ class _MermaidViewState extends State<MermaidView>
                       onNodeHover: widget.onNodeHover,
                       hoverCursor: widget.hoverCursor,
                       nodeTooltipBuilder: widget.nodeTooltipBuilder,
+                      semanticNodes: widget.semanticNodes,
                       onEdgeTap: widget.onEdgeTap,
                       nodePaintOverrides: widget.nodePaintOverrides,
                       linkPaintOverrides: widget.linkPaintOverrides,

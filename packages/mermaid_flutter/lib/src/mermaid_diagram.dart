@@ -5,6 +5,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart' show mapEquals;
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 
 import 'flutter_text_measurer.dart';
@@ -38,6 +39,7 @@ class MermaidDiagram extends StatefulWidget {
     this.onNodeHover,
     this.hoverCursor = SystemMouseCursors.click,
     this.nodeTooltipBuilder,
+    this.semanticNodes = false,
     this.onEdgeTap,
     this.onSceneChanged,
     this.nodePaintOverrides = const {},
@@ -62,6 +64,13 @@ class MermaidDiagram extends StatefulWidget {
   ///
   /// The overlay ignores pointer events and does not affect diagram geometry.
   final MermaidNodeTooltipBuilder? nodeTooltipBuilder;
+
+  /// Exposes one semantics node per id-carrying diagram node.
+  ///
+  /// Nodes use their human label with the stable id as fallback. Traversal
+  /// follows scene order, which is source declaration order for flowcharts.
+  /// Decorative groups, edges, and edge labels are excluded. Off by default.
+  final bool semanticNodes;
 
   /// Called when a flowchart edge stroke or label is tapped.
   ///
@@ -387,6 +396,30 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       );
     }
 
+    if (widget.semanticNodes) {
+      final semanticNodes = _collectSemanticNodes(scene.nodes);
+      paint = Stack(
+        fit: StackFit.expand,
+        children: [
+          paint,
+          for (var index = 0; index < semanticNodes.length; index++)
+            Positioned.fromRect(
+              rect: semanticNodes[index].rect,
+              child: _SemanticNodeTarget(
+                node: semanticNodes[index],
+                sortKey: OrdinalSortKey(index.toDouble()),
+                onTap: onNodeTap == null
+                    ? null
+                    : () => onNodeTap(
+                        semanticNodes[index].id,
+                        semanticNodes[index].link,
+                      ),
+              ),
+            ),
+        ],
+      );
+    }
+
     final hoveredNodeId = _hoveredNodeId;
     final tooltipBuilder = widget.nodeTooltipBuilder;
     final hasNodeInteraction =
@@ -463,6 +496,98 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       );
     }
     return diagram;
+  }
+}
+
+List<_SemanticNodeInfo> _collectSemanticNodes(
+  Iterable<core.SceneNode> nodes,
+) {
+  final byId = <String, _SemanticNodeInfo>{};
+
+  void walk(Iterable<core.SceneNode> children) {
+    for (final child in children) {
+      if (child is! core.SceneGroup) continue;
+      final id = child.id;
+      if (id != null && child.role == core.SceneGroupRole.node) {
+        final bounds = core.sceneBounds(child.children);
+        if (bounds != null) {
+          final label = child.semanticLabel?.trim();
+          // Reinsert duplicates so order and geometry both follow the
+          // last-painted node, matching pointer hit testing.
+          byId.remove(id);
+          byId[id] = _SemanticNodeInfo(
+            id: id,
+            label: label == null || label.isEmpty ? id : label,
+            link: child.link,
+            tooltip: child.tooltip,
+            rect: Rect.fromLTRB(
+              bounds.left,
+              bounds.top,
+              bounds.right,
+              bounds.bottom,
+            ),
+          );
+        }
+      }
+      walk(child.children);
+    }
+  }
+
+  walk(nodes);
+  return List.unmodifiable(byId.values);
+}
+
+class _SemanticNodeInfo {
+  const _SemanticNodeInfo({
+    required this.id,
+    required this.label,
+    required this.rect,
+    this.link,
+    this.tooltip,
+  });
+
+  final String id;
+  final String label;
+  final Rect rect;
+  final String? link;
+  final String? tooltip;
+}
+
+class _SemanticNodeTarget extends StatelessWidget {
+  const _SemanticNodeTarget({
+    required this.node,
+    required this.sortKey,
+    required this.onTap,
+  });
+
+  final _SemanticNodeInfo node;
+  final OrdinalSortKey sortKey;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tap = onTap;
+    final child = tap == null
+        ? const SizedBox.expand()
+        : GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            excludeFromSemantics: true,
+            onTap: tap,
+            child: const SizedBox.expand(),
+          );
+    return Semantics(
+      key: ValueKey('mermaid-node:${node.id}'),
+      container: true,
+      excludeSemantics: true,
+      identifier: node.id,
+      label: node.label,
+      tooltip: node.tooltip,
+      sortKey: sortKey,
+      enabled: tap == null ? null : true,
+      button: tap != null,
+      onTap: tap,
+      child: child,
+    );
   }
 }
 
