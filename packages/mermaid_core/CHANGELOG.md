@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Paint nested sequence `rect` backgrounds above their parents while preserving
+  participant-box and sibling ordering.
 - Honor quadrant chart dimensions and padding, normalize quoted/trailing-arrow
   axis labels, and keep rotated axes inside the configured viewport.
 - Add paint-only flowchart node and link overrides that preserve existing

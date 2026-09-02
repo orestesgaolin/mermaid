@@ -139,6 +139,54 @@ void main() {
     );
   });
 
+  test('nested rect backgrounds paint parent before child', () {
+    final s = layout('''
+box rgb(10, 20, 30) Group
+participant A
+participant B
+end
+rect rgb(200, 220, 100)
+  rect rgb(200, 255, 200)
+    A->>B: inside
+  end
+  A->>B: parent only
+end
+rect rgb(100, 110, 120)
+  A->>B: sibling
+end
+''');
+    const participantColor = 0xff0a141e;
+    const parentColor = 0xffc8dc64;
+    const childColor = 0xffc8ffc8;
+    const siblingColor = 0xff646e78;
+    final coloredRects = s.nodes.whereType<SceneShape>().where(
+          (shape) => shape.geometry is RectGeometry && shape.fill != null,
+        );
+    final colors = coloredRects.map((shape) => shape.fill!.color.value).toList();
+    expect(
+      colors,
+      containsAllInOrder([
+        participantColor,
+        parentColor,
+        childColor,
+        siblingColor,
+      ]),
+    );
+
+    Rect rectOf(int color) => (coloredRects
+            .singleWhere((shape) => shape.fill!.color.value == color)
+            .geometry as RectGeometry)
+        .rect;
+    final parent = rectOf(parentColor);
+    final child = rectOf(childColor);
+    final sibling = rectOf(siblingColor);
+    expect(child.top, greaterThan(parent.top));
+    expect(child.bottom, lessThan(parent.bottom));
+    expect(child.left, lessThan(parent.right));
+    expect(child.right, greaterThan(parent.left));
+    expect(sibling.top, greaterThan(parent.bottom));
+  });
+
   test('alt divider renders bracketed label', () {
     final s = layout('alt ok\nA->>B: a\nelse failed\nA->>B: b\nend');
     expect(

@@ -44,10 +44,11 @@ class _Column {
 }
 
 class _OpenFrame {
-  _OpenFrame(this.start, this.startY);
+  _OpenFrame(this.start, this.startY, this.sourceOrder);
 
   final SeqBlockStart start;
   final double startY;
+  final int sourceOrder;
   final dividers = <(double, String)>[];
   double minX = double.infinity;
   double maxX = double.negativeInfinity;
@@ -75,7 +76,8 @@ class _SequenceLayout {
   final order = <String>[];
 
   // Output buckets in paint order.
-  final backgrounds = <SceneNode>[]; // rect-block fills
+  final participantBackgrounds = <SceneNode>[];
+  final rectBackgrounds = <({int sourceOrder, SceneNode node})>[];
   final frames = <SceneNode>[]; // loop/alt/... frames (above bg, below rest)
   final frameLabels = <SceneNode>[]; // tabs + divider labels (top-most)
   final lifelines = <SceneNode>[];
@@ -84,6 +86,7 @@ class _SequenceLayout {
   final actorNodes = <SceneNode>[];
 
   double y = 0;
+  int _nextFrameSourceOrder = 0;
 
   RenderScene run() {
     _buildColumns();
@@ -140,7 +143,8 @@ class _SequenceLayout {
 
         case SeqBlockStart():
           y += _boxMargin;
-          final frame = _OpenFrame(event, y)..depth = openFrames.length;
+          final frame = _OpenFrame(event, y, _nextFrameSourceOrder++)
+            ..depth = openFrames.length;
           openFrames.add(frame);
           if (event.kind != SeqBlockKind.rect) {
             y += _blockLabelHeight +
@@ -209,7 +213,7 @@ class _SequenceLayout {
       left -= _boxMargin;
       right += _boxMargin;
       final top = -_boxMargin - (box.label.isEmpty ? 0 : _blockLabelHeight);
-      backgrounds.add(SceneShape(
+      participantBackgrounds.add(SceneShape(
         geometry: RectGeometry(
             Rect.fromLTWH(left, top, right - left, bottomBoxTop - top + _boxMargin)),
         fill: Fill((box.color != null ? Color.tryParse(box.color!) : null) ??
@@ -217,7 +221,7 @@ class _SequenceLayout {
       ));
       if (box.label.isNotEmpty) {
         final size = measurer.measure(box.label, baseStyle);
-        backgrounds.add(SceneText(
+        participantBackgrounds.add(SceneText(
           text: box.label,
           bounds: Rect.fromLTWH((left + right) / 2 - size.width / 2,
               top + 2, size.width, size.height),
@@ -260,8 +264,11 @@ class _SequenceLayout {
       }
     }
 
+    final orderedRectBackgrounds = [...rectBackgrounds]
+      ..sort((a, b) => a.sourceOrder.compareTo(b.sourceOrder));
     var nodes = <SceneNode>[
-      ...backgrounds,
+      ...participantBackgrounds,
+      for (final background in orderedRectBackgrounds) background.node,
       ...frames,
       ...lifelines,
       ...activationNodes,
@@ -688,9 +695,12 @@ class _SequenceLayout {
     if (frame.start.kind == SeqBlockKind.rect) {
       final fill = Color.tryParse(frame.start.color ?? '') ??
           const Color(0x11888888);
-      backgrounds.add(SceneShape(
-        geometry: RectGeometry(rect),
-        fill: Fill(fill),
+      rectBackgrounds.add((
+        sourceOrder: frame.sourceOrder,
+        node: SceneShape(
+          geometry: RectGeometry(rect),
+          fill: Fill(fill),
+        ),
       ));
       return;
     }
