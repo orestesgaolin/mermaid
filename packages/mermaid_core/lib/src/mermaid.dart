@@ -92,7 +92,9 @@ class Mermaid {
             elkOptions: resolveElkConfig(source));
       case DiagramType.er:
         return layoutErDiagram(parseErDiagram(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer,
+            theme: theme,
+            config: ErConfig.fromSource(source));
       case DiagramType.pie:
         return layoutPieChart(parsePieChart(source),
             measurer: measurer, theme: theme);

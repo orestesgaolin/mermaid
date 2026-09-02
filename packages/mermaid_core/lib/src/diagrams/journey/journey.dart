@@ -132,11 +132,8 @@ JourneyDiagram parseJourney(String source) {
 // fillType<n> }` whenever `fillType0` is set — which it always is in every
 // theme. A CSS class fill beats an SVG presentation attribute, so the dark
 // `sectionFills` are dead: the actually-rendered fill is `theme.fillType[n]`
-// (the light pastels in the default theme). The section/task TEXT element
-// carries the same class, so its `fill="#fff"` presentation attribute is
-// likewise overridden — the rendered text colour is also `theme.fillType[n]`.
-// We therefore drive both rect fill and text colour from `theme.fillType`,
-// indexed by `n = sectionIndex % 7` (sectionFills.length).
+// (the light pastels in the default theme). Journey labels must still use the
+// theme text colour so they remain visible against those fills.
 const _sectionFillCount = 7;
 const _actorFills = [
   Color(0xff8FBC8F),
@@ -233,11 +230,11 @@ RenderScene layoutJourney(
   var sectionIndex = 0;
   for (final section in diagram.sections) {
     final count = section.tasks.length;
-    // n = sectionNumber % sectionFills.length; the CSS `.section-type-n` /
-    // `.task-type-n` rule paints both rect and text with theme.fillType[n].
+    // n = sectionNumber % sectionFills.length; use the matching fillType for
+    // the section and task boxes, and the theme text colour for their labels.
     final n = sectionIndex % _sectionFillCount;
     final fill = theme.fillType[n];
-    final textColor = fill;
+    final textColor = theme.textColor;
     final sectionX = globalIndex * _taskMargin + globalIndex * _boxWidth +
         leftMargin;
     if (section.name.isNotEmpty) {

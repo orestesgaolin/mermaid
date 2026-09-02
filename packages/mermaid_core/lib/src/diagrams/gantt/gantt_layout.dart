@@ -311,10 +311,11 @@ RenderScene layoutGanttChart(
         measurer.measure(formatGanttDate(ticks.first, fmt), baseStyle).width;
     labelEvery = math.max(1, ((labelW + 12) / spacing).ceil());
   }
+  final gridNodes = <SceneNode>[];
   for (var i = 0; i < ticks.length; i++) {
     final tick = ticks[i];
     final x = xOf(tick);
-    nodes.add(SceneShape(
+    gridNodes.add(SceneShape(
       geometry: PathGeometry(
           [MoveTo(Point(x, chartTop - 10)), LineTo(Point(x, chartBottom + 4))]),
       stroke: const Stroke(color: _gridColor, width: 1),
@@ -330,6 +331,11 @@ RenderScene layoutGanttChart(
       color: theme.textColor,
     ));
   }
+  // Scene order is paint order for both Flutter and SVG. Mermaid.js paints
+  // excluded-day shading first, then grid lines, section bands and opaque task
+  // bars. Keep that order so task fills cover the grid without hiding it under
+  // excluded-day shading.
+  nodes.insertAll(overlays.length, gridNodes);
 
   // Title: fixed font-size 18, centered on the full chart width (upstream
   // titleText at (w/2, titleTopMargin)).

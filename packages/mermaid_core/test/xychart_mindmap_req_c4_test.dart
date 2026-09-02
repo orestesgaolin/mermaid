@@ -1,6 +1,8 @@
 /// Tests for xychart, mindmap, requirement and C4 diagrams.
 library;
 
+import 'dart:math' as math;
+
 import 'package:mermaid_core/src/diagrams/c4/c4.dart';
 import 'package:mermaid_core/src/diagrams/mindmap/mindmap.dart';
 import 'package:mermaid_core/src/diagrams/requirement/requirement.dart';
@@ -61,6 +63,50 @@ xychart-beta
       expect(bars, hasLength(2));
       expect(bars[1].height, greaterThan(bars[0].height * 5));
       expect(texts(s), containsAll(['a', 'b']));
+    });
+    test('layout centers titles on the final left-axis range', () {
+      void expectCenteredOnEndTicks(
+          RenderScene scene, String title, String firstTick, String lastTick) {
+        final allText = flatten(scene.nodes).whereType<SceneText>();
+        final titleNode = allText.singleWhere((text) => text.text == title);
+        final first =
+            allText.singleWhere((text) => text.text == firstTick).bounds.center;
+        final last =
+            allText.singleWhere((text) => text.text == lastTick).bounds.center;
+
+        expect(titleNode.rotation, 270);
+        expect(titleNode.bounds.center.y,
+            closeTo(first.y + (last.y - first.y) / 2, 0.001));
+        expect(titleNode.bounds.center.x,
+            lessThan(math.min(first.x, last.x)));
+      }
+
+      final vertical = layoutXyChart(
+        parseXyChart('''
+xychart-beta
+    title "Sales Revenue"
+    x-axis [jan, feb, mar, apr, may, jun]
+    y-axis "Revenue (thousands)" 4000 --> 11000
+    bar [5000, 6000, 7500, 8200, 9500, 10500]
+    line [5000, 6000, 7500, 8200, 9500, 10500]
+'''),
+        measurer: measurer,
+        theme: theme,
+      );
+      expectCenteredOnEndTicks(
+          vertical, 'Revenue (thousands)', '4000', '11000');
+
+      final horizontal = layoutXyChart(
+        parseXyChart('''
+xychart-beta horizontal
+    x-axis "Quarter" [jan, feb, mar]
+    y-axis 0 --> 100
+    bar [10, 50, 100]
+'''),
+        measurer: measurer,
+        theme: theme,
+      );
+      expectCenteredOnEndTicks(horizontal, 'Quarter', 'jan', 'mar');
     });
   });
 

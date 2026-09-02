@@ -5,6 +5,7 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -15,13 +16,9 @@ import '../../vendor/dagre/dart_dagre.dart' as dagre;
 import '../flowchart/flow_model.dart' show FlowDirection;
 import 'er_model.dart';
 
-// Upstream erBox falls back to PADDING = er.diagramPadding ?? 10 (horizontal,
-// once per column) and TEXT_PADDING = er.entityPadding ?? 6 (vertical, once per
-// row) for the htmlLabels default. The richer config-schema defaults
-// (diagramPadding 20 / entityPadding 15) are not present on the resolved config
-// the unified renderer feeds erBox, so the 10/6 fallbacks win.
+// Upstream erBox uses the resolved ER entityPadding as vertical padding once
+// per row.
 const double _cellPadX = 10;
-const double _cellPadY = 6;
 const double _diagramPadding = 8;
 const double _markerLen = 18;
 
@@ -33,12 +30,31 @@ const double _minEntityHeight = 75;
 // Not exposed as a MermaidTheme palette field, so kept inlined.
 const _tertiaryColor = Color(0xfff9ffec);
 
+/// Layout values resolved from `config.er`.
+class ErConfig {
+  const ErConfig({this.entityPadding = 15});
+
+  final double entityPadding;
+
+  factory ErConfig.fromSource(String source) {
+    final value = resolveDiagramConfig(source, 'er')['entityPadding'];
+    if (value is num) {
+      final padding = value.toDouble();
+      if (padding.isFinite && padding >= 0) {
+        return ErConfig(entityPadding: padding);
+      }
+    }
+    return const ErConfig();
+  }
+}
+
 RenderScene layoutErDiagram(
   ErDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  ErConfig config = const ErConfig(),
 }) {
-  return _ErLayout(diagram, measurer, theme).run();
+  return _ErLayout(diagram, measurer, theme, config).run();
 }
 
 class _EntityBox {
@@ -66,7 +82,7 @@ class _EntityStyle {
 }
 
 class _ErLayout {
-  _ErLayout(this.diagram, this.measurer, this.theme)
+  _ErLayout(this.diagram, this.measurer, this.theme, this.config)
       : baseStyle = TextStyleSpec(
           fontFamily: theme.fontFamily,
           fontSize: theme.fontSize,
@@ -83,6 +99,7 @@ class _ErLayout {
   final ErDiagram diagram;
   final TextMeasurer measurer;
   final MermaidTheme theme;
+  final ErConfig config;
 
   /// Attribute-cell text style (full `fontSize`, normal weight — matches
   /// unified `erBox`, which draws all cells at `config.fontSize`).
@@ -278,7 +295,7 @@ class _ErLayout {
   _EntityBox _measureEntity(ErEntity e) {
     final headerSize = measurer.measure(e.label, headerStyle);
     // erBox: nameBBox.height += TEXT_PADDING.
-    final headerHeight = headerSize.height + _cellPadY;
+    final headerHeight = headerSize.height + config.entityPadding;
     final cells = _attributeCells(e);
 
     if (cells.isEmpty) {
@@ -302,7 +319,7 @@ class _ErLayout {
         colWidths[c] = math.max(colWidths[c], size.width + _cellPadX);
         rowH = math.max(rowH, size.height);
       }
-      rowHeights.add(rowH + _cellPadY);
+      rowHeights.add(rowH + config.entityPadding);
     }
     // w = max(headerBBox.width + PADDING*2, node.width, sum(colWidths)).
     var width = math.max(headerSize.width + _cellPadX * 2,
@@ -321,6 +338,16 @@ class _ErLayout {
     final rect = b.rect;
     final cells = _attributeCells(b.entity);
     final style = _resolveStyle(b.entity);
+    final headerSize = measurer.measure(b.entity.label, headerStyle);
+    final labelBounds = cells.isEmpty
+        ? Rect.fromLTWH(rect.left, rect.center.y - headerSize.height / 2,
+            rect.width, headerSize.height)
+        : Rect.fromLTWH(
+            rect.left,
+            rect.top + (b.headerHeight - headerSize.height) / 2,
+            rect.width,
+            headerSize.height,
+          );
     final children = <SceneNode>[
       SceneShape(
         geometry: RectGeometry(rect),
@@ -329,8 +356,7 @@ class _ErLayout {
       ),
       SceneText(
         text: b.entity.label,
-        bounds: Rect.fromLTWH(
-            rect.left, rect.top + _cellPadY, rect.width, b.headerHeight),
+        bounds: labelBounds,
         style: headerStyle,
         color: style.color ?? theme.textColor,
       ),

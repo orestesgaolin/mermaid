@@ -11,6 +11,7 @@ import 'package:mermaid_core/src/diagrams/pie/pie_layout.dart';
 import 'package:mermaid_core/src/diagrams/pie/pie_parser.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
+import 'package:mermaid_core/src/mermaid.dart';
 import 'package:mermaid_core/src/parse_error.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
@@ -135,6 +136,84 @@ void main() {
           .singleWhere((text) => text.text == 'PK');
 
       expect(outerRect.right - key.bounds.right, closeTo(5, 0.001));
+    });
+    test('entity labels and attribute rows use Mermaid vertical spacing', () {
+      final scene = layoutErDiagram(
+        parseErDiagram('erDiagram\n'
+            'CUSTOMER ||--o{ ORDER : places\n'
+            'ORDER ||--|{ LINE_ITEM : contains\n'
+            'CUSTOMER {\nstring name PK\nstring email UK\n}'),
+        measurer: measurer,
+        theme: theme,
+      );
+
+      SceneGroup entity(String id) =>
+          scene.nodes.whereType<SceneGroup>().singleWhere((g) => g.id == id);
+      Rect outerRect(SceneGroup group) => group.children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .reduce((a, b) => a.width * a.height > b.width * b.height ? a : b);
+
+      for (final id in ['ORDER', 'LINE_ITEM']) {
+        final group = entity(id);
+        final box = outerRect(group);
+        final label = group.children
+            .whereType<SceneText>()
+            .singleWhere((text) => text.text == id);
+        expect(label.bounds.center.x, closeTo(box.center.x, 0.001));
+        expect(label.bounds.center.y, closeTo(box.center.y, 0.001));
+        expect(label.bounds.height, lessThan(box.height));
+      }
+
+      final customer = entity('CUSTOMER');
+      final customerBox = outerRect(customer);
+      final rowRects = customer.children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .where((rect) => rect != customerBox)
+          .toList();
+      final name = customer.children
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == 'name');
+      expect(rowRects, hasLength(2));
+      expect(rowRects.first.height - name.bounds.height, closeTo(15, 0.001));
+      expect(rowRects.first.top - customerBox.top - name.bounds.height,
+          closeTo(15, 0.001));
+    });
+    test('entityPadding config overrides the 15 px default end to end', () {
+      const source = '''
+%%{init: {"er": {"entityPadding": 24}}}%%
+erDiagram
+    CUSTOMER {
+        string name PK
+        string email UK
+    }
+''';
+      final scene = const Mermaid(measurer: measurer).render(source);
+      final customer = scene.nodes
+          .whereType<SceneGroup>()
+          .singleWhere((group) => group.id == 'CUSTOMER');
+      final outer = customer.children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .reduce((a, b) => a.width * a.height > b.width * b.height ? a : b);
+      final row = customer.children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .firstWhere((rect) => rect != outer);
+      final name = customer.children
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == 'name');
+
+      expect(row.height - name.bounds.height, closeTo(24, 0.001));
     });
   });
 

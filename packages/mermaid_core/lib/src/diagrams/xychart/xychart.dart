@@ -779,7 +779,7 @@ void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
         text: axis.title,
         bounds: Rect.fromCenter(
             Point(axis.boundingX + _titlePadding + size.height / 2,
-                axis.boundingY + axis.boundingH / 2),
+                axis.rangeStart + (axis.rangeEnd - axis.rangeStart) / 2),
             size.width,
             size.height),
         style: titleStyle,
