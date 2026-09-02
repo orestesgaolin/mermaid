@@ -1,6 +1,8 @@
 /// Structural tests for the class diagram layout.
 library;
 
+import 'dart:io';
+
 import 'package:mermaid_core/src/diagrams/class_diagram/class_layout.dart';
 import 'package:mermaid_core/src/diagrams/class_diagram/class_parser.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
@@ -9,11 +11,13 @@ import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
 
-RenderScene layout(String body) => layoutClassDiagram(
-      parseClassDiagram('classDiagram\n$body'),
+RenderScene layoutSource(String source) => layoutClassDiagram(
+      parseClassDiagram(source),
       measurer: const ApproximateTextMeasurer(),
       theme: MermaidTheme.defaultTheme,
     );
+
+RenderScene layout(String body) => layoutSource('classDiagram\n$body');
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
       for (final n in nodes) ...[
@@ -171,24 +175,9 @@ Bike --> Square : Logo Shape
   });
 
   test('fixture 11 labels sit on edges and inheritance enters rank edge', () {
-    final s = layout('''
-namespace Shapes {
-  class Shape
-  class Circle
-  class Square
-}
-Shape <|-- Circle
-Shape <|-- Square
-namespace Vehicles {
-  class Vehicle
-  class Car
-  class Bike
-}
-Vehicle <|-- Car
-Vehicle <|-- Bike
-Car --> Circle : "Logo Shape"
-Bike --> Square : "Logo Shape"
-''');
+    final source =
+        File('test/fixtures/upstream_class/11.mmd').readAsStringSync();
+    final s = layoutSource(source);
     for (final entry in [
       ('rel_Car_Circle_4', 'rellabel_4'),
       ('rel_Bike_Square_5', 'rellabel_5'),
@@ -212,6 +201,37 @@ Bike --> Square : "Logo Shape"
       final tip = triangle.points.first;
       expect(tip.y, closeTo(vehicle.bottom, 0.001));
       expect(tip.x, inInclusiveRange(vehicle.left, vehicle.right));
+    }
+
+    for (final inheritance in [
+      ('Shape', ['rel_Shape_Circle_0', 'rel_Shape_Square_1']),
+      ('Vehicle', ['rel_Vehicle_Car_2', 'rel_Vehicle_Bike_3']),
+    ]) {
+      final edgeGeometry = inheritance.$2.map((edgeId) {
+        final geometry = flatten(group(s, edgeId).children)
+            .whereType<SceneShape>()
+            .map((shape) => shape.geometry);
+        final triangle = geometry.whereType<PolygonGeometry>().single;
+        final path = geometry.whereType<PathGeometry>().single;
+        return (tip: triangle.points.first, pathStart: (path.commands.first as MoveTo).p);
+      }).toList();
+      final tips = edgeGeometry.map((edge) => edge.tip).toList();
+      final parent = sceneNodeBounds(group(s, inheritance.$1))!;
+
+      expect(tips[0].y, closeTo(parent.bottom, 0.001));
+      expect(tips[1].y, closeTo(parent.bottom, 0.001));
+      expect(
+        (tips[0].x - tips[1].x).abs(),
+        greaterThan(1),
+        reason: '${inheritance.$1} inheritance routes must keep separate '
+            'ports and arrowheads',
+      );
+      expect(
+        (edgeGeometry[0].pathStart.x - edgeGeometry[1].pathStart.x).abs(),
+        greaterThan(1),
+        reason: '${inheritance.$1} inheritance strokes must remain separate '
+            'through their parent-edge approach',
+      );
     }
   });
 

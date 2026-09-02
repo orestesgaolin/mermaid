@@ -241,6 +241,87 @@ requirementDiagram
         isTrue,
       );
     });
+    test('fixture 02 orders relation sources and clears contains markers', () {
+      final source = File(
+        'test/fixtures/upstream_requirement/02.mmd',
+      ).readAsStringSync();
+      final scene = layoutRequirementDiagram(
+        parseRequirementDiagram(source),
+        measurer: measurer,
+        theme: theme,
+      );
+      SceneGroup group(String id) => flatten(
+        scene.nodes,
+      ).whereType<SceneGroup>().singleWhere((node) => node.id == id);
+      Rect nodeRect(String id) =>
+          (group(id).children.whereType<SceneShape>().first.geometry
+                  as RectGeometry)
+              .rect;
+
+      final entity = nodeRect('test_entity');
+      final example = nodeRect('An Example');
+      final random = nodeRect('Random Name');
+      expect(entity.center.x, lessThan(example.center.x));
+      expect(
+        (entity.center.x - random.center.x).abs(),
+        lessThan((example.center.x - random.center.x).abs()),
+      );
+
+      final marker = group('rel_2').children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<CircleGeometry>()
+          .single;
+      final horizontallyClear =
+          marker.center.x + marker.radius <= example.left ||
+          marker.center.x - marker.radius >= example.right;
+      final verticallyClear =
+          marker.center.y + marker.radius <= example.top ||
+          marker.center.y - marker.radius >= example.bottom;
+      expect(horizontallyClear || verticallyClear, isTrue);
+
+      final relationPath = group('rel_0').children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PathGeometry>()
+          .first;
+      final route = relationPath.commands
+          .map(
+            (command) => switch (command) {
+              MoveTo(:final p) => p,
+              LineTo(:final p) => p,
+              _ => null,
+            },
+          )
+          .whereType<Point>()
+          .toList();
+      expect(route.length, greaterThan(2));
+      var length = 0.0;
+      for (var i = 1; i < route.length; i++) {
+        length += route[i].distanceTo(route[i - 1]);
+      }
+      var remaining = length / 2;
+      var routeMidpoint = route.last;
+      for (var i = 1; i < route.length; i++) {
+        final segment = route[i].distanceTo(route[i - 1]);
+        if (segment >= remaining) {
+          final fraction = segment == 0 ? 0.0 : remaining / segment;
+          routeMidpoint = Point(
+            route[i - 1].x + (route[i].x - route[i - 1].x) * fraction,
+            route[i - 1].y + (route[i].y - route[i - 1].y) * fraction,
+          );
+          break;
+        }
+        remaining -= segment;
+      }
+      final labelCenter =
+          (group('rellabel_0').children.whereType<SceneShape>().single.geometry
+                  as RectGeometry)
+              .rect
+              .center;
+      expect(labelCenter.x, closeTo(routeMidpoint.x, 0.001));
+      expect(labelCenter.y, closeTo(routeMidpoint.y, 0.001));
+    });
   });
 
   group('C4', () {

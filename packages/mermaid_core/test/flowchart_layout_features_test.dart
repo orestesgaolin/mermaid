@@ -75,6 +75,31 @@ void main() {
       expect(c2.x, closeTo(p.x, 1e-9));
       expect(c2.y, closeTo(p.y, 1e-9));
     }
+
+    final sqlAgentPath = groupById(
+      scene,
+      'edge_c0102290_1ec3_e711_8c5a_005056ad0002_71082290_1ec3_e711_8c5a_005056ad0002_37',
+    )
+        .children
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<PathGeometry>()
+        .single;
+    final start = (sqlAgentPath.commands.first as MoveTo).p;
+    final firstSegmentEnd = (sqlAgentPath.commands[1] as LineTo).p;
+    final end = (sqlAgentPath.commands.last as CubicTo).p;
+    final firstStep = firstSegmentEnd - start;
+    final sourceToTarget = end - start;
+    final forwardProgress =
+        firstStep.x * sourceToTarget.x + firstStep.y * sourceToTarget.y;
+    final approachAlignment = forwardProgress /
+        (start.distanceTo(firstSegmentEnd) * start.distanceTo(end));
+    expect(
+      approachAlignment,
+      greaterThan(0.25),
+      reason: 'SQLAgent -> MSSQLSERVER must not start by moving away from '
+          'its target and fold back into a near-hairpin',
+    );
   });
 
   group('self-loops', () {

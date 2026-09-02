@@ -917,6 +917,15 @@ _Fragment _layoutGraph(
       points[0] = startTip - startDir * _markerShorten(e.headFrom);
     }
 
+    // Dagre can place the first routing bend on the side opposite the target
+    // when a short edge competes with several long skip edges. A basis curve
+    // through that bend starts by moving away from the target, then folds back
+    // into a near-hairpin. Apply this after clipping so it measures progress
+    // from the visible edge start, not Dagre's node-center route.
+    if (!useElk && (e.interpolate == null || e.interpolate == 'basis')) {
+      points = _softenBasisStart(points);
+    }
+
     final pathGeometry = PathGeometry(
       // ELK draws orthogonal edges with sharp corners (linear through the
       // Manhattan route); other engines use the edge's own interpolation.
@@ -2341,6 +2350,26 @@ List<PathCommand> _curveBasis(List<Point> pts) {
   // Dagre's last two route points are far apart.
   cmds.add(_basisSegment(pts[n - 1], pts[n - 1], pts[n - 1]));
   return cmds;
+}
+
+List<Point> _softenBasisStart(List<Point> points) {
+  if (points.length < 3) return points;
+
+  final start = points.first;
+  final end = points.last;
+  final axis = end - start;
+  final axisLengthSquared = axis.x * axis.x + axis.y * axis.y;
+  if (axisLengthSquared == 0) return points;
+
+  final firstStep = points[1] - start;
+  final progress =
+      (firstStep.x * axis.x + firstStep.y * axis.y) / axisLengthSquared;
+  const minimumProgress = 0.02;
+  if (progress >= minimumProgress) return points;
+
+  final softened = List<Point>.from(points);
+  softened[1] = points[1] + axis * (minimumProgress - progress);
+  return softened;
 }
 
 CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(

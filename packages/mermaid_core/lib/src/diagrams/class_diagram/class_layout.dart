@@ -206,6 +206,11 @@ class _ClassLayout {
     final labelNodes = <SceneNode>[];
     final boxNodes = <SceneNode>[];
 
+    // Multiple inheritance relations may share the same parent. Keep each
+    // relation on its own rank-facing port instead of collapsing every route
+    // and marker onto the center of the parent edge.
+    final extensionPorts = _extensionPorts();
+
     // Reversed: namespaces close innermost-first during parsing, so painting
     // in reverse puts enclosing clusters behind nested ones.
     for (final ns in diagram.namespaces.reversed) {
@@ -273,10 +278,18 @@ class _ClassLayout {
       }
       // Keep inheritance markers on the rank-facing edge of their class.
       if (r.endFrom == RelationEnd.extension && points.length >= 2) {
-        points[1] = _rankApproachPoint(from, to.center);
+        points[1] = _rankApproachPoint(
+          from,
+          to.center,
+          crossAxis: extensionPorts[(i, r.from)],
+        );
       }
       if (r.endTo == RelationEnd.extension && points.length >= 2) {
-        points[points.length - 2] = _rankApproachPoint(to, from.center);
+        points[points.length - 2] = _rankApproachPoint(
+          to,
+          from.center,
+          crossAxis: extensionPorts[(i, r.to)],
+        );
       }
       points[0] = _intersectRect(from.rectAt(from.center), points[1]);
       points[points.length - 1] =
@@ -619,18 +632,64 @@ class _ClassLayout {
     return len == 0 ? const Point(0, 1) : Point(d.x / len, d.y / len);
   }
 
-  Point _rankApproachPoint(_Box endpoint, Point other) {
+  Map<(int, String), double> _extensionPorts() {
+    final byEndpoint = <String, List<(int, Point)>>{};
+    for (var i = 0; i < diagram.relations.length; i++) {
+      final relation = diagram.relations[i];
+      if (relation.endFrom == RelationEnd.extension) {
+        byEndpoint
+            .putIfAbsent(relation.from, () => [])
+            .add((i, boxes[relation.to]!.center));
+      }
+      if (relation.endTo == RelationEnd.extension) {
+        byEndpoint
+            .putIfAbsent(relation.to, () => [])
+            .add((i, boxes[relation.from]!.center));
+      }
+    }
+
+    final ports = <(int, String), double>{};
+    for (final MapEntry(key: endpointId, value: relations)
+        in byEndpoint.entries) {
+      final endpoint = boxes[endpointId]!;
+      final vertical = diagram.direction == FlowDirection.tb ||
+          diagram.direction == FlowDirection.bt;
+      relations.sort((a, b) {
+        final aCross = vertical ? a.$2.x : a.$2.y;
+        final bCross = vertical ? b.$2.x : b.$2.y;
+        final crossOrder = aCross.compareTo(bCross);
+        return crossOrder != 0 ? crossOrder : a.$1.compareTo(b.$1);
+      });
+
+      if (relations.length == 1) {
+        ports[(relations.single.$1, endpointId)] =
+            vertical ? endpoint.center.x : endpoint.center.y;
+        continue;
+      }
+
+      final extent = vertical ? endpoint.width : endpoint.height;
+      final start = (vertical ? endpoint.center.x : endpoint.center.y) -
+          extent / 2;
+      for (var index = 0; index < relations.length; index++) {
+        ports[(relations[index].$1, endpointId)] =
+            start + extent * (index + 1) / (relations.length + 1);
+      }
+    }
+    return ports;
+  }
+
+  Point _rankApproachPoint(_Box endpoint, Point other, {double? crossAxis}) {
     if (diagram.direction == FlowDirection.tb ||
         diagram.direction == FlowDirection.bt) {
       final sign = other.y < endpoint.center.y ? -1.0 : 1.0;
-      return Point(endpoint.center.x,
+      return Point(crossAxis ?? endpoint.center.x,
           endpoint.center.y + sign * (endpoint.height / 2 + _rankSpacing / 2));
     }
     final sign = other.x < endpoint.center.x ? -1.0 : 1.0;
     return Point(
         endpoint.center.x +
             sign * (endpoint.width / 2 + _rankSpacing / 2),
-        endpoint.center.y);
+        crossAxis ?? endpoint.center.y);
   }
 }
 

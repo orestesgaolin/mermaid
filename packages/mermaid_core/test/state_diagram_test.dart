@@ -9,6 +9,7 @@ import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart'
 import 'package:mermaid_core/src/diagrams/state/state_layout.dart';
 import 'package:mermaid_core/src/diagrams/state/state_model.dart';
 import 'package:mermaid_core/src/diagrams/state/state_parser.dart';
+import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/ir/scene_utils.dart';
 import 'package:mermaid_core/src/parse_error.dart';
@@ -38,6 +39,69 @@ List<SceneNode> flatten(List<SceneNode> nodes) => [
 SceneGroup sceneGroup(RenderScene s, String id) => flatten(s.nodes)
     .whereType<SceneGroup>()
     .firstWhere((g) => g.id == id);
+
+PathGeometry transitionPath(RenderScene scene, String id) =>
+    flatten(sceneGroup(scene, id).children)
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<PathGeometry>()
+        .single;
+
+PolygonGeometry transitionArrow(RenderScene scene, String id) =>
+    flatten(sceneGroup(scene, id).children)
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<PolygonGeometry>()
+        .single;
+
+List<Point> transitionPoints(RenderScene scene, String id) =>
+    transitionPath(scene, id)
+        .commands
+        .map((command) => switch (command) {
+              MoveTo(:final p) => p,
+              LineTo(:final p) => p,
+              _ => null,
+            })
+        .whereType<Point>()
+        .toList();
+
+bool segmentIntersectsRectInterior(Point a, Point b, Rect rect) {
+  final inner = rect.inflate(-0.01);
+  final dx = b.x - a.x;
+  final dy = b.y - a.y;
+  var minT = 0.0;
+  var maxT = 1.0;
+
+  bool clip(double p, double q) {
+    if (p == 0) return q >= 0;
+    final ratio = q / p;
+    if (p < 0) {
+      if (ratio > maxT) return false;
+      if (ratio > minT) minT = ratio;
+    } else {
+      if (ratio < minT) return false;
+      if (ratio < maxT) maxT = ratio;
+    }
+    return true;
+  }
+
+  return clip(-dx, a.x - inner.left) &&
+      clip(dx, inner.right - a.x) &&
+      clip(-dy, a.y - inner.top) &&
+      clip(dy, inner.bottom - a.y) &&
+      minT <= maxT;
+}
+
+void expectRouteAvoidsRect(List<Point> route, Rect blocker) {
+  expect(route, hasLength(greaterThan(1)));
+  for (var i = 1; i < route.length; i++) {
+    expect(
+      segmentIntersectsRectInterior(route[i - 1], route[i], blocker),
+      isFalse,
+      reason: 'segment ${route[i - 1]} -> ${route[i]} crosses $blocker',
+    );
+  }
+}
 
 void main() {
   group('parser', () {
@@ -279,6 +343,7 @@ Nested --> RootTarget
 
       expect(inner.top, greaterThan(firstState.bottom));
       expect((inner.center.x - firstState.center.x).abs(), lessThan(25));
+      expect(first.bottom - inner.bottom, greaterThan(5));
       expect(second.top, greaterThan(first.bottom));
       expect(third.left, greaterThan(first.right));
 
@@ -314,6 +379,66 @@ Nested --> RootTarget
             .single;
         expect(path.commands.whereType<CubicTo>(), isEmpty);
       }
+
+      final parentRoute = transitionPath(s, 'trans_First_Second_1');
+      final nestedRoute = transitionPath(s, 'trans_innerFirst_2nd_7');
+      final parentStart = (parentRoute.commands.first as MoveTo).p;
+      final nestedStart = (nestedRoute.commands.first as MoveTo).p;
+      expect((parentStart.x - nestedStart.x).abs(), greaterThan(5));
+    });
+    test('fixture pseudo-state arrows use the shared vertical centre line', () {
+      final s = layoutStateDiagram(
+        parseStateDiagram(stateFixture('05')),
+        measurer: const ApproximateTextMeasurer(),
+        theme: MermaidTheme.defaultTheme,
+      );
+
+      for (final (transitionId, sourceId, targetId) in [
+        ('trans___start_Third_3rd_9', '__start_Third', '3rd'),
+        ('trans_3rd___end_Third_10', '3rd', '__end_Third'),
+      ]) {
+        final source = sceneNodeBounds(sceneGroup(s, sourceId))!;
+        final target = sceneNodeBounds(sceneGroup(s, targetId))!;
+        final path = transitionPath(s, transitionId);
+        final start = (path.commands.first as MoveTo).p;
+        final tip = transitionArrow(s, transitionId).points.first;
+
+        expect(start.x, closeTo(source.center.x, 0.001));
+        expect(start.y, closeTo(source.bottom, 0.001));
+        expect(tip.x, closeTo(target.center.x, 0.001));
+        expect(tip.y, closeTo(target.top, 0.001));
+      }
+    });
+    test(
+      'aligned normal-state shortcut does not cross an intervening state',
+      () {
+        final s = layout('''
+state Root {
+  A --> B
+  B --> C
+  A --> C
+}
+''');
+
+        expectRouteAvoidsRect(
+          transitionPoints(s, 'trans_A_C_2'),
+          sceneNodeBounds(sceneGroup(s, 'B'))!,
+        );
+      },
+    );
+    test('aligned pseudo-state shortcut requires a clear corridor', () {
+      final s = layout('''
+state Root {
+  A --> B
+  B --> [*]
+  A --> [*]
+}
+''');
+
+      expectRouteAvoidsRect(
+        transitionPoints(s, 'trans_A___end_Root_2'),
+        sceneNodeBounds(sceneGroup(s, 'B'))!,
+      );
     });
     test('explicit dagre selection is preserved for nested composites', () {
       final s = layoutStateDiagram(

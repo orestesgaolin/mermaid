@@ -196,17 +196,24 @@ class _StateLayout {
       }
     }
 
+    late Rect? Function(String id) compositeBounds;
+
     Rect? descendantBounds(String id) {
       Rect? acc;
       for (final childId in diagram.states[id]?.children ?? const <String>[]) {
-        final b = placed[childId]?.rect ?? descendantBounds(childId);
+        final child = diagram.states[childId];
+        final b =
+            placed[childId]?.rect ??
+            (child?.kind == StateKind.composite
+                ? compositeBounds(childId)
+                : null);
         if (b == null) continue;
         acc = acc == null ? b : acc.union(b);
       }
       return acc;
     }
 
-    Rect? compositeBounds(String id) {
+    compositeBounds = (String id) {
       final pos = descendantBounds(id);
       if (pos == null) return null;
       final state = diagram.states[id]!;
@@ -221,7 +228,7 @@ class _StateLayout {
             _clusterPadding,
         pos.bottom + _clusterPadding,
       );
-    }
+    };
 
     void translateDescendants(String id, double dx, double dy) {
       for (final childId in diagram.states[id]?.children ?? const <String>[]) {
@@ -453,15 +460,72 @@ class _StateLayout {
         points =
             _dropInsideRect(points, clusterRects[clusterFrom]!, fromEnd: false);
       }
-      final sourceRect =
-          clusterFrom != null ? clusterRects[clusterFrom]! : placed[fromId]!.rect;
-      final targetRect =
-          clusterTo != null ? clusterRects[clusterTo]! : placed[toId]!.rect;
+      final sourceRect = clusterFrom != null
+          ? clusterRects[clusterFrom]!
+          : _transitionRect(placed[fromId]!);
+      final targetRect = clusterTo != null
+          ? clusterRects[clusterTo]!
+          : _transitionRect(placed[toId]!);
+      final source = placed[fromId]!.node;
+      final target = placed[toId]!.node;
+      bool isPseudoState(StateNode node) =>
+          node.kind == StateKind.start || node.kind == StateKind.end;
+      final corridorX = sourceRect.center.x;
+      final corridorTop = math.min(sourceRect.center.y, targetRect.center.y);
+      final corridorBottom = math.max(sourceRect.center.y, targetRect.center.y);
+      final directCorridorClear = placed.entries
+          .where((entry) => entry.key != fromId && entry.key != toId)
+          .where((entry) => entry.value.node.parent == source.parent)
+          .every((entry) {
+            final rect = _transitionRect(entry.value);
+            final crossesX = rect.left <= corridorX && corridorX <= rect.right;
+            final overlapsY =
+                rect.bottom > corridorTop && rect.top < corridorBottom;
+            return !crossesX || !overlapsY;
+          });
+      final alignedSiblingRoute =
+          useElk &&
+          clusterFrom == null &&
+          clusterTo == null &&
+          source.parent == target.parent &&
+          (isPseudoState(source) || isPseudoState(target)) &&
+          directCorridorClear &&
+          (sourceRect.center.x - targetRect.center.x).abs() < 0.001;
+      if (alignedSiblingRoute) {
+        // ELK can move a bend to the edge of a circular pseudo-state even when
+        // two sibling states have the same centre line. Use the direct axis so
+        // initial/final arrows meet both the marker and state cleanly.
+        points = [sourceRect.center, targetRect.center];
+      }
+
+      final hasNestedParallelRoute =
+          directCompositeRoute &&
+          diagram.transitions.any(
+            (other) =>
+                other != t &&
+                _isDescendantOf(other.from, t.from) &&
+                _isDescendantOf(other.to, t.to),
+          );
+      final useSeparateCorridor =
+          hasNestedParallelRoute &&
+          targetRect.top >= sourceRect.bottom &&
+          math.min(sourceRect.right, targetRect.right) >
+              math.max(sourceRect.left, targetRect.left);
+      if (useSeparateCorridor) {
+        // Keep the parent transition in its own corridor when a descendant
+        // transition crosses the same pair of composite boundaries.
+        final overlapLeft = math.max(sourceRect.left, targetRect.left);
+        final overlapRight = math.min(sourceRect.right, targetRect.right);
+        final x = overlapLeft + (overlapRight - overlapLeft) * 0.25;
+        points = [Point(x, sourceRect.bottom), Point(x, targetRect.top)];
+      }
       // ELK routes orthogonally, so clip the end segments perpendicular to the
       // border (keeping the stub axis-aligned) rather than from the node centre,
       // which would tilt a near-vertical/near-horizontal stub. Dagre paths are
       // curves, so keep the centre-based intersect for them.
-      if (useElk && !directCompositeRoute) {
+      if (useSeparateCorridor) {
+        // The points already lie on the two visible cluster boundaries.
+      } else if (useElk && !directCompositeRoute) {
         points[0] = _clipRectPerp(sourceRect, points[0], points[1]);
         points[points.length - 1] = _clipRectPerp(
             targetRect, points[points.length - 1], points[points.length - 2]);
@@ -628,6 +692,25 @@ class _StateLayout {
       channel(background.green),
       channel(background.blue),
     );
+  }
+
+  bool _isDescendantOf(String candidateId, String ancestorId) {
+    var parentId = diagram.states[candidateId]?.parent;
+    while (parentId != null) {
+      if (parentId == ancestorId) return true;
+      parentId = diagram.states[parentId]?.parent;
+    }
+    return false;
+  }
+
+  Rect _transitionRect(_Placed state) {
+    // End markers reserve an 18 px layout box but draw a 14 px outer circle.
+    // Connect the transition to the visible circle instead of the invisible
+    // layout padding.
+    if (state.node.kind == StateKind.end) {
+      return Rect.fromCenter(state.center, 14, 14);
+    }
+    return state.rect;
   }
 
   _Placed _measure(StateNode s) {

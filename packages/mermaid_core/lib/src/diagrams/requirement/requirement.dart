@@ -264,9 +264,19 @@ RenderScene layoutRequirementDiagram(
   }
 
   final g = dagre.DagreGraph();
-  boxes.forEach((id, b) {
+  // Use first relation appearance as Dagre's stable tie-break order. This is
+  // the order upstream's relationship graph exposes to Dagre and keeps source
+  // siblings on the same side as their targets, avoiding avoidable crossings.
+  final nodeOrder = <String>{};
+  for (final relation in diagram.relations) {
+    nodeOrder.add(relation.from);
+    nodeOrder.add(relation.to);
+  }
+  nodeOrder.addAll(boxes.keys);
+  for (final id in nodeOrder) {
+    final b = boxes[id]!;
     g.addNode(dagre.DagreNode(id, width: b.$1.width, height: b.$1.height));
-  });
+  }
   final labelSizes = <int, Size>{};
   for (var i = 0; i < diagram.relations.length; i++) {
     final r = diagram.relations[i];
@@ -287,11 +297,144 @@ RenderScene layoutRequirementDiagram(
   boxes.forEach((id, b) {
     centers[id] = result.graph.nodeMap[id]!.position!.center;
   });
+  final originalCenters = Map<String, Point>.from(centers);
+
+  // Dagre's stable tie-break can retain a same-rank source order that creates
+  // a crossing even when each source has a clear target column. Reorder only
+  // those same-rank siblings by the average x position of their downstream
+  // targets, then reroute their incident edges from the corrected centers.
+  final movedNodes = <String>{};
+  final byY = centers.keys.toList()
+    ..sort((a, b) => centers[a]!.y.compareTo(centers[b]!.y));
+  final rankGroups = <List<String>>[];
+  for (final id in byY) {
+    if (rankGroups.isEmpty ||
+        (centers[id]!.y - centers[rankGroups.last.first]!.y).abs() > 25) {
+      rankGroups.add([id]);
+    } else {
+      rankGroups.last.add(id);
+    }
+  }
+  for (final rank in rankGroups.where((group) => group.length > 1)) {
+    double targetX(String id) {
+      final targets = diagram.relations
+          .where((relation) => relation.from == id)
+          .map((relation) => centers[relation.to])
+          .whereType<Point>()
+          .where((target) => target.y > centers[id]!.y)
+          .toList();
+      if (targets.isEmpty) return centers[id]!.x;
+      return targets.fold(0.0, (sum, target) => sum + target.x) /
+          targets.length;
+    }
+
+    final ordered = [...rank]
+      ..sort((a, b) {
+        final byTarget = targetX(a).compareTo(targetX(b));
+        return byTarget != 0
+            ? byTarget
+            : centers[a]!.x.compareTo(centers[b]!.x);
+      });
+    final current = [...rank]
+      ..sort((a, b) => centers[a]!.x.compareTo(centers[b]!.x));
+    if (List.generate(
+      ordered.length,
+      (i) => ordered[i] == current[i],
+    ).every((same) => same)) {
+      continue;
+    }
+
+    int incomingFromAbove(String id) => diagram.relations
+        .where((relation) => relation.to == id)
+        .where((relation) => centers[relation.from]!.y < centers[id]!.y)
+        .length;
+    var anchor = 0;
+    for (var i = 1; i < ordered.length; i++) {
+      if (incomingFromAbove(ordered[i]) > incomingFromAbove(ordered[anchor])) {
+        anchor = i;
+      }
+    }
+    final assigned = <String, double>{
+      ordered[anchor]: centers[ordered[anchor]]!.x,
+    };
+    for (var i = anchor - 1; i >= 0; i--) {
+      final next = ordered[i + 1];
+      assigned[ordered[i]] =
+          assigned[next]! -
+          boxes[next]!.$1.width / 2 -
+          50 -
+          boxes[ordered[i]]!.$1.width / 2;
+    }
+    for (var i = anchor + 1; i < ordered.length; i++) {
+      final previous = ordered[i - 1];
+      assigned[ordered[i]] =
+          assigned[previous]! +
+          boxes[previous]!.$1.width / 2 +
+          50 +
+          boxes[ordered[i]]!.$1.width / 2;
+    }
+    for (final id in ordered) {
+      final center = centers[id]!;
+      final x = assigned[id]!;
+      if ((center.x - x).abs() > 0.001) movedNodes.add(id);
+      centers[id] = Point(x, center.y);
+    }
+  }
+  for (final sourceId in movedNodes.toList()) {
+    ReqRelation? relation;
+    for (final candidate in diagram.relations) {
+      if (candidate.from == sourceId) {
+        relation = candidate;
+        break;
+      }
+    }
+    if (relation == null) continue;
+    final targetId = relation.to;
+    final target = centers[targetId]!;
+    final peers =
+        centers.keys
+            .where((id) => id != targetId)
+            .where((id) => (centers[id]!.y - target.y).abs() <= 25)
+            .toList()
+          ..sort((a, b) => centers[a]!.x.compareTo(centers[b]!.x));
+    var x = centers[sourceId]!.x;
+    for (final peerId in peers) {
+      final peer = centers[peerId]!;
+      if (peer.x < target.x) {
+        x = math.max(
+          x,
+          peer.x +
+              boxes[peerId]!.$1.width / 2 +
+              50 +
+              boxes[targetId]!.$1.width / 2,
+        );
+      } else {
+        x = math.min(
+          x,
+          peer.x -
+              boxes[peerId]!.$1.width / 2 -
+              50 -
+              boxes[targetId]!.$1.width / 2,
+        );
+      }
+    }
+    if ((target.x - x).abs() > 0.001) {
+      centers[targetId] = Point(x, target.y);
+      movedNodes.add(targetId);
+    }
+  }
 
   for (var i = 0; i < diagram.relations.length; i++) {
     final r = diagram.relations[i];
     final dagreEdge = result.graph.findEdgeById('e$i')!;
     var pts = List<Point>.from(dagreEdge.points);
+    if (movedNodes.contains(r.from) || movedNodes.contains(r.to)) {
+      pts = _translateRoute(
+        pts,
+        centers[r.from]! - originalCenters[r.from]!,
+        centers[r.to]! - originalCenters[r.to]!,
+      );
+    }
     if (pts.length < 2) pts = [centers[r.from]!, centers[r.to]!];
     final fromRect =
         Rect.fromCenter(centers[r.from]!, boxes[r.from]!.$1.width, boxes[r.from]!.$1.height);
@@ -309,8 +452,11 @@ RenderScene layoutRequirementDiagram(
     if (isContains) {
       // `contains` uses a start marker (circle r=9 + crosshair) at the `from`
       // end, no end arrow (`markers.js:requirement_contains`, refX 0).
-      final start = pts.first;
-      final sdir = _dir(pts[1], start); // points from line outward into marker
+      final border = pts.first;
+      const markerRadius = 9.0;
+      final start = _outsideMarkerCenter(fromRect, border, markerRadius);
+      pts[0] = start;
+      final sdir = _dir(pts[1], start); // points from line toward the source
       // Marker center sits at the start point; the crosshair lines span the
       // circle. Reproduce circle (r=9) + two crossing lines.
       final perp = Point(-sdir.y, sdir.x);
@@ -322,21 +468,21 @@ RenderScene layoutRequirementDiagram(
         stroke: Stroke(color: theme.relationColor, width: 1.3, dash: dash),
       ));
       children.add(SceneShape(
-        geometry: CircleGeometry(start, 9),
+        geometry: CircleGeometry(start, markerRadius),
         stroke: Stroke(color: theme.relationColor, width: 1),
       ));
       // Crosshair: one line along the edge direction, one perpendicular.
       children.add(SceneShape(
         geometry: PathGeometry([
-          MoveTo(start - sdir * 9),
-          LineTo(start + sdir * 9),
+          MoveTo(start - sdir * markerRadius),
+          LineTo(start + sdir * markerRadius),
         ]),
         stroke: Stroke(color: theme.relationColor, width: 1),
       ));
       children.add(SceneShape(
         geometry: PathGeometry([
-          MoveTo(start - perp * 9),
-          LineTo(start + perp * 9),
+          MoveTo(start - perp * markerRadius),
+          LineTo(start + perp * markerRadius),
         ]),
         stroke: Stroke(color: theme.relationColor, width: 1),
       ));
@@ -370,7 +516,7 @@ RenderScene layoutRequirementDiagram(
       children: children,
     ));
     final size = labelSizes[i]!;
-    final mid = pts[pts.length ~/ 2];
+    final mid = _pathMidpoint(pts);
     // Upstream label: `relationLabelColor` (=actorTextColor) on
     // `relationLabelBackground` (=labelBackground='rgba(232,232,232,0.8)').
     nodes.add(SceneGroup(
@@ -481,6 +627,66 @@ Point _intersectRect(Rect rect, Point outside) {
     sy = dy * sx / dx;
   }
   return Point(c.x + sx, c.y + sy);
+}
+
+Point _outsideMarkerCenter(Rect rect, Point border, double radius) {
+  final distances = <(double, Point)>[
+    ((border.x - rect.left).abs(), Point(rect.left - radius, border.y)),
+    ((border.x - rect.right).abs(), Point(rect.right + radius, border.y)),
+    ((border.y - rect.top).abs(), Point(border.x, rect.top - radius)),
+    ((border.y - rect.bottom).abs(), Point(border.x, rect.bottom + radius)),
+  ]..sort((a, b) => a.$1.compareTo(b.$1));
+  return distances.first.$2;
+}
+
+/// Moves both ends of a routed polyline while retaining Dagre's bends.
+/// Displacement is interpolated by arc-length position, so moved nodes do not
+/// replace obstacle-aware routes with direct segments.
+List<Point> _translateRoute(
+  List<Point> points,
+  Point sourceDelta,
+  Point targetDelta,
+) {
+  if (points.length < 2) return points;
+  var total = 0.0;
+  final distances = <double>[0];
+  for (var i = 1; i < points.length; i++) {
+    total += points[i].distanceTo(points[i - 1]);
+    distances.add(total);
+  }
+  return [
+    for (var i = 0; i < points.length; i++)
+      Point(
+        points[i].x +
+            sourceDelta.x * (1 - (total == 0 ? 0 : distances[i] / total)) +
+            targetDelta.x * (total == 0 ? 0 : distances[i] / total),
+        points[i].y +
+            sourceDelta.y * (1 - (total == 0 ? 0 : distances[i] / total)) +
+            targetDelta.y * (total == 0 ? 0 : distances[i] / total),
+      ),
+  ];
+}
+
+Point _pathMidpoint(List<Point> points) {
+  if (points.isEmpty) return Point.zero;
+  if (points.length == 1) return points.first;
+  var total = 0.0;
+  for (var i = 1; i < points.length; i++) {
+    total += points[i].distanceTo(points[i - 1]);
+  }
+  var remaining = total / 2;
+  for (var i = 1; i < points.length; i++) {
+    final length = points[i].distanceTo(points[i - 1]);
+    if (length >= remaining) {
+      final fraction = length == 0 ? 0.0 : remaining / length;
+      return Point(
+        points[i - 1].x + (points[i].x - points[i - 1].x) * fraction,
+        points[i - 1].y + (points[i].y - points[i - 1].y) * fraction,
+      );
+    }
+    remaining -= length;
+  }
+  return points.last;
 }
 
 Point _dir(Point from, Point to) {
