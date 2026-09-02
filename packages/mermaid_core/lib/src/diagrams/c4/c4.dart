@@ -760,6 +760,53 @@ RenderScene layoutC4Diagram(
     ));
   }
 
+  final boundaryHeaderRects = <Rect>[];
+  for (final group in clusterNodes.whereType<SceneGroup>()) {
+    final bounds = sceneBounds(group.children.whereType<SceneText>().toList());
+    if (bounds != null) boundaryHeaderRects.add(bounds.inflate(4));
+  }
+  final relationAnnotationRects = <Rect>[];
+  final relationSegments = <({Point start, Point end})>[];
+  for (final relation in diagram.rels) {
+    final fromRect = placedRects[relation.from];
+    final toRect = placedRects[relation.to];
+    if (fromRect == null || toRect == null) continue;
+    final start = _intersectRect(fromRect, toRect.center);
+    final tip = _intersectRect(toRect, fromRect.center);
+    final dir = _dir(start, tip);
+    relationSegments.add((start: start, end: tip - dir * 9));
+  }
+  final obstacleSegments = [...relationSegments];
+  for (final rect in boundaryRects.values) {
+    final topLeft = Point(rect.left, rect.top);
+    final topRight = Point(rect.right, rect.top);
+    final bottomRight = Point(rect.right, rect.bottom);
+    final bottomLeft = Point(rect.left, rect.bottom);
+    obstacleSegments.addAll([
+      (start: topLeft, end: topRight),
+      (start: topRight, end: bottomRight),
+      (start: bottomRight, end: bottomLeft),
+      (start: bottomLeft, end: topLeft),
+    ]);
+  }
+  Rect? commonBoundaryRect(C4Rel relation) {
+    List<String> ancestors(String nodeId) {
+      final result = <String>[];
+      var boundary = diagram.nodes[nodeId]?.boundary;
+      while (boundary != null) {
+        result.add(boundary);
+        boundary = boundaryById[boundary]?.parent;
+      }
+      return result;
+    }
+
+    final toAncestors = ancestors(relation.to).toSet();
+    for (final boundary in ancestors(relation.from)) {
+      if (toAncestors.contains(boundary)) return boundaryRects[boundary];
+    }
+    return null;
+  }
+
   // ---- Relations ----
   for (var i = 0; i < diagram.rels.length; i++) {
     final r = diagram.rels[i];
@@ -812,37 +859,150 @@ RenderScene layoutC4Diagram(
     final labelText = diagram.subtype == C4Subtype.dynamic
         ? '${i + 1}: ${r.label}'
         : r.label;
-    final mid = Point((start.x + tip.x) / 2 + r.offsetX,
-        (start.y + tip.y) / 2 + r.offsetY);
-    if (labelText.isNotEmpty) {
-      final size = measurer.measure(labelText, relStyle, maxWidth: 150);
-      labelNodes.add(SceneText(
-        text: labelText,
-        bounds: Rect.fromCenter(mid, size.width, size.height),
-        style: relStyle,
-        color: textColor,
-      ));
+    var mid = Point((start.x + tip.x) / 2, (start.y + tip.y) / 2);
+    if (labelText.isNotEmpty || r.technology.isNotEmpty) {
+      final labelSize = labelText.isEmpty
+          ? Size.zero
+          : measurer.measure(labelText, relStyle, maxWidth: 150);
+      final technologySize = r.technology.isEmpty
+          ? Size.zero
+          : measurer.measure('[${r.technology}]', technStyle,
+              maxWidth: 150);
+      final gap = labelText.isNotEmpty && r.technology.isNotEmpty ? 2.0 : 0.0;
+      final annotationWidth = math.max(labelSize.width, technologySize.width);
+      final annotationHeight = labelSize.height + gap + technologySize.height;
+      final annotationTopOffset = labelText.isNotEmpty
+          ? -labelSize.height / 2
+          : -technologySize.height / 2;
+      List<Rect> textBoundsAt(Point center) => [
+        if (labelText.isNotEmpty)
+          Rect.fromCenter(center, labelSize.width, labelSize.height),
+        if (r.technology.isNotEmpty)
+          Rect.fromCenter(
+              Point(center.x,
+                  labelText.isEmpty
+                      ? center.y
+                      : center.y + labelSize.height / 2 + gap +
+                          technologySize.height / 2),
+              technologySize.width,
+              technologySize.height),
+      ];
+      final obstructions = [
+        ...placedRects.values.map((rect) => rect.inflate(4)),
+        ...boundaryHeaderRects,
+        ...relationAnnotationRects,
+      ];
+      final commonBoundary = commonBoundaryRect(r);
+      final containingBoundary = commonBoundary == null
+          ? null
+          : Rect.fromLTRB(
+              commonBoundary.left + 4,
+              commonBoundary.top + 4,
+              commonBoundary.right - 4,
+              commonBoundary.bottom - 4,
+            );
+      final primaryDirection = dir.x.abs() < 0.15
+          ? const Point(1, 0)
+          : dir.y.abs() < 0.15
+              ? const Point(0, -1)
+              : Point(-dir.y, dir.x);
+      final directions = [primaryDirection, primaryDirection * -1];
+      final candidates =
+          <({Point mid, Rect bounds, double distance, int priority})>[];
+      ({Point mid, Rect bounds, double distance, int priority})? fallback;
+      for (var directionIndex = 0;
+          directionIndex < directions.length;
+          directionIndex++) {
+        final direction = directions[directionIndex];
+        final xProjection = math.min(
+            direction.x * -annotationWidth / 2,
+            direction.x * annotationWidth / 2);
+        final yProjection = math.min(
+            direction.y * annotationTopOffset,
+            direction.y * (annotationTopOffset + annotationHeight));
+        final baseDistance = 4 - xProjection - yProjection;
+        var found = false;
+        for (var radius = 0; radius < 40 && !found; radius++) {
+          for (var normalPass = 0;
+              normalPass <= radius && !found;
+              normalPass++) {
+            final slidePass = radius - normalPass;
+            final slideOffsets = slidePass == 0
+                ? const [0.0]
+                : [slidePass * 8.0, slidePass * -8.0];
+            for (final slideOffset in slideOffsets) {
+              final normalDistance = baseDistance + normalPass * 8;
+              final candidateMid = mid +
+                  direction * normalDistance +
+                  dir * slideOffset +
+                  Point(r.offsetX, r.offsetY);
+              final candidateBounds = Rect.fromLTWH(
+                  candidateMid.x - annotationWidth / 2,
+                  candidateMid.y + annotationTopOffset,
+                  annotationWidth,
+                  annotationHeight);
+              final distance = math.sqrt(
+                  normalDistance * normalDistance +
+                      slideOffset * slideOffset);
+              fallback ??= (
+                mid: candidateMid,
+                bounds: candidateBounds,
+                distance: distance,
+                priority: directionIndex,
+              );
+              final textBounds = textBoundsAt(candidateMid);
+              final crossesStroke = obstacleSegments.any((segment) =>
+                  textBounds.any((bounds) => _segmentIntersectsRect(
+                      segment.start, segment.end, bounds.inflate(3))));
+              final overlapsObstruction = obstructions.any((obstruction) =>
+                  _rectsOverlap(candidateBounds, obstruction));
+              final insideBoundary = containingBoundary == null ||
+                  _rectContainsRect(containingBoundary, candidateBounds);
+              if (!crossesStroke && !overlapsObstruction && insideBoundary) {
+                candidates.add((
+                  mid: candidateMid,
+                  bounds: candidateBounds,
+                  distance: distance,
+                  priority: directionIndex,
+                ));
+                found = true;
+                break;
+              }
+            }
+          }
+        }
+      }
+      candidates.sort((a, b) {
+        final distance = a.distance.compareTo(b.distance);
+        return distance != 0 ? distance : a.priority.compareTo(b.priority);
+      });
+      final placement = candidates.isEmpty ? fallback! : candidates.first;
+      mid = placement.mid;
+      final annotationBounds = placement.bounds;
+      relationAnnotationRects.add(annotationBounds.inflate(4));
+
+      if (labelText.isNotEmpty) {
+        labelNodes.add(SceneText(
+          text: labelText,
+          bounds: Rect.fromCenter(mid, labelSize.width, labelSize.height),
+          style: relStyle,
+          color: textColor,
+        ));
+      }
       if (r.technology.isNotEmpty) {
-        final ts = measurer.measure('[${r.technology}]', technStyle,
-            maxWidth: 150);
         labelNodes.add(SceneText(
           text: '[${r.technology}]',
           bounds: Rect.fromCenter(
-              Point(mid.x, mid.y + size.height / 2 + ts.height / 2 + 2),
-              ts.width, ts.height),
+              Point(mid.x,
+                  labelText.isEmpty
+                      ? mid.y
+                      : mid.y + labelSize.height / 2 + gap +
+                          technologySize.height / 2),
+              technologySize.width, technologySize.height),
           style: technStyle,
           color: textColor,
         ));
       }
-    } else if (r.technology.isNotEmpty) {
-      final ts =
-          measurer.measure('[${r.technology}]', technStyle, maxWidth: 150);
-      labelNodes.add(SceneText(
-        text: '[${r.technology}]',
-        bounds: Rect.fromCenter(mid, ts.width, ts.height),
-        style: technStyle,
-        color: textColor,
-      ));
     }
   }
 
@@ -1054,6 +1214,55 @@ Point _intersectRect(Rect rect, Point outside) {
     sy = dy * sx / dx;
   }
   return Point(c.x + sx, c.y + sy);
+}
+
+bool _rectsOverlap(Rect a, Rect b) =>
+    a.left < b.right &&
+    a.right > b.left &&
+    a.top < b.bottom &&
+    a.bottom > b.top;
+
+bool _rectContainsRect(Rect outer, Rect inner) =>
+    inner.left >= outer.left &&
+    inner.right <= outer.right &&
+    inner.top >= outer.top &&
+    inner.bottom <= outer.bottom;
+
+bool _segmentIntersectsRect(Point a, Point b, Rect rect) {
+  if (rect.contains(a) || rect.contains(b)) return true;
+
+  double cross(Point p, Point q, Point r) =>
+      (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  int orientation(Point p, Point q, Point r) {
+    final value = cross(p, q, r);
+    if (value.abs() < 1e-9) return 0;
+    return value > 0 ? 1 : -1;
+  }
+  bool onSegment(Point p, Point q, Point r) =>
+      q.x >= math.min(p.x, r.x) - 1e-9 &&
+      q.x <= math.max(p.x, r.x) + 1e-9 &&
+      q.y >= math.min(p.y, r.y) - 1e-9 &&
+      q.y <= math.max(p.y, r.y) + 1e-9;
+  bool intersects(Point c, Point d) {
+    final o1 = orientation(a, b, c);
+    final o2 = orientation(a, b, d);
+    final o3 = orientation(c, d, a);
+    final o4 = orientation(c, d, b);
+    if (o1 != o2 && o3 != o4) return true;
+    return (o1 == 0 && onSegment(a, c, b)) ||
+        (o2 == 0 && onSegment(a, d, b)) ||
+        (o3 == 0 && onSegment(c, a, d)) ||
+        (o4 == 0 && onSegment(c, b, d));
+  }
+
+  final topLeft = Point(rect.left, rect.top);
+  final topRight = Point(rect.right, rect.top);
+  final bottomRight = Point(rect.right, rect.bottom);
+  final bottomLeft = Point(rect.left, rect.bottom);
+  return intersects(topLeft, topRight) ||
+      intersects(topRight, bottomRight) ||
+      intersects(bottomRight, bottomLeft) ||
+      intersects(bottomLeft, topLeft);
 }
 
 Point _dir(Point from, Point to) {

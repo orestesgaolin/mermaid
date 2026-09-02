@@ -429,7 +429,7 @@ C4Deployment
       expect(type.bounds.bottom, lessThan(mobileRect.top));
       expect(boundaryRect.contains(mobileRect.center), isTrue);
     });
-    test('UpdateRelStyle offsets move the complete relation annotation', () {
+    test('UpdateRelStyle moves the complete annotation while retaining clearance', () {
       const base = '''
 C4Context
   Person(a, "User")
@@ -452,12 +452,216 @@ C4Context
           .singleWhere((text) => text.text == value)
           .bounds
           .center;
+      Point relationMidpoint(RenderScene scene) {
+        final relation = flatten(scene.nodes)
+            .whereType<SceneGroup>()
+            .singleWhere((node) => node.id == 'rel_a_b_0');
+        final points = (relation.children
+                    .whereType<SceneShape>()
+                    .first
+                    .geometry as PathGeometry)
+                .commands
+                .map((command) => switch (command) {
+                      MoveTo(:final p) => p,
+                      LineTo(:final p) => p,
+                      _ => null,
+                    })
+                .whereType<Point>()
+                .toList();
+        return Point((points.first.x + points.last.x) / 2,
+            (points.first.y + points.last.y) / 2);
+      }
       final original = render(base);
       final shifted = render(updated);
+      final deltas = <Point>[];
       for (final value in ['Uses', '[HTTPS]']) {
-        final delta = center(shifted, value) - center(original, value);
-        expect(delta.x, closeTo(-40, 0.001));
-        expect(delta.y, closeTo(-20, 0.001));
+        final originalOffset =
+            center(original, value) - relationMidpoint(original);
+        final shiftedOffset =
+            center(shifted, value) - relationMidpoint(shifted);
+        deltas.add(shiftedOffset - originalOffset);
+      }
+      expect(deltas[1].x, closeTo(deltas[0].x, 0.001));
+      expect(deltas[1].y, closeTo(deltas[0].y, 0.001));
+      expect(deltas[0].x, isNegative);
+      expect(deltas[0].y, isNegative);
+    });
+    test('fixture 05 relation annotations clear headers and strokes', () {
+      final source = File('test/fixtures/upstream_c4/05.mmd')
+          .readAsStringSync();
+      final scene = layoutC4Diagram(
+        parseC4Diagram(source),
+        measurer: measurer,
+        theme: theme,
+      );
+      final nodes = flatten(scene.nodes);
+      SceneGroup group(String id) => nodes.whereType<SceneGroup>()
+          .singleWhere((node) => node.id == id);
+      bool overlaps(Rect a, Rect b) =>
+          a.left < b.right &&
+          a.right > b.left &&
+          a.top < b.bottom &&
+          a.bottom > b.top;
+      double cross(Point a, Point b, Point c) =>
+          (b.x - a.x) * (c.y - a.y) -
+          (b.y - a.y) * (c.x - a.x);
+      int orientation(Point a, Point b, Point c) {
+        final value = cross(a, b, c);
+        if (value.abs() < 1e-9) return 0;
+        return value > 0 ? 1 : -1;
+      }
+      bool onSegment(Point a, Point b, Point c) =>
+          b.x >= math.min(a.x, c.x) - 1e-9 &&
+          b.x <= math.max(a.x, c.x) + 1e-9 &&
+          b.y >= math.min(a.y, c.y) - 1e-9 &&
+          b.y <= math.max(a.y, c.y) + 1e-9;
+      bool segmentsIntersect(Point a, Point b, Point c, Point d) {
+        final o1 = orientation(a, b, c);
+        final o2 = orientation(a, b, d);
+        final o3 = orientation(c, d, a);
+        final o4 = orientation(c, d, b);
+        if (o1 != o2 && o3 != o4) return true;
+        return (o1 == 0 && onSegment(a, c, b)) ||
+            (o2 == 0 && onSegment(a, d, b)) ||
+            (o3 == 0 && onSegment(c, a, d)) ||
+            (o4 == 0 && onSegment(c, b, d));
+      }
+      bool segmentIntersectsRect(Point a, Point b, Rect rect) =>
+          rect.contains(a) ||
+          rect.contains(b) ||
+          segmentsIntersect(a, b, Point(rect.left, rect.top),
+              Point(rect.right, rect.top)) ||
+          segmentsIntersect(a, b, Point(rect.right, rect.top),
+              Point(rect.right, rect.bottom)) ||
+          segmentsIntersect(a, b, Point(rect.right, rect.bottom),
+              Point(rect.left, rect.bottom)) ||
+          segmentsIntersect(a, b, Point(rect.left, rect.bottom),
+              Point(rect.left, rect.top));
+      List<Point> relationPoints(String id) => (group(id).children
+                  .whereType<SceneShape>()
+                  .first
+                  .geometry as PathGeometry)
+              .commands
+              .map((command) => switch (command) {
+                    MoveTo(:final p) => p,
+                    LineTo(:final p) => p,
+                    _ => null,
+                  })
+              .whereType<Point>()
+              .toList();
+
+      final plcHeader = group('boundary_plc')
+          .children
+          .whereType<SceneText>()
+          .map((text) => text.bounds)
+          .reduce((a, b) => a.union(b))
+          .inflate(4);
+      final apiCallAnnotations = nodes.whereType<SceneText>().where((text) =>
+          text.text == 'Makes API calls to' || text.text == '[json/HTTPS]')
+          .toList();
+      expect(apiCallAnnotations, hasLength(4));
+      for (final annotation in apiCallAnnotations) {
+        expect(overlaps(annotation.bounds, plcHeader), isFalse);
+      }
+      final apiRelationIds = ['rel_mobile_api_0', 'rel_spa_api_1'];
+      for (var i = 0; i < apiRelationIds.length; i++) {
+        final edge = relationPoints(apiRelationIds[i]);
+        final annotation = apiCallAnnotations[i * 2].bounds
+            .union(apiCallAnnotations[i * 2 + 1].bounds);
+        expect(segmentIntersectsRect(edge.first, edge.last, annotation),
+            isFalse);
+      }
+
+      final vertical = relationPoints('rel_api_db_3');
+      final lineX = vertical.first.x;
+      final readAnnotations = nodes.whereType<SceneText>()
+          .where((text) => text.text == 'Reads from and writes to')
+          .toList();
+      final readTechnologies = nodes.whereType<SceneText>()
+          .where((text) => text.text == '[JDBC]')
+          .toList();
+      expect(readAnnotations, hasLength(2));
+      expect(readTechnologies, hasLength(2));
+      expect(overlaps(readAnnotations[0].bounds, readAnnotations[1].bounds),
+          isFalse);
+      final reads = readAnnotations.reduce((a, b) =>
+              (a.bounds.center.x - lineX).abs() <
+                      (b.bounds.center.x - lineX).abs()
+                  ? a
+                  : b);
+      final readsIndex = readAnnotations.indexOf(reads);
+      final verticalAnnotation =
+          reads.bounds.union(readTechnologies[readsIndex].bounds).inflate(3);
+      expect(segmentIntersectsRect(
+          vertical.first, vertical.last, verticalAnnotation), isFalse);
+
+      final diagonal = relationPoints('rel_api_db2_4');
+      final diagonalAnnotation =
+          readAnnotations[1].bounds.union(readTechnologies[1].bounds);
+      for (final bounds in [
+        readAnnotations[1].bounds,
+        readTechnologies[1].bounds,
+      ]) {
+        expect(segmentIntersectsRect(
+            diagonal.first, diagonal.last, bounds.inflate(3)), isFalse);
+      }
+      final plcBounds = (group('boundary_plc').children
+              .whereType<SceneShape>()
+              .first
+              .geometry as RectGeometry)
+          .rect;
+      expect(plcBounds.contains(
+          Point(diagonalAnnotation.left, diagonalAnnotation.top)), isTrue);
+      expect(plcBounds.contains(
+          Point(diagonalAnnotation.right, diagonalAnnotation.bottom)), isTrue);
+
+      final horizontal = relationPoints('rel_db_db2_5');
+      final replicates = nodes.whereType<SceneText>()
+          .singleWhere((text) => text.text == 'Replicates data to');
+      expect(replicates.bounds.bottom,
+          lessThanOrEqualTo(horizontal.first.y - 4));
+    });
+    test('horizontal relation technology clears its stroke', () {
+      final fixture = File('test/fixtures/upstream_c4/05.mmd')
+          .readAsStringSync();
+      for (final replacement in [
+        'Rel_R(db, db2, "Replicates data to", "SYNC")',
+        'Rel_R(db, db2, "", "SYNC")',
+      ]) {
+        final source = fixture.replaceFirst(
+          'Rel_R(db, db2, "Replicates data to")',
+          replacement,
+        );
+        final scene = layoutC4Diagram(
+          parseC4Diagram(source),
+          measurer: measurer,
+          theme: theme,
+        );
+        final nodes = flatten(scene.nodes);
+        final relation = nodes
+            .whereType<SceneGroup>()
+            .singleWhere((node) => node.id == 'rel_db_db2_5');
+        final points = (relation.children
+                    .whereType<SceneShape>()
+                    .first
+                    .geometry as PathGeometry)
+                .commands
+                .map((command) => switch (command) {
+                      MoveTo(:final p) => p,
+                      LineTo(:final p) => p,
+                      _ => null,
+                    })
+                .whereType<Point>()
+                .toList();
+        final annotations = nodes.whereType<SceneText>().where((text) =>
+            text.text == 'Replicates data to' || text.text == '[SYNC]');
+
+        expect(annotations, isNotEmpty);
+        for (final annotation in annotations) {
+          final clearsAbove = annotation.bounds.bottom <= points.first.y - 3;
+          final clearsBelow = annotation.bounds.top >= points.first.y + 3;
+          expect(clearsAbove || clearsBelow, isTrue);
+        }
       }
     });
     test('garbage throws', () {
