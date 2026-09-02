@@ -80,6 +80,27 @@ class Home extends StatelessComponent {
           .text(' page.'),
         ]),
       ]),
+      section(classes: 'theme-bridge', [
+        div(classes: 'theme-bridge-copy', [
+          div(classes: 'theme-bridge-kicker', [.text('Flutter integration')]),
+          h2([.text('Follow ThemeData with one call')]),
+          p([
+            .text('The Flutter preview below maps the active Material color '
+                'and text roles into every Mermaid diagram family. For '
+                'samples without an explicit theme directive, use its '
+                'light/dark button to switch ThemeData and repaint the same '
+                'source immediately.'),
+          ]),
+        ]),
+        pre(classes: 'theme-bridge-code', [
+          code([.text('MermaidView(\n'
+              '  source: source,\n'
+              '  theme: MaterialMermaidTheme.fromTheme(\n'
+              '    Theme.of(context),\n'
+              '  ),\n'
+              ')')]),
+        ]),
+      ]),
       const CompareView(),
       footer(classes: 'foot', [
         p([

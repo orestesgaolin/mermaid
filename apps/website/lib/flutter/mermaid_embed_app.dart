@@ -14,7 +14,8 @@ import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
 import 'package:flutter/material.dart';
-import 'package:mermaid_flutter/mermaid_flutter.dart';
+
+import 'material_theme_demo.dart';
 
 @JS('mermaidDartEmbed')
 external set _mermaidDartEmbed(JSObject value);
@@ -55,27 +56,13 @@ class _MermaidEmbedAppState extends State<MermaidEmbedApp> {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      home: Material(
-        color: Colors.white,
-        // Interactive viewer (pan/zoom, arrows, reset, fullscreen) — the same
-        // way mermaid.js presents a diagram on the web. It fits the diagram to
-        // the pane on load and re-frames it when the source changes.
-        child: MermaidView(
-          source: _source,
-          backgroundColor: Colors.white,
-          // Errors replace the diagram so the comparison stays honest.
-          keepLastGoodSceneOnError: false,
-          // Let the host page present a true full-page overlay (a Flutter
-          // dialog would be trapped inside this small embedded view).
-          onRequestFullscreen: () {
-            try {
-              _toggleFullscreen();
-            } catch (_) {}
-          },
-        ),
-      ),
+    return MaterialThemeDemo(
+      source: _source,
+      onRequestFullscreen: () {
+        try {
+          _toggleFullscreen();
+        } catch (_) {}
+      },
     );
   }
 }
