@@ -474,6 +474,7 @@ Map<String, String> _parseStyles(String s) {
 const _cellGap = 8.0;
 // Upstream layout default padding is `config.block.padding ?? 8`.
 const _pad = 8.0;
+const _pointMarkerExtent = 8.0;
 
 /// Depth of a block-arrow's triangular head (how far it extends past the body).
 const _arrowHead = 18.0;
@@ -635,7 +636,7 @@ RenderScene layoutBlock(
     final dir = _unit(from, to);
     // Pull the line back from a filled point head so it doesn't poke through.
     final end = (e.arrowTo && e.markerTo == BlockMarker.point)
-        ? to - dir * 8
+        ? to - dir * _pointMarkerExtent
         : to;
     // Upstream `.edgePath .path` stroke is 2.0px; `==` => thick (3.5px),
     // `.-` => dotted dash pattern.
@@ -1178,8 +1179,8 @@ List<SceneNode> _marker(
         SceneShape(
           geometry: PolygonGeometry([
             tip,
-            tip - dir * 9 + perp * 4,
-            tip - dir * 9 - perp * 4,
+            tip - dir * _pointMarkerExtent + perp * 4,
+            tip - dir * _pointMarkerExtent - perp * 4,
           ]),
           fill: Fill(color),
         ),

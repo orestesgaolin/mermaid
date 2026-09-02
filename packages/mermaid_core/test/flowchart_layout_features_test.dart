@@ -363,6 +363,40 @@ flowchart TB
     });
   });
 
+  test('LR titled subgraphs center on their member row', () {
+    final graph = parseFlowchart('''
+graph LR
+    subgraph Stage One
+        a1[Fetch] --> a2[Validate]
+    end
+    subgraph Stage Two
+        b1[Transform] --> b2[Store]
+    end
+    a2 --> b1
+    Start([Start]) --> a1
+    b2 --> Done([Done])
+''');
+    final scene = layout(graph);
+
+    for (final (clusterTitle, memberId) in [
+      ('Stage One', 'a1'),
+      ('Stage Two', 'b1'),
+    ]) {
+      final clusterId = graph.subgraphs
+          .singleWhere((subgraph) => subgraph.title == clusterTitle)
+          .id;
+      final cluster = groupById(scene, clusterId);
+      final clusterRect = cluster.children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .single
+          .rect;
+      final memberRect = groupBounds(groupById(scene, memberId));
+      expect(clusterRect.center.y, closeTo(memberRect.center.y, 1e-6));
+    }
+  });
+
   group('per-subgraph direction', () {
     FlowGraph mixed() => FlowGraph(
       direction: FlowDirection.tb,

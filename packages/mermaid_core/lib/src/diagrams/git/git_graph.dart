@@ -538,15 +538,16 @@ RenderScene layoutGitGraph(
           ? Point(center.x, center.y + commitR + 9 + size.height / 2)
           : Point(center.x - commitR - 8 - size.width / 2, center.y);
       const py = 2.0;
+      final labelBounds = Rect.fromCenter(
+        lblCenter,
+        size.width + 2 * py,
+        size.height + 2 * py,
+      );
       children.add(
         SceneShape(
-          geometry: RectGeometry(
-            Rect.fromCenter(
-              lblCenter,
-              size.width + 2 * py,
-              size.height + 2 * py,
-            ),
-          ),
+          geometry: lr
+              ? PolygonGeometry(_rotatedRectPoints(labelBounds, -45))
+              : RectGeometry(labelBounds),
           fill: Fill(theme.commitLabelBackground.withOpacity(0.5)),
         ),
       );
@@ -575,7 +576,9 @@ RenderScene layoutGitGraph(
           // toward the spine.
           final cy = center.y - 19.2 - tagOffset;
           final cx = center.x;
-          final notchX = cx - w / 2 - px - 6; // pole side
+          // Upstream places the two-point tag hole just inside the body edge.
+          // Extending it beyond the body produces an oversized spear shape.
+          final notchX = cx - w / 2 - px / 2;
           final h2 = h / 2;
           children.add(
             SceneShape(
@@ -692,6 +695,29 @@ RenderScene layoutGitGraph(
     background: theme.background,
     nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
   );
+}
+
+List<Point> _rotatedRectPoints(Rect rect, double degrees) {
+  final center = rect.center;
+  final radians = degrees * math.pi / 180;
+  final cosA = math.cos(radians);
+  final sinA = math.sin(radians);
+
+  Point rotate(double x, double y) {
+    final dx = x - center.x;
+    final dy = y - center.y;
+    return Point(
+      center.x + dx * cosA - dy * sinA,
+      center.y + dx * sinA + dy * cosA,
+    );
+  }
+
+  return [
+    rotate(rect.left, rect.top),
+    rotate(rect.right, rect.top),
+    rotate(rect.right, rect.bottom),
+    rotate(rect.left, rect.bottom),
+  ];
 }
 
 /// Chooses the arrow color following upstream `drawArrow`: destination branch

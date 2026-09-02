@@ -143,6 +143,54 @@ void main() {
     expect(bar.bottom, greaterThanOrEqualTo(msgs[1].bottom - 6));
   });
 
+  test('auth activations align badges and leave side-note clearance', () {
+    final s = layout('''
+autonumber
+actor U as User
+participant W as Web App
+participant S as Auth Service
+U->>+W: Login request
+W->>+S: Validate credentials
+Note right of S: Check password hash
+alt valid
+    S-->>W: Token
+    W-->>U: Welcome!
+else invalid
+    S-->>-W: 401
+    W-->>-U: Try again
+end
+''');
+
+    double actorCenter(String id) => groupBounds(
+      groups(s, 'actor_$id').firstWhere((group) => group.id == 'actor_$id'),
+    ).center.x;
+
+    final bars = flatten(s.nodes)
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<RectGeometry>()
+        .map((geometry) => geometry.rect)
+        .where((rect) => (rect.width - 10).abs() < 0.1)
+        .toList();
+    final webBar = bars.singleWhere(
+      (rect) => (rect.center.x - actorCenter('W')).abs() < 0.1,
+    );
+    final authBar = bars.singleWhere(
+      (rect) => (rect.center.x - actorCenter('S')).abs() < 0.1,
+    );
+    expect(webBar.center.x, closeTo(actorCenter('W'), 1e-9));
+    expect(authBar.center.x, closeTo(actorCenter('S'), 1e-9));
+
+    Rect badge(String number) => flatten(
+      s.nodes,
+    ).whereType<SceneText>().singleWhere((text) => text.text == number).bounds;
+    expect(badge('2').center.x, closeTo(webBar.center.x, 1e-9));
+    expect(badge('3').center.x, closeTo(authBar.center.x, 1e-9));
+
+    final note = groupBounds(groups(s, 'note').single);
+    expect(note.left - authBar.right, greaterThanOrEqualTo(10));
+  });
+
   test('note over two participants spans both lifelines', () {
     final s = layout(
       'participant A\nparticipant B\nA->>B: x\n'

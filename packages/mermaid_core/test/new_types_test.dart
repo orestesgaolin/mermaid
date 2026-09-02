@@ -1,6 +1,8 @@
 /// Parse + layout smoke tests for block, radar, treemap, kanban, architecture.
 library;
 
+import 'dart:math' as math;
+
 import 'package:mermaid_core/src/detect.dart';
 import 'package:mermaid_core/src/diagrams/architecture/architecture.dart';
 import 'package:mermaid_core/src/diagrams/block/block.dart';
@@ -91,6 +93,45 @@ block-beta
     final worker2 = nodeRect('E');
     expect(worker1.left, groupRect.left + 8);
     expect(worker2.right, groupRect.right - 8);
+  });
+
+  test('block: point arrow stays between adjacent boxes', () {
+    final scene = layoutBlock(
+      parseBlock('''
+block-beta
+  columns 3
+  A["Input"] B["Process"] C["Output"]
+  block:group:3
+    D["Worker 1"] E["Worker 2"]
+  end
+  A --> B
+'''),
+      measurer: measurer,
+      theme: theme,
+    );
+
+    Rect nodeRect(String id) {
+      final group = flatten(
+        scene.nodes,
+      ).whereType<SceneGroup>().firstWhere((node) => node.id == id);
+      return (group.children.whereType<SceneShape>().first.geometry
+              as RectGeometry)
+          .rect;
+    }
+
+    final source = nodeRect('A');
+    final target = nodeRect('B');
+    final marker = flatten(scene.nodes)
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<PolygonGeometry>()
+        .single;
+
+    expect(
+      marker.points.map((point) => point.x),
+      everyElement(inInclusiveRange(source.right, target.left)),
+    );
+    expect(marker.points.map((point) => point.x).reduce(math.max), target.left);
   });
 
   test('radar: axes, curves, range', () {

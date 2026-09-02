@@ -199,9 +199,11 @@ class _SequenceLayout {
     final bottomBoxTop = y + 2 * _boxMargin;
 
     for (final (id, startY, endY, depth) in activationRects) {
-      // Upstream: left = center + (stackedSize-1)*activationWidth/2, width
-      // activationWidth. `depth` is the 0-based stack index (stackedSize-1).
-      final left = columns[id]!.x + depth * _activationWidth / 2;
+      // Keep the first activation centered on the lifeline. Nested
+      // activations shift right by half a bar, matching message endpoint
+      // calculations while keeping autonumber badges on the visible bar.
+      final left =
+          columns[id]!.x - _activationWidth / 2 + depth * _activationWidth / 2;
       activationNodes.add(
         SceneShape(
           geometry: RectGeometry(
@@ -758,9 +760,9 @@ class _SequenceLayout {
     double width = w;
     switch (note.placement) {
       case NotePlacement.rightOf:
-        left = col.x + _activationWidth;
+        left = col.x + _actorMargin / 2;
       case NotePlacement.leftOf:
-        left = col.x - _activationWidth - w;
+        left = col.x - _actorMargin / 2 - w;
       case NotePlacement.over:
         if (note.target2 != null) {
           final col2 = columns[note.target2!]!;

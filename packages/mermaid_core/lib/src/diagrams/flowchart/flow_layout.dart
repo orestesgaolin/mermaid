@@ -669,6 +669,7 @@ _Fragment _layoutGraph(
   // Resolve that top edge inside-out so an outer cluster also encloses a
   // nested cluster's title.
   final visibleClusterTops = <String, double>{};
+  final visibleClusterBottoms = <String, double>{};
   if (!useElk) {
     for (var i = sgs.length - 1; i >= 0; i--) {
       if (removedSubgraphs.contains(i)) continue;
@@ -682,10 +683,25 @@ _Fragment _layoutGraph(
               visibleClusterTops.containsKey(sgs[child].id))
             visibleClusterTops[sgs[child].id]!,
       ];
+      final contentBottoms = <double>[
+        for (final p in placed.values)
+          if (parentOf[p.node.id] == sg.id) p.center.y + p.shape.height / 2,
+        for (var child = 0; child < sgs.length; child++)
+          if (!removedSubgraphs.contains(child) &&
+              sgs[child].parentIndex == i &&
+              visibleClusterBottoms.containsKey(sgs[child].id))
+            visibleClusterBottoms[sgs[child].id]!,
+      ];
       if (contentTops.isNotEmpty) {
         visibleClusterTops[sg.id] =
             contentTops.reduce(math.min) -
             _clusterPadding -
+            clusterTitleSizes[sg.id]!.height;
+      }
+      if (contentBottoms.isNotEmpty) {
+        visibleClusterBottoms[sg.id] =
+            contentBottoms.reduce(math.max) +
+            _clusterPadding +
             clusterTitleSizes[sg.id]!.height;
       }
     }
@@ -717,7 +733,8 @@ _Fragment _layoutGraph(
             visibleClusterTops[sg.id] ??
                 pos.top - _clusterPadding - titleSize.height,
             pos.right + _clusterPadding,
-            pos.bottom + _clusterPadding,
+            visibleClusterBottoms[sg.id] ??
+                pos.bottom + _clusterPadding + titleSize.height,
           );
     // HTML labels use line-height 1.5 upstream. Center Flutter's shorter
     // measured line box inside that visual line height without growing the

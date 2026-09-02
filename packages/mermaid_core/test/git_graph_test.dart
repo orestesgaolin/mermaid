@@ -108,5 +108,37 @@ gitGraph
       ).whereType<SceneText>().map((t) => t.text).toSet();
       expect(texts.containsAll({'main', 'develop', 'first'}), isTrue);
     });
+
+    test('rotates commit label backgrounds and keeps tag notch compact', () {
+      final scene = layoutGitGraph(
+        parseGitGraph('''
+gitGraph
+   commit id: "Normal" tag: "v1.0.0"
+'''),
+        measurer: measurer,
+        theme: theme,
+      );
+      final commit = scene.nodes.whereType<SceneGroup>().singleWhere(
+        (group) => group.id == 'commit_Normal',
+      );
+      final polygons = commit.children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PolygonGeometry>()
+          .toList();
+
+      final labelBackground = polygons.singleWhere(
+        (polygon) => polygon.points.length == 4,
+      );
+      expect(labelBackground.points.map((point) => point.x).toSet().length, 4);
+      expect(labelBackground.points.map((point) => point.y).toSet().length, 4);
+
+      final tag = polygons.singleWhere((polygon) => polygon.points.length == 6);
+      expect(
+        tag.points.first.x,
+        greaterThan(tag.points[2].x),
+        reason: 'the tag notch belongs inside the body edge',
+      );
+    });
   });
 }
