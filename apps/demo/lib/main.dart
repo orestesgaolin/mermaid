@@ -132,9 +132,10 @@ class _EditorPageState extends State<EditorPage> {
   /// light/dark toggle or the editor's reset button.
   core.MermaidTheme? _themeOverride;
 
-  core.MermaidTheme get _baseTheme => widget.dark
-      ? core.MermaidTheme.darkTheme
-      : core.MermaidTheme.defaultTheme;
+  // The preview follows the app's complete Material color and text theme.
+  // This also demonstrates the one-call bridge used by consumer apps.
+  core.MermaidTheme get _baseTheme =>
+      MaterialMermaidTheme.fromTheme(Theme.of(context));
 
   core.MermaidTheme get _mermaidTheme => _themeOverride ?? _baseTheme;
 

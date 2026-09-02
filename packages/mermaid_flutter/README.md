@@ -153,17 +153,39 @@ limits.
 ## Themes and errors
 
 ```dart
+final mermaidTheme = MaterialMermaidTheme.fromTheme(Theme.of(context));
+
+MermaidDiagram(source: source, theme: mermaidTheme)
+```
+
+`MaterialMermaidTheme` maps Material surface, container, outline, text, and
+categorical color roles to all supported Mermaid diagram palettes. Switching
+the surrounding `ThemeData` between light and dark therefore updates diagram
+colors without consumer-side field mapping. You can also use
+`MaterialMermaidTheme.fromColorScheme(colorScheme, textTheme: textTheme)`.
+
+When a `TextTheme` is supplied, `bodyMedium.fontFamily` and
+`bodyMedium.fontSize` become the Mermaid font settings. Text metrics are part
+of diagram layout, so changing either value can change node sizes and edge
+routing. Without a `TextTheme`, Mermaid's platform-independent font defaults
+are retained.
+
+Theme directives in source still take precedence over the widget `theme`.
+Theme-token references inside source styles are not currently supported.
+
+Error handling remains independent of theme selection:
+
+```dart
 MermaidDiagram(
   source: source,
-  theme: core.MermaidTheme.darkTheme,
+  theme: mermaidTheme,
   keepLastGoodSceneOnError: true,
   errorBuilder: (context, error) => Text('$error'),
 )
 ```
 
-Theme directives in the Mermaid source take precedence over the `theme`
-argument. With `keepLastGoodSceneOnError`, the widget keeps the previous valid
-diagram visible while reporting a new parse error.
+With `keepLastGoodSceneOnError`, the widget keeps the previous valid diagram
+visible while reporting a new parse error.
 
 For lower-level use, `FlutterTextMeasurer` implements the `mermaid_core`
 measurement interface and `ScenePainter` paints a `RenderScene` directly.
