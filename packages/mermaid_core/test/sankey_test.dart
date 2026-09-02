@@ -2,6 +2,7 @@
 library;
 
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/detect.dart';
@@ -20,6 +21,67 @@ const theme = MermaidTheme.defaultTheme;
 List<SceneNode> flatten(List<SceneNode> nodes) => [
   for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
 ];
+
+bool pathsCross(PathGeometry a, PathGeometry b) {
+  final aStart = (a.commands.first as MoveTo).p;
+  final aCurve = a.commands.last as CubicTo;
+  final bStart = (b.commands.first as MoveTo).p;
+  final bCurve = b.commands.last as CubicTo;
+  final left = math.max(aStart.x, bStart.x);
+  final right = math.min(aCurve.p.x, bCurve.p.x);
+  double? previous;
+  for (var i = 0; i <= 24; i++) {
+    final x = left + (right - left) * (i + 0.25) / 24.5;
+    final difference = pathYAt(a, x) - pathYAt(b, x);
+    if (difference.abs() <= 1e-6) continue;
+    if (previous != null && difference.sign != previous.sign) return true;
+    previous = difference;
+  }
+  return false;
+}
+
+double pathYAt(PathGeometry path, double x) {
+  final start = (path.commands.first as MoveTo).p;
+  final curve = path.commands.last as CubicTo;
+  var low = 0.0;
+  var high = 1.0;
+  for (var i = 0; i < 20; i++) {
+    final t = (low + high) / 2;
+    final mt = 1 - t;
+    final curveX =
+        mt * mt * mt * start.x +
+        3 * mt * mt * t * curve.c1.x +
+        3 * mt * t * t * curve.c2.x +
+        t * t * t * curve.p.x;
+    if (curveX < x) {
+      low = t;
+    } else {
+      high = t;
+    }
+  }
+  final t = (low + high) / 2;
+  final mt = 1 - t;
+  return mt * mt * mt * start.y +
+      3 * mt * mt * t * curve.c1.y +
+      3 * mt * t * t * curve.c2.y +
+      t * t * t * curve.p.y;
+}
+
+String pathSignature(RenderScene scene) => flatten(scene.nodes)
+    .whereType<SceneShape>()
+    .where((shape) => shape.geometry is PathGeometry)
+    .map((shape) {
+      final path = shape.geometry as PathGeometry;
+      return path.commands.map((command) {
+        return switch (command) {
+          MoveTo(:final p) => 'M${p.x},${p.y}',
+          CubicTo(:final c1, :final c2, :final p) =>
+            'C${c1.x},${c1.y},${c2.x},${c2.y},${p.x},${p.y}',
+          _ => command.runtimeType.toString(),
+        };
+      }).join();
+    })
+    .join('|');
 
 void main() {
   test('detects sankey / sankey-beta', () {
@@ -90,6 +152,7 @@ A,C,2
       final source = File(
         'test/fixtures/upstream_sankey/03.mmd',
       ).readAsStringSync();
+      final sankey = parseSankey(source);
       final scene = renderer.render(source);
       final nodes = flatten(scene.nodes);
       final shapes = nodes
@@ -120,8 +183,15 @@ A,C,2
           .where((shape) => shape.geometry is RectGeometry)
           .toList();
       double topOf(String name) {
-        final index = parseSankey(source).nodes.indexOf(name);
+        final index = sankey.nodes.indexOf(name);
         return (rects[index].geometry as RectGeometry).rect.top;
+      }
+
+      PathGeometry ribbon(String source, String target) {
+        final index = sankey.links.indexWhere(
+          (link) => link.source == source && link.target == target,
+        );
+        return ribbons[index].geometry as PathGeometry;
       }
 
       // d3-sankey reorders each column by the connected nodes' breadth during
@@ -131,6 +201,61 @@ A,C,2
         lessThan(topOf('UK land based bioenergy')),
       );
       expect(topOf('Wind'), lessThan(topOf('Pumped heat')));
+      expect(topOf('Marine algae'), lessThan(topOf('Other waste')));
+      expect(topOf('Gas imports'), lessThan(topOf('Tidal')));
+      expect(
+        pathsCross(
+          ribbon('Marine algae', 'Bio-conversion'),
+          ribbon('Other waste', 'Solid'),
+        ),
+        isFalse,
+      );
+      expect(
+        pathsCross(
+          ribbon('Gas imports', 'Ngas'),
+          ribbon('Tidal', 'Electricity grid'),
+        ),
+        isFalse,
+      );
+
+      final repeated = renderer.render(source);
+      expect(pathSignature(repeated), pathSignature(scene));
+
+      // Padding can reduce computed lane widths to zero, while the renderer
+      // still paints them at 1 px. The crossing refinement must use that same
+      // effective width and keep the visible hairlines ordered.
+      final compressed = renderer.render(
+        source.replaceFirst('height: 600', 'height: 30\n    nodePadding: 100'),
+      );
+      final compressedRibbons = flatten(compressed.nodes)
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is PathGeometry)
+          .toList();
+      expect(
+        compressedRibbons.every((shape) => shape.stroke?.width == 1),
+        isTrue,
+      );
+      PathGeometry compressedRibbon(String source, String target) {
+        final index = sankey.links.indexWhere(
+          (link) => link.source == source && link.target == target,
+        );
+        return compressedRibbons[index].geometry as PathGeometry;
+      }
+
+      expect(
+        pathsCross(
+          compressedRibbon('Marine algae', 'Bio-conversion'),
+          compressedRibbon('Other waste', 'Solid'),
+        ),
+        isFalse,
+      );
+      expect(
+        pathsCross(
+          compressedRibbon('Gas imports', 'Ngas'),
+          compressedRibbon('Tidal', 'Electricity grid'),
+        ),
+        isFalse,
+      );
     });
 
     test('two configs change size, alignment, values, and link color', () {

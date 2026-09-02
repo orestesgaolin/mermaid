@@ -457,6 +457,7 @@ RenderScene layoutSankey(
     _relaxLeftToRight(columns, alpha, beta, height, py);
   }
   _computeLinkBreadths(columns);
+  _reduceSourceCrossings(columns);
 
   // --- Smart label positioning anchor (central node layer) --------------
   var centralNodeLayer = 0;
@@ -657,18 +658,166 @@ int _alignLayer(
 void _computeLinkBreadths(List<List<_Node>> columns) {
   for (final col in columns) {
     for (final n in col) {
-      var y0 = n.y0;
-      var y1 = n.y0;
-      for (final l in n.sourceLinks) {
-        l.y0 = y0 + l.width / 2;
-        y0 += l.width;
+      _computeNodeLinkBreadths(n);
+    }
+  }
+}
+
+void _computeNodeLinkBreadths(_Node node) {
+  var y0 = node.y0;
+  var y1 = node.y0;
+  for (final link in node.sourceLinks) {
+    link.y0 = y0 + link.width / 2;
+    y0 += link.width;
+  }
+  for (final link in node.targetLinks) {
+    link.y1 = y1 + link.width / 2;
+    y1 += link.width;
+  }
+}
+
+/// Removes local inversions between adjacent source nodes left by d3's
+/// continuous relaxation. The refinement is deliberately limited to pure
+/// sources: moving intermediate or sink nodes can improve one crossing while
+/// making several large downstream bundles less direct.
+void _reduceSourceCrossings(List<List<_Node>> columns) {
+  for (final column in columns) {
+    var i = 0;
+    // Keep refinement cost bounded for dense diagrams. Backtracking normally
+    // resolves a local cascade in only a few comparisons.
+    var remainingComparisons = math.min(column.length * column.length, 256);
+    while (i + 1 < column.length && remainingComparisons-- > 0) {
+      final upper = column[i];
+      final lower = column[i + 1];
+      if (upper.targetLinks.isNotEmpty ||
+          lower.targetLinks.isNotEmpty ||
+          upper.sourceLinks.isEmpty ||
+          lower.sourceLinks.isEmpty) {
+        i++;
+        continue;
       }
-      for (final l in n.targetLinks) {
-        l.y1 = y1 + l.width / 2;
-        y1 += l.width;
+
+      final before = _crossingCostBetween(upper, lower);
+      if (before == 0) {
+        i++;
+        continue;
+      }
+
+      final upperY0 = upper.y0;
+      final upperY1 = upper.y1;
+      final lowerY0 = lower.y0;
+      final lowerY1 = lower.y1;
+      _swapAdjacentNodes(column, i);
+      _refreshSwappedSources(upper, lower);
+
+      if (_crossingCostBetween(lower, upper) >= before) {
+        column[i] = upper;
+        column[i + 1] = lower;
+        upper.y0 = upperY0;
+        upper.y1 = upperY1;
+        lower.y0 = lowerY0;
+        lower.y1 = lowerY1;
+        _refreshSwappedSources(upper, lower);
+        i++;
+      } else if (i > 0) {
+        // Reconsider the newly adjacent pair above. This resolves cascading
+        // inversions without repeatedly scanning unrelated columns.
+        i--;
+      } else {
+        i++;
       }
     }
   }
+}
+
+void _refreshSwappedSources(_Node a, _Node b) {
+  _reorderNodeLinks(a);
+  _reorderNodeLinks(b);
+  final affected = <_Node>{
+    a,
+    b,
+    for (final link in a.sourceLinks) link.target,
+    for (final link in b.sourceLinks) link.target,
+  };
+  for (final node in affected) {
+    _computeNodeLinkBreadths(node);
+  }
+}
+
+void _swapAdjacentNodes(List<_Node> column, int index) {
+  final upper = column[index];
+  final lower = column[index + 1];
+  final top = upper.y0;
+  final upperHeight = upper.y1 - upper.y0;
+  final lowerHeight = lower.y1 - lower.y0;
+  final gap = lower.y0 - upper.y1;
+
+  lower.y0 = top;
+  lower.y1 = top + lowerHeight;
+  upper.y0 = lower.y1 + gap;
+  upper.y1 = upper.y0 + upperHeight;
+  column[index] = lower;
+  column[index + 1] = upper;
+}
+
+double _crossingCostBetween(_Node a, _Node b) {
+  var cost = 0.0;
+  for (final aLink in a.sourceLinks) {
+    for (final bLink in b.sourceLinks) {
+      if (identical(aLink.target, bLink.target)) continue;
+      if (_linksCross(aLink, bLink)) {
+        // Crossing area grows with both lane widths. A width-aware cost avoids
+        // replacing several hairline crossings with one dominant crossing.
+        final aWidth = math.max(1.0, aLink.width);
+        final bWidth = math.max(1.0, bLink.width);
+        cost += aWidth * bWidth;
+      }
+    }
+  }
+  return cost;
+}
+
+bool _linksCross(_Link a, _Link b) {
+  final left = math.max(a.source.x1, b.source.x1);
+  final right = math.min(a.target.x0, b.target.x0);
+  if (right - left <= 1e-6) return false;
+
+  const samples = 12;
+  double? previous;
+  for (var i = 0; i <= samples; i++) {
+    // Stay just inside the shared interval so touching node ports are not
+    // counted as crossings.
+    final fraction = (i + 0.25) / (samples + 0.5);
+    final x = left + (right - left) * fraction;
+    final difference = _linkYAt(a, x) - _linkYAt(b, x);
+    if (difference.abs() <= 1e-6) continue;
+    if (previous != null && difference.sign != previous.sign) return true;
+    previous = difference;
+  }
+  return false;
+}
+
+double _linkYAt(_Link link, double x) {
+  final x0 = link.source.x1;
+  final x1 = link.target.x0;
+  final unitX = ((x - x0) / (x1 - x0)).clamp(0.0, 1.0);
+
+  // Invert the monotonic x component of the horizontal cubic. Its two
+  // controls are both at the midpoint: x(t) = 1.5t - 1.5t² + t³.
+  var low = 0.0;
+  var high = 1.0;
+  for (var i = 0; i < 16; i++) {
+    final t = (low + high) / 2;
+    final curveX = 1.5 * t - 1.5 * t * t + t * t * t;
+    if (curveX < unitX) {
+      low = t;
+    } else {
+      high = t;
+    }
+  }
+  final t = (low + high) / 2;
+  final smooth = t * t * (3 - 2 * t);
+  return link.y0 + (link.y1 - link.y0) * smooth;
 }
 
 int _ascendingTargetBreadth(_Link a, _Link b) {
