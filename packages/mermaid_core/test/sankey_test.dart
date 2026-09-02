@@ -182,6 +182,12 @@ A,C,2
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is RectGeometry)
           .toList();
+      expect(
+        rects.every(
+          (shape) => (shape.geometry as RectGeometry).rect.height >= 2.0 - 1e-6,
+        ),
+        isTrue,
+      );
       double topOf(String name) {
         final index = sankey.nodes.indexOf(name);
         return (rects[index].geometry as RectGeometry).rect.top;
@@ -221,9 +227,9 @@ A,C,2
       final repeated = renderer.render(source);
       expect(pathSignature(repeated), pathSignature(scene));
 
-      // Padding can reduce computed lane widths to zero, while the renderer
-      // still paints them at 1 px. The crossing refinement must use that same
-      // effective width and keep the visible hairlines ordered.
+      // Compression can reduce computed lane widths below one pixel. The
+      // crossing refinement must use the effective painted width and keep the
+      // visible hairlines ordered.
       final compressed = renderer.render(
         source.replaceFirst('height: 600', 'height: 30\n    nodePadding: 100'),
       );
@@ -232,7 +238,7 @@ A,C,2
           .where((shape) => shape.geometry is PathGeometry)
           .toList();
       expect(
-        compressedRibbons.every((shape) => shape.stroke?.width == 1),
+        compressedRibbons.every((shape) => (shape.stroke?.width ?? 0) >= 2),
         isTrue,
       );
       PathGeometry compressedRibbon(String source, String target) {
@@ -408,6 +414,59 @@ C,Z,1
       // Labels can translate the complete scene, so compare the node span,
       // not its absolute post-normalization coordinates.
       expect(sceneBounds(rects)!.height, lessThanOrEqualTo(30 + 1e-6));
+    });
+
+    test('thin single-link nodes match the painted lane width', () {
+      const source = '''
+---
+config:
+  sankey:
+    height: 100
+    nodePadding: 12
+    showValues: false
+---
+sankey
+A,X,100
+B,Y,10
+C,Z,0.1
+''';
+
+      final nodes = flatten(renderer.render(source).nodes);
+      final rects = nodes
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .map((shape) => (shape.geometry as RectGeometry).rect)
+          .toList();
+      final ribbons = nodes
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is PathGeometry)
+          .toList();
+
+      final rectBounds = rects.reduce((a, b) => a.union(b));
+      expect(rectBounds.height, lessThanOrEqualTo(100 + 1e-6));
+      expect(rects[4].height, closeTo(2, 1e-6));
+      final largeWidth = ribbons[0].stroke!.width;
+      final mediumWidth = ribbons[1].stroke!.width;
+      final smallWidth = ribbons[2].stroke!.width;
+      expect(largeWidth / mediumWidth, closeTo(10, 1e-6));
+      expect(smallWidth, closeTo(2, 1e-6));
+      expect(rects[0].height, closeTo(largeWidth, 1e-6));
+      expect(rects[2].height, closeTo(mediumWidth, 1e-6));
+      expect(rects[4].height, closeTo(smallWidth, 1e-6));
+      final smallPath = ribbons[2].geometry as PathGeometry;
+      final start = (smallPath.commands.first as MoveTo).p;
+      final end = (smallPath.commands.last as CubicTo).p;
+      expect(start.y, closeTo(rects[4].center.y, 1e-6));
+      expect(end.y, closeTo(rects[5].center.y, 1e-6));
+
+      final tiny = renderer.render(
+        source.replaceFirst('height: 100', 'height: 6'),
+      );
+      final tinyRects = flatten(tiny.nodes)
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .toList();
+      expect(sceneBounds(tinyRects)!.height, lessThanOrEqualTo(6 + 1e-6));
     });
 
     test('invalid values use renderer defaults', () {

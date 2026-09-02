@@ -289,6 +289,7 @@ class _Node {
 }
 
 const _kSankeyIterations = 6;
+const _kMinVisualFlowWidth = 2.0;
 
 RenderScene layoutSankey(
   Sankey diagram, {
@@ -409,24 +410,60 @@ RenderScene layoutSankey(
 
   // --- d3-sankey: computeNodeBreadths -----------------------------------
   // Keep the largest column within the vertical extent even when callers
-  // request more padding than the configured height can hold.
+  // request more padding than the configured height can hold. Reserve the
+  // same small visible height that link painting uses so a tiny node and its
+  // lane remain aligned without inflating link geometry during relaxation.
   final maxColumnLength = columns.fold<int>(
     0,
     (largest, column) => math.max(largest, column.length),
   );
+  final effectiveMinNodeHeight = maxColumnLength == 0
+      ? _kMinVisualFlowWidth
+      : math.min(_kMinVisualFlowWidth, height / maxColumnLength);
   if (maxColumnLength > 1) {
-    py = math.min(py, height / (maxColumnLength - 1));
+    final availableForPadding = math.max(
+      0.0,
+      height - maxColumnLength * effectiveMinNodeHeight,
+    );
+    py = math.min(py, availableForPadding / (maxColumnLength - 1));
   }
 
-  // ky: largest vertical scale that fits every column inside `height`.
-  var ky = double.infinity;
+  // ky: largest vertical scale that fits every column after applying the node
+  // visibility floor. Link widths remain proportional, as in d3-sankey.
+  var upperKy = double.infinity;
   for (final col in columns) {
     if (col.isEmpty) continue;
     final sumV = col.fold(0.0, (a, n) => a + n.value);
     final avail = height - (col.length - 1) * py;
-    if (sumV > 0) ky = math.min(ky, avail / sumV);
+    if (sumV > 0) upperKy = math.min(upperKy, avail / sumV);
   }
-  if (!ky.isFinite || ky < 0) ky = 0;
+  if (!upperKy.isFinite || upperKy < 0) upperKy = 0;
+
+  bool scaleFits(double scale) {
+    for (final col in columns) {
+      final nodesHeight = col.fold(
+        0.0,
+        (sum, node) =>
+            sum + math.max(effectiveMinNodeHeight, node.value * scale),
+      );
+      if (nodesHeight + math.max(0, col.length - 1) * py > height + 1e-9) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  var lowKy = 0.0;
+  var highKy = upperKy;
+  for (var i = 0; i < 48; i++) {
+    final candidate = (lowKy + highKy) / 2;
+    if (scaleFits(candidate)) {
+      lowKy = candidate;
+    } else {
+      highKy = candidate;
+    }
+  }
+  final ky = lowKy;
 
   // initializeNodeBreadths: stack each column, distribute its unused space
   // evenly above, between, and below nodes, then order links by the opposite
@@ -435,7 +472,7 @@ RenderScene layoutSankey(
     var y = 0.0;
     for (final n in col) {
       n.y0 = y;
-      n.y1 = y + n.value * ky;
+      n.y1 = y + math.max(effectiveMinNodeHeight, n.value * ky);
       y = n.y1 + py;
       for (final l in n.sourceLinks) {
         l.width = l.value * ky;
@@ -475,7 +512,7 @@ RenderScene layoutSankey(
 
   // --- Links: thick horizontal cubic strokes ----------------------------
   for (final l in links) {
-    final w = math.max(1.0, l.width);
+    final w = math.max(_kMinVisualFlowWidth, l.width);
     final x0 = l.source.x1;
     final x1 = l.target.x0;
     final cx = (x0 + x1) / 2;
@@ -664,8 +701,9 @@ void _computeLinkBreadths(List<List<_Node>> columns) {
 }
 
 void _computeNodeLinkBreadths(_Node node) {
-  var y0 = node.y0;
-  var y1 = node.y0;
+  final inset = _bundleInset(node);
+  var y0 = node.y0 + inset;
+  var y1 = node.y0 + inset;
   for (final link in node.sourceLinks) {
     link.y0 = y0 + link.width / 2;
     y0 += link.width;
@@ -674,6 +712,19 @@ void _computeNodeLinkBreadths(_Node node) {
     link.y1 = y1 + link.width / 2;
     y1 += link.width;
   }
+}
+
+double _bundleInset(_Node node) {
+  final sourceHeight = node.sourceLinks.fold(
+    0.0,
+    (sum, link) => sum + link.width,
+  );
+  final targetHeight = node.targetLinks.fold(
+    0.0,
+    (sum, link) => sum + link.width,
+  );
+  final bundleHeight = math.max(sourceHeight, targetHeight);
+  return math.max(0.0, node.y1 - node.y0 - bundleHeight) / 2;
 }
 
 /// Removes local inversions between adjacent source nodes left by d3's
@@ -959,7 +1010,11 @@ void _resolveBottomToTop(
 }
 
 double _targetTop(_Node source, _Node target, double py) {
-  var y = source.y0 - (source.sourceLinks.length - 1) * py / 2;
+  var y =
+      source.y0 +
+      _bundleInset(source) -
+      _bundleInset(target) -
+      (source.sourceLinks.length - 1) * py / 2;
   for (final link in source.sourceLinks) {
     if (identical(link.target, target)) break;
     y += link.width + py;
@@ -972,7 +1027,11 @@ double _targetTop(_Node source, _Node target, double py) {
 }
 
 double _sourceTop(_Node source, _Node target, double py) {
-  var y = target.y0 - (target.targetLinks.length - 1) * py / 2;
+  var y =
+      target.y0 +
+      _bundleInset(target) -
+      _bundleInset(source) -
+      (target.targetLinks.length - 1) * py / 2;
   for (final link in target.targetLinks) {
     if (identical(link.source, source)) break;
     y += link.width + py;

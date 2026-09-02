@@ -85,3 +85,12 @@
 - Status set to **full-parity**: matches mermaid.js under the default theme and now adapts to non-default themes; the remaining niche gap is the outlined-label text-stroke approximation.
 
 (2026-09-02) Replaced the filled-band approximation after visual review showed incorrect lane silhouettes and source-over occlusion at crossings. The shared scene IR now supports gradient strokes and multiply compositing, and both SVG and Flutter backends map those primitives directly.
+
+(2026-09-02) Increased the minimum visible flow width from 1px to 2px for
+small values. Mermaid.js 11.17.2 keeps node and link geometry proportional and
+only clamps the painted link stroke to 1px. We retain that proportional link
+geometry and the upstream 12px node padding, but intentionally use a 2px paint
+floor. Thin single-link source and sink nodes also receive a 2px layout floor,
+so their solid bar and gradient lane have the same visible thickness. This
+does not floor every link during layout because that changes relaxation,
+ordering, and label clearance on dense diagrams.
