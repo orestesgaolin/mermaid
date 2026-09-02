@@ -24,6 +24,7 @@ class _StateParser {
   final transitions = <StateTransition>[];
   final notes = <StateNote>[];
   final classDefs = <String, Map<String, String>>{};
+  final _authoritativeStates = <String>{};
   var direction = FlowDirection.tb;
   String? title;
 
@@ -123,7 +124,7 @@ class _StateParser {
         'fork' => StateKind.fork,
         _ => StateKind.join,
       };
-      final node = _ensure(m.group(1)!);
+      final node = _declare(m.group(1)!);
       states[node.id] = node.copyWith(kind: kind);
       return;
     }
@@ -131,7 +132,7 @@ class _StateParser {
     // state "description" as id [{]
     m = RegExp(r'^state\s+"([^"]*)"\s+as\s+(\S+?)\s*(\{)?\s*$').firstMatch(line);
     if (m != null) {
-      final node = _ensure(m.group(2)!);
+      final node = _declare(m.group(2)!);
       states[node.id] = node.copyWith(label: _normalize(m.group(1)!));
       if (m.group(3) != null) _openComposite(node.id);
       return;
@@ -140,7 +141,7 @@ class _StateParser {
     // state id [{]
     m = RegExp(r'^state\s+([^\s{]+)\s*(\{)?\s*$').firstMatch(line);
     if (m != null) {
-      final node = _ensure(m.group(1)!);
+      final node = _declare(m.group(1)!);
       if (m.group(2) != null) _openComposite(node.id);
       return;
     }
@@ -152,7 +153,7 @@ class _StateParser {
       final pos = m.group(1) == 'left'
           ? StateNotePosition.leftOf
           : StateNotePosition.rightOf;
-      _ensure(m.group(2)!);
+      _reference(m.group(2)!);
       if (m.group(3) != null) {
         notes.add(StateNote(
             target: m.group(2)!,
@@ -215,7 +216,7 @@ class _StateParser {
     // `id : description` (appends on repeat, like upstream).
     m = RegExp(r'^([^\s:]+)\s*:\s*(.+)$').firstMatch(line);
     if (m != null) {
-      final node = _ensure(m.group(1)!);
+      final node = _declare(m.group(1)!);
       final desc = _normalize(m.group(2)!);
       states[node.id] = node.copyWith(
         label: node.label == node.id ? desc : '${node.label}\n$desc',
@@ -225,7 +226,7 @@ class _StateParser {
 
     // Bare state mention (word-ish ids only, per upstream ID token).
     if (RegExp(r'^[\w.-]+$').hasMatch(line)) {
-      _ensure(line);
+      _declare(line);
       return;
     }
 
@@ -256,7 +257,7 @@ class _StateParser {
       }
       return id;
     }
-    if (raw != '[*]') return _ensure(raw).id;
+    if (raw != '[*]') return _reference(raw).id;
     final scope = _scope.last;
     final id = isSource ? '__start_$scope' : '__end_$scope';
     if (!states.containsKey(id)) {
@@ -284,6 +285,55 @@ class _StateParser {
     return node;
   }
 
+  StateNode _reference(String id) {
+    if (_scope.last.isNotEmpty &&
+        states.containsKey(id) &&
+        !_authoritativeStates.contains(id)) {
+      _reparentToCurrentScope(id);
+    }
+    return _ensure(id);
+  }
+
+  StateNode _declare(String id) {
+    if (_scope.last.isNotEmpty && states.containsKey(id)) {
+      _reparentToCurrentScope(id);
+    }
+    final node = _ensure(id);
+    _authoritativeStates.add(id);
+    return node;
+  }
+
+  void _reparentToCurrentScope(String id) {
+    final node = states[id]!;
+    final newParent = _scope.last.isEmpty ? null : _scope.last;
+    if (node.parent == newParent) return;
+    for (var ancestor = newParent;
+        ancestor != null;
+        ancestor = states[ancestor]?.parent) {
+      if (ancestor == id) return;
+    }
+
+    final oldParent = node.parent;
+    if (oldParent != null) {
+      final parent = states[oldParent];
+      if (parent != null) {
+        states[oldParent] = parent.copyWith(
+          children: parent.children.where((child) => child != id).toList(),
+          regions: [
+            for (final region in parent.regions)
+              region.where((child) => child != id).toList(),
+          ],
+        );
+      }
+      for (final region in _regions[oldParent] ?? const <List<String>>[]) {
+        region.removeWhere((child) => child == id);
+      }
+    }
+
+    states[id] = node.reparent(newParent);
+    _attachToScope(id);
+  }
+
   /// Region groups per open composite scope; finalized into the node's
   /// `regions` on close (only kept when more than one group exists).
   final _regions = <String, List<List<String>>>{};
@@ -292,9 +342,11 @@ class _StateParser {
     final scope = _scope.last;
     if (scope.isEmpty) return;
     final parent = states[scope]!;
-    states[scope] = parent.copyWith(children: [...parent.children, id]);
+    if (!parent.children.contains(id)) {
+      states[scope] = parent.copyWith(children: [...parent.children, id]);
+    }
     final groups = _regions[scope];
-    if (groups != null) groups.last.add(id);
+    if (groups != null && !groups.last.contains(id)) groups.last.add(id);
   }
 
   String _normalize(String s) => s

@@ -2,6 +2,8 @@
 /// stateDiagram.spec.js.
 library;
 
+import 'dart:io';
+
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart'
     show FlowDirection;
 import 'package:mermaid_core/src/diagrams/state/state_layout.dart';
@@ -22,6 +24,9 @@ RenderScene layout(String body) => layoutStateDiagram(
       measurer: const ApproximateTextMeasurer(),
       theme: MermaidTheme.defaultTheme,
     );
+
+String stateFixture(String name) =>
+    File('test/fixtures/upstream_state/$name.mmd').readAsStringSync();
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
       for (final n in nodes) ...[
@@ -80,6 +85,64 @@ void main() {
       final d = parse('state A {\nstate B {\nC\n}\n}');
       expect(d.states['B']!.parent, 'A');
       expect(d.states['C']!.parent, 'B');
+    });
+    test('later composite adopts an implicitly referenced state', () {
+      final d = parseStateDiagram(stateFixture('05'));
+      expect(d.states['2nd']!.parent, 'Second');
+      expect(d.states['First']!.children, isNot(contains('2nd')));
+      expect(d.states['Second']!.children.where((id) => id == '2nd'),
+          hasLength(1));
+      expect(
+        d.transitions,
+        contains(
+          isA<StateTransition>()
+              .having((transition) => transition.from, 'from', '2nd')
+              .having(
+                (transition) => transition.to,
+                'to',
+                '__end_Second',
+              ),
+        ),
+      );
+    });
+    test('adoption updates regions without moving declared cross-boundary states',
+        () {
+      final d = parse('''
+state First {
+  Declared
+  A --> Adopted
+  --
+  B
+}
+state Second {
+  Adopted --> Declared
+  Adopted --> [*]
+}
+''');
+      expect(d.states['Declared']!.parent, 'First');
+      expect(d.states['Adopted']!.parent, 'Second');
+      expect(d.states['First']!.children, isNot(contains('Adopted')));
+      expect(
+        d.states['First']!.regions.expand((region) => region),
+        isNot(contains('Adopted')),
+      );
+      expect(d.states['Second']!.children.where((id) => id == 'Adopted'),
+          hasLength(1));
+    });
+    test('root references preserve nested ownership and adoption rejects cycles',
+        () {
+      final d = parse('''
+state Parent {
+  X --> Nested
+  state Child {
+    state Parent
+  }
+}
+Nested --> RootTarget
+''');
+      expect(d.states['Nested']!.parent, 'Parent');
+      expect(d.states['Parent']!.parent, isNull);
+      expect(d.states['Child']!.parent, 'Parent');
     });
     test('[*] inside composite is scoped', () {
       final d = parse('state A {\n[*] --> X\n}\n[*] --> A');
@@ -180,6 +243,24 @@ void main() {
         flatten(s.nodes).whereType<SceneText>().any((t) => t.text == 'Active'),
         isTrue,
       );
+    });
+    test('adopted fixture state renders only inside its final composite', () {
+      final diagram = parseStateDiagram(stateFixture('05'));
+      final s = layoutStateDiagram(
+        diagram,
+        measurer: const ApproximateTextMeasurer(),
+        theme: MermaidTheme.defaultTheme,
+      );
+      final first = sceneNodeBounds(sceneGroup(s, 'First'))!;
+      final second = sceneNodeBounds(sceneGroup(s, 'Second'))!;
+      final adoptedGroups = flatten(s.nodes)
+          .whereType<SceneGroup>()
+          .where((group) => group.id == '2nd')
+          .toList();
+      expect(adoptedGroups, hasLength(1));
+      final adopted = sceneNodeBounds(adoptedGroups.single)!.center;
+      expect(second.contains(adopted), isTrue);
+      expect(first.contains(adopted), isFalse);
     });
     test('self-transition on composite renders a loop', () {
       final s = layout('state Active {\nIdle\n}\nActive --> Active : LOG');

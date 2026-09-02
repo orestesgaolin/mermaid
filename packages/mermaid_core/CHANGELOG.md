@@ -1,5 +1,7 @@
 ## Unreleased
 
+- Adopt implicitly referenced states into their later composite scope without
+  moving explicitly declared states on cross-composite transitions.
 - Paint nested sequence `rect` backgrounds above their parents while preserving
   participant-box and sibling ordering.
 - Honor quadrant chart dimensions and padding, normalize quoted/trailing-arrow

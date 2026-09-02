@@ -90,6 +90,18 @@ class StateNode {
         styles: styles ?? this.styles,
         regions: regions ?? this.regions,
       );
+
+  /// Returns this state with a new composite owner, including the root scope.
+  StateNode reparent(String? parent) => StateNode(
+        id: id,
+        label: label,
+        kind: kind,
+        children: children,
+        parent: parent,
+        cssClasses: cssClasses,
+        styles: styles,
+        regions: regions,
+      );
 }
 
 class StateTransition {
