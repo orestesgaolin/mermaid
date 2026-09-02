@@ -15,6 +15,7 @@ import 'dart:math' as math;
 
 import '../../color.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -22,6 +23,116 @@ import '../../parse_error.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
+
+/// Typed values from `config.sankey`.
+///
+/// [useMaxWidth] controls responsive SVG sizing in Mermaid.js. A [RenderScene]
+/// has an intrinsic logical size instead, so this backend records the option
+/// but does not change layout geometry. `MermaidView` contain-fits that scene
+/// and therefore preserves the configured [width]/[height] aspect ratio.
+class SankeyConfig {
+  const SankeyConfig({
+    this.width = 600,
+    this.height = 600,
+    this.nodeWidth = 10,
+    this.nodePadding = 12,
+    this.nodeAlignment = 'justify',
+    this.linkColor = 'gradient',
+    this.showValues = true,
+    this.prefix = '',
+    this.suffix = '',
+    this.labelStyle = 'legacy',
+    this.useMaxWidth = false,
+    this.nodeColors = const {},
+  });
+
+  final double width;
+  final double height;
+  final double nodeWidth;
+  final double nodePadding;
+  final String nodeAlignment;
+
+  /// `source`, `target`, `gradient`, or a CSS color.
+  final String linkColor;
+  final bool showValues;
+  final String prefix;
+  final String suffix;
+  final String labelStyle;
+  final bool useMaxWidth;
+  final Map<String, Color> nodeColors;
+
+  /// Resolves frontmatter first, then applies init directives in order.
+  /// Invalid values use the renderer's documented defaults.
+  factory SankeyConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'sankey');
+
+    double positive(String key, double fallback) {
+      final value = values[key];
+      if (value is num) {
+        final resolved = value.toDouble();
+        if (resolved.isFinite && resolved > 0) return resolved;
+      }
+      return fallback;
+    }
+
+    double nonNegative(String key, double fallback) {
+      final value = values[key];
+      if (value is num) {
+        final resolved = value.toDouble();
+        if (resolved.isFinite && resolved >= 0) return resolved;
+      }
+      return fallback;
+    }
+
+    String oneOf(String key, Set<String> supported, String fallback) {
+      final value = values[key];
+      return value is String && supported.contains(value) ? value : fallback;
+    }
+
+    var linkColor = values['linkColor'];
+    if (linkColor is! String ||
+        (linkColor != 'source' &&
+            linkColor != 'target' &&
+            linkColor != 'gradient' &&
+            Color.tryParse(linkColor) == null)) {
+      linkColor = 'gradient';
+    }
+
+    final nodeColors = <String, Color>{};
+    final rawNodeColors = values['nodeColors'];
+    if (rawNodeColors is Map) {
+      for (final entry in rawNodeColors.entries) {
+        final rawColor = entry.value;
+        final color = rawColor is String ? Color.tryParse(rawColor) : null;
+        if (color != null) nodeColors['${entry.key}'] = color;
+      }
+    }
+
+    return SankeyConfig(
+      width: positive('width', 600),
+      height: positive('height', 600),
+      nodeWidth: positive('nodeWidth', 10),
+      nodePadding: nonNegative('nodePadding', 12),
+      nodeAlignment: oneOf('nodeAlignment', const {
+        'left',
+        'right',
+        'center',
+        'justify',
+      }, 'justify'),
+      linkColor: linkColor,
+      showValues: values['showValues'] is bool
+          ? values['showValues']! as bool
+          : true,
+      prefix: values['prefix'] is String ? values['prefix']! as String : '',
+      suffix: values['suffix'] is String ? values['suffix']! as String : '',
+      labelStyle: oneOf('labelStyle', const {'legacy', 'outlined'}, 'legacy'),
+      useMaxWidth: values['useMaxWidth'] is bool
+          ? values['useMaxWidth']! as bool
+          : false,
+      nodeColors: Map.unmodifiable(nodeColors),
+    );
+  }
+}
 
 class SankeyLink {
   const SankeyLink(this.source, this.target, this.value);
@@ -61,12 +172,16 @@ Sankey parseSankey(String source) {
     final fields = _csv(line);
     if (fields.length < 3) {
       throw MermaidParseException(
-          'sankey line needs source,target,value', line: i + 1);
+        'sankey line needs source,target,value',
+        line: i + 1,
+      );
     }
     final value = double.tryParse(fields[2].trim());
     if (value == null) {
       throw MermaidParseException(
-          'invalid sankey value "${fields[2]}"', line: i + 1);
+        'invalid sankey value "${fields[2]}"',
+        line: i + 1,
+      );
     }
     final src = fields[0].trim();
     final tgt = fields[1].trim();
@@ -145,10 +260,11 @@ SankeyNodeAlignment _alignmentFromName(String? name) {
 }
 
 class _Link {
-  _Link(this.source, this.target, this.value);
+  _Link(this.source, this.target, this.value, this.index);
   final _Node source;
   final _Node target;
   final double value;
+  final int index;
   double width = 0;
   // Vertical center of the link at each endpoint.
   double y0 = 0;
@@ -187,6 +303,7 @@ RenderScene layoutSankey(
   double nodeWidth = 10,
   double nodePadding = 12,
   String nodeAlignment = 'justify',
+  String linkColor = 'gradient',
   bool showValues = true,
   String prefix = '',
   String suffix = '',
@@ -195,10 +312,12 @@ RenderScene layoutSankey(
 }) {
   final align = _alignmentFromName(nodeAlignment);
   // d3-sankey: nodePadding(nodePadding + (showValues ? 15 : 0)).
-  final py = nodePadding + (showValues ? 15.0 : 0.0);
+  var py = nodePadding + (showValues ? 15.0 : 0.0);
   const labelFontSize = 14.0;
-  final labelTextStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: labelFontSize);
+  final labelTextStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: labelFontSize,
+  );
 
   // Build nodes (first-seen order) and links wired to node objects.
   final nodes = <String, _Node>{};
@@ -211,8 +330,9 @@ RenderScene layoutSankey(
     nodeList.add(n);
   }
   final links = <_Link>[];
-  for (final l in diagram.links) {
-    final link = _Link(nodes[l.source]!, nodes[l.target]!, l.value);
+  for (var i = 0; i < diagram.links.length; i++) {
+    final l = diagram.links[i];
+    final link = _Link(nodes[l.source]!, nodes[l.target]!, l.value, i);
     links.add(link);
     link.source.sourceLinks.add(link);
     link.target.targetLinks.add(link);
@@ -234,11 +354,17 @@ RenderScene layoutSankey(
   }
 
   // --- d3-sankey: computeNodeDepths (BFS from sources) ------------------
-  _computeNodeDepths(nodeList, (n) => n.sourceLinks.map((l) => l.target),
-      (n, d) => n.depth = d);
+  _computeNodeDepths(
+    nodeList,
+    (n) => n.sourceLinks.map((l) => l.target),
+    (n, d) => n.depth = d,
+  );
   // computeNodeHeights (BFS from sinks)
-  _computeNodeDepths(nodeList, (n) => n.targetLinks.map((l) => l.source),
-      (n, d) => n.height = d);
+  _computeNodeDepths(
+    nodeList,
+    (n) => n.targetLinks.map((l) => l.source),
+    (n, d) => n.height = d,
+  );
 
   final maxDepth = nodeList.fold(0, (a, n) => math.max(a, n.depth));
   final maxHeight = nodeList.fold(0, (a, n) => math.max(a, n.height));
@@ -259,8 +385,12 @@ RenderScene layoutSankey(
   // alignment (left/right/center/justify) keeps the rightmost column flush
   // with the right edge.
   for (final n in nodeList) {
-    final col = _alignLayer(n, align, maxDepth, maxHeight)
-        .clamp(0, columnCount - 1);
+    final col = _alignLayer(
+      n,
+      align,
+      maxDepth,
+      maxHeight,
+    ).clamp(0, columnCount - 1);
     n.layer = col;
     n.x0 = col * kx;
     n.x1 = n.x0 + nodeWidth;
@@ -278,6 +408,16 @@ RenderScene layoutSankey(
   }
 
   // --- d3-sankey: computeNodeBreadths -----------------------------------
+  // Keep the largest column within the vertical extent even when callers
+  // request more padding than the configured height can hold.
+  final maxColumnLength = columns.fold<int>(
+    0,
+    (largest, column) => math.max(largest, column.length),
+  );
+  if (maxColumnLength > 1) {
+    py = math.min(py, height / (maxColumnLength - 1));
+  }
+
   // ky: largest vertical scale that fits every column inside `height`.
   var ky = double.infinity;
   for (final col in columns) {
@@ -286,9 +426,11 @@ RenderScene layoutSankey(
     final avail = height - (col.length - 1) * py;
     if (sumV > 0) ky = math.min(ky, avail / sumV);
   }
-  if (!ky.isFinite || ky <= 0) ky = 1;
+  if (!ky.isFinite || ky < 0) ky = 0;
 
-  // initializeNodeBreadths: stack each column from the top.
+  // initializeNodeBreadths: stack each column, distribute its unused space
+  // evenly above, between, and below nodes, then order links by the opposite
+  // endpoint. This is d3-sankey's initial breadth state before relaxation.
   for (final col in columns) {
     var y = 0.0;
     for (final n in col) {
@@ -299,20 +441,22 @@ RenderScene layoutSankey(
         l.width = l.value * ky;
       }
     }
+    final gap = (height - y + py) / (col.length + 1);
+    for (var i = 0; i < col.length; i++) {
+      col[i].y0 += gap * (i + 1);
+      col[i].y1 += gap * (i + 1);
+    }
+    _reorderLinks(col);
   }
-  // initial computeLinkBreadths
-  _computeLinkBreadths(columns);
 
   // Iterative relaxation, matching d3-sankey's default iteration loop:
-  // alpha decays by 0.99 per pass and scales the weighted-position move.
   for (var i = 0; i < _kSankeyIterations; i++) {
     final alpha = math.pow(0.99, i).toDouble();
-    _relaxRightToLeft(columns, alpha);
-    _resolveCollisions(columns, height, py);
-    _relaxLeftToRight(columns, alpha);
-    _resolveCollisions(columns, height, py);
-    _computeLinkBreadths(columns);
+    final beta = math.max(1 - alpha, (i + 1) / _kSankeyIterations);
+    _relaxRightToLeft(columns, alpha, beta, height, py);
+    _relaxLeftToRight(columns, alpha, beta, height, py);
   }
+  _computeLinkBreadths(columns);
 
   // --- Smart label positioning anchor (central node layer) --------------
   var centralNodeLayer = 0;
@@ -339,36 +483,54 @@ RenderScene layoutSankey(
     final ty = l.y1;
     // Upstream strokes a horizontal cubic centerline at `w`; the visible band
     // is the area between the top and bottom edges of that stroke.
-    ribbons.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(x0, sy - half)),
-        CubicTo(Point(cx, sy - half), Point(cx, ty - half), Point(x1, ty - half)),
-        LineTo(Point(x1, ty + half)),
-        CubicTo(Point(cx, ty + half), Point(cx, sy + half), Point(x0, sy + half)),
-        const ClosePath(),
-      ]),
-      // Upstream renders links with `stroke-opacity:0.5`. A gradient paint
-      // overrides the base fill color, so the half-opacity must live in the
-      // gradient stops themselves (otherwise ribbons paint at full opacity and
-      // visually swallow the node bars).
-      fill: Fill(
-        l.source.color.withOpacity(0.5),
-        gradient: SceneGradient(
-          Point(x0, 0),
-          Point(x1, 0),
-          [l.source.color.withOpacity(0.5), l.target.color.withOpacity(0.5)],
-        ),
+    final customLinkColor = Color.tryParse(linkColor);
+    final solidColor = switch (linkColor) {
+      'target' => l.target.color,
+      'source' => l.source.color,
+      _ => customLinkColor ?? l.source.color,
+    };
+    final gradient = linkColor == 'gradient'
+        ? SceneGradient(Point(x0, 0), Point(x1, 0), [
+            _linkColor(l.source.color),
+            _linkColor(l.target.color),
+          ])
+        : null;
+    ribbons.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(x0, sy - half)),
+          CubicTo(
+            Point(cx, sy - half),
+            Point(cx, ty - half),
+            Point(x1, ty - half),
+          ),
+          LineTo(Point(x1, ty + half)),
+          CubicTo(
+            Point(cx, ty + half),
+            Point(cx, sy + half),
+            Point(x0, sy + half),
+          ),
+          const ClosePath(),
+        ]),
+        // Upstream renders links with `stroke-opacity:0.5`. A gradient paint
+        // overrides the base fill color, so the half-opacity must live in the
+        // gradient stops themselves (otherwise ribbons paint at full opacity and
+        // visually swallow the node bars).
+        fill: Fill(_linkColor(solidColor), gradient: gradient),
       ),
-    ));
+    );
   }
 
   // --- Node rects -------------------------------------------------------
   for (final n in nodeList) {
-    nodeShapes.add(SceneShape(
-      geometry: RectGeometry(
-          Rect.fromLTWH(n.x0, n.y0, n.x1 - n.x0, math.max(0, n.y1 - n.y0))),
-      fill: Fill(n.color),
-    ));
+    nodeShapes.add(
+      SceneShape(
+        geometry: RectGeometry(
+          Rect.fromLTWH(n.x0, n.y0, n.x1 - n.x0, math.max(0, n.y1 - n.y0)),
+        ),
+        fill: Fill(n.color),
+      ),
+    );
   }
 
   // --- Labels -----------------------------------------------------------
@@ -400,12 +562,15 @@ RenderScene layoutSankey(
         : n.x0 - 6 - labelSize.width / 2;
 
     SceneText makeText(Color color) => SceneText(
-          text: text,
-          bounds: Rect.fromCenter(
-              Point(lx, cy + dy), labelSize.width, labelSize.height),
-          style: labelTextStyle,
-          color: color,
-        );
+      text: text,
+      bounds: Rect.fromCenter(
+        Point(lx, cy + dy),
+        labelSize.width,
+        labelSize.height,
+      ),
+      style: labelTextStyle,
+      color: color,
+    );
 
     if (outlined) {
       // Upstream draws a 4px background-colored stroke copy under the
@@ -442,6 +607,14 @@ String _fmtValue(double v) {
   return rounded.toString();
 }
 
+/// Applies Mermaid's 0.5 link opacity without replacing configured alpha.
+Color _linkColor(Color color) => Color.fromARGB(
+  (color.alpha * 0.5).round(),
+  color.red,
+  color.green,
+  color.blue,
+);
+
 /// BFS layering (d3-sankey computeNodeDepths/Heights). [next] yields the
 /// neighbours to advance to; [assign] records the BFS distance.
 void _computeNodeDepths(
@@ -467,7 +640,11 @@ void _computeNodeDepths(
 }
 
 int _alignLayer(
-    _Node n, SankeyNodeAlignment align, int maxDepth, int maxHeight) {
+  _Node n,
+  SankeyNodeAlignment align,
+  int maxDepth,
+  int maxHeight,
+) {
   switch (align) {
     case SankeyNodeAlignment.left:
       return n.depth;
@@ -476,9 +653,7 @@ int _alignLayer(
     case SankeyNodeAlignment.center:
       // d3 sankeyCenter: sources keep depth; others = min target depth - 1.
       if (n.targetLinks.isEmpty && n.sourceLinks.isNotEmpty) {
-        return n.sourceLinks
-            .map((l) => l.target.depth)
-            .reduce(math.min) - 1;
+        return n.sourceLinks.map((l) => l.target.depth).reduce(math.min) - 1;
       }
       return n.depth;
     case SankeyNodeAlignment.justify:
@@ -488,13 +663,6 @@ int _alignLayer(
 }
 
 void _computeLinkBreadths(List<List<_Node>> columns) {
-  for (final col in columns) {
-    for (final n in col) {
-      // Source endpoints stacked top→bottom in the node's source order.
-      n.sourceLinks.sort((a, b) => a.target.y0.compareTo(b.target.y0));
-      n.targetLinks.sort((a, b) => a.source.y0.compareTo(b.source.y0));
-    }
-  }
   for (final col in columns) {
     for (final n in col) {
       var y0 = n.y0;
@@ -511,73 +679,166 @@ void _computeLinkBreadths(List<List<_Node>> columns) {
   }
 }
 
-double _weightedSource(_Node n) {
-  var sumW = 0.0, sum = 0.0;
-  for (final l in n.targetLinks) {
-    sum += (l.source.y0 + l.source.y1) / 2 * l.value;
-    sumW += l.value;
-  }
-  return sumW > 0 ? sum / sumW : (n.y0 + n.y1) / 2;
+int _ascendingTargetBreadth(_Link a, _Link b) {
+  final breadth = a.target.y0.compareTo(b.target.y0);
+  return breadth != 0 ? breadth : a.index.compareTo(b.index);
 }
 
-double _weightedTarget(_Node n) {
-  var sumW = 0.0, sum = 0.0;
-  for (final l in n.sourceLinks) {
-    sum += (l.target.y0 + l.target.y1) / 2 * l.value;
-    sumW += l.value;
-  }
-  return sumW > 0 ? sum / sumW : (n.y0 + n.y1) / 2;
+int _ascendingSourceBreadth(_Link a, _Link b) {
+  final breadth = a.source.y0.compareTo(b.source.y0);
+  return breadth != 0 ? breadth : a.index.compareTo(b.index);
 }
 
-void _relaxLeftToRight(List<List<_Node>> columns, double alpha) {
+int _ascendingNodeBreadth(_Node a, _Node b) {
+  final breadth = a.y0.compareTo(b.y0);
+  return breadth != 0 ? breadth : a.index.compareTo(b.index);
+}
+
+void _reorderLinks(List<_Node> nodes) {
+  for (final node in nodes) {
+    node.sourceLinks.sort(_ascendingTargetBreadth);
+    node.targetLinks.sort(_ascendingSourceBreadth);
+  }
+}
+
+void _reorderNodeLinks(_Node node) {
+  for (final link in node.targetLinks) {
+    link.source.sourceLinks.sort(_ascendingTargetBreadth);
+  }
+  for (final link in node.sourceLinks) {
+    link.target.targetLinks.sort(_ascendingSourceBreadth);
+  }
+}
+
+void _relaxLeftToRight(
+  List<List<_Node>> columns,
+  double alpha,
+  double beta,
+  double height,
+  double py,
+) {
   for (var i = 1; i < columns.length; i++) {
-    for (final n in columns[i]) {
-      if (n.targetLinks.isEmpty) continue;
-      final v = _weightedSource(n);
-      final dy = (v - (n.y0 + n.y1) / 2) * alpha;
-      n.y0 += dy;
-      n.y1 += dy;
+    final column = columns[i];
+    for (final target in column) {
+      var y = 0.0;
+      var weight = 0.0;
+      for (final link in target.targetLinks) {
+        final v = link.value * (target.layer - link.source.layer);
+        y += _targetTop(link.source, target, py) * v;
+        weight += v;
+      }
+      if (!(weight > 0)) continue;
+      final dy = (y / weight - target.y0) * alpha;
+      target.y0 += dy;
+      target.y1 += dy;
+      _reorderNodeLinks(target);
     }
+    column.sort(_ascendingNodeBreadth);
+    _resolveCollisions(column, beta, height, py);
   }
 }
 
-void _relaxRightToLeft(List<List<_Node>> columns, double alpha) {
+void _relaxRightToLeft(
+  List<List<_Node>> columns,
+  double alpha,
+  double beta,
+  double height,
+  double py,
+) {
   for (var i = columns.length - 2; i >= 0; i--) {
-    for (final n in columns[i]) {
-      if (n.sourceLinks.isEmpty) continue;
-      final v = _weightedTarget(n);
-      final dy = (v - (n.y0 + n.y1) / 2) * alpha;
-      n.y0 += dy;
-      n.y1 += dy;
+    final column = columns[i];
+    for (final source in column) {
+      var y = 0.0;
+      var weight = 0.0;
+      for (final link in source.sourceLinks) {
+        final v = link.value * (link.target.layer - source.layer);
+        y += _sourceTop(source, link.target, py) * v;
+        weight += v;
+      }
+      if (!(weight > 0)) continue;
+      final dy = (y / weight - source.y0) * alpha;
+      source.y0 += dy;
+      source.y1 += dy;
+      _reorderNodeLinks(source);
     }
+    column.sort(_ascendingNodeBreadth);
+    _resolveCollisions(column, beta, height, py);
   }
 }
 
 void _resolveCollisions(
-    List<List<_Node>> columns, double height, double py) {
-  for (final col in columns) {
-    if (col.isEmpty) continue;
-    col.sort((a, b) => a.y0.compareTo(b.y0));
-    // Push nodes that overlap downward (resolveCollisionsTopToBottom).
-    var y = 0.0;
-    for (final n in col) {
-      final dy = y - n.y0;
-      if (dy > 0) {
-        n.y0 += dy;
-        n.y1 += dy;
-      }
-      y = n.y1 + py;
+  List<_Node> nodes,
+  double alpha,
+  double height,
+  double py,
+) {
+  if (nodes.isEmpty) return;
+  final middle = nodes.length >> 1;
+  final subject = nodes[middle];
+  _resolveBottomToTop(nodes, subject.y0 - py, middle - 1, alpha, py);
+  _resolveTopToBottom(nodes, subject.y1 + py, middle + 1, alpha, py);
+  _resolveBottomToTop(nodes, height, nodes.length - 1, alpha, py);
+  _resolveTopToBottom(nodes, 0, 0, alpha, py);
+}
+
+void _resolveTopToBottom(
+  List<_Node> nodes,
+  double y,
+  int start,
+  double alpha,
+  double py,
+) {
+  for (var i = start; i < nodes.length; i++) {
+    final node = nodes[i];
+    final dy = (y - node.y0) * alpha;
+    if (dy > 1e-6) {
+      node.y0 += dy;
+      node.y1 += dy;
     }
-    // If they overflow the bottom, push back up (bottomToTop).
-    y = height;
-    for (var i = col.length - 1; i >= 0; i--) {
-      final n = col[i];
-      final dy = n.y1 - y;
-      if (dy > 0) {
-        n.y0 -= dy;
-        n.y1 -= dy;
-      }
-      y = n.y0 - py;
-    }
+    y = node.y1 + py;
   }
+}
+
+void _resolveBottomToTop(
+  List<_Node> nodes,
+  double y,
+  int start,
+  double alpha,
+  double py,
+) {
+  for (var i = start; i >= 0; i--) {
+    final node = nodes[i];
+    final dy = (node.y1 - y) * alpha;
+    if (dy > 1e-6) {
+      node.y0 -= dy;
+      node.y1 -= dy;
+    }
+    y = node.y0 - py;
+  }
+}
+
+double _targetTop(_Node source, _Node target, double py) {
+  var y = source.y0 - (source.sourceLinks.length - 1) * py / 2;
+  for (final link in source.sourceLinks) {
+    if (identical(link.target, target)) break;
+    y += link.width + py;
+  }
+  for (final link in target.targetLinks) {
+    if (identical(link.source, source)) break;
+    y -= link.width;
+  }
+  return y;
+}
+
+double _sourceTop(_Node source, _Node target, double py) {
+  var y = target.y0 - (target.targetLinks.length - 1) * py / 2;
+  for (final link in target.targetLinks) {
+    if (identical(link.source, source)) break;
+    y += link.width + py;
+  }
+  for (final link in source.sourceLinks) {
+    if (identical(link.target, target)) break;
+    y -= link.width;
+  }
+  return y;
 }

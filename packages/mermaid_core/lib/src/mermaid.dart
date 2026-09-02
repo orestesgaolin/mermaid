@@ -128,8 +128,21 @@ class Mermaid {
         return layoutGitGraph(parseGitGraph(source),
             measurer: measurer, theme: theme);
       case DiagramType.sankey:
+        final config = SankeyConfig.fromSource(source);
         return layoutSankey(parseSankey(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer,
+            theme: theme,
+            width: config.width,
+            height: config.height,
+            nodeWidth: config.nodeWidth,
+            nodePadding: config.nodePadding,
+            nodeAlignment: config.nodeAlignment,
+            linkColor: config.linkColor,
+            showValues: config.showValues,
+            prefix: config.prefix,
+            suffix: config.suffix,
+            labelStyle: config.labelStyle,
+            nodeColors: config.nodeColors);
       case DiagramType.packet:
         return layoutPacket(parsePacket(source),
             measurer: measurer, theme: theme);

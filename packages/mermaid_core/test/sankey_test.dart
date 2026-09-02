@@ -1,9 +1,14 @@
 /// Tests for the sankey diagram.
 library;
 
+import 'dart:io';
+
+import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/detect.dart';
 import 'package:mermaid_core/src/diagrams/sankey/sankey.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
+import 'package:mermaid_core/src/ir/scene_utils.dart';
+import 'package:mermaid_core/src/mermaid.dart';
 import 'package:mermaid_core/src/parse_error.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
@@ -13,11 +18,8 @@ const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
+  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
+];
 
 void main() {
   test('detects sankey / sankey-beta', () {
@@ -44,8 +46,10 @@ A,C,2
     });
 
     test('rejects a non-numeric value', () {
-      expect(() => parseSankey('sankey-beta\nA,B,x'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseSankey('sankey-beta\nA,B,x'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
@@ -66,16 +70,250 @@ A,C,2
           .toSet();
       expect(xs.length, 3);
       // Ribbons are filled bezier paths.
-      final ribbons = flatten(scene.nodes)
-          .whereType<SceneShape>()
-          .where((s) => s.geometry is PathGeometry && s.fill != null);
+      final ribbons = flatten(scene.nodes).whereType<SceneShape>().where(
+        (s) => s.geometry is PathGeometry && s.fill != null,
+      );
       expect(ribbons.length, 2);
       // Labels present. showValues defaults true upstream, so each node label
       // is "<name>\n<value>"; check the name on the first line.
-      final names = flatten(scene.nodes)
-          .whereType<SceneText>()
-          .map((t) => t.text.split('\n').first);
+      final names = flatten(
+        scene.nodes,
+      ).whereType<SceneText>().map((t) => t.text.split('\n').first);
       expect(names, containsAll(['A', 'B', 'C']));
+    });
+  });
+
+  group('Mermaid.render configuration', () {
+    const renderer = Mermaid(measurer: measurer, theme: theme);
+
+    test('fixture frontmatter controls extent, values, and gradient links', () {
+      final source = File(
+        'test/fixtures/upstream_sankey/03.mmd',
+      ).readAsStringSync();
+      final scene = renderer.render(source);
+      final nodes = flatten(scene.nodes);
+      final shapes = nodes
+          .whereType<SceneShape>()
+          .where(
+            (s) => s.geometry is RectGeometry || s.geometry is PathGeometry,
+          )
+          .toList();
+      final diagramBounds = sceneBounds(shapes)!;
+      final texts = nodes.whereType<SceneText>().toList();
+      final ribbons = shapes.where((s) => s.geometry is PathGeometry).toList();
+
+      // The configured d3-sankey extent is preserved before labels and the
+      // outer 12 px scene padding expand the public scene bounds.
+      expect(diagramBounds.width, closeTo(1200, 1e-6));
+      expect(diagramBounds.height, closeTo(600, 1e-6));
+      expect(scene.size.width, greaterThan(1200));
+      expect(texts, isNotEmpty);
+      expect(texts.every((text) => !text.text.contains('\n')), isTrue);
+      expect(ribbons.every((shape) => shape.fill?.gradient != null), isTrue);
+
+      final rects = nodes
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .toList();
+      double topOf(String name) {
+        final index = parseSankey(source).nodes.indexOf(name);
+        return (rects[index].geometry as RectGeometry).rect.top;
+      }
+
+      // d3-sankey reorders each column by the connected nodes' breadth during
+      // relaxation. First-seen stacking puts both pairs in the reverse order.
+      expect(
+        topOf("Agricultural 'waste'"),
+        lessThan(topOf('UK land based bioenergy')),
+      );
+      expect(topOf('Wind'), lessThan(topOf('Pumped heat')));
+    });
+
+    test('two configs change size, alignment, values, and link color', () {
+      const data = '''
+sankey
+A,B,10
+A,C,5
+B,D,10
+''';
+      const leftSource = '''
+---
+config:
+  sankey:
+    width: 300
+    height: 200
+    showValues: false
+    nodeAlignment: left
+    linkColor: source
+---
+$data''';
+      const justifyTarget = '''
+---
+config:
+  sankey:
+    width: 900
+    height: 400
+    showValues: true
+    nodeAlignment: justify
+    linkColor: target
+---
+$data''';
+
+      final left = flatten(renderer.render(leftSource).nodes);
+      final justify = flatten(renderer.render(justifyTarget).nodes);
+      final leftRects = left
+          .whereType<SceneShape>()
+          .where((s) => s.geometry is RectGeometry)
+          .toList();
+      final justifyRects = justify
+          .whereType<SceneShape>()
+          .where((s) => s.geometry is RectGeometry)
+          .toList();
+      final leftRibbons = left
+          .whereType<SceneShape>()
+          .where((s) => s.geometry is PathGeometry)
+          .toList();
+      final targetRibbons = justify
+          .whereType<SceneShape>()
+          .where((s) => s.geometry is PathGeometry)
+          .toList();
+
+      expect(sceneBounds(leftRects)!.width, closeTo(300, 1e-6));
+      expect(sceneBounds(justifyRects)!.width, closeTo(900, 1e-6));
+      expect(sceneBounds(leftRects)!.height, closeTo(200, 1e-6));
+      expect(sceneBounds(justifyRects)!.height, closeTo(400, 1e-6));
+      expect(
+        left.whereType<SceneText>().every((text) => !text.text.contains('\n')),
+        isTrue,
+      );
+      expect(
+        justify.whereType<SceneText>().every(
+          (text) => text.text.contains('\n'),
+        ),
+        isTrue,
+      );
+
+      // C is the third first-seen node. Left alignment leaves this early sink
+      // in the middle column; justify alignment moves it to the final column.
+      final leftCX = (leftRects[2].geometry as RectGeometry).rect.left;
+      final justifyCX = (justifyRects[2].geometry as RectGeometry).rect.left;
+      final justifyDX = (justifyRects[3].geometry as RectGeometry).rect.left;
+      expect(
+        leftCX,
+        lessThan((leftRects[3].geometry as RectGeometry).rect.left),
+      );
+      expect(justifyCX, closeTo(justifyDX, 1e-6));
+
+      expect(leftRibbons.first.fill?.gradient, isNull);
+      expect(leftRibbons.first.fill?.color, const Color(0x804e79a7));
+      expect(targetRibbons.first.fill?.gradient, isNull);
+      expect(targetRibbons.first.fill?.color, const Color(0x80f28e2c));
+    });
+
+    test('link opacity multiplies configured alpha', () {
+      const semiTransparent = '''
+---
+config:
+  sankey:
+    linkColor: '#ff000080'
+---
+sankey
+A,B,1
+''';
+      const transparent = '''
+---
+config:
+  sankey:
+    linkColor: transparent
+---
+sankey
+A,B,1
+''';
+      const gradient = '''
+---
+config:
+  sankey:
+    linkColor: gradient
+    nodeColors:
+      A: '#ff000080'
+      B: transparent
+---
+sankey
+A,B,1
+''';
+
+      SceneShape ribbon(String source) => flatten(renderer.render(source).nodes)
+          .whereType<SceneShape>()
+          .firstWhere((shape) => shape.geometry is PathGeometry);
+
+      expect(ribbon(semiTransparent).fill?.color, const Color(0x40ff0000));
+      expect(ribbon(transparent).fill?.color, const Color(0x00000000));
+      expect(ribbon(gradient).fill?.gradient?.colors, [
+        const Color(0x40ff0000),
+        const Color(0x00000000),
+      ]);
+    });
+
+    test('large node padding stays within a small configured height', () {
+      const source = '''
+---
+config:
+  sankey:
+    height: 30
+    nodePadding: 100
+    showValues: false
+---
+sankey
+A,X,1
+B,Y,1
+C,Z,1
+''';
+
+      final scene = renderer.render(source);
+      final rects = flatten(scene.nodes)
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .toList();
+
+      expect(rects, hasLength(6));
+      // Labels can translate the complete scene, so compare the node span,
+      // not its absolute post-normalization coordinates.
+      expect(sceneBounds(rects)!.height, lessThanOrEqualTo(30 + 1e-6));
+    });
+
+    test('invalid values use renderer defaults', () {
+      const source = '''
+---
+config:
+  sankey:
+    width: -2
+    height: no
+    nodePadding: -1
+    nodeAlignment: diagonal
+    linkColor: not-a-color
+    showValues: sometimes
+---
+sankey
+A,B,1
+B,C,1
+''';
+
+      final nodes = flatten(renderer.render(source).nodes);
+      final rects = nodes
+          .whereType<SceneShape>()
+          .where((s) => s.geometry is RectGeometry)
+          .toList();
+      final ribbon = nodes.whereType<SceneShape>().firstWhere(
+        (s) => s.geometry is PathGeometry,
+      );
+
+      expect(sceneBounds(rects)!.width, closeTo(600, 1e-6));
+      expect(sceneBounds(rects)!.height, closeTo(600, 1e-6));
+      expect(
+        nodes.whereType<SceneText>().every((text) => text.text.contains('\n')),
+        isTrue,
+      );
+      expect(ribbon.fill?.gradient, isNotNull);
     });
   });
 }
