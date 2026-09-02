@@ -243,7 +243,7 @@ RenderScene layoutTimeline(
             size.width,
             size.height),
         style: event ? labelStyle : labelStyle.copyWith(fontWeight: 700),
-        color: theme.textColor,
+        color: event ? theme.textColor : theme.cScaleLabel[ci],
       ),
     ]);
   }
@@ -313,7 +313,7 @@ RenderScene layoutTimeline(
     for (final section in diagram.sections) {
       final tasks = section.periods;
       final sectionWidth =
-          _columnAdvance * math.max(tasks.length, 1) - 50;
+          _columnAdvance * (math.max(tasks.length, 1) - 1) + _nodeWidth;
       nodes.add(drawNode(
         x: masterX,
         y: sectionBeginY,

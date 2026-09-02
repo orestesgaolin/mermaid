@@ -1,6 +1,8 @@
 /// Tests for self-loop edges and per-subgraph direction layout.
 library;
 
+import 'dart:io';
+
 import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_parser.dart';
@@ -50,6 +52,31 @@ Rect groupBounds(SceneGroup g) {
 }
 
 void main() {
+  test('fixture 07 basis edges ease into their final endpoints', () {
+    final source =
+        File('test/fixtures/upstream_flowcharts/07.mmd').readAsStringSync();
+    final scene = layout(parseFlowchart(source));
+
+    for (final id in [
+      'edge_c0102290_1ec3_e711_8c5a_005056ad0002_71082290_1ec3_e711_8c5a_005056ad0002_37',
+      'edge_9a072290_1ec3_e711_8c5a_005056ad0002_d6072290_1ec3_e711_8c5a_005056ad0002_38',
+    ]) {
+      final shape = groupById(scene, id)
+          .children
+          .whereType<SceneShape>()
+          .singleWhere((node) => node.geometry is PathGeometry);
+      final commands = (shape.geometry as PathGeometry).commands;
+      final last = commands.last;
+      expect(last, isA<CubicTo>(),
+          reason: '$id must not change from a basis curve to a straight tail');
+      final CubicTo(:c1, :c2, :p) = last as CubicTo;
+      expect(c1.x, closeTo(p.x, 1e-9));
+      expect(c1.y, closeTo(p.y, 1e-9));
+      expect(c2.x, closeTo(p.x, 1e-9));
+      expect(c2.y, closeTo(p.y, 1e-9));
+    }
+  });
+
   group('self-loops', () {
     test('loop stays right of node center with arrowhead, inside scene', () {
       final g = FlowGraph(

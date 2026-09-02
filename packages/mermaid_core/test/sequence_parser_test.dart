@@ -209,6 +209,20 @@ void main() {
   });
 
   group('misc', () {
+    test('message and note wrap directives are parsed, not displayed', () {
+      final diagram = parse('''
+A->>B: wrap: a long wrapped message
+Note over B:nowrap: a long unwrapped note
+''');
+      final message = diagram.events.whereType<SeqMessage>().single;
+      final note = diagram.events.whereType<SeqNote>().single;
+
+      expect(message.text, 'a long wrapped message');
+      expect(message.wrap, isTrue);
+      expect(note.text, 'a long unwrapped note');
+      expect(note.wrap, isFalse);
+    });
+
     test('autonumber plain', () {
       final a = parse('autonumber\nA->>B: x').events.first as SeqAutonumber;
       expect(a.on, isTrue);

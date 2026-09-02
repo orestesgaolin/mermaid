@@ -294,6 +294,24 @@ timeline
       expect((fb.bounds.center.x - gg.bounds.center.x).abs(), lessThan(2));
       expect(gg.bounds.top, greaterThan(fb.bounds.bottom));
     });
+    test('section headers span task columns and use palette label colors', () {
+      final s = layoutTimeline(parseTimeline('''
+timeline
+  section Planning
+    First : A
+    Second : B
+'''), measurer: measurer, theme: theme);
+      SceneGroup group(String label) => flatten(s.nodes).whereType<SceneGroup>()
+          .singleWhere((g) => g.children.whereType<SceneText>()
+              .any((text) => text.text == label));
+      Rect rect(String label) => (group(label).children.whereType<SceneShape>()
+          .first.geometry as RectGeometry).rect;
+      final header = rect('Planning');
+      expect(header.left, rect('First').left);
+      expect(header.right, rect('Second').right);
+      expect(group('Planning').children.whereType<SceneText>().single.color,
+          theme.cScaleLabel0);
+    });
   });
 
   group('frontmatter tolerance', () {

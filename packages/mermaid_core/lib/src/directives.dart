@@ -124,8 +124,8 @@ Map<String, Object?> resolveDiagramConfig(String source, String diagramKey) {
 /// from `layout:` in an `%%{init}%%` directive or frontmatter `config:`. Also
 /// honours upstream's `flowchart.defaultRenderer: 'elk'` and recognizes the
 /// `flowchart-elk` diagram keyword (handled by the caller).
-String resolveLayout(String source) {
-  var layout = 'dagre';
+String resolveLayout(String source, {String defaultLayout = 'dagre'}) {
+  var layout = defaultLayout;
   final text = source.replaceAll('\r\n', '\n');
   // The `flowchart-elk` keyword selects the elk engine.
   if (RegExp(r'(?:^|\n)\s*flowchart-elk\b').hasMatch(text)) layout = 'elk';
@@ -279,6 +279,7 @@ Map<String, Object?> _frontmatterConfigBlock(String body, String name) {
   int? configIndent;
   int? diagramIndent;
   int? propertyIndent;
+  String? nestedProperty;
   for (final raw in lines) {
     if (raw.trim().isEmpty) continue;
     final indent = raw.length - raw.trimLeft().length;
@@ -294,10 +295,25 @@ Map<String, Object?> _frontmatterConfigBlock(String body, String name) {
     }
     if (indent <= diagramIndent) break;
     propertyIndent ??= indent;
-    if (indent != propertyIndent) continue;
-    final match = RegExp(r'^([A-Za-z_]\w*)\s*:\s*(.+)$').firstMatch(line);
-    if (match == null) continue;
-    out[match.group(1)!] = _parseYamlScalar(match.group(2)!.trim());
+    if (indent == propertyIndent) {
+      nestedProperty = null;
+      final nested = RegExp(r'^([A-Za-z_]\w*)\s*:\s*$').firstMatch(line);
+      if (nested != null) {
+        nestedProperty = nested.group(1)!;
+        out[nestedProperty] = <String, Object?>{};
+        continue;
+      }
+      final match = RegExp(r'^([A-Za-z_]\w*)\s*:\s*(.+)$').firstMatch(line);
+      if (match != null) {
+        out[match.group(1)!] = _parseYamlScalar(match.group(2)!.trim());
+      }
+    } else if (indent > propertyIndent && nestedProperty != null) {
+      final match = RegExp(r'^([A-Za-z_]\w*)\s*:\s*(.+)$').firstMatch(line);
+      if (match != null) {
+        (out[nestedProperty]! as Map<String, Object?>)[match.group(1)!] =
+            _parseYamlScalar(match.group(2)!.trim());
+      }
+    }
   }
   return out;
 }

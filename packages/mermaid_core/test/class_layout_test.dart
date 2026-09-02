@@ -170,6 +170,51 @@ Bike --> Square : Logo Shape
     }
   });
 
+  test('fixture 11 labels sit on edges and inheritance enters rank edge', () {
+    final s = layout('''
+namespace Shapes {
+  class Shape
+  class Circle
+  class Square
+}
+Shape <|-- Circle
+Shape <|-- Square
+namespace Vehicles {
+  class Vehicle
+  class Car
+  class Bike
+}
+Vehicle <|-- Car
+Vehicle <|-- Bike
+Car --> Circle : "Logo Shape"
+Bike --> Square : "Logo Shape"
+''');
+    for (final entry in [
+      ('rel_Car_Circle_4', 'rellabel_4'),
+      ('rel_Bike_Square_5', 'rellabel_5'),
+    ]) {
+      final path = flatten(group(s, entry.$1).children)
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PathGeometry>()
+          .first;
+      final labelCenter = sceneNodeBounds(group(s, entry.$2))!.center;
+      expect(distanceToPath(path, labelCenter), lessThan(0.6));
+    }
+
+    final vehicle = sceneNodeBounds(group(s, 'Vehicle'))!;
+    for (final edgeId in ['rel_Vehicle_Car_2', 'rel_Vehicle_Bike_3']) {
+      final triangle = flatten(group(s, edgeId).children)
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PolygonGeometry>()
+          .single;
+      final tip = triangle.points.first;
+      expect(tip.y, closeTo(vehicle.bottom, 0.001));
+      expect(tip.x, inInclusiveRange(vehicle.left, vehicle.right));
+    }
+  });
+
   test('note for class renders yellow box with dashed connector', () {
     final s = layout('class A\nnote for A "remember"');
     final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);

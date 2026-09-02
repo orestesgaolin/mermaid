@@ -100,12 +100,16 @@ class SeqMessage extends SeqEvent {
     required this.to,
     required this.arrow,
     this.text = '',
+    this.wrap = false,
   });
 
   final String from;
   final String to;
   final SeqArrow arrow;
   final String text;
+
+  /// Whether a leading `wrap:` directive requested word wrapping.
+  final bool wrap;
 }
 
 /// Activation bar start/end on a participant's lifeline.
@@ -137,6 +141,7 @@ class SeqNote extends SeqEvent {
     required this.target,
     this.target2,
     required this.text,
+    this.wrap = false,
   });
 
   final NotePlacement placement;
@@ -145,6 +150,9 @@ class SeqNote extends SeqEvent {
   /// Second participant for `Note over A,B`.
   final String? target2;
   final String text;
+
+  /// Whether a leading `wrap:` directive requested word wrapping.
+  final bool wrap;
 }
 
 enum SeqBlockKind { loop, alt, opt, par, critical, breakBlock, rect }

@@ -88,7 +88,7 @@ class Mermaid {
         return layoutStateDiagram(parseStateDiagram(source),
             measurer: measurer,
             theme: theme,
-            engine: resolveLayout(source),
+            engine: resolveLayout(source, defaultLayout: 'auto'),
             elkOptions: resolveElkConfig(source));
       case DiagramType.er:
         return layoutErDiagram(parseErDiagram(source),

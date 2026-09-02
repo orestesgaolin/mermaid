@@ -358,13 +358,13 @@ class _LayoutContext {
   // Measure a (possibly multi-line) label, returning its width/height.
   Size _measureMultiline(String text, TextStyleSpec style) {
     final lines = _splitLines(text);
-    final lh = style.fontSize * 1.05;
     var w = 0.0;
     for (final line in lines) {
       final s = measurer.measure(line, style);
       if (s.width > w) w = s.width;
     }
-    final h = lines.length * lh;
+    // Keep layout bounds identical to the active painter's line metrics.
+    final h = measurer.measure(lines.join('\n'), style).height;
     return Size(w, h);
   }
 
@@ -552,7 +552,6 @@ class _LayoutContext {
   double _drawSubLabel(String text, double x, double y, _SubAnchor anchor) {
     final size = _measureMultiline(text, labelStyle);
     // End-anchored: text extends to the left of x.
-    final lh = labelStyle.fontSize * 1.05;
     final lines = _splitLines(text);
     double topY;
     switch (anchor) {
@@ -564,8 +563,7 @@ class _LayoutContext {
         topY = y;
     }
     // Multi-line block right-aligned to x.
-    final blockTop = topY - ((lines.length - 1) * lh) / 2;
-    final bounds = Rect.fromLTWH(x - size.width, blockTop, size.width, size.height);
+    final bounds = Rect.fromLTWH(x - size.width, topY, size.width, size.height);
     nodes.add(SceneText(
       text: lines.join('\n'),
       bounds: bounds,
@@ -585,13 +583,12 @@ class _LayoutContext {
     TextAlignH align,
   ) {
     final lines = _splitLines(text);
-    final lh = style.fontSize * 1.05;
     var w = 0.0;
     for (final line in lines) {
       final s = measurer.measure(line, style);
       if (s.width > w) w = s.width;
     }
-    final h = lines.length * lh;
+    final h = measurer.measure(lines.join('\n'), style).height;
     nodes.add(SceneText(
       text: lines.join('\n'),
       bounds: Rect.fromCenter(Point(cx, cy), w, h),

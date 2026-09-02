@@ -100,6 +100,30 @@ ishikawa-beta
     expect(_texts(s), containsAll(['Blurry Photo', 'Process', 'Out of focus']));
   });
 
+  test('ishikawa middle labels use painter height at branch anchors', () {
+    final s = _m.render('''
+ishikawa-beta
+  Slow website
+    Technology
+      Old servers
+''');
+    final nodes = _flat(s.nodes);
+    final label = nodes.whereType<SceneText>()
+        .singleWhere((text) => text.text == 'Old servers');
+    expect(label.bounds.height,
+        const ApproximateTextMeasurer().measure(label.text, label.style).height);
+    final branch = nodes.whereType<SceneShape>()
+        .map((shape) => shape.geometry).whereType<PathGeometry>()
+        .where((path) => path.commands.length == 2)
+        .singleWhere((path) {
+      final a = (path.commands.first as MoveTo).p;
+      final b = (path.commands.last as LineTo).p;
+      return a.y == b.y && (b.x - label.bounds.right).abs() < 0.001;
+    });
+    expect(label.bounds.center.y,
+        closeTo((branch.commands.last as LineTo).p.y, 0.001));
+  });
+
   test('wardley renders components and axis stages', () {
     final s = _m.render('''
 wardley-beta

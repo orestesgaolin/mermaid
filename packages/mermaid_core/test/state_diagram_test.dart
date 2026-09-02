@@ -262,6 +262,75 @@ Nested --> RootTarget
       expect(second.contains(adopted), isTrue);
       expect(first.contains(adopted), isFalse);
     });
+    test('nested fixture preserves hierarchical placement and straight routes',
+        () {
+      final diagram = parseStateDiagram(stateFixture('05'));
+      final s = layoutStateDiagram(
+        diagram,
+        measurer: const ApproximateTextMeasurer(),
+        theme: MermaidTheme.defaultTheme,
+      );
+
+      final first = sceneNodeBounds(sceneGroup(s, 'First'))!;
+      final inner = sceneNodeBounds(sceneGroup(s, 'innerFirst'))!;
+      final firstState = sceneNodeBounds(sceneGroup(s, '1st'))!;
+      final second = sceneNodeBounds(sceneGroup(s, 'Second'))!;
+      final third = sceneNodeBounds(sceneGroup(s, 'Third'))!;
+
+      expect(inner.top, greaterThan(firstState.bottom));
+      expect((inner.center.x - firstState.center.x).abs(), lessThan(25));
+      expect(second.top, greaterThan(first.bottom));
+      expect(third.left, greaterThan(first.right));
+
+      final nestedBodyShapes = sceneGroup(s, 'innerFirst')
+          .children
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .toList();
+      expect(nestedBodyShapes, hasLength(2));
+      expect(
+        nestedBodyShapes.last.fill?.color.value,
+        0xfff0f0f0,
+      );
+
+      final rootBranch = flatten(sceneGroup(s, 'trans_First_Third_2').children)
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PathGeometry>()
+          .single;
+      final start = (rootBranch.commands.first as MoveTo).p;
+      final end = (rootBranch.commands.last as LineTo).p;
+      expect(start.x, closeTo(first.right, 0.001));
+      expect(third.left - end.x, inInclusiveRange(0, 8.1));
+
+      for (final id in [
+        'trans___start_innerFirst_1st1st_4',
+        'trans_1st1st_1st2nd_5',
+      ]) {
+        final path = flatten(sceneGroup(s, id).children)
+            .whereType<SceneShape>()
+            .map((shape) => shape.geometry)
+            .whereType<PathGeometry>()
+            .single;
+        expect(path.commands.whereType<CubicTo>(), isEmpty);
+      }
+    });
+    test('explicit dagre selection is preserved for nested composites', () {
+      final s = layoutStateDiagram(
+        parseStateDiagram(stateFixture('05')),
+        measurer: const ApproximateTextMeasurer(),
+        theme: MermaidTheme.defaultTheme,
+        engine: 'dagre',
+      );
+      final path = flatten(
+        sceneGroup(s, 'trans___start_innerFirst_1st1st_4').children,
+      )
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PathGeometry>()
+          .single;
+      expect(path.commands.whereType<CubicTo>(), isNotEmpty);
+    });
     test('self-transition on composite renders a loop', () {
       final s = layout('state Active {\nIdle\n}\nActive --> Active : LOG');
       final loop = sceneGroup(s, 'trans_Active_Active_0');

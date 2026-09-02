@@ -271,6 +271,13 @@ class _ClassLayout {
           to.center.y + verticalDirection * (to.height / 2 + _rankSpacing / 2),
         );
       }
+      // Keep inheritance markers on the rank-facing edge of their class.
+      if (r.endFrom == RelationEnd.extension && points.length >= 2) {
+        points[1] = _rankApproachPoint(from, to.center);
+      }
+      if (r.endTo == RelationEnd.extension && points.length >= 2) {
+        points[points.length - 2] = _rankApproachPoint(to, from.center);
+      }
       points[0] = _intersectRect(from.rectAt(from.center), points[1]);
       points[points.length - 1] =
           _intersectRect(to.rectAt(to.center), points[points.length - 2]);
@@ -287,8 +294,9 @@ class _ClassLayout {
       if (_markerInset(r.endTo) > 0) {
         points[points.length - 1] = endTip - endDir * _markerInset(r.endTo);
       }
+      final path = PathGeometry(_curveBasis(points));
       children.add(SceneShape(
-        geometry: PathGeometry(_curveBasis(points)),
+        geometry: path,
         stroke: Stroke(
           color: theme.lineColor,
           width: 1.5,
@@ -305,10 +313,9 @@ class _ClassLayout {
 
       final labelSize = labelSizes[i];
       if (labelSize != null) {
-        final c = (dagreEdge.labelX != null && dagreEdge.labelY != null)
-            ? Point(dagreEdge.labelX!, dagreEdge.labelY!) +
-                (fromOffset + toOffset) * 0.5
-            : points[points.length ~/ 2];
+        // Namespace separation changes the route after Dagre calculates its
+        // label position. Anchor the label on the final painted curve.
+        final c = _pathMidpoint(path);
         labelNodes.add(SceneGroup(
           id: 'rellabel_$i',
           role: SceneGroupRole.edgeLabel,
@@ -611,6 +618,20 @@ class _ClassLayout {
     final len = math.sqrt(d.x * d.x + d.y * d.y);
     return len == 0 ? const Point(0, 1) : Point(d.x / len, d.y / len);
   }
+
+  Point _rankApproachPoint(_Box endpoint, Point other) {
+    if (diagram.direction == FlowDirection.tb ||
+        diagram.direction == FlowDirection.bt) {
+      final sign = other.y < endpoint.center.y ? -1.0 : 1.0;
+      return Point(endpoint.center.x,
+          endpoint.center.y + sign * (endpoint.height / 2 + _rankSpacing / 2));
+    }
+    final sign = other.x < endpoint.center.x ? -1.0 : 1.0;
+    return Point(
+        endpoint.center.x +
+            sign * (endpoint.width / 2 + _rankSpacing / 2),
+        endpoint.center.y);
+  }
 }
 
 // --- small geometry helpers (private ports, same as flow_layout) -------------
@@ -656,3 +677,58 @@ CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
       Point((p0.x + 2 * p1.x) / 3, (p0.y + 2 * p1.y) / 3),
       Point((p0.x + 4 * p1.x + p.x) / 6, (p0.y + 4 * p1.y + p.y) / 6),
     );
+
+/// Arc-length midpoint of a path, sampled finely enough for label placement.
+Point _pathMidpoint(PathGeometry path) {
+  final samples = <Point>[];
+  Point? current;
+  for (final command in path.commands) {
+    switch (command) {
+      case MoveTo(:final p):
+        current = p;
+        samples.add(p);
+      case LineTo(:final p):
+        current = p;
+        samples.add(p);
+      case CubicTo(:final c1, :final c2, :final p):
+        final start = current;
+        if (start == null) break;
+        for (var step = 1; step <= 16; step++) {
+          final t = step / 16;
+          final u = 1 - t;
+          samples.add(Point(
+            u * u * u * start.x +
+                3 * u * u * t * c1.x +
+                3 * u * t * t * c2.x +
+                t * t * t * p.x,
+            u * u * u * start.y +
+                3 * u * u * t * c1.y +
+                3 * u * t * t * c2.y +
+                t * t * t * p.y,
+          ));
+        }
+        current = p;
+      case QuadTo():
+      case ClosePath():
+        break;
+    }
+  }
+  if (samples.length < 2) return samples.isEmpty ? Point.zero : samples.first;
+
+  final lengths = <double>[];
+  var total = 0.0;
+  for (var i = 1; i < samples.length; i++) {
+    final d = samples[i] - samples[i - 1];
+    total += math.sqrt(d.x * d.x + d.y * d.y);
+    lengths.add(total);
+  }
+  final target = total / 2;
+  for (var i = 0; i < lengths.length; i++) {
+    if (lengths[i] < target) continue;
+    final before = i == 0 ? 0.0 : lengths[i - 1];
+    final segment = lengths[i] - before;
+    final t = segment == 0 ? 0.0 : (target - before) / segment;
+    return samples[i] + (samples[i + 1] - samples[i]) * t;
+  }
+  return samples.last;
+}

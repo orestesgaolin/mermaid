@@ -2335,7 +2335,11 @@ List<PathCommand> _curveBasis(List<Point> pts) {
   }
   final n = pts.length;
   cmds.add(_basisSegment(pts[n - 2], pts[n - 1], pts[n - 1]));
-  cmds.add(LineTo(pts[n - 1]));
+  // d3-shape repeats the final point twice when closing an open basis line.
+  // The second repetition supplies the final cubic that eases into the
+  // endpoint. Replacing it with a LineTo leaves a long straight tail whenever
+  // Dagre's last two route points are far apart.
+  cmds.add(_basisSegment(pts[n - 1], pts[n - 1], pts[n - 1]));
   return cmds;
 }
 

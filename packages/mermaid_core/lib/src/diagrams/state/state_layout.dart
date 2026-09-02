@@ -29,7 +29,7 @@ RenderScene layoutStateDiagram(
   StateDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
-  String engine = 'dagre',
+  String engine = 'auto',
   elk.ElkLayoutOptions? elkOptions,
 }) {
   return _StateLayout(diagram, measurer, theme, engine,
@@ -64,7 +64,20 @@ class _StateLayout {
   final elk.ElkLayoutOptions elkOptions;
   final TextStyleSpec baseStyle;
 
-  bool get useElk => engine == 'elk';
+  bool get hasNestedComposite => diagram.states.values.any((state) {
+        if (state.kind != StateKind.composite || state.parent == null) {
+          return false;
+        }
+        return diagram.states[state.parent]?.kind == StateKind.composite;
+      });
+
+  // Dagre's compound layout flattens the ranks of nested clusters through the
+  // representative leaf nodes used for cross-cluster transitions. That places
+  // sibling states beside nested composites and produces indirect curves.
+  // ELK retains the state hierarchy for this case. Keep Dagre for diagrams
+  // without nested composites so their established geometry does not change.
+  bool get useElk =>
+      engine == 'elk' || (engine == 'auto' && hasNestedComposite);
 
   final placed = <String, _Placed>{};
   final clusterRects = <String, Rect>{};
@@ -183,16 +196,6 @@ class _StateLayout {
       }
     }
 
-    // --- scene ------------------------------------------------------------------
-    final clusterNodes = <SceneNode>[];
-    final edgeNodes = <SceneNode>[];
-    final labelNodes = <SceneNode>[];
-    final stateNodes = <SceneNode>[];
-
-    // Composite clusters, outermost-first (parents precede children in the
-    // map since composites register before their members). The rect is the
-    // union of descendant boxes: dagre's own cluster position is unreliable
-    // when edges cross the cluster boundary.
     Rect? descendantBounds(String id) {
       Rect? acc;
       for (final childId in diagram.states[id]?.children ?? const <String>[]) {
@@ -203,12 +206,12 @@ class _StateLayout {
       return acc;
     }
 
-    for (final s in diagram.states.values) {
-      if (s.kind != StateKind.composite) continue;
-      final pos = descendantBounds(s.id);
-      if (pos == null) continue;
-      final titleSize = measurer.measure(s.label, baseStyle);
-      final rect = Rect.fromLTRB(
+    Rect? compositeBounds(String id) {
+      final pos = descendantBounds(id);
+      if (pos == null) return null;
+      final state = diagram.states[id]!;
+      final titleSize = measurer.measure(state.label, baseStyle);
+      return Rect.fromLTRB(
         math.min(pos.left,
                 pos.center.x - titleSize.width / 2 - _clusterPadding) -
             _clusterPadding,
@@ -218,6 +221,68 @@ class _StateLayout {
             _clusterPadding,
         pos.bottom + _clusterPadding,
       );
+    }
+
+    void translateDescendants(String id, double dx, double dy) {
+      for (final childId in diagram.states[id]?.children ?? const <String>[]) {
+        final child = placed[childId];
+        if (child != null) {
+          child.center = child.center + Point(dx, dy);
+        } else {
+          translateDescendants(childId, dx, dy);
+        }
+      }
+    }
+
+    // ELK keeps nested members hierarchical, but its representative leaf
+    // endpoints can put every root-level branch on the rank below the source.
+    // Mermaid keeps the first branch below and places later composite targets
+    // beside the source. Apply that ordering after ELK, before cluster bounds
+    // and transition endpoints are resolved.
+    if (useElk && hasNestedComposite && diagram.direction == FlowDirection.tb) {
+      final targetsBySource = <String, List<String>>{};
+      for (final transition in diagram.transitions) {
+        final from = diagram.states[transition.from];
+        final to = diagram.states[transition.to];
+        if (from?.kind != StateKind.composite ||
+            to?.kind != StateKind.composite ||
+            from!.parent != null ||
+            to!.parent != null) {
+          continue;
+        }
+        targetsBySource.putIfAbsent(from.id, () => []).add(to.id);
+      }
+      for (final entry in targetsBySource.entries) {
+        if (entry.value.length < 2) continue;
+        final sourceRect = compositeBounds(entry.key);
+        if (sourceRect == null) continue;
+        for (final targetId in entry.value.skip(1)) {
+          final targetRect = compositeBounds(targetId);
+          if (targetRect == null) continue;
+          final dx = math.max(
+              0.0, sourceRect.right + _nodeSpacing - targetRect.left);
+          final dy = sourceRect.top + _rankSpacing - targetRect.top;
+          translateDescendants(targetId, dx, dy);
+        }
+      }
+    }
+
+    // --- scene ------------------------------------------------------------------
+    final clusterNodes = <SceneNode>[];
+    final edgeNodes = <SceneNode>[];
+    final labelNodes = <SceneNode>[];
+    final stateNodes = <SceneNode>[];
+
+    // Composite clusters, outermost-first (parents precede children in the
+    // map since composites register before their members). The rect is the
+    // union of descendant boxes: dagre's own cluster position is unreliable
+    // when edges cross the cluster boundary.
+
+    for (final s in diagram.states.values) {
+      if (s.kind != StateKind.composite) continue;
+      final rect = compositeBounds(s.id);
+      if (rect == null) continue;
+      final titleSize = measurer.measure(s.label, baseStyle);
       clusterRects[s.id] = rect;
       final titleY = rect.top + 4;
       final dividerY = titleY + titleSize.height + 4;
@@ -236,7 +301,7 @@ class _StateLayout {
         SceneShape(
           geometry: RectGeometry(
               Rect.fromLTRB(rect.left, dividerY, rect.right, rect.bottom)),
-          fill: Fill(theme.background),
+          fill: Fill(_compositeBodyColor(s)),
         ),
         // Title band.
         SceneText(
@@ -369,6 +434,18 @@ class _StateLayout {
       if (points.length < 2) {
         points = [placed[fromId]!.center, placed[toId]!.center];
       }
+      final directCompositeRoute =
+          useElk && clusterFrom != null && clusterTo != null;
+      if (directCompositeRoute) {
+        // Root transitions between composite states should connect their
+        // visible containers directly. ELK routes from representative leaf
+        // nodes, which otherwise leaves a long right-angle detour outside the
+        // source cluster.
+        points = [
+          clusterRects[clusterFrom]!.center,
+          clusterRects[clusterTo]!.center,
+        ];
+      }
       if (clusterTo != null) {
         points = _dropInsideRect(points, clusterRects[clusterTo]!, fromEnd: true);
       }
@@ -384,7 +461,7 @@ class _StateLayout {
       // border (keeping the stub axis-aligned) rather than from the node centre,
       // which would tilt a near-vertical/near-horizontal stub. Dagre paths are
       // curves, so keep the centre-based intersect for them.
-      if (useElk) {
+      if (useElk && !directCompositeRoute) {
         points[0] = _clipRectPerp(sourceRect, points[0], points[1]);
         points[points.length - 1] = _clipRectPerp(
             targetRect, points[points.length - 1], points[points.length - 2]);
@@ -521,6 +598,35 @@ class _StateLayout {
           bounds.height + 2 * _diagramPadding),
       background: theme.background,
       nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
+    );
+  }
+
+  Color _compositeBodyColor(StateNode state) {
+    var depth = 0;
+    var parentId = state.parent;
+    while (parentId != null) {
+      depth++;
+      parentId = diagram.states[parentId]?.parent;
+    }
+    if (depth.isEven) return theme.background;
+
+    // Mermaid alternates nested composite bodies with altBackground. The core
+    // theme does not expose that token yet, so derive its default 6% contrast
+    // from the active background instead of hard-coding a light-only colour.
+    final background = theme.background.alpha == 0
+        ? theme.mainBkg
+        : theme.background;
+    final darkBackground =
+        background.red + background.green + background.blue < 384;
+    final target = darkBackground ? 255 : 0;
+    const amount = 0.06;
+    int channel(int value) =>
+        (value + (target - value) * amount).round().clamp(0, 255);
+    return Color.fromARGB(
+      background.alpha,
+      channel(background.red),
+      channel(background.green),
+      channel(background.blue),
     );
   }
 

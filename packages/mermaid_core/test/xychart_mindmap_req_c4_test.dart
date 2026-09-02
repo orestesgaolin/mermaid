@@ -1,13 +1,16 @@
 /// Tests for xychart, mindmap, requirement and C4 diagrams.
 library;
 
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:mermaid_core/src/diagrams/c4/c4.dart';
 import 'package:mermaid_core/src/diagrams/mindmap/mindmap.dart';
 import 'package:mermaid_core/src/diagrams/requirement/requirement.dart';
 import 'package:mermaid_core/src/diagrams/xychart/xychart.dart';
+import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
+import 'package:mermaid_core/src/mermaid.dart';
 import 'package:mermaid_core/src/parse_error.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
@@ -107,6 +110,29 @@ xychart-beta horizontal
         theme: theme,
       );
       expectCenteredOnEndTicks(horizontal, 'Quarter', 'jan', 'mar');
+    });
+    test('fixture frontmatter controls theme, size and orientation', () {
+      final source = File(
+          'test/fixtures/upstream_xychart/18.mmd')
+          .readAsStringSync();
+      final chart = parseXyChart(source);
+      final scene = const Mermaid(measurer: ApproximateTextMeasurer())
+          .render(source);
+      expect(chart.horizontal, isTrue);
+      expect(scene.size, const Size(1000, 600));
+      expect(chart.config.xAxis.labelFontSize, 20);
+      final nodes = flatten(scene.nodes);
+      final bars = nodes.whereType<SceneShape>().where((shape) =>
+          shape.fill?.color.value == 0xffcde498 &&
+          shape.geometry is RectGeometry).toList();
+      expect(bars, hasLength(12));
+      expect(nodes.whereType<SceneShape>().any(
+          (shape) => shape.stroke?.color.value == 0xffff6b6b), isTrue);
+      SceneText text(String value) => nodes.whereType<SceneText>()
+          .singleWhere((node) => node.text == value);
+      expect(text('Sales Revenue').style.fontSize, 10);
+      expect(text('Months').style.fontSize, 30);
+      expect(text('jan').style.fontSize, 20);
     });
   });
 
@@ -321,6 +347,37 @@ C4Deployment
           isNull);
       expect(type.bounds.bottom, lessThan(mobileRect.top));
       expect(boundaryRect.contains(mobileRect.center), isTrue);
+    });
+    test('UpdateRelStyle offsets move the complete relation annotation', () {
+      const base = '''
+C4Context
+  Person(a, "User")
+  System(b, "System")
+  Rel(a, b, "Uses", "HTTPS")
+''';
+      final updated = '$base\n'
+          'UpdateRelStyle(a, b, \$offsetX="-40", \$offsetY="-20")';
+      final parsed = parseC4Diagram(updated).rels.single;
+      expect(parsed.offsetX, -40);
+      expect(parsed.offsetY, -20);
+
+      RenderScene render(String source) => layoutC4Diagram(
+            parseC4Diagram(source),
+            measurer: measurer,
+            theme: theme,
+          );
+      Point center(RenderScene scene, String value) => flatten(scene.nodes)
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == value)
+          .bounds
+          .center;
+      final original = render(base);
+      final shifted = render(updated);
+      for (final value in ['Uses', '[HTTPS]']) {
+        final delta = center(shifted, value) - center(original, value);
+        expect(delta.x, closeTo(-40, 0.001));
+        expect(delta.y, closeTo(-20, 0.001));
+      }
     });
     test('garbage throws', () {
       expect(() => parseC4Diagram('C4Context\nnonsense here'),

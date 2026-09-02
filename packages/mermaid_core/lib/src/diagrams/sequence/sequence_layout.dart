@@ -25,6 +25,7 @@ const double _noteMargin = 10;
 const double _messageMargin = 35;
 const double _activationWidth = 10;
 const double _blockLabelHeight = 24;
+const double _wrapPadding = 10;
 
 RenderScene layoutSequence(
   SequenceDiagram diagram, {
@@ -58,6 +59,13 @@ class _OpenFrame {
     minX = math.min(minX, math.min(x1, x2));
     maxX = math.max(maxX, math.max(x1, x2));
   }
+}
+
+class _ResolvedText {
+  const _ResolvedText(this.text, this.size);
+
+  final String text;
+  final Size size;
 }
 
 class _SequenceLayout {
@@ -321,7 +329,6 @@ class _SequenceLayout {
     // contribute, and the width is attributed to the LEFT actor of the gap.
     // `maxMsgWidth[i]` holds the widest message held by actor order[i] toward
     // its next actor order[i+1] (gap index i). messageWidth = text + 2*wrapPad.
-    const wrapPadding = 10.0;
     final maxMsgWidth = List<double>.filled(math.max(0, order.length - 1), 0);
     void hold(int gapIndex, double width) {
       if (gapIndex < 0 || gapIndex >= maxMsgWidth.length) return;
@@ -330,9 +337,12 @@ class _SequenceLayout {
 
     for (final event in diagram.events) {
       switch (event) {
-        case SeqMessage(:final from, :final to, :final text):
+        case SeqMessage(:final from, :final to, :final text, :final wrap):
           if (text.isEmpty) break;
-          final w = measurer.measure(text, baseStyle).width + 2 * wrapPadding;
+          final resolved = wrap
+              ? _resolveWrappedText(text, _actorMinWidth - 2 * _wrapPadding)
+              : _ResolvedText(text, measurer.measure(text, baseStyle));
+          final w = resolved.size.width + 2 * _wrapPadding;
           final ia = order.indexOf(from);
           final ib = order.indexOf(to);
           if (ia < 0 || ib < 0) break;
@@ -345,9 +355,17 @@ class _SequenceLayout {
             hold(math.min(ia, ib), w);
           }
           // Non-adjacent (spanning) messages do not widen columns upstream.
-        case SeqNote(:final placement, :final target, :final target2, :final text):
-          final w = measurer.measure(text, baseStyle, maxWidth: 250).width +
-              2 * wrapPadding;
+        case SeqNote(
+            :final placement,
+            :final target,
+            :final target2,
+            :final text,
+            :final wrap
+          ):
+          final resolved = wrap
+              ? _resolveWrappedText(text, _actorMinWidth - 2 * _wrapPadding)
+              : _ResolvedText(text, measurer.measure(text, baseStyle));
+          final w = resolved.size.width + 2 * _wrapPadding;
           final i = order.indexOf(target);
           if (i < 0) break;
           switch (placement) {
@@ -465,8 +483,15 @@ class _SequenceLayout {
       void Function(double, double) include) {
     final fromCol = columns[msg.from]!;
     final toCol = columns[msg.to]!;
-    final textSize =
-        msg.text.isEmpty ? Size.zero : measurer.measure(msg.text, baseStyle);
+    final text = msg.wrap && msg.text.isNotEmpty
+        ? _resolveWrappedText(
+            msg.text,
+            math.max((toCol.x - fromCol.x).abs() + 2 * _wrapPadding,
+                _actorMinWidth),
+          )
+        : _ResolvedText(msg.text,
+            msg.text.isEmpty ? Size.zero : measurer.measure(msg.text, baseStyle));
+    final textSize = text.size;
     y += math.max(_messageMargin, textSize.height + 14);
 
     final dir = toCol.x > fromCol.x ? 1.0 : -1.0;
@@ -483,7 +508,7 @@ class _SequenceLayout {
 
     if (msg.text.isNotEmpty) {
       children.add(SceneText(
-        text: msg.text,
+        text: text.text,
         bounds: Rect.fromLTWH((x1 + x2) / 2 - textSize.width / 2,
             y - textSize.height - 4, textSize.width, textSize.height),
         style: baseStyle,
@@ -522,8 +547,12 @@ class _SequenceLayout {
   void _selfMessage(SeqMessage msg, int? number,
       void Function(double, double) include) {
     final col = columns[msg.from]!;
-    final textSize =
-        msg.text.isEmpty ? Size.zero : measurer.measure(msg.text, baseStyle);
+    final text = msg.wrap && msg.text.isNotEmpty
+        ? _resolveWrappedText(
+            msg.text, _actorMinWidth - 2 * _wrapPadding)
+        : _ResolvedText(msg.text,
+            msg.text.isEmpty ? Size.zero : measurer.measure(msg.text, baseStyle));
+    final textSize = text.size;
     y += _messageMargin;
     final x = col.x;
     const out = 34.0;
@@ -544,7 +573,7 @@ class _SequenceLayout {
       ..._head(msg.arrow, Point(x + 2, y + h), const Point(-1, 0.2)),
       if (msg.text.isNotEmpty)
         SceneText(
-          text: msg.text,
+          text: text.text,
           bounds: Rect.fromLTWH(x + out * 0.85, y + h / 2 - textSize.height / 2,
               textSize.width, textSize.height),
           style: baseStyle,
@@ -633,8 +662,14 @@ class _SequenceLayout {
   }
 
   void _note(SeqNote note, void Function(double, double) include) {
-    final textSize = measurer.measure(note.text, baseStyle, maxWidth: 250);
-    final w = textSize.width + 2 * _noteMargin;
+    final text = note.wrap
+        ? _resolveWrappedText(
+            note.text, _actorMinWidth - 2 * _wrapPadding)
+        : _ResolvedText(note.text, measurer.measure(note.text, baseStyle));
+    final textSize = text.size;
+    final w = note.wrap
+        ? _actorMinWidth
+        : textSize.width + 2 * _noteMargin;
     final h = textSize.height + 2 * _noteMargin;
     final col = columns[note.target]!;
     double left;
@@ -670,7 +705,7 @@ class _SequenceLayout {
           stroke: Stroke(color: theme.noteBorderColor),
         ),
         SceneText(
-          text: note.text,
+          text: text.text,
           bounds: Rect.fromLTWH(left + (width - textSize.width) / 2,
               y + _noteMargin, textSize.width, textSize.height),
           style: baseStyle,
@@ -817,5 +852,27 @@ class _SequenceLayout {
   Point _norm(Point p) {
     final len = math.sqrt(p.x * p.x + p.y * p.y);
     return len == 0 ? const Point(1, 0) : Point(p.x / len, p.y / len);
+  }
+
+  _ResolvedText _resolveWrappedText(String text, double maxWidth) {
+    final lines = <String>[];
+    for (final hardLine in text.split('\n')) {
+      final words = hardLine.trim().split(RegExp(r'\s+'));
+      var current = '';
+      for (final word in words) {
+        if (word.isEmpty) continue;
+        final candidate = current.isEmpty ? word : '$current $word';
+        if (current.isNotEmpty &&
+            measurer.measure(candidate, baseStyle).width > maxWidth) {
+          lines.add(current);
+          current = word;
+        } else {
+          current = candidate;
+        }
+      }
+      lines.add(current);
+    }
+    final resolved = lines.join('\n');
+    return _ResolvedText(resolved, measurer.measure(resolved, baseStyle));
   }
 }

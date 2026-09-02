@@ -136,11 +136,13 @@ class _SequenceParser {
       for (final t in targets) {
         _ensureParticipant(t);
       }
+      final content = _parseWrappedText(m.group(3)!);
       events.add(SeqNote(
         placement: placement,
         target: targets[0],
         target2: targets.length > 1 ? targets[1] : null,
-        text: _normalizeText(m.group(3)!),
+        text: content.text,
+        wrap: content.wrap,
       ));
       return;
     }
@@ -274,11 +276,13 @@ class _SequenceParser {
       }
       _ensureParticipant(from);
       _ensureParticipant(to);
+      final content = _parseWrappedText(msg);
       events.add(SeqMessage(
         from: from,
         to: to,
         arrow: arrow,
-        text: _normalizeText(msg),
+        text: content.text,
+        wrap: content.wrap,
       ));
       // `A->>+B` activates the receiver, `B-->>-A` deactivates the sender
       // (upstream signal rules).
@@ -338,5 +342,13 @@ class _SequenceParser {
     return out
         .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
         .trim();
+  }
+
+  ({String text, bool wrap}) _parseWrappedText(String source) {
+    var text = source.trim();
+    final directive = RegExp(r'^:?(wrap|nowrap):').firstMatch(text);
+    final wrap = directive?.group(1) == 'wrap';
+    if (directive != null) text = text.substring(directive.end).trim();
+    return (text: _normalizeText(text), wrap: wrap);
   }
 }

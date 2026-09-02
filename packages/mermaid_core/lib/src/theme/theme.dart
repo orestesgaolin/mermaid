@@ -19,6 +19,12 @@ const _darkXyChartPlotColorPalette = <Color>[
   Color(0xff1abc9c), Color(0xffe67e22),
 ];
 
+const _forestXyChartPlotColorPalette = <Color>[
+  Color(0xffcde498), Color(0xffff6b6b), Color(0xffa0d2db), Color(0xffd7bde2),
+  Color(0xfff0f0f0), Color(0xffffc3a0), Color(0xff7fd8be), Color(0xffff9a8b),
+  Color(0xfffaf3e0), Color(0xfffff176),
+];
+
 class MermaidTheme {
   const MermaidTheme({
     required this.background,
@@ -667,6 +673,7 @@ class MermaidTheme {
 
   /// Values from upstream theme-forest.js.
   static const MermaidTheme forestTheme = MermaidTheme(
+    xyChartPlotColorPalette: _forestXyChartPlotColorPalette,
     background: Color(0xffffffff),
     primaryColor: Color(0xffcde498),
     primaryTextColor: Color(0xff333333),

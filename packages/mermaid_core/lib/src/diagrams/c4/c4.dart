@@ -140,6 +140,8 @@ class C4Rel {
     this.backwards = false,
     this.textColor,
     this.lineColor,
+    this.offsetX = 0,
+    this.offsetY = 0,
   });
 
   final String from;
@@ -154,8 +156,15 @@ class C4Rel {
   /// `UpdateRelStyle` overrides ($textColor / $lineColor).
   final Color? textColor;
   final Color? lineColor;
+  final double offsetX;
+  final double offsetY;
 
-  C4Rel copyWith({Color? textColor, Color? lineColor}) => C4Rel(
+  C4Rel copyWith({
+    Color? textColor,
+    Color? lineColor,
+    double? offsetX,
+    double? offsetY,
+  }) => C4Rel(
         from: from,
         to: to,
         label: label,
@@ -164,6 +173,8 @@ class C4Rel {
         backwards: backwards,
         textColor: textColor ?? this.textColor,
         lineColor: lineColor ?? this.lineColor,
+        offsetX: offsetX ?? this.offsetX,
+        offsetY: offsetY ?? this.offsetY,
       );
 }
 
@@ -372,7 +383,7 @@ C4Diagram parseC4Diagram(String source) {
         }
         continue;
       }
-      // UpdateRelStyle(from, to, $textColor=, $lineColor=, ...).
+      // UpdateRelStyle relationship colors and annotation offsets.
       if (fn == 'UpdateRelStyle' && a.length >= 2) {
         final kv = _styleArgs(a.skip(2));
         for (var r = 0; r < rels.length; r++) {
@@ -380,6 +391,8 @@ C4Diagram parseC4Diagram(String source) {
             rels[r] = rels[r].copyWith(
               textColor: Color.tryParse(kv['textColor'] ?? ''),
               lineColor: Color.tryParse(kv['lineColor'] ?? ''),
+              offsetX: double.tryParse(kv['offsetX'] ?? ''),
+              offsetY: double.tryParse(kv['offsetY'] ?? ''),
             );
           }
         }
@@ -799,7 +812,8 @@ RenderScene layoutC4Diagram(
     final labelText = diagram.subtype == C4Subtype.dynamic
         ? '${i + 1}: ${r.label}'
         : r.label;
-    final mid = Point((start.x + tip.x) / 2, (start.y + tip.y) / 2);
+    final mid = Point((start.x + tip.x) / 2 + r.offsetX,
+        (start.y + tip.y) / 2 + r.offsetY);
     if (labelText.isNotEmpty) {
       final size = measurer.measure(labelText, relStyle, maxWidth: 150);
       labelNodes.add(SceneText(

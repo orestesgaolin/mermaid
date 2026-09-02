@@ -1,6 +1,8 @@
 /// Structural tests for the sequence diagram layout.
 library;
 
+import 'dart:io';
+
 import 'package:mermaid_core/src/diagrams/sequence/sequence_layout.dart';
 import 'package:mermaid_core/src/diagrams/sequence/sequence_parser.dart';
 import 'package:mermaid_core/src/geometry.dart';
@@ -69,6 +71,29 @@ Rect groupBounds(SceneGroup g) {
 }
 
 void main() {
+  test('fixture 01 wraps explicit wrap labels into a compact scene', () {
+    final source =
+        File('test/fixtures/upstream_sequence/01.mmd').readAsStringSync();
+    final scene = layoutSequence(
+      parseSequence(source),
+      measurer: const ApproximateTextMeasurer(),
+      theme: MermaidTheme.defaultTheme,
+    );
+    final texts = flatten(scene.nodes).whereType<SceneText>().toList();
+
+    expect(texts.any((text) => text.text.startsWith('wrap:')), isFalse);
+    expect(texts.any((text) => text.text.startsWith('nowrap:')), isFalse);
+    final wrappedMessage = texts.singleWhere(
+      (text) => text.text.startsWith('John! Are you still debating'),
+    );
+    expect(wrappedMessage.text.split('\n'), hasLength(greaterThan(1)));
+    final unwrappedNote = texts.singleWhere(
+      (text) => text.text.startsWith("John's trying hard"),
+    );
+    expect(unwrappedNote.text, isNot(contains('\n')));
+    expect(scene.size.width, lessThan(900));
+  });
+
   test('columns ordered left to right, boxes mirrored top and bottom', () {
     final s = layout('participant A\nparticipant B\nparticipant C\nA->>B: x');
     double centerX(String id) => groupBounds(
