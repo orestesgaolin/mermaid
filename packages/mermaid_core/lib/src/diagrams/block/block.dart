@@ -46,8 +46,14 @@ sealed class BlockItem {
 }
 
 class BlockNode extends BlockItem {
-  BlockNode(this.id, this.label, this.shape, this.span, this.styles,
-      {this.arrowDirs = const {}});
+  BlockNode(
+    this.id,
+    this.label,
+    this.shape,
+    this.span,
+    this.styles, {
+    this.arrowDirs = const {},
+  });
   final String id;
   final String label;
   final BlockShape shape;
@@ -115,7 +121,7 @@ BlockDiagram parseBlock(String source) {
   // Scope stack; root has a null group. `columns N` sets the current group's
   // columns (or rootColumns at the top level).
   final scopes = <({List<BlockItem> items, BlockGroup? group})>[
-    (items: [], group: null)
+    (items: [], group: null),
   ];
   var rootColumns = -1;
   final styleById = <String, Map<String, String>>{};
@@ -155,15 +161,13 @@ BlockDiagram parseBlock(String source) {
       continue;
     }
     // classDef name fill:#f96,stroke:#333,...
-    final classDefM =
-        RegExp(r'^classDef\s+(\S+)\s+(.+)$').firstMatch(line);
+    final classDefM = RegExp(r'^classDef\s+(\S+)\s+(.+)$').firstMatch(line);
     if (classDefM != null) {
       classDefs[classDefM.group(1)!] = _parseStyles(classDefM.group(2)!);
       continue;
     }
     // class id1,id2 className
-    final classM =
-        RegExp(r'^class\s+([^\s]+)\s+(\S+)\s*$').firstMatch(line);
+    final classM = RegExp(r'^class\s+([^\s]+)\s+(\S+)\s*$').firstMatch(line);
     if (classM != null) {
       final cls = classM.group(2)!;
       for (final id in classM.group(1)!.split(',')) {
@@ -187,8 +191,13 @@ BlockDiagram parseBlock(String source) {
     // block:id[:span] [columns N] — opens a group.
     final grpM = RegExp(r'^block:([^\s:]+)(?::(\d+))?\s*$').firstMatch(line);
     if (grpM != null) {
-      final group = BlockGroup(grpM.group(1)!, '', int.parse(grpM.group(2) ?? '1'),
-          -1, []);
+      final group = BlockGroup(
+        grpM.group(1)!,
+        '',
+        int.parse(grpM.group(2) ?? '1'),
+        -1,
+        [],
+      );
       scopes.last.items.add(group);
       scopes.add((items: group.children, group: group));
       continue;
@@ -262,8 +271,7 @@ BlockNode _parseNode(String spec) {
   }
   if (spec == 'space') return BlockNode('', '', BlockShape.space, span, {});
   // Block arrow: id<["label"]>(dir[, dir]) — a fat arrow polygon.
-  final arrowM =
-      RegExp(r'^([^\s<]+)<\[(.*?)\]>\(([^)]*)\)$').firstMatch(spec);
+  final arrowM = RegExp(r'^([^\s<]+)<\[(.*?)\]>\(([^)]*)\)$').firstMatch(spec);
   if (arrowM != null) {
     final id = arrowM.group(1)!;
     var label = arrowM.group(2)!.trim();
@@ -283,22 +291,33 @@ BlockNode _parseNode(String spec) {
         case 'down':
           dirs.add(BlockArrowDir.down);
         case 'x':
-          dirs..add(BlockArrowDir.left)..add(BlockArrowDir.right);
+          dirs
+            ..add(BlockArrowDir.left)
+            ..add(BlockArrowDir.right);
         case 'y':
-          dirs..add(BlockArrowDir.up)..add(BlockArrowDir.down);
+          dirs
+            ..add(BlockArrowDir.up)
+            ..add(BlockArrowDir.down);
       }
     }
     if (dirs.isEmpty) dirs.add(BlockArrowDir.right);
-    return BlockNode(id, label, BlockShape.blockArrow, span, {},
-        arrowDirs: dirs);
+    return BlockNode(
+      id,
+      label,
+      BlockShape.blockArrow,
+      span,
+      {},
+      arrowDirs: dirs,
+    );
   }
   // Opening delimiters, longest first so `(((` wins over `((` etc. The id is
   // any run of non-delimiter chars. `>` opens the `odd` (`id>label]`) shape.
-  final m = RegExp(r'^([^\s([{>]+)\s*'
-          r'(\(\(\(|\(\(|\(\[|\[\(|\{\{|\[\[|\[/|\[\\|\(|\[|\{|>)'
-          r'(.*?)'
-          r'(\)\)\)|\)\)|\]\)|\)\]|\}\}|\]\]|/\]|\\\]|\)|\]|\})?\s*$')
-      .firstMatch(spec);
+  final m = RegExp(
+    r'^([^\s([{>]+)\s*'
+    r'(\(\(\(|\(\(|\(\[|\[\(|\{\{|\[\[|\[/|\[\\|\(|\[|\{|>)'
+    r'(.*?)'
+    r'(\)\)\)|\)\)|\]\)|\)\]|\}\}|\]\]|/\]|\\\]|\)|\]|\})?\s*$',
+  ).firstMatch(spec);
   if (m == null) {
     return BlockNode(spec, spec, BlockShape.rect, span, {});
   }
@@ -340,7 +359,17 @@ void _parseEdges(String line, List<BlockEdge> edges) {
   // Split on link operators while capturing the operator + label.
   final ids = <String>[];
   final ops =
-      <({bool to, bool from, String label, bool thick, bool dotted, BlockMarker mTo, BlockMarker mFrom})>[];
+      <
+        ({
+          bool to,
+          bool from,
+          String label,
+          bool thick,
+          bool dotted,
+          BlockMarker mTo,
+          BlockMarker mFrom,
+        })
+      >[];
   var pos = 0;
   final whole = line;
   // A link operator: an optional leading marker (`<`/`o`/`x`), a body of
@@ -368,8 +397,9 @@ void _parseEdges(String line, List<BlockEdge> edges) {
     final openHalf = !RegExp(r'[>ox]$').hasMatch(opStr);
     // pattern: optional `"label"` or bare label then another link body
     final twoPart = openHalf
-        ? RegExp(r'^\s*(?:"([^"]*)"|([^<>|"=.-][^<>|]*?))\s*([-=][-=.]*(?:[>ox])?)')
-            .firstMatch(rest)
+        ? RegExp(
+            r'^\s*(?:"([^"]*)"|([^<>|"=.-][^<>|]*?))\s*([-=][-=.]*(?:[>ox])?)',
+          ).firstMatch(rest)
         : null;
     if (twoPart != null) {
       label = (twoPart.group(1) ?? twoPart.group(2) ?? '').trim();
@@ -377,7 +407,9 @@ void _parseEdges(String line, List<BlockEdge> edges) {
       after = after + twoPart.end;
     } else {
       // piped label: `-->|label|`
-      final piped = RegExp(r'^\s*\|\s*(?:"([^"]*)"|([^|]*))\|').firstMatch(rest);
+      final piped = RegExp(
+        r'^\s*\|\s*(?:"([^"]*)"|([^|]*))\|',
+      ).firstMatch(rest);
       if (piped != null) {
         label = (piped.group(1) ?? piped.group(2) ?? '').trim();
         after = after + piped.end;
@@ -402,29 +434,31 @@ void _parseEdges(String line, List<BlockEdge> edges) {
     if (i >= ops.length) break;
     final op = ops[i];
     if (ids[i].isEmpty || ids[i + 1].isEmpty) continue;
-    edges.add(BlockEdge(
-      ids[i],
-      ids[i + 1],
-      op.label,
-      op.to,
-      op.from,
-      thick: op.thick,
-      dotted: op.dotted,
-      markerTo: op.mTo,
-      markerFrom: op.mFrom,
-    ));
+    edges.add(
+      BlockEdge(
+        ids[i],
+        ids[i + 1],
+        op.label,
+        op.to,
+        op.from,
+        thick: op.thick,
+        dotted: op.dotted,
+        markerTo: op.mTo,
+        markerFrom: op.mFrom,
+      ),
+    );
   }
 }
 
 BlockMarker _markerFor(String ch) => switch (ch) {
-      'o' => BlockMarker.circle,
-      'x' => BlockMarker.cross,
-      _ => BlockMarker.point,
-    };
+  'o' => BlockMarker.circle,
+  'x' => BlockMarker.cross,
+  _ => BlockMarker.point,
+};
 
-String _cleanEdgeId(String tok) =>
-    tok.split(RegExp(r'[\s"\[\](){}]')).firstWhere((s) => s.isNotEmpty,
-        orElse: () => '');
+String _cleanEdgeId(String tok) => tok
+    .split(RegExp(r'[\s"\[\](){}]'))
+    .firstWhere((s) => s.isNotEmpty, orElse: () => '');
 
 Map<String, String> _parseStyles(String s) {
   final out = <String, String>{};
@@ -466,16 +500,22 @@ RenderScene layoutBlock(
   required TextMeasurer measurer,
   required MermaidTheme theme,
 }) {
-  final baseStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
+  final baseStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: theme.fontSize,
+  );
   final centers = <String, Point>{};
   final sizes = <String, _Sized>{};
 
   _Sized measure(BlockItem item) {
     if (item is BlockGroup) {
       final grid = _layoutGrid(item.children, item.columns, measure);
-      final s = _Sized(item, grid.width + 2 * _pad,
-          grid.height + 2 * _pad + (item.label.isEmpty ? 0 : 16), grid);
+      final s = _Sized(
+        item,
+        grid.width + 2 * _pad,
+        grid.height + 2 * _pad + (item.label.isEmpty ? 0 : 16),
+        grid,
+      );
       return s;
     }
     final n = item as BlockNode;
@@ -483,9 +523,11 @@ RenderScene layoutBlock(
     final ls = measurer.measure(n.label, baseStyle, maxWidth: 200);
     if (n.shape == BlockShape.blockArrow) {
       // Reserve room for the arrow head(s) on whichever axis they point.
-      final horiz = n.arrowDirs.contains(BlockArrowDir.left) ||
+      final horiz =
+          n.arrowDirs.contains(BlockArrowDir.left) ||
           n.arrowDirs.contains(BlockArrowDir.right);
-      final vert = n.arrowDirs.contains(BlockArrowDir.up) ||
+      final vert =
+          n.arrowDirs.contains(BlockArrowDir.up) ||
           n.arrowDirs.contains(BlockArrowDir.down);
       final w =
           math.max(ls.width + 2 * _pad, 60.0) + (horiz ? 2 * _arrowHead : 0);
@@ -533,30 +575,50 @@ RenderScene layoutBlock(
         final rect = Rect.fromCenter(Point(cx, cy), s.width, s.height);
         // Upstream `.node .cluster` fills with fade(clusterBkg, 0.5) and
         // strokes with fade(clusterBorder, 0.2); composite rx is 0.
-        nodes.add(SceneShape(
-          geometry: RectGeometry(rect),
-          fill: Fill(theme.clusterBkg.withOpacity(0.5)),
-          stroke: Stroke(color: theme.clusterBorder.withOpacity(0.2)),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: RectGeometry(rect),
+            fill: Fill(theme.clusterBkg.withOpacity(0.5)),
+            stroke: Stroke(color: theme.clusterBorder.withOpacity(0.2)),
+          ),
+        );
         if (item.label.isNotEmpty) {
           final ls = measurer.measure(item.label, baseStyle);
-          nodes.add(SceneText(
-            text: item.label,
-            bounds: Rect.fromLTWH(
-                cx - ls.width / 2, rect.top + 4, ls.width, ls.height),
-            style: baseStyle,
-            color: theme.textColor,
-          ));
+          nodes.add(
+            SceneText(
+              text: item.label,
+              bounds: Rect.fromLTWH(
+                cx - ls.width / 2,
+                rect.top + 4,
+                ls.width,
+                ls.height,
+              ),
+              style: baseStyle,
+              color: theme.textColor,
+            ),
+          );
         }
-        place(s.childLayout!, rect.left + _pad,
-            rect.top + _pad + (item.label.isEmpty ? 0 : 16));
+        place(
+          s.childLayout!,
+          rect.left + _pad,
+          rect.top + _pad + (item.label.isEmpty ? 0 : 16),
+        );
       } else {
         final n = item as BlockNode;
         if (n.shape == BlockShape.space) continue;
         centers[n.id] = Point(cx, cy);
         sizes[n.id] = s..center = Point(cx, cy);
-        nodes.addAll(_drawNode(n, Point(cx, cy), s.width, s.height,
-            measurer, baseStyle, theme));
+        nodes.addAll(
+          _drawNode(
+            n,
+            Point(cx, cy),
+            s.width,
+            s.height,
+            measurer,
+            baseStyle,
+            theme,
+          ),
+        );
       }
     }
   }
@@ -572,25 +634,29 @@ RenderScene layoutBlock(
     final to = sb != null ? _clip(b, sb.width, sb.height, a) : b;
     final dir = _unit(from, to);
     // Pull the line back from a filled point head so it doesn't poke through.
-    final end =
-        (e.arrowTo && e.markerTo == BlockMarker.point) ? to - dir * 8 : to;
+    final end = (e.arrowTo && e.markerTo == BlockMarker.point)
+        ? to - dir * 8
+        : to;
     // Upstream `.edgePath .path` stroke is 2.0px; `==` => thick (3.5px),
     // `.-` => dotted dash pattern.
     final width = e.thick ? 3.5 : 2.0;
-    nodes.add(SceneShape(
-      geometry: PathGeometry([MoveTo(from), LineTo(end)]),
-      stroke: Stroke(
-        color: theme.lineColor,
-        width: width,
-        dash: e.dotted ? const [3, 3] : null,
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([MoveTo(from), LineTo(end)]),
+        stroke: Stroke(
+          color: theme.lineColor,
+          width: width,
+          dash: e.dotted ? const [3, 3] : null,
+        ),
       ),
-    ));
+    );
     if (e.arrowTo) {
       nodes.addAll(_marker(e.markerTo, to, dir, theme.lineColor, width));
     }
     if (e.arrowFrom) {
       nodes.addAll(
-          _marker(e.markerFrom, from, _unit(to, from), theme.lineColor, width));
+        _marker(e.markerFrom, from, _unit(to, from), theme.lineColor, width),
+      );
     }
     // Edge label at the midpoint, on a small background chip.
     if (e.label.isNotEmpty) {
@@ -598,17 +664,22 @@ RenderScene layoutBlock(
       final mid = Point((from.x + to.x) / 2, (from.y + to.y) / 2);
       const lp = 3.0;
       // Upstream edge-label rect is opacity 0.5.
-      nodes.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromCenter(mid, ls.width + 2 * lp, ls.height + 2 * lp)),
-        fill: Fill(theme.edgeLabelBackground.withOpacity(0.5)),
-      ));
-      nodes.add(SceneText(
-        text: e.label,
-        bounds: Rect.fromCenter(mid, ls.width, ls.height),
-        style: baseStyle,
-        color: theme.textColor,
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromCenter(mid, ls.width + 2 * lp, ls.height + 2 * lp),
+          ),
+          fill: Fill(theme.edgeLabelBackground.withOpacity(0.5)),
+        ),
+      );
+      nodes.add(
+        SceneText(
+          text: e.label,
+          bounds: Rect.fromCenter(mid, ls.width, ls.height),
+          style: baseStyle,
+          color: theme.textColor,
+        ),
+      );
     }
   }
 
@@ -617,15 +688,23 @@ RenderScene layoutBlock(
   return RenderScene(
     size: Size(bounds.width + 2 * m, bounds.height + 2 * m),
     background: theme.background,
-    nodes: [for (final n in nodes) translateSceneNode(n, m - bounds.left, m - bounds.top)],
+    nodes: [
+      for (final n in nodes)
+        translateSceneNode(n, m - bounds.left, m - bounds.top),
+    ],
   );
 }
 
 /// Row-major grid fill. [columns] -1 ⇒ one row of all items.
 _GridLayout _layoutGrid(
-    List<BlockItem> items, int columns, _Sized Function(BlockItem) measure) {
+  List<BlockItem> items,
+  int columns,
+  _Sized Function(BlockItem) measure,
+) {
   final sized = [for (final it in items) measure(it)];
-  final cols = columns > 0 ? columns : math.max(1, sized.fold(0, (a, s) => a + s.item.span));
+  final cols = columns > 0
+      ? columns
+      : math.max(1, sized.fold(0, (a, s) => a + s.item.span));
   // Column width = max single-cell width across items (item width / span).
   var cellW = 40.0;
   var rowH = 30.0;
@@ -659,10 +738,7 @@ _GridLayout _layoutGrid(
       s.width = spanW;
       if (s.item is BlockNode) s.height = rh;
       if (s.childLayout != null) {
-        _expandGridWidth(
-          s.childLayout!,
-          math.max(0, spanW - 2 * _pad),
-        );
+        _expandGridWidth(s.childLayout!, math.max(0, spanW - 2 * _pad));
       }
       s.center = Point(rx + spanW / 2, y + rh / 2);
       rx += spanW + _cellGap;
@@ -688,15 +764,11 @@ void _expandGridWidth(_GridLayout grid, double targetWidth) {
       col = 0;
       rx = 0;
     }
-    final spanW = cell.item.span * cellW +
-        (cell.item.span - 1) * _cellGap;
+    final spanW = cell.item.span * cellW + (cell.item.span - 1) * _cellGap;
     cell.width = spanW;
     cell.center = Point(rx + spanW / 2, cell.center.y);
     if (cell.childLayout != null) {
-      _expandGridWidth(
-        cell.childLayout!,
-        math.max(0, spanW - 2 * _pad),
-      );
+      _expandGridWidth(cell.childLayout!, math.max(0, spanW - 2 * _pad));
     }
     rx += spanW + _cellGap;
     col += cell.item.span;
@@ -704,105 +776,139 @@ void _expandGridWidth(_GridLayout grid, double targetWidth) {
   grid.width = targetWidth;
 }
 
-List<SceneNode> _drawNode(BlockNode n, Point c, double w, double h,
-    TextMeasurer measurer, TextStyleSpec style, MermaidTheme theme) {
+List<SceneNode> _drawNode(
+  BlockNode n,
+  Point c,
+  double w,
+  double h,
+  TextMeasurer measurer,
+  TextStyleSpec style,
+  MermaidTheme theme,
+) {
   final fill = Color.tryParse(n.styles['fill'] ?? '') ?? theme.mainBkg;
   final stroke = Color.tryParse(n.styles['stroke'] ?? '') ?? theme.nodeBorder;
   final rect = Rect.fromCenter(c, w, h);
   final st = Stroke(color: stroke, width: 1);
   final f = Fill(fill);
   final shapes = switch (n.shape) {
-    BlockShape.circle =>
-      [SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st)],
+    BlockShape.circle => [
+      SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st),
+    ],
     BlockShape.doubleCircle => [
-        SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st),
-        SceneShape(
-            geometry: CircleGeometry(c, math.max(w / 2 - 5, 1)),
-            fill: const Fill(Color.transparent),
-            stroke: st),
-      ],
+      SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st),
+      SceneShape(
+        geometry: CircleGeometry(c, math.max(w / 2 - 5, 1)),
+        fill: const Fill(Color.transparent),
+        stroke: st,
+      ),
+    ],
     BlockShape.ellipse => [
-        SceneShape(
-            geometry: EllipseGeometry(c, w / 2, h / 2), fill: f, stroke: st)
-      ],
+      SceneShape(
+        geometry: EllipseGeometry(c, w / 2, h / 2),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.stadium => [
-        SceneShape(
-            geometry: RectGeometry(rect, rx: h / 2, ry: h / 2),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: RectGeometry(rect, rx: h / 2, ry: h / 2),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.rounded => [
-        SceneShape(geometry: RectGeometry(rect, rx: 5, ry: 5), fill: f, stroke: st)
-      ],
+      SceneShape(
+        geometry: RectGeometry(rect, rx: 5, ry: 5),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.diamond => [
-        SceneShape(
-            geometry: PolygonGeometry([
-              Point(c.x, rect.top),
-              Point(rect.right, c.y),
-              Point(c.x, rect.bottom),
-              Point(rect.left, c.y),
-            ]),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry([
+          Point(c.x, rect.top),
+          Point(rect.right, c.y),
+          Point(c.x, rect.bottom),
+          Point(rect.left, c.y),
+        ]),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.hexagon => [
-        SceneShape(
-            geometry: PolygonGeometry(_hexagonPoints(rect)),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry(_hexagonPoints(rect)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.leanRight => [
-        SceneShape(
-            geometry: PolygonGeometry(_parallelogramPoints(rect, lean: true)),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry(_parallelogramPoints(rect, lean: true)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.leanLeft => [
-        SceneShape(
-            geometry: PolygonGeometry(_parallelogramPoints(rect, lean: false)),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry(_parallelogramPoints(rect, lean: false)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.trapezoid => [
-        SceneShape(
-            geometry: PolygonGeometry(_trapezoidPoints(rect, inverted: false)),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry(_trapezoidPoints(rect, inverted: false)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.invTrapezoid => [
-        SceneShape(
-            geometry: PolygonGeometry(_trapezoidPoints(rect, inverted: true)),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry(_trapezoidPoints(rect, inverted: true)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.odd => [
-        SceneShape(
-            geometry: PolygonGeometry(_oddPoints(rect)), fill: f, stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry(_oddPoints(rect)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.subroutine => _subroutineShapes(rect, f, st),
     BlockShape.cylinder => [
-        SceneShape(
-            geometry: PathGeometry(_cylinderPath(rect)), fill: f, stroke: st)
-      ],
+      SceneShape(
+        geometry: PathGeometry(_cylinderPath(rect)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     BlockShape.blockArrow => [
-        SceneShape(
-            geometry: PolygonGeometry(_blockArrowPoints(rect, n.arrowDirs)),
-            fill: f,
-            stroke: st)
-      ],
+      SceneShape(
+        geometry: PolygonGeometry(_blockArrowPoints(rect, n.arrowDirs)),
+        fill: f,
+        stroke: st,
+      ),
+    ],
     _ => [SceneShape(geometry: RectGeometry(rect), fill: f, stroke: st)],
   };
   final ls = measurer.measure(n.label, style, maxWidth: 200);
   return [
-    SceneGroup(id: n.id, semanticLabel: n.label, children: [
-      ...shapes,
-      SceneText(
-        text: n.label,
-        bounds: Rect.fromCenter(c, ls.width, ls.height),
-        style: style,
-        color: Color.tryParse(n.styles['color'] ?? '') ?? theme.textColor,
-      ),
-    ]),
+    SceneGroup(
+      id: n.id,
+      semanticLabel: n.label,
+      children: [
+        ...shapes,
+        SceneText(
+          text: n.label,
+          bounds: Rect.fromCenter(c, ls.width, ls.height),
+          style: style,
+          color: Color.tryParse(n.styles['color'] ?? '') ?? theme.textColor,
+        ),
+      ],
+    ),
   ];
 }
 
@@ -881,17 +987,19 @@ List<SceneNode> _subroutineShapes(Rect rect, Fill fill, Stroke st) {
   return [
     SceneShape(geometry: RectGeometry(rect), fill: fill, stroke: st),
     SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(rect.left + inset, rect.top)),
-          LineTo(Point(rect.left + inset, rect.bottom)),
-        ]),
-        stroke: st),
+      geometry: PathGeometry([
+        MoveTo(Point(rect.left + inset, rect.top)),
+        LineTo(Point(rect.left + inset, rect.bottom)),
+      ]),
+      stroke: st,
+    ),
     SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(rect.right - inset, rect.top)),
-          LineTo(Point(rect.right - inset, rect.bottom)),
-        ]),
-        stroke: st),
+      geometry: PathGeometry([
+        MoveTo(Point(rect.right - inset, rect.top)),
+        LineTo(Point(rect.right - inset, rect.bottom)),
+      ]),
+      stroke: st,
+    ),
   ];
 }
 
@@ -901,8 +1009,7 @@ List<PathCommand> _cylinderPath(Rect rect) {
   const kappa = 0.5522847498;
   final rx = rect.width / 2;
   // Cap depth proportional to width, clamped so it never exceeds the body.
-  final ry =
-      math.min(rect.height / 4, rx / (2.5 + rect.width / 50));
+  final ry = math.min(rect.height / 4, rx / (2.5 + rect.width / 50));
   final cx = (rect.left + rect.right) / 2;
   final top = rect.top;
   final bottom = rect.bottom;
@@ -914,22 +1021,40 @@ List<PathCommand> _cylinderPath(Rect rect) {
   return [
     MoveTo(Point(left, topMid)),
     // Lower half of the top ellipse.
-    CubicTo(Point(left, topMid + k * ry), Point(cx - k * rx, top + 2 * ry),
-        Point(cx, top + 2 * ry)),
-    CubicTo(Point(cx + k * rx, top + 2 * ry), Point(right, topMid + k * ry),
-        Point(right, topMid)),
+    CubicTo(
+      Point(left, topMid + k * ry),
+      Point(cx - k * rx, top + 2 * ry),
+      Point(cx, top + 2 * ry),
+    ),
+    CubicTo(
+      Point(cx + k * rx, top + 2 * ry),
+      Point(right, topMid + k * ry),
+      Point(right, topMid),
+    ),
     // Upper half of the top ellipse (back to start).
-    CubicTo(Point(right, topMid - k * ry), Point(cx + k * rx, top),
-        Point(cx, top)),
-    CubicTo(Point(cx - k * rx, top), Point(left, topMid - k * ry),
-        Point(left, topMid)),
+    CubicTo(
+      Point(right, topMid - k * ry),
+      Point(cx + k * rx, top),
+      Point(cx, top),
+    ),
+    CubicTo(
+      Point(cx - k * rx, top),
+      Point(left, topMid - k * ry),
+      Point(left, topMid),
+    ),
     // Left wall.
     LineTo(Point(left, bottomMid)),
     // Bottom bulge.
-    CubicTo(Point(left, bottomMid + k * ry), Point(cx - k * rx, bottom),
-        Point(cx, bottom)),
-    CubicTo(Point(cx + k * rx, bottom), Point(right, bottomMid + k * ry),
-        Point(right, bottomMid)),
+    CubicTo(
+      Point(left, bottomMid + k * ry),
+      Point(cx - k * rx, bottom),
+      Point(cx, bottom),
+    ),
+    CubicTo(
+      Point(cx + k * rx, bottom),
+      Point(right, bottomMid + k * ry),
+      Point(right, bottomMid),
+    ),
     // Right wall.
     LineTo(Point(right, topMid)),
     const ClosePath(),
@@ -1012,7 +1137,12 @@ Point _unit(Point a, Point b) {
 /// Endpoint marker at [tip] pointing along [dir]. Mirrors upstream
 /// `insertMarkers` (`point` filled triangle, `circle`, `cross`).
 List<SceneNode> _marker(
-    BlockMarker marker, Point tip, Point dir, Color color, double width) {
+  BlockMarker marker,
+  Point tip,
+  Point dir,
+  Color color,
+  double width,
+) {
   final perp = Point(-dir.y, dir.x);
   switch (marker) {
     case BlockMarker.circle:
@@ -1046,8 +1176,11 @@ List<SceneNode> _marker(
     case BlockMarker.none:
       return [
         SceneShape(
-          geometry: PolygonGeometry(
-              [tip, tip - dir * 9 + perp * 4, tip - dir * 9 - perp * 4]),
+          geometry: PolygonGeometry([
+            tip,
+            tip - dir * 9 + perp * 4,
+            tip - dir * 9 - perp * 4,
+          ]),
           fill: Fill(color),
         ),
       ];

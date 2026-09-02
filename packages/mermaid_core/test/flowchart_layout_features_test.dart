@@ -13,16 +13,18 @@ import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
 
 RenderScene layout(FlowGraph g) => layoutFlowchart(
-      g,
-      measurer: const ApproximateTextMeasurer(),
-      theme: MermaidTheme.defaultTheme,
-    );
+  g,
+  measurer: const ApproximateTextMeasurer(),
+  theme: MermaidTheme.defaultTheme,
+);
 
 FlowNode node(String id) => FlowNode(id: id, label: id);
 
 /// Flattens the scene tree, returning every node with its group path.
-List<(List<String?>, SceneNode)> flatten(List<SceneNode> nodes,
-    [List<String?> path = const []]) {
+List<(List<String?>, SceneNode)> flatten(
+  List<SceneNode> nodes, [
+  List<String?> path = const [],
+]) {
   final out = <(List<String?>, SceneNode)>[];
   for (final n in nodes) {
     out.add((path, n));
@@ -33,10 +35,9 @@ List<(List<String?>, SceneNode)> flatten(List<SceneNode> nodes,
   return out;
 }
 
-SceneGroup groupById(RenderScene scene, String id) => flatten(scene.nodes)
-    .map((e) => e.$2)
-    .whereType<SceneGroup>()
-    .firstWhere((g) => g.id == id);
+SceneGroup groupById(RenderScene scene, String id) => flatten(
+  scene.nodes,
+).map((e) => e.$2).whereType<SceneGroup>().firstWhere((g) => g.id == id);
 
 Rect groupBounds(SceneGroup g) {
   Rect? acc;
@@ -53,22 +54,25 @@ Rect groupBounds(SceneGroup g) {
 
 void main() {
   test('fixture 07 basis edges ease into their final endpoints', () {
-    final source =
-        File('test/fixtures/upstream_flowcharts/07.mmd').readAsStringSync();
+    final source = File(
+      'test/fixtures/upstream_flowcharts/07.mmd',
+    ).readAsStringSync();
     final scene = layout(parseFlowchart(source));
 
     for (final id in [
       'edge_c0102290_1ec3_e711_8c5a_005056ad0002_71082290_1ec3_e711_8c5a_005056ad0002_37',
       'edge_9a072290_1ec3_e711_8c5a_005056ad0002_d6072290_1ec3_e711_8c5a_005056ad0002_38',
     ]) {
-      final shape = groupById(scene, id)
-          .children
+      final shape = groupById(scene, id).children
           .whereType<SceneShape>()
           .singleWhere((node) => node.geometry is PathGeometry);
       final commands = (shape.geometry as PathGeometry).commands;
       final last = commands.last;
-      expect(last, isA<CubicTo>(),
-          reason: '$id must not change from a basis curve to a straight tail');
+      expect(
+        last,
+        isA<CubicTo>(),
+        reason: '$id must not change from a basis curve to a straight tail',
+      );
       final CubicTo(:c1, :c2, :p) = last as CubicTo;
       expect(c1.x, closeTo(p.x, 1e-9));
       expect(c1.y, closeTo(p.y, 1e-9));
@@ -76,15 +80,15 @@ void main() {
       expect(c2.y, closeTo(p.y, 1e-9));
     }
 
-    final sqlAgentPath = groupById(
-      scene,
-      'edge_c0102290_1ec3_e711_8c5a_005056ad0002_71082290_1ec3_e711_8c5a_005056ad0002_37',
-    )
-        .children
-        .whereType<SceneShape>()
-        .map((shape) => shape.geometry)
-        .whereType<PathGeometry>()
-        .single;
+    final sqlAgentPath =
+        groupById(
+              scene,
+              'edge_c0102290_1ec3_e711_8c5a_005056ad0002_71082290_1ec3_e711_8c5a_005056ad0002_37',
+            ).children
+            .whereType<SceneShape>()
+            .map((shape) => shape.geometry)
+            .whereType<PathGeometry>()
+            .single;
     final start = (sqlAgentPath.commands.first as MoveTo).p;
     final firstSegmentEnd = (sqlAgentPath.commands[1] as LineTo).p;
     final end = (sqlAgentPath.commands.last as CubicTo).p;
@@ -92,12 +96,14 @@ void main() {
     final sourceToTarget = end - start;
     final forwardProgress =
         firstStep.x * sourceToTarget.x + firstStep.y * sourceToTarget.y;
-    final approachAlignment = forwardProgress /
+    final approachAlignment =
+        forwardProgress /
         (start.distanceTo(firstSegmentEnd) * start.distanceTo(end));
     expect(
       approachAlignment,
       greaterThan(0.25),
-      reason: 'SQLAgent -> MSSQLSERVER must not start by moving away from '
+      reason:
+          'SQLAgent -> MSSQLSERVER must not start by moving away from '
           'its target and fold back into a near-hairpin',
     );
   });
@@ -112,8 +118,9 @@ void main() {
       final scene = layout(g);
       final edgeGroup = groupById(scene, 'edge_A_A_0');
       final path = edgeGroup.children.whereType<SceneShape>().firstWhere(
-          (s) => s.geometry is PathGeometry,
-          orElse: () => fail('no loop path emitted'));
+        (s) => s.geometry is PathGeometry,
+        orElse: () => fail('no loop path emitted'),
+      );
       final nodeGroup = groupById(scene, 'A');
       final nodeRect = groupBounds(nodeGroup);
       for (final cmd in (path.geometry as PathGeometry).commands) {
@@ -125,22 +132,30 @@ void main() {
           ClosePath() => const <Point>[],
         };
         for (final p in pts) {
-          expect(p.x, greaterThanOrEqualTo(nodeRect.center.x),
-              reason: 'loop should bulge to the right of the node');
-          expect(scene.size.width, greaterThanOrEqualTo(p.x),
-              reason: 'loop must stay inside the scene');
+          expect(
+            p.x,
+            greaterThanOrEqualTo(nodeRect.center.x),
+            reason: 'loop should bulge to the right of the node',
+          );
+          expect(
+            scene.size.width,
+            greaterThanOrEqualTo(p.x),
+            reason: 'loop must stay inside the scene',
+          );
         }
       }
       // Arrowhead present (point head = filled triangle polygon).
       expect(
         edgeGroup.children.whereType<SceneShape>().any(
-            (s) => s.geometry is PolygonGeometry && s.fill != null),
+          (s) => s.geometry is PolygonGeometry && s.fill != null,
+        ),
         isTrue,
       );
       // Label emitted.
       expect(
-        flatten(scene.nodes).map((e) => e.$2).whereType<SceneText>().any(
-            (t) => t.text == 'again'),
+        flatten(
+          scene.nodes,
+        ).map((e) => e.$2).whereType<SceneText>().any((t) => t.text == 'again'),
         isTrue,
       );
     });
@@ -177,29 +192,29 @@ void main() {
 
   group('edges targeting subgraph ids', () {
     FlowGraph clusterTarget({FlowDirection? sgDirection}) => FlowGraph(
-          direction: FlowDirection.tb,
-          nodes: {
-            for (final id in ['x', 'm1', 'm2', 's']) id: node(id),
-          },
-          edges: const [
-            FlowEdge(from: 'x', to: 's'),
-            FlowEdge(from: 'm1', to: 'm2'),
-          ],
-          subgraphs: [
-            FlowSubgraph(
-              id: 's',
-              title: 'Cluster',
-              nodeIds: const ['m1', 'm2'],
-              direction: sgDirection,
-            ),
-          ],
-        );
+      direction: FlowDirection.tb,
+      nodes: {
+        for (final id in ['x', 'm1', 'm2', 's']) id: node(id),
+      },
+      edges: const [
+        FlowEdge(from: 'x', to: 's'),
+        FlowEdge(from: 'm1', to: 'm2'),
+      ],
+      subgraphs: [
+        FlowSubgraph(
+          id: 's',
+          title: 'Cluster',
+          nodeIds: const ['m1', 'm2'],
+          direction: sgDirection,
+        ),
+      ],
+    );
 
     void expectStopsAtBorder(RenderScene scene) {
       final edge = groupById(scene, 'edge_x_s_0');
-      final path = edge.children
-          .whereType<SceneShape>()
-          .firstWhere((s) => s.geometry is PathGeometry);
+      final path = edge.children.whereType<SceneShape>().firstWhere(
+        (s) => s.geometry is PathGeometry,
+      );
       final endPoint = switch ((path.geometry as PathGeometry).commands.last) {
         LineTo(:final p) => p,
         CubicTo(:final p) => p,
@@ -207,17 +222,20 @@ void main() {
         _ => fail('unexpected trailing command'),
       };
       final cluster = groupBounds(groupById(scene, 's'));
-      expect((endPoint.y - cluster.top).abs(), lessThan(12),
-          reason: 'arrow should stop at the cluster border, got $endPoint '
-              'vs top ${cluster.top}');
+      expect(
+        (endPoint.y - cluster.top).abs(),
+        lessThan(12),
+        reason:
+            'arrow should stop at the cluster border, got $endPoint '
+            'vs top ${cluster.top}',
+      );
       final m1 = groupBounds(groupById(scene, 'm1'));
       expect(endPoint.y, lessThan(m1.top));
       // The phantom node `s` must not be rendered as a standalone node:
       // every group named `s` is the cluster (contains the title text).
-      final sGroups = flatten(scene.nodes)
-          .map((e) => e.$2)
-          .whereType<SceneGroup>()
-          .where((g) => g.id == 's');
+      final sGroups = flatten(
+        scene.nodes,
+      ).map((e) => e.$2).whereType<SceneGroup>().where((g) => g.id == 's');
       for (final g in sGroups) {
         expect(
           flatten(g.children)
@@ -235,8 +253,7 @@ void main() {
     });
 
     test('isolated-direction cluster endpoint clips at border', () {
-      expectStopsAtBorder(
-          layout(clusterTarget(sgDirection: FlowDirection.lr)));
+      expectStopsAtBorder(layout(clusterTarget(sgDirection: FlowDirection.lr)));
     });
   });
 
@@ -261,21 +278,24 @@ flowchart TB
       final scene = layout(parseFlowchart(source));
       final com = groupBounds(groupById(scene, 'COM'));
       final sem = groupBounds(groupById(scene, 'SEM'));
-      expect(
-        com.center.x,
-        lessThan(sem.center.x),
-      );
+      expect(com.center.x, lessThan(sem.center.x));
       expect(com.top, closeTo(sem.top, 0.001));
 
       final firstMember = groupBounds(groupById(scene, 'C1'));
-      expect(firstMember.top - com.top, lessThan(30),
-          reason: 'the visible cluster top should contain only its title band');
-      final comTitle = groupById(scene, 'COM')
-          .children
-          .whereType<SceneText>()
-          .single;
-      expect(comTitle.bounds.height, lessThan(25),
-          reason: 'the cluster title should remain on one line');
+      expect(
+        firstMember.top - com.top,
+        lessThan(30),
+        reason: 'the visible cluster top should contain only its title band',
+      );
+      final comTitle = groupById(
+        scene,
+        'COM',
+      ).children.whereType<SceneText>().single;
+      expect(
+        comTitle.bounds.height,
+        lessThan(25),
+        reason: 'the cluster title should remain on one line',
+      );
     });
 
     test('enters each visible cluster after a rounded bend', () {
@@ -305,8 +325,11 @@ flowchart TB
               cursor = p;
             case CubicTo(:final c1, :final c2, :final p):
               final start = cursor!;
-              final allVertical = [c1.x, c2.x, p.x]
-                  .every((x) => (start.x - x).abs() < 0.001);
+              final allVertical = [
+                c1.x,
+                c2.x,
+                p.x,
+              ].every((x) => (start.x - x).abs() < 0.001);
               if (p.y < cluster.top &&
                   !allVertical &&
                   (p.x - c2.x).abs() < 0.001) {
@@ -323,10 +346,16 @@ flowchart TB
           }
         }
 
-        expect(hasRoundedBendAbove, isTrue,
-            reason: '$edgeId should keep a rounded bend above $clusterId');
-        expect(crossesVertically, isTrue,
-            reason: '$edgeId should be vertical at the $clusterId border');
+        expect(
+          hasRoundedBendAbove,
+          isTrue,
+          reason: '$edgeId should keep a rounded bend above $clusterId',
+        );
+        expect(
+          crossesVertically,
+          isTrue,
+          reason: '$edgeId should be vertical at the $clusterId border',
+        );
       }
 
       expectRoundedVerticalEntry('edge_A2_B1_2', 'SEM');
@@ -336,25 +365,25 @@ flowchart TB
 
   group('per-subgraph direction', () {
     FlowGraph mixed() => FlowGraph(
-          direction: FlowDirection.tb,
-          nodes: {
-            for (final id in ['req', 'a1', 'a2', 'a3', 'resp']) id: node(id),
-          },
-          edges: const [
-            FlowEdge(from: 'req', to: 'a1'),
-            FlowEdge(from: 'a1', to: 'a2'),
-            FlowEdge(from: 'a2', to: 'a3'),
-            FlowEdge(from: 'a3', to: 'resp'),
-          ],
-          subgraphs: const [
-            FlowSubgraph(
-              id: 'mw',
-              title: 'Middleware',
-              nodeIds: ['a1', 'a2', 'a3'],
-              direction: FlowDirection.lr,
-            ),
-          ],
-        );
+      direction: FlowDirection.tb,
+      nodes: {
+        for (final id in ['req', 'a1', 'a2', 'a3', 'resp']) id: node(id),
+      },
+      edges: const [
+        FlowEdge(from: 'req', to: 'a1'),
+        FlowEdge(from: 'a1', to: 'a2'),
+        FlowEdge(from: 'a2', to: 'a3'),
+        FlowEdge(from: 'a3', to: 'resp'),
+      ],
+      subgraphs: const [
+        FlowSubgraph(
+          id: 'mw',
+          title: 'Middleware',
+          nodeIds: ['a1', 'a2', 'a3'],
+          direction: FlowDirection.lr,
+        ),
+      ],
+    );
 
     test('LR subgraph members form a horizontal row inside a TB graph', () {
       final scene = layout(mixed());
@@ -376,9 +405,9 @@ flowchart TB
     test('cross-boundary edge ends at the cluster border', () {
       final scene = layout(mixed());
       final edge = groupById(scene, 'edge_req_a1_0');
-      final path = edge.children
-          .whereType<SceneShape>()
-          .firstWhere((s) => s.geometry is PathGeometry);
+      final path = edge.children.whereType<SceneShape>().firstWhere(
+        (s) => s.geometry is PathGeometry,
+      );
       final cmds = (path.geometry as PathGeometry).commands;
       final endPoint = switch (cmds.last) {
         LineTo(:final p) => p,
@@ -388,18 +417,27 @@ flowchart TB
       };
       final cluster = groupBounds(groupById(scene, 'mw'));
       // Arrow tip sits the marker-shorten distance above the cluster top.
-      expect((endPoint.y - cluster.top).abs(), lessThan(12),
-          reason: 'edge should stop at the cluster boundary, '
-              'got $endPoint vs cluster top ${cluster.top}');
+      expect(
+        (endPoint.y - cluster.top).abs(),
+        lessThan(12),
+        reason:
+            'edge should stop at the cluster boundary, '
+            'got $endPoint vs cluster top ${cluster.top}',
+      );
       final a1 = groupBounds(groupById(scene, 'a1'));
-      expect(endPoint.y, lessThan(a1.top),
-          reason: 'edge must not reach into the member node');
+      expect(
+        endPoint.y,
+        lessThan(a1.top),
+        reason: 'edge must not reach into the member node',
+      );
     });
 
     test('nested isolated directions complete and nest correctly', () {
       final g = FlowGraph(
         direction: FlowDirection.tb,
-        nodes: {for (final id in ['x', 'i1', 'i2', 'j1', 'j2']) id: node(id)},
+        nodes: {
+          for (final id in ['x', 'i1', 'i2', 'j1', 'j2']) id: node(id),
+        },
         edges: const [
           FlowEdge(from: 'x', to: 'i1'),
           FlowEdge(from: 'i1', to: 'i2'),
@@ -425,7 +463,10 @@ flowchart TB
       final outer = groupBounds(groupById(scene, 'outer'));
       final inner = groupBounds(groupById(scene, 'inner'));
       for (final id in ['i1', 'i2']) {
-        expect(outer.contains(groupBounds(groupById(scene, id)).center), isTrue);
+        expect(
+          outer.contains(groupBounds(groupById(scene, id)).center),
+          isTrue,
+        );
       }
       for (final id in ['j1', 'j2']) {
         final c = groupBounds(groupById(scene, id)).center;
@@ -433,11 +474,15 @@ flowchart TB
         expect(outer.contains(c), isTrue);
       }
       // Inner is TB again: j2 below j1.
-      expect(groupBounds(groupById(scene, 'j2')).center.y,
-          greaterThan(groupBounds(groupById(scene, 'j1')).center.y));
+      expect(
+        groupBounds(groupById(scene, 'j2')).center.y,
+        greaterThan(groupBounds(groupById(scene, 'j1')).center.y),
+      );
       // Outer is LR: i2 right of i1.
-      expect(groupBounds(groupById(scene, 'i2')).center.x,
-          greaterThan(groupBounds(groupById(scene, 'i1')).center.x));
+      expect(
+        groupBounds(groupById(scene, 'i2')).center.x,
+        greaterThan(groupBounds(groupById(scene, 'i1')).center.x),
+      );
     });
   });
 }

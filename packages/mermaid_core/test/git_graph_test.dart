@@ -16,8 +16,7 @@ void main() {
   group('detect', () {
     test('recognizes gitGraph header', () {
       expect(detectDiagramType('gitGraph\n  commit'), DiagramType.gitGraph);
-      expect(detectDiagramType('gitGraph LR:\n  commit'),
-          DiagramType.gitGraph);
+      expect(detectDiagramType('gitGraph LR:\n  commit'), DiagramType.gitGraph);
     });
   });
 
@@ -78,8 +77,10 @@ gitGraph
     });
 
     test('unknown checkout target throws', () {
-      expect(() => parseGitGraph('gitGraph\n  checkout nope'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseGitGraph('gitGraph\n  checkout nope'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
@@ -100,13 +101,11 @@ gitGraph
       expect(groups.any((g) => g.id == 'commit_first'), isTrue);
       // Branch labels for main and develop are emitted as text.
       List<SceneNode> flat(List<SceneNode> n) => [
-            for (final x in n) ...[
-              x,
-              if (x is SceneGroup) ...flat(x.children),
-            ],
-          ];
-      final texts =
-          flat(scene.nodes).whereType<SceneText>().map((t) => t.text).toSet();
+        for (final x in n) ...[x, if (x is SceneGroup) ...flat(x.children)],
+      ];
+      final texts = flat(
+        scene.nodes,
+      ).whereType<SceneText>().map((t) => t.text).toSet();
       expect(texts.containsAll({'main', 'develop', 'first'}), isTrue);
     });
   });

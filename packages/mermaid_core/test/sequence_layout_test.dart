@@ -12,21 +12,18 @@ import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
 
 RenderScene layout(String body) => layoutSequence(
-      parseSequence('sequenceDiagram\n$body'),
-      measurer: const ApproximateTextMeasurer(),
-      theme: MermaidTheme.defaultTheme,
-    );
+  parseSequence('sequenceDiagram\n$body'),
+  measurer: const ApproximateTextMeasurer(),
+  theme: MermaidTheme.defaultTheme,
+);
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
+  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
+];
 
-Iterable<SceneGroup> groups(RenderScene s, String prefix) => flatten(s.nodes)
-    .whereType<SceneGroup>()
-    .where((g) => (g.id ?? '').startsWith(prefix));
+Iterable<SceneGroup> groups(RenderScene s, String prefix) => flatten(
+  s.nodes,
+).whereType<SceneGroup>().where((g) => (g.id ?? '').startsWith(prefix));
 
 Rect geometryBounds(ShapeGeometry g) {
   Rect points(List<Point> pts) {
@@ -39,21 +36,27 @@ Rect geometryBounds(ShapeGeometry g) {
 
   return switch (g) {
     RectGeometry(:final rect) => rect,
-    CircleGeometry(:final center, :final radius) =>
-      Rect.fromCenter(center, radius * 2, radius * 2),
-    EllipseGeometry(:final center, :final rx, :final ry) =>
-      Rect.fromCenter(center, rx * 2, ry * 2),
+    CircleGeometry(:final center, :final radius) => Rect.fromCenter(
+      center,
+      radius * 2,
+      radius * 2,
+    ),
+    EllipseGeometry(:final center, :final rx, :final ry) => Rect.fromCenter(
+      center,
+      rx * 2,
+      ry * 2,
+    ),
     PolygonGeometry(points: final pts) => points(pts),
     PathGeometry(:final commands) => points([
-        for (final c in commands)
-          ...switch (c) {
-            MoveTo(:final p) => [p],
-            LineTo(:final p) => [p],
-            QuadTo(:final c, :final p) => [c, p],
-            CubicTo(:final c1, :final c2, :final p) => [c1, c2, p],
-            ClosePath() => const <Point>[],
-          },
-      ]),
+      for (final c in commands)
+        ...switch (c) {
+          MoveTo(:final p) => [p],
+          LineTo(:final p) => [p],
+          QuadTo(:final c, :final p) => [c, p],
+          CubicTo(:final c1, :final c2, :final p) => [c1, c2, p],
+          ClosePath() => const <Point>[],
+        },
+    ]),
   };
 }
 
@@ -72,8 +75,9 @@ Rect groupBounds(SceneGroup g) {
 
 void main() {
   test('fixture 01 wraps explicit wrap labels into a compact scene', () {
-    final source =
-        File('test/fixtures/upstream_sequence/01.mmd').readAsStringSync();
+    final source = File(
+      'test/fixtures/upstream_sequence/01.mmd',
+    ).readAsStringSync();
     final scene = layoutSequence(
       parseSequence(source),
       measurer: const ApproximateTextMeasurer(),
@@ -97,21 +101,19 @@ void main() {
   test('columns ordered left to right, boxes mirrored top and bottom', () {
     final s = layout('participant A\nparticipant B\nparticipant C\nA->>B: x');
     double centerX(String id) => groupBounds(
-        groups(s, 'actor_$id').firstWhere((g) => g.id == 'actor_$id')).center.x;
+      groups(s, 'actor_$id').firstWhere((g) => g.id == 'actor_$id'),
+    ).center.x;
     expect(centerX('A'), lessThan(centerX('B')));
     expect(centerX('B'), lessThan(centerX('C')));
     // Mirrored bottom boxes exist and sit below the top ones.
     final top = groupBounds(groups(s, 'actor_A').first);
-    final bottom = groupBounds(
-        groups(s, 'actor_A_bottom').single);
+    final bottom = groupBounds(groups(s, 'actor_A_bottom').single);
     expect(bottom.top, greaterThan(top.bottom));
   });
 
   test('messages are y-ordered by statement order', () {
     final s = layout('A->>B: one\nB->>A: two\nA->>B: three');
-    final ys = groups(s, 'msg_')
-        .map((g) => groupBounds(g).bottom)
-        .toList();
+    final ys = groups(s, 'msg_').map((g) => groupBounds(g).bottom).toList();
     expect(ys.length, 3);
     expect(ys[0], lessThan(ys[1]));
     expect(ys[1], lessThan(ys[2]));
@@ -129,9 +131,11 @@ void main() {
   test('activation bar spans the +/- pair', () {
     final s = layout('A->>+B: go\nB-->>-A: done');
     // The activation rect is a 10px-wide standalone shape.
-    final bars = flatten(s.nodes).whereType<SceneShape>().where((n) =>
-        n.geometry is RectGeometry &&
-        ((n.geometry as RectGeometry).rect.width - 10).abs() < 0.1);
+    final bars = flatten(s.nodes).whereType<SceneShape>().where(
+      (n) =>
+          n.geometry is RectGeometry &&
+          ((n.geometry as RectGeometry).rect.width - 10).abs() < 0.1,
+    );
     expect(bars, hasLength(1));
     final bar = (bars.single.geometry as RectGeometry).rect;
     final msgs = groups(s, 'msg_').map(groupBounds).toList();
@@ -140,8 +144,10 @@ void main() {
   });
 
   test('note over two participants spans both lifelines', () {
-    final s = layout('participant A\nparticipant B\nA->>B: x\n'
-        'Note over A,B: across');
+    final s = layout(
+      'participant A\nparticipant B\nA->>B: x\n'
+      'Note over A,B: across',
+    );
     final ax = groupBounds(groups(s, 'actor_A').first).center.x;
     final bx = groupBounds(groups(s, 'actor_B').first).center.x;
     final note = groupBounds(groups(s, 'note').single);
@@ -185,9 +191,11 @@ end
     const childColor = 0xffc8ffc8;
     const siblingColor = 0xff646e78;
     final coloredRects = s.nodes.whereType<SceneShape>().where(
-          (shape) => shape.geometry is RectGeometry && shape.fill != null,
-        );
-    final colors = coloredRects.map((shape) => shape.fill!.color.value).toList();
+      (shape) => shape.geometry is RectGeometry && shape.fill != null,
+    );
+    final colors = coloredRects
+        .map((shape) => shape.fill!.color.value)
+        .toList();
     expect(
       colors,
       containsAllInOrder([
@@ -198,10 +206,12 @@ end
       ]),
     );
 
-    Rect rectOf(int color) => (coloredRects
-            .singleWhere((shape) => shape.fill!.color.value == color)
-            .geometry as RectGeometry)
-        .rect;
+    Rect rectOf(int color) =>
+        (coloredRects
+                    .singleWhere((shape) => shape.fill!.color.value == color)
+                    .geometry
+                as RectGeometry)
+            .rect;
     final parent = rectOf(parentColor);
     final child = rectOf(childColor);
     final sibling = rectOf(siblingColor);
@@ -234,7 +244,9 @@ end
   });
 
   test('scene bounds enclose everything with margin', () {
-    final s = layout('A->>B: x\nNote left of A: way left\nloop l\nA->>B: y\nend');
+    final s = layout(
+      'A->>B: x\nNote left of A: way left\nloop l\nA->>B: y\nend',
+    );
     for (final n in flatten(s.nodes)) {
       final b = switch (n) {
         SceneShape(geometry: RectGeometry(:final rect)) => rect,
@@ -253,9 +265,9 @@ end
     final s = layout('actor A\nA->>B: x');
     final actorGroup = groups(s, 'actor_A').first;
     expect(
-      flatten(actorGroup.children)
-          .whereType<SceneShape>()
-          .any((n) => n.geometry is CircleGeometry),
+      flatten(
+        actorGroup.children,
+      ).whereType<SceneShape>().any((n) => n.geometry is CircleGeometry),
       isTrue,
     );
   });

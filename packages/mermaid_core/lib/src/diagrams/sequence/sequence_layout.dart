@@ -70,10 +70,10 @@ class _ResolvedText {
 
 class _SequenceLayout {
   _SequenceLayout(this.diagram, this.measurer, this.theme)
-      : baseStyle = TextStyleSpec(
-          fontFamily: theme.fontFamily,
-          fontSize: theme.fontSize,
-        );
+    : baseStyle = TextStyleSpec(
+        fontFamily: theme.fontFamily,
+        fontSize: theme.fontSize,
+      );
 
   final SequenceDiagram diagram;
   final TextMeasurer measurer;
@@ -142,8 +142,12 @@ class _SequenceLayout {
           if (event.active) {
             stack.add(y);
           } else if (stack.isNotEmpty) {
-            activationRects
-                .add((event.id, stack.removeLast(), y, stack.length));
+            activationRects.add((
+              event.id,
+              stack.removeLast(),
+              y,
+              stack.length,
+            ));
           }
 
         case SeqNote():
@@ -155,7 +159,8 @@ class _SequenceLayout {
             ..depth = openFrames.length;
           openFrames.add(frame);
           if (event.kind != SeqBlockKind.rect) {
-            y += _blockLabelHeight +
+            y +=
+                _blockLabelHeight +
                 (event.label.isEmpty
                     ? 0
                     : measurer.measure(event.label, baseStyle).height);
@@ -196,21 +201,23 @@ class _SequenceLayout {
     for (final (id, startY, endY, depth) in activationRects) {
       // Upstream: left = center + (stackedSize-1)*activationWidth/2, width
       // activationWidth. `depth` is the 0-based stack index (stackedSize-1).
-      final left =
-          columns[id]!.x + depth * _activationWidth / 2;
-      activationNodes.add(SceneShape(
-        geometry: RectGeometry(Rect.fromLTWH(
-            left, startY, _activationWidth, endY - startY)),
-        fill: Fill(theme.activationBkgColor),
-        stroke: Stroke(color: theme.activationBorderColor),
-      ));
+      final left = columns[id]!.x + depth * _activationWidth / 2;
+      activationNodes.add(
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromLTWH(left, startY, _activationWidth, endY - startY),
+          ),
+          fill: Fill(theme.activationBkgColor),
+          stroke: Stroke(color: theme.activationBorderColor),
+        ),
+      );
     }
 
     // Participant grouping boxes, drawn behind the lifelines.
     for (final box in diagram.boxes) {
       final xs = [
         for (final m in box.members)
-          if (columns[m] != null) columns[m]!
+          if (columns[m] != null) columns[m]!,
       ];
       if (xs.isEmpty) continue;
       var left = double.infinity, right = -double.infinity;
@@ -221,35 +228,55 @@ class _SequenceLayout {
       left -= _boxMargin;
       right += _boxMargin;
       final top = -_boxMargin - (box.label.isEmpty ? 0 : _blockLabelHeight);
-      participantBackgrounds.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromLTWH(left, top, right - left, bottomBoxTop - top + _boxMargin)),
-        fill: Fill((box.color != null ? Color.tryParse(box.color!) : null) ??
-            const Color(0x00000000)),
-      ));
+      participantBackgrounds.add(
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromLTWH(
+              left,
+              top,
+              right - left,
+              bottomBoxTop - top + _boxMargin,
+            ),
+          ),
+          fill: Fill(
+            (box.color != null ? Color.tryParse(box.color!) : null) ??
+                const Color(0x00000000),
+          ),
+        ),
+      );
       if (box.label.isNotEmpty) {
         final size = measurer.measure(box.label, baseStyle);
-        participantBackgrounds.add(SceneText(
-          text: box.label,
-          bounds: Rect.fromLTWH((left + right) / 2 - size.width / 2,
-              top + 2, size.width, size.height),
-          style: baseStyle,
-          color: theme.textColor,
-        ));
+        participantBackgrounds.add(
+          SceneText(
+            text: box.label,
+            bounds: Rect.fromLTWH(
+              (left + right) / 2 - size.width / 2,
+              top + 2,
+              size.width,
+              size.height,
+            ),
+            style: baseStyle,
+            color: theme.textColor,
+          ),
+        );
       }
     }
 
     for (final id in order) {
       final col = columns[id]!;
-      final top = createTop[id] != null ? createTop[id]! + _actorHeight : topBoxBottom;
+      final top = createTop[id] != null
+          ? createTop[id]! + _actorHeight
+          : topBoxBottom;
       final bottom = destroyY[id] ?? bottomBoxTop;
-      lifelines.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(col.x, top)),
-          LineTo(Point(col.x, bottom)),
-        ]),
-        stroke: Stroke(color: theme.actorLineColor, width: 0.5),
-      ));
+      lifelines.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(col.x, top)),
+            LineTo(Point(col.x, bottom)),
+          ]),
+          stroke: Stroke(color: theme.actorLineColor, width: 0.5),
+        ),
+      );
       // Top box: at the create point for created participants, else the top.
       _actorBox(col, createTop[id] ?? 0);
       // mirrorActors: repeat at the bottom, unless the participant was
@@ -260,15 +287,17 @@ class _SequenceLayout {
         // ✗ marker where the lifeline ends.
         final d = 6.0;
         final yy = destroyY[id]!;
-        eventNodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(col.x - d, yy - d)),
-            LineTo(Point(col.x + d, yy + d)),
-            MoveTo(Point(col.x + d, yy - d)),
-            LineTo(Point(col.x - d, yy + d)),
-          ]),
-          stroke: Stroke(color: theme.actorLineColor, width: 2),
-        ));
+        eventNodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(col.x - d, yy - d)),
+              LineTo(Point(col.x + d, yy + d)),
+              MoveTo(Point(col.x + d, yy - d)),
+              LineTo(Point(col.x - d, yy + d)),
+            ]),
+            stroke: Stroke(color: theme.actorLineColor, width: 2),
+          ),
+        );
       }
     }
 
@@ -284,8 +313,8 @@ class _SequenceLayout {
       ...eventNodes,
       ...frameLabels,
     ];
-    var bounds = sceneBounds(nodes) ??
-        Rect.fromLTWH(0, 0, _actorMinWidth, _actorHeight);
+    var bounds =
+        sceneBounds(nodes) ?? Rect.fromLTWH(0, 0, _actorMinWidth, _actorHeight);
 
     final title = diagram.title;
     if (title != null && title.isNotEmpty) {
@@ -293,8 +322,12 @@ class _SequenceLayout {
       final size = measurer.measure(title, style);
       final node = SceneText(
         text: title,
-        bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-            bounds.top - size.height - 8, size.width, size.height),
+        bounds: Rect.fromLTWH(
+          bounds.center.x - size.width / 2,
+          bounds.top - size.height - 8,
+          size.width,
+          size.height,
+        ),
         style: style,
         color: theme.titleColor,
       );
@@ -305,7 +338,10 @@ class _SequenceLayout {
     final dx = _diagramMarginX / 2 - bounds.left;
     final dy = _diagramMarginY - bounds.top;
     return RenderScene(
-      size: Size(bounds.width + _diagramMarginX, bounds.height + 2 * _diagramMarginY),
+      size: Size(
+        bounds.width + _diagramMarginX,
+        bounds.height + 2 * _diagramMarginY,
+      ),
       background: theme.background,
       nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
     );
@@ -316,7 +352,10 @@ class _SequenceLayout {
   void _buildColumns() {
     for (final p in diagram.participants.values) {
       final labelSize = measurer.measure(p.label, baseStyle, maxWidth: 200);
-      final w = math.max(_actorMinWidth, labelSize.width + 2 * _boxTextMargin * 2);
+      final w = math.max(
+        _actorMinWidth,
+        labelSize.width + 2 * _boxTextMargin * 2,
+      );
       order.add(p.id);
       columns[p.id] = _Column(p, w, labelSize);
     }
@@ -354,14 +393,14 @@ class _SequenceLayout {
             // Adjacent message: attribute to the left actor's gap.
             hold(math.min(ia, ib), w);
           }
-          // Non-adjacent (spanning) messages do not widen columns upstream.
+        // Non-adjacent (spanning) messages do not widen columns upstream.
         case SeqNote(
-            :final placement,
-            :final target,
-            :final target2,
-            :final text,
-            :final wrap
-          ):
+          :final placement,
+          :final target,
+          :final target2,
+          :final text,
+          :final wrap,
+        ):
           final resolved = wrap
               ? _resolveWrappedText(text, _actorMinWidth - 2 * _wrapPadding)
               : _ResolvedText(text, measurer.measure(text, baseStyle));
@@ -402,8 +441,9 @@ class _SequenceLayout {
       final cur = columns[order[i]]!;
       final msgWidth = maxMsgWidth[i - 1];
       final margin = math.max(
-          _actorMargin,
-          msgWidth + _actorMargin - prev.boxWidth / 2 - cur.boxWidth / 2);
+        _actorMargin,
+        msgWidth + _actorMargin - prev.boxWidth / 2 - cur.boxWidth / 2,
+      );
       final centerDist = prev.boxWidth / 2 + margin + cur.boxWidth / 2;
       x += centerDist;
       cur.x = x;
@@ -415,7 +455,11 @@ class _SequenceLayout {
   void _actorBox(_Column col, double top) {
     final p = col.participant;
     final rect = Rect.fromLTWH(
-        col.x - col.boxWidth / 2, top, col.boxWidth, _actorHeight);
+      col.x - col.boxWidth / 2,
+      top,
+      col.boxWidth,
+      _actorHeight,
+    );
     final children = <SceneNode>[];
     if (p.isActor) {
       // Stick figure above the name, matching svgDraw drawActorTypeActor
@@ -449,8 +493,12 @@ class _SequenceLayout {
         ),
         SceneText(
           text: p.label,
-          bounds: Rect.fromLTWH(col.x - col.labelSize.width / 2,
-              top + 64, col.labelSize.width, col.labelSize.height),
+          bounds: Rect.fromLTWH(
+            col.x - col.labelSize.width / 2,
+            top + 64,
+            col.labelSize.width,
+            col.labelSize.height,
+          ),
           style: baseStyle,
           color: theme.actorTextColor,
         ),
@@ -465,32 +513,46 @@ class _SequenceLayout {
         SceneText(
           text: p.label,
           bounds: Rect.fromCenter(
-              rect.center, col.labelSize.width, col.labelSize.height),
+            rect.center,
+            col.labelSize.width,
+            col.labelSize.height,
+          ),
           style: baseStyle,
           color: theme.actorTextColor,
         ),
       ]);
     }
-    actorNodes.add(SceneGroup(
-      id: 'actor_${p.id}${top > 0 ? '_bottom' : ''}',
-      semanticLabel: p.label,
-      children: children,
-    ));
+    actorNodes.add(
+      SceneGroup(
+        id: 'actor_${p.id}${top > 0 ? '_bottom' : ''}',
+        semanticLabel: p.label,
+        children: children,
+      ),
+    );
   }
 
-  void _message(SeqMessage msg, int? number,
-      Map<String, List<double>> activations,
-      void Function(double, double) include) {
+  void _message(
+    SeqMessage msg,
+    int? number,
+    Map<String, List<double>> activations,
+    void Function(double, double) include,
+  ) {
     final fromCol = columns[msg.from]!;
     final toCol = columns[msg.to]!;
     final text = msg.wrap && msg.text.isNotEmpty
         ? _resolveWrappedText(
             msg.text,
-            math.max((toCol.x - fromCol.x).abs() + 2 * _wrapPadding,
-                _actorMinWidth),
+            math.max(
+              (toCol.x - fromCol.x).abs() + 2 * _wrapPadding,
+              _actorMinWidth,
+            ),
           )
-        : _ResolvedText(msg.text,
-            msg.text.isEmpty ? Size.zero : measurer.measure(msg.text, baseStyle));
+        : _ResolvedText(
+            msg.text,
+            msg.text.isEmpty
+                ? Size.zero
+                : measurer.measure(msg.text, baseStyle),
+          );
     final textSize = text.size;
     y += math.max(_messageMargin, textSize.height + 14);
 
@@ -507,51 +569,66 @@ class _SequenceLayout {
     final children = <SceneNode>[];
 
     if (msg.text.isNotEmpty) {
-      children.add(SceneText(
-        text: text.text,
-        bounds: Rect.fromLTWH((x1 + x2) / 2 - textSize.width / 2,
-            y - textSize.height - 4, textSize.width, textSize.height),
-        style: baseStyle,
-        color: theme.signalTextColor,
-      ));
+      children.add(
+        SceneText(
+          text: text.text,
+          bounds: Rect.fromLTWH(
+            (x1 + x2) / 2 - textSize.width / 2,
+            y - textSize.height - 4,
+            textSize.width,
+            textSize.height,
+          ),
+          style: baseStyle,
+          color: theme.signalTextColor,
+        ),
+      );
     }
 
-    children.add(SceneShape(
-      geometry: PathGeometry([MoveTo(Point(x1, y)), LineTo(Point(x2, y))]),
-      stroke: Stroke(
-        color: theme.signalColor,
-        width: 1.5,
-        dash: msg.arrow.dotted ? const [2, 2] : null,
+    children.add(
+      SceneShape(
+        geometry: PathGeometry([MoveTo(Point(x1, y)), LineTo(Point(x2, y))]),
+        stroke: Stroke(
+          color: theme.signalColor,
+          width: 1.5,
+          dash: msg.arrow.dotted ? const [2, 2] : null,
+        ),
       ),
-    ));
+    );
 
     children.addAll(_head(msg.arrow, Point(x2, y), Point(dir, 0)));
     if (msg.arrow.bidirectional) {
-      children.addAll(
-          _head(SeqArrow.solidArrow, Point(x1, y), Point(-dir, 0)));
+      children.addAll(_head(SeqArrow.solidArrow, Point(x1, y), Point(-dir, 0)));
     }
     if (number != null) {
       children.addAll(_numberBadge(number, Point(x1, y)));
     }
 
-    eventNodes.add(SceneGroup(
-      id: 'msg_${msg.from}_${msg.to}',
-      role: SceneGroupRole.edge,
-      semanticLabel: msg.text.isEmpty ? null : msg.text,
-      children: children,
-    ));
+    eventNodes.add(
+      SceneGroup(
+        id: 'msg_${msg.from}_${msg.to}',
+        role: SceneGroupRole.edge,
+        semanticLabel: msg.text.isEmpty ? null : msg.text,
+        children: children,
+      ),
+    );
     include(math.min(x1, x2), math.max(x1, x2));
     y += 4;
   }
 
-  void _selfMessage(SeqMessage msg, int? number,
-      void Function(double, double) include) {
+  void _selfMessage(
+    SeqMessage msg,
+    int? number,
+    void Function(double, double) include,
+  ) {
     final col = columns[msg.from]!;
     final text = msg.wrap && msg.text.isNotEmpty
-        ? _resolveWrappedText(
-            msg.text, _actorMinWidth - 2 * _wrapPadding)
-        : _ResolvedText(msg.text,
-            msg.text.isEmpty ? Size.zero : measurer.measure(msg.text, baseStyle));
+        ? _resolveWrappedText(msg.text, _actorMinWidth - 2 * _wrapPadding)
+        : _ResolvedText(
+            msg.text,
+            msg.text.isEmpty
+                ? Size.zero
+                : measurer.measure(msg.text, baseStyle),
+          );
     final textSize = text.size;
     y += _messageMargin;
     final x = col.x;
@@ -561,8 +638,11 @@ class _SequenceLayout {
       SceneShape(
         geometry: PathGeometry([
           MoveTo(Point(x, y)),
-          CubicTo(Point(x + out, y - 6), Point(x + out, y + h + 6),
-              Point(x + 4, y + h)),
+          CubicTo(
+            Point(x + out, y - 6),
+            Point(x + out, y + h + 6),
+            Point(x + 4, y + h),
+          ),
         ]),
         stroke: Stroke(
           color: theme.signalColor,
@@ -574,20 +654,26 @@ class _SequenceLayout {
       if (msg.text.isNotEmpty)
         SceneText(
           text: text.text,
-          bounds: Rect.fromLTWH(x + out * 0.85, y + h / 2 - textSize.height / 2,
-              textSize.width, textSize.height),
+          bounds: Rect.fromLTWH(
+            x + out * 0.85,
+            y + h / 2 - textSize.height / 2,
+            textSize.width,
+            textSize.height,
+          ),
           style: baseStyle,
           color: theme.signalTextColor,
           align: TextAlignH.left,
         ),
       if (number != null) ..._numberBadge(number, Point(x, y)),
     ];
-    eventNodes.add(SceneGroup(
-      id: 'msg_${msg.from}_${msg.from}',
-      role: SceneGroupRole.edge,
-      semanticLabel: msg.text.isEmpty ? null : msg.text,
-      children: children,
-    ));
+    eventNodes.add(
+      SceneGroup(
+        id: 'msg_${msg.from}_${msg.from}',
+        role: SceneGroupRole.edge,
+        semanticLabel: msg.text.isEmpty ? null : msg.text,
+        children: children,
+      ),
+    );
     include(x, x + out + textSize.width);
     y += h + 4;
   }
@@ -597,14 +683,13 @@ class _SequenceLayout {
     final perp = Point(-d.y, d.x);
     switch (arrow) {
       case SeqArrow.solidArrow ||
-            SeqArrow.dottedArrow ||
-            SeqArrow.bidirectionalSolid ||
-            SeqArrow.bidirectionalDotted:
+          SeqArrow.dottedArrow ||
+          SeqArrow.bidirectionalSolid ||
+          SeqArrow.bidirectionalDotted:
         final base = tip - d * 10;
         return [
           SceneShape(
-            geometry:
-                PolygonGeometry([tip, base + perp * 5, base - perp * 5]),
+            geometry: PolygonGeometry([tip, base + perp * 5, base - perp * 5]),
             fill: Fill(theme.arrowheadColor),
           ),
         ];
@@ -663,13 +748,10 @@ class _SequenceLayout {
 
   void _note(SeqNote note, void Function(double, double) include) {
     final text = note.wrap
-        ? _resolveWrappedText(
-            note.text, _actorMinWidth - 2 * _wrapPadding)
+        ? _resolveWrappedText(note.text, _actorMinWidth - 2 * _wrapPadding)
         : _ResolvedText(note.text, measurer.measure(note.text, baseStyle));
     final textSize = text.size;
-    final w = note.wrap
-        ? _actorMinWidth
-        : textSize.width + 2 * _noteMargin;
+    final w = note.wrap ? _actorMinWidth : textSize.width + 2 * _noteMargin;
     final h = textSize.height + 2 * _noteMargin;
     final col = columns[note.target]!;
     double left;
@@ -694,25 +776,31 @@ class _SequenceLayout {
         }
     }
     y += _boxMargin;
-    eventNodes.add(SceneGroup(
-      id: 'note',
-      role: SceneGroupRole.annotation,
-      semanticLabel: note.text,
-      children: [
-        SceneShape(
-          geometry: RectGeometry(Rect.fromLTWH(left, y, width, h)),
-          fill: Fill(theme.noteBkgColor),
-          stroke: Stroke(color: theme.noteBorderColor),
-        ),
-        SceneText(
-          text: text.text,
-          bounds: Rect.fromLTWH(left + (width - textSize.width) / 2,
-              y + _noteMargin, textSize.width, textSize.height),
-          style: baseStyle,
-          color: theme.noteTextColor,
-        ),
-      ],
-    ));
+    eventNodes.add(
+      SceneGroup(
+        id: 'note',
+        role: SceneGroupRole.annotation,
+        semanticLabel: note.text,
+        children: [
+          SceneShape(
+            geometry: RectGeometry(Rect.fromLTWH(left, y, width, h)),
+            fill: Fill(theme.noteBkgColor),
+            stroke: Stroke(color: theme.noteBorderColor),
+          ),
+          SceneText(
+            text: text.text,
+            bounds: Rect.fromLTWH(
+              left + (width - textSize.width) / 2,
+              y + _noteMargin,
+              textSize.width,
+              textSize.height,
+            ),
+            style: baseStyle,
+            color: theme.noteTextColor,
+          ),
+        ],
+      ),
+    );
     include(left, left + width);
     y += h + _boxMargin;
   }
@@ -725,17 +813,18 @@ class _SequenceLayout {
     }
     final inset = 10.0 + frame.depth * 6;
     final rect = Rect.fromLTRB(
-        frame.minX - inset, frame.startY, frame.maxX + inset, endY);
+      frame.minX - inset,
+      frame.startY,
+      frame.maxX + inset,
+      endY,
+    );
 
     if (frame.start.kind == SeqBlockKind.rect) {
-      final fill = Color.tryParse(frame.start.color ?? '') ??
-          const Color(0x11888888);
+      final fill =
+          Color.tryParse(frame.start.color ?? '') ?? const Color(0x11888888);
       rectBackgrounds.add((
         sourceOrder: frame.sourceOrder,
-        node: SceneShape(
-          geometry: RectGeometry(rect),
-          fill: Fill(fill),
-        ),
+        node: SceneShape(geometry: RectGeometry(rect), fill: Fill(fill)),
       ));
       return;
     }
@@ -754,23 +843,35 @@ class _SequenceLayout {
     final tabW = kwSize.width + 2 * _boxTextMargin + 8;
     final tabH = kwSize.height + 4;
 
-    frames.add(SceneGroup(
-      id: 'frame_$keyword',
-      role: SceneGroupRole.cluster,
-      children: [
-      SceneShape(
-        geometry: RectGeometry(rect),
-        // Upstream .loopLine: stroke-width 2, dash 2,2, labelBoxBorderColor.
-        stroke: Stroke(color: theme.labelBoxBorderColor, width: 2, dash: const [2, 2]),
+    frames.add(
+      SceneGroup(
+        id: 'frame_$keyword',
+        role: SceneGroupRole.cluster,
+        children: [
+          SceneShape(
+            geometry: RectGeometry(rect),
+            // Upstream .loopLine: stroke-width 2, dash 2,2, labelBoxBorderColor.
+            stroke: Stroke(
+              color: theme.labelBoxBorderColor,
+              width: 2,
+              dash: const [2, 2],
+            ),
+          ),
+          for (final (dy, _) in frame.dividers)
+            SceneShape(
+              geometry: PathGeometry([
+                MoveTo(Point(rect.left, dy)),
+                LineTo(Point(rect.right, dy)),
+              ]),
+              stroke: Stroke(
+                color: theme.labelBoxBorderColor,
+                width: 2,
+                dash: const [2, 2],
+              ),
+            ),
+        ],
       ),
-      for (final (dy, _) in frame.dividers)
-        SceneShape(
-          geometry: PathGeometry(
-              [MoveTo(Point(rect.left, dy)), LineTo(Point(rect.right, dy))]),
-          stroke: Stroke(color: theme.labelBoxBorderColor, width: 2, dash: const [2, 2]),
-        ),
-      ],
-    ));
+    );
     // Tab and labels paint above everything (activation bars would occlude
     // centered divider labels otherwise).
     final labelChildren = <SceneNode>[
@@ -790,8 +891,12 @@ class _SequenceLayout {
       ),
       SceneText(
         text: keyword,
-        bounds: Rect.fromLTWH(rect.left + _boxTextMargin, rect.top + 2,
-            kwSize.width, kwSize.height),
+        bounds: Rect.fromLTWH(
+          rect.left + _boxTextMargin,
+          rect.top + 2,
+          kwSize.width,
+          kwSize.height,
+        ),
         style: keywordStyle,
         color: theme.labelTextColor,
         align: TextAlignH.left,
@@ -805,35 +910,50 @@ class _SequenceLayout {
       final size = measurer.measure(titleText, baseStyle);
       const labelBoxWidth = 50.0;
       final cx = rect.left + labelBoxWidth / 2 + (rect.right - rect.left) / 2;
-      labelChildren.add(SceneText(
-        text: titleText,
-        bounds: Rect.fromLTWH(cx - size.width / 2,
-            rect.top + _boxMargin + _boxTextMargin, size.width, size.height),
-        style: baseStyle,
-        color: theme.loopTextColor,
-        align: TextAlignH.center,
-      ));
+      labelChildren.add(
+        SceneText(
+          text: titleText,
+          bounds: Rect.fromLTWH(
+            cx - size.width / 2,
+            rect.top + _boxMargin + _boxTextMargin,
+            size.width,
+            size.height,
+          ),
+          style: baseStyle,
+          color: theme.loopTextColor,
+          align: TextAlignH.center,
+        ),
+      );
     }
     for (final (dy, label) in frame.dividers) {
       if (label.isEmpty) continue;
       final size = measurer.measure('[$label]', baseStyle);
-      labelChildren.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromLTWH(rect.center.x - size.width / 2 - 3, dy + 2,
-                size.width + 6, size.height + 2),
+      labelChildren.add(
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromLTWH(
+              rect.center.x - size.width / 2 - 3,
+              dy + 2,
+              size.width + 6,
+              size.height + 2,
+            ),
             rx: 2,
-            ry: 2),
-        fill: Fill(theme.edgeLabelBackground),
-      ));
-      labelChildren
-          .add(_frameLabel('[$label]', Point(rect.center.x, dy + 3),
-              centered: true));
+            ry: 2,
+          ),
+          fill: Fill(theme.edgeLabelBackground),
+        ),
+      );
+      labelChildren.add(
+        _frameLabel('[$label]', Point(rect.center.x, dy + 3), centered: true),
+      );
     }
-    frameLabels.add(SceneGroup(
-      id: 'framelabel_$keyword',
-      role: SceneGroupRole.internal,
-      children: labelChildren,
-    ));
+    frameLabels.add(
+      SceneGroup(
+        id: 'framelabel_$keyword',
+        role: SceneGroupRole.internal,
+        children: labelChildren,
+      ),
+    );
   }
 
   SceneText _frameLabel(String text, Point topLeft, {bool centered = false}) {
@@ -841,8 +961,12 @@ class _SequenceLayout {
     final t = text.startsWith('[') ? text : '[$text]';
     return SceneText(
       text: t,
-      bounds: Rect.fromLTWH(centered ? topLeft.x - size.width / 2 : topLeft.x,
-          topLeft.y, size.width, size.height),
+      bounds: Rect.fromLTWH(
+        centered ? topLeft.x - size.width / 2 : topLeft.x,
+        topLeft.y,
+        size.width,
+        size.height,
+      ),
       style: baseStyle,
       color: theme.loopTextColor,
       align: centered ? TextAlignH.center : TextAlignH.left,

@@ -17,11 +17,8 @@ const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
 List<SceneNode> flatten(List<SceneNode> n) => [
-      for (final x in n) ...[
-        x,
-        if (x is SceneGroup) ...flatten(x.children),
-      ],
-    ];
+  for (final x in n) ...[x, if (x is SceneGroup) ...flatten(x.children)],
+];
 
 Iterable<String> texts(RenderScene s) =>
     flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
@@ -33,8 +30,10 @@ void main() {
       expect(detectDiagramType('radar-beta\n axis a,b,c'), DiagramType.radar);
       expect(detectDiagramType('treemap-beta\n "A": 1'), DiagramType.treemap);
       expect(detectDiagramType('kanban\n c[X]'), DiagramType.kanban);
-      expect(detectDiagramType('architecture-beta\n service a'),
-          DiagramType.architecture);
+      expect(
+        detectDiagramType('architecture-beta\n service a'),
+        DiagramType.architecture,
+      );
     });
   });
 
@@ -72,9 +71,9 @@ block-beta
     );
 
     Rect nodeRect(String id) {
-      final group = flatten(scene.nodes)
-          .whereType<SceneGroup>()
-          .firstWhere((node) => node.id == id);
+      final group = flatten(
+        scene.nodes,
+      ).whereType<SceneGroup>().firstWhere((node) => node.id == id);
       return (group.children.whereType<SceneShape>().first.geometry
               as RectGeometry)
           .rect;
@@ -82,9 +81,9 @@ block-beta
 
     final topLeft = nodeRect('A').left;
     final topRight = nodeRect('C').right;
-    final groupRect = (scene.nodes.whereType<SceneShape>().single.geometry
-            as RectGeometry)
-        .rect;
+    final groupRect =
+        (scene.nodes.whereType<SceneShape>().single.geometry as RectGeometry)
+            .rect;
     expect(groupRect.left, topLeft);
     expect(groupRect.right, topRight);
 
@@ -174,7 +173,8 @@ treemap-beta
     );
     final labels = {
       for (final text in scene.nodes.whereType<SceneText>())
-        if (const {'UI', 'State'}.contains(text.text)) text.text: text.bounds.center,
+        if (const {'UI', 'State'}.contains(text.text))
+          text.text: text.bounds.center,
     };
 
     expect(labels.keys, containsAll(['UI', 'State']));
@@ -205,15 +205,21 @@ kanban
         .where((shape) => shape.fill?.color.value == theme.background.value)
         .map((shape) => (shape.geometry as RectGeometry).rect)
         .toList();
-    final title = flatten(scene.nodes)
-        .whereType<SceneText>()
-        .singleWhere((text) => text.text == 'To Do');
+    final title = flatten(
+      scene.nodes,
+    ).whereType<SceneText>().singleWhere((text) => text.text == 'To Do');
 
-    expect(title.bounds.top, section.top,
-        reason: 'the title should sit inside the section header');
+    expect(
+      title.bounds.top,
+      section.top,
+      reason: 'the title should sit inside the section header',
+    );
     expect(cards.first.left - section.left, closeTo(7.5, 0.001));
-    expect(section.bottom - cards[1].bottom, closeTo(10, 0.001),
-        reason: 'the section should keep one padding unit below its last card');
+    expect(
+      section.bottom - cards[1].bottom,
+      closeTo(10, 0.001),
+      reason: 'the section should keep one padding unit below its last card',
+    );
   });
 
   test('architecture: groups, services, port edges', () {

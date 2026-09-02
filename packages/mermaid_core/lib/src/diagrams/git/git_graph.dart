@@ -100,7 +100,9 @@ GitGraph parseGitGraph(String source) {
 
   // Parses `key: value` / `key:value` attributes (id/type/tag) from the
   // remainder of a commit/merge line. `tag` may appear more than once.
-  ({String? id, GitCommitType type, List<String> tags}) parseAttrs(String rest) {
+  ({String? id, GitCommitType type, List<String> tags}) parseAttrs(
+    String rest,
+  ) {
     String? id;
     var type = GitCommitType.normal;
     final tags = <String>[];
@@ -137,9 +139,10 @@ GitGraph parseGitGraph(String source) {
     if (line.isEmpty) continue;
 
     if (!seenHeader) {
-      final m = RegExp(r'^gitGraph\b\s*(TB|BT|LR|RL)?\s*:?\s*(.*)$',
-              caseSensitive: false)
-          .firstMatch(line);
+      final m = RegExp(
+        r'^gitGraph\b\s*(TB|BT|LR|RL)?\s*:?\s*(.*)$',
+        caseSensitive: false,
+      ).firstMatch(line);
       if (m == null) {
         throw MermaidParseException('expected "gitGraph" header', line: i + 1);
       }
@@ -197,7 +200,9 @@ GitGraph parseGitGraph(String source) {
         final from = unquote(parts.first);
         if (!branchHead.containsKey(from)) {
           throw MermaidParseException(
-              'cannot merge unknown branch "$from"', line: i + 1);
+            'cannot merge unknown branch "$from"',
+            line: i + 1,
+          );
         }
         final attrs = parseAttrs(rest.substring(parts.first.length));
         final id = attrs.id ?? 'merge_${autoId++}';
@@ -284,16 +289,24 @@ RenderScene layoutGitGraph(
   const commitLabelSize = 10.0;
   const tagLabelSize = 10.0;
   final lr = graph.direction == GitDirection.leftRight;
-  final tb = graph.direction == GitDirection.topBottom ||
+  final tb =
+      graph.direction == GitDirection.topBottom ||
       graph.direction == GitDirection.bottomTop;
   final bt = graph.direction == GitDirection.bottomTop;
 
-  final commitLabelStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: commitLabelSize);
-  final tagLabelStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: tagLabelSize);
+  final commitLabelStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: commitLabelSize,
+  );
+  final tagLabelStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: tagLabelSize,
+  );
   final branchLabelStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: 12, fontWeight: 700);
+    fontFamily: theme.fontFamily,
+    fontSize: 12,
+    fontWeight: 700,
+  );
 
   // gitGraph palette (git0..git7) and the matching highlight / branch-label
   // colors come from the theme; the default-theme values equal upstream
@@ -305,8 +318,7 @@ RenderScene layoutGitGraph(
   final laneOf = <String, int>{
     for (var i = 0; i < graph.branchOrder.length; i++) graph.branchOrder[i]: i,
   };
-  Color branchColor(String b) =>
-      gitColors[(laneOf[b] ?? 0) % gitColors.length];
+  Color branchColor(String b) => gitColors[(laneOf[b] ?? 0) % gitColors.length];
   int branchIndex(String b) => (laneOf[b] ?? 0) % gitColors.length;
 
   // Lane spine coordinate (perpendicular to the time axis) for a branch.
@@ -334,8 +346,9 @@ RenderScene layoutGitGraph(
         final pt = timeOf[pid];
         if (pt != null && pt > parentMax) parentMax = pt;
       }
-      final fromParent =
-          parentMax.isFinite ? parentMax + commitStep : pos + layoutOffset;
+      final fromParent = parentMax.isFinite
+          ? parentMax + commitStep
+          : pos + layoutOffset;
       final cursor = pos + layoutOffset;
       t = math.max(fromParent, cursor);
     }
@@ -371,10 +384,12 @@ RenderScene layoutGitGraph(
     final hi = math.max(start, end);
     final p1 = lr ? Point(lo, spine - 2) : Point(spine, lo);
     final p2 = lr ? Point(hi, spine - 2) : Point(spine, hi);
-    nodes.add(SceneShape(
-      geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
-      stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
+        stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
+      ),
+    );
   }
 
   // Arrows: one for EVERY parent → child edge (including consecutive
@@ -400,15 +415,17 @@ RenderScene layoutGitGraph(
         lr: lr,
         branchColor: branchColor,
       );
-      nodes.add(_arrow(
-        from: from,
-        to: to,
-        color: color,
-        lr: lr,
-        bt: bt,
-        isMergeSecond: isMergeSecond,
-        sourceMatchesFirstParent: parent != null && pi == 0,
-      ));
+      nodes.add(
+        _arrow(
+          from: from,
+          to: to,
+          color: color,
+          lr: lr,
+          bt: bt,
+          isMergeSecond: isMergeSecond,
+          sourceMatchesFirstParent: parent != null && pi == 0,
+        ),
+      );
     }
   }
 
@@ -422,69 +439,89 @@ RenderScene layoutGitGraph(
       case GitCommitType.highlight:
         // Outer rect 20×20 filled with gitInv{i}; inner rect 12×12 filled
         // with primaryColor.
-        children.add(SceneShape(
-          geometry: RectGeometry(Rect.fromCenter(center, 20, 20)),
-          fill: Fill(gitInvColors[idx]),
-          stroke: Stroke(color: gitInvColors[idx], width: 1),
-        ));
-        children.add(SceneShape(
-          geometry: RectGeometry(Rect.fromCenter(center, 12, 12)),
-          fill: Fill(theme.primaryColor),
-          stroke: Stroke(color: theme.primaryColor, width: 1),
-        ));
+        children.add(
+          SceneShape(
+            geometry: RectGeometry(Rect.fromCenter(center, 20, 20)),
+            fill: Fill(gitInvColors[idx]),
+            stroke: Stroke(color: gitInvColors[idx], width: 1),
+          ),
+        );
+        children.add(
+          SceneShape(
+            geometry: RectGeometry(Rect.fromCenter(center, 12, 12)),
+            fill: Fill(theme.primaryColor),
+            stroke: Stroke(color: theme.primaryColor, width: 1),
+          ),
+        );
       case GitCommitType.reverse:
-        children.add(SceneShape(
-          geometry: CircleGeometry(center, commitR),
-          fill: Fill(color),
-          stroke: Stroke(color: color, width: 1),
-        ));
+        children.add(
+          SceneShape(
+            geometry: CircleGeometry(center, commitR),
+            fill: Fill(color),
+            stroke: Stroke(color: color, width: 1),
+          ),
+        );
         // Cross marker: arm 5, stroke-width 3, primaryColor.
         const arm = 5.0;
-        children.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(center.x - arm, center.y - arm)),
-            LineTo(Point(center.x + arm, center.y + arm)),
-            MoveTo(Point(center.x - arm, center.y + arm)),
-            LineTo(Point(center.x + arm, center.y - arm)),
-          ]),
-          stroke: Stroke(color: theme.primaryColor, width: 3),
-        ));
+        children.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(center.x - arm, center.y - arm)),
+              LineTo(Point(center.x + arm, center.y + arm)),
+              MoveTo(Point(center.x - arm, center.y + arm)),
+              LineTo(Point(center.x + arm, center.y - arm)),
+            ]),
+            stroke: Stroke(color: theme.primaryColor, width: 3),
+          ),
+        );
       case GitCommitType.normal:
         if (c.isCherryPick) {
           // Cherry glyph: r10 circle + two small white circles (r2.75 at
           // x±3, y+2) + two white stems up to (x, y−5).
-          children.add(SceneShape(
-            geometry: CircleGeometry(center, commitR),
-            fill: Fill(color),
-            stroke: Stroke(color: color, width: 1),
-          ));
+          children.add(
+            SceneShape(
+              geometry: CircleGeometry(center, commitR),
+              fill: Fill(color),
+              stroke: Stroke(color: color, width: 1),
+            ),
+          );
           for (final dx in const [-3.0, 3.0]) {
-            children.add(SceneShape(
-              geometry:
-                  CircleGeometry(Point(center.x + dx, center.y + 2), 2.75),
-              fill: const Fill(Color(0xffffffff)),
-            ));
-            children.add(SceneShape(
-              geometry: PathGeometry([
-                MoveTo(Point(center.x + dx, center.y + 1)),
-                LineTo(Point(center.x, center.y - 5)),
-              ]),
-              stroke: const Stroke(color: Color(0xffffffff), width: 1),
-            ));
+            children.add(
+              SceneShape(
+                geometry: CircleGeometry(
+                  Point(center.x + dx, center.y + 2),
+                  2.75,
+                ),
+                fill: const Fill(Color(0xffffffff)),
+              ),
+            );
+            children.add(
+              SceneShape(
+                geometry: PathGeometry([
+                  MoveTo(Point(center.x + dx, center.y + 1)),
+                  LineTo(Point(center.x, center.y - 5)),
+                ]),
+                stroke: const Stroke(color: Color(0xffffffff), width: 1),
+              ),
+            );
           }
         } else {
-          children.add(SceneShape(
-            geometry: CircleGeometry(center, commitR),
-            fill: Fill(color),
-            stroke: Stroke(color: color, width: 1),
-          ));
+          children.add(
+            SceneShape(
+              geometry: CircleGeometry(center, commitR),
+              fill: Fill(color),
+              stroke: Stroke(color: color, width: 1),
+            ),
+          );
           if (c.isMerge) {
             // Inner circle r6 filled with primaryColor.
-            children.add(SceneShape(
-              geometry: CircleGeometry(center, 6),
-              fill: Fill(theme.primaryColor),
-              stroke: Stroke(color: theme.primaryColor, width: 1),
-            ));
+            children.add(
+              SceneShape(
+                geometry: CircleGeometry(center, 6),
+                fill: Fill(theme.primaryColor),
+                stroke: Stroke(color: theme.primaryColor, width: 1),
+              ),
+            );
           }
         }
     }
@@ -494,26 +531,34 @@ RenderScene layoutGitGraph(
     // commitLabelColor on a 50%-opacity commitLabelBackground rect (upstream
     // `.commit-label-bkg { opacity: 0.5 }`). Rotated −45° for LR
     // (rotateCommitLabel defaults true).
-    final showLabel =
-        !c.isCherryPick && (c.customId || !c.isMerge);
+    final showLabel = !c.isCherryPick && (c.customId || !c.isMerge);
     if (showLabel) {
       final size = measurer.measure(c.id, commitLabelStyle, maxWidth: 200);
       final lblCenter = lr
           ? Point(center.x, center.y + commitR + 9 + size.height / 2)
           : Point(center.x - commitR - 8 - size.width / 2, center.y);
       const py = 2.0;
-      children.add(SceneShape(
-        geometry: RectGeometry(Rect.fromCenter(
-            lblCenter, size.width + 2 * py, size.height + 2 * py)),
-        fill: Fill(theme.commitLabelBackground.withOpacity(0.5)),
-      ));
-      children.add(SceneText(
-        text: c.id,
-        bounds: Rect.fromCenter(lblCenter, size.width, size.height),
-        style: commitLabelStyle,
-        color: theme.commitLabelColor,
-        rotation: lr ? -45 : 0,
-      ));
+      children.add(
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromCenter(
+              lblCenter,
+              size.width + 2 * py,
+              size.height + 2 * py,
+            ),
+          ),
+          fill: Fill(theme.commitLabelBackground.withOpacity(0.5)),
+        ),
+      );
+      children.add(
+        SceneText(
+          text: c.id,
+          bounds: Rect.fromCenter(lblCenter, size.width, size.height),
+          style: commitLabelStyle,
+          color: theme.commitLabelColor,
+          rotation: lr ? -45 : 0,
+        ),
+      );
     }
 
     // Tags: a stack of flag labels offset by 20px each, placed above (LR) /
@@ -532,55 +577,67 @@ RenderScene layoutGitGraph(
           final cx = center.x;
           final notchX = cx - w / 2 - px - 6; // pole side
           final h2 = h / 2;
-          children.add(SceneShape(
-            geometry: PolygonGeometry([
-              Point(notchX, cy + py),
-              Point(notchX, cy - py),
-              Point(cx - w / 2 - px, cy - h2 - py),
-              Point(cx + w / 2 + px, cy - h2 - py),
-              Point(cx + w / 2 + px, cy + h2 + py),
-              Point(cx - w / 2 - px, cy + h2 + py),
-            ]),
-            fill: Fill(theme.tagLabelBackground),
-            stroke: Stroke(color: theme.tagLabelBorder, width: 1),
-          ));
-          children.add(SceneShape(
-            geometry: CircleGeometry(Point(notchX + px / 2, cy), 1.5),
-            fill: Fill(theme.textColor),
-          ));
-          children.add(SceneText(
-            text: tag,
-            bounds: Rect.fromCenter(Point(cx, cy), w, h),
-            style: tagLabelStyle,
-            color: theme.tagLabelColor,
-          ));
+          children.add(
+            SceneShape(
+              geometry: PolygonGeometry([
+                Point(notchX, cy + py),
+                Point(notchX, cy - py),
+                Point(cx - w / 2 - px, cy - h2 - py),
+                Point(cx + w / 2 + px, cy - h2 - py),
+                Point(cx + w / 2 + px, cy + h2 + py),
+                Point(cx - w / 2 - px, cy + h2 + py),
+              ]),
+              fill: Fill(theme.tagLabelBackground),
+              stroke: Stroke(color: theme.tagLabelBorder, width: 1),
+            ),
+          );
+          children.add(
+            SceneShape(
+              geometry: CircleGeometry(Point(notchX + px / 2, cy), 1.5),
+              fill: Fill(theme.textColor),
+            ),
+          );
+          children.add(
+            SceneText(
+              text: tag,
+              bounds: Rect.fromCenter(Point(cx, cy), w, h),
+              style: tagLabelStyle,
+              color: theme.tagLabelColor,
+            ),
+          );
         } else {
           final cx = center.x - commitR - 10 - tagOffset;
           final cy = center.y;
           final w2 = w / 2 + px;
           final h2 = h / 2 + py;
-          children.add(SceneShape(
-            geometry: PolygonGeometry([
-              Point(cx + w2 + 6, cy - py),
-              Point(cx + w2 + 6, cy + py),
-              Point(cx + w2, cy + h2),
-              Point(cx - w2, cy + h2),
-              Point(cx - w2, cy - h2),
-              Point(cx + w2, cy - h2),
-            ]),
-            fill: Fill(theme.tagLabelBackground),
-            stroke: Stroke(color: theme.tagLabelBorder, width: 1),
-          ));
-          children.add(SceneShape(
-            geometry: CircleGeometry(Point(cx + w2 + 5, cy), 1.5),
-            fill: Fill(theme.textColor),
-          ));
-          children.add(SceneText(
-            text: tag,
-            bounds: Rect.fromCenter(Point(cx, cy), w, h),
-            style: tagLabelStyle,
-            color: theme.tagLabelColor,
-          ));
+          children.add(
+            SceneShape(
+              geometry: PolygonGeometry([
+                Point(cx + w2 + 6, cy - py),
+                Point(cx + w2 + 6, cy + py),
+                Point(cx + w2, cy + h2),
+                Point(cx - w2, cy + h2),
+                Point(cx - w2, cy - h2),
+                Point(cx + w2, cy - h2),
+              ]),
+              fill: Fill(theme.tagLabelBackground),
+              stroke: Stroke(color: theme.tagLabelBorder, width: 1),
+            ),
+          );
+          children.add(
+            SceneShape(
+              geometry: CircleGeometry(Point(cx + w2 + 5, cy), 1.5),
+              fill: Fill(theme.textColor),
+            ),
+          );
+          children.add(
+            SceneText(
+              text: tag,
+              bounds: Rect.fromCenter(Point(cx, cy), w, h),
+              style: tagLabelStyle,
+              color: theme.tagLabelColor,
+            ),
+          );
         }
         tagOffset += 20;
       }
@@ -606,19 +663,24 @@ RenderScene layoutGitGraph(
     } else {
       center = Point(spine, timeToCoord(tb ? 0 : defaultPos) - 4);
     }
-    nodes.add(SceneShape(
-      geometry: RectGeometry(
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(
           Rect.fromCenter(center, size.width + 14, size.height + 4),
           rx: 4,
-          ry: 4),
-      fill: Fill(color),
-    ));
-    nodes.add(SceneText(
-      text: b,
-      bounds: Rect.fromCenter(center, size.width, size.height),
-      style: branchLabelStyle,
-      color: gitBranchLabelColors[idx],
-    ));
+          ry: 4,
+        ),
+        fill: Fill(color),
+      ),
+    );
+    nodes.add(
+      SceneText(
+        text: b,
+        bounds: Rect.fromCenter(center, size.width, size.height),
+        style: branchLabelStyle,
+        color: gitBranchLabelColors[idx],
+      ),
+    );
   }
 
   final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 120, 80);

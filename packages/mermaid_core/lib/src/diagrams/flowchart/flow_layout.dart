@@ -67,7 +67,10 @@ class _WrappedLabel {
 }
 
 _WrappedLabel _wrapLabel(
-    String text, TextStyleSpec style, TextMeasurer measurer) {
+  String text,
+  TextStyleSpec style,
+  TextMeasurer measurer,
+) {
   final lines = <String>[];
   for (final hardLine in text.split('\n')) {
     lines.addAll(_wrapLabelLine(hardLine, style, measurer));
@@ -77,7 +80,10 @@ _WrappedLabel _wrapLabel(
 }
 
 List<String> _wrapLabelLine(
-    String line, TextStyleSpec style, TextMeasurer measurer) {
+  String line,
+  TextStyleSpec style,
+  TextMeasurer measurer,
+) {
   if (measurer.measure(line, style).width <= _wrappingWidth) return [line];
 
   var remaining = line.runes.map(String.fromCharCode).toList();
@@ -161,9 +167,14 @@ RenderScene layoutFlowchart(
     fontSize: theme.fontSize,
   );
   final fragment = _layoutGraph(
-      graph, measurer, theme, baseStyle, engine,
-      elkOptions: elkOptions ?? const elk.ElkLayoutOptions(),
-      originalLinkIndices: List<int>.generate(graph.edges.length, (i) => i));
+    graph,
+    measurer,
+    theme,
+    baseStyle,
+    engine,
+    elkOptions: elkOptions ?? const elk.ElkLayoutOptions(),
+    originalLinkIndices: List<int>.generate(graph.edges.length, (i) => i),
+  );
   var sceneNodes = fragment.nodes;
   var bounds = fragment.bounds;
 
@@ -172,8 +183,11 @@ RenderScene layoutFlowchart(
   if (title != null && title.isNotEmpty) {
     // `.flowchartTitleText`: fixed 18px, normal weight, fill = textColor.
     final titleStyle = baseStyle.copyWith(fontSize: 18, fontWeight: 400);
-    final titleSize =
-        measurer.measure(title, titleStyle, maxWidth: _wrappingWidth);
+    final titleSize = measurer.measure(
+      title,
+      titleStyle,
+      maxWidth: _wrappingWidth,
+    );
     final titleNode = SceneText(
       text: title,
       bounds: Rect.fromLTWH(
@@ -298,13 +312,17 @@ _Fragment _layoutGraph(
     for (final d in descIdx) {
       remap[d] = subSgs.length;
       final orig = sgs[d];
-      subSgs.add(FlowSubgraph(
-        id: orig.id,
-        title: orig.title,
-        nodeIds: orig.nodeIds,
-        direction: orig.direction,
-        parentIndex: orig.parentIndex == root ? null : remap[orig.parentIndex!],
-      ));
+      subSgs.add(
+        FlowSubgraph(
+          id: orig.id,
+          title: orig.title,
+          nodeIds: orig.nodeIds,
+          direction: orig.direction,
+          parentIndex: orig.parentIndex == root
+              ? null
+              : remap[orig.parentIndex!],
+        ),
+      );
     }
     final subEdges = <FlowEdge>[];
     final subLinkIndices = <int>[];
@@ -338,15 +356,20 @@ _Fragment _layoutGraph(
     );
     final titleSize = sgs[root].title.isEmpty
         ? Size.zero
-        : measurer.measure(sgs[root].title, baseStyle,
-            maxWidth: _wrappingWidth);
+        : measurer.measure(
+            sgs[root].title,
+            baseStyle,
+            maxWidth: _wrappingWidth,
+          );
     final cluster = _IsolatedCluster(
       subgraph: sgs[root],
       fragment: fragment,
       titleSize: titleSize,
-      width: math.max(fragment.bounds.width, titleSize.width) +
+      width:
+          math.max(fragment.bounds.width, titleSize.width) +
           2 * _clusterPadding,
-      height: fragment.bounds.height +
+      height:
+          fragment.bounds.height +
           2 * _clusterPadding +
           (titleSize.height > 0 ? titleSize.height + 4 : 0),
     );
@@ -359,8 +382,7 @@ _Fragment _layoutGraph(
       absorbedBy.containsKey(id) ? sgs[absorbedBy[id]!].id : id;
 
   bool isAbsorbedEdge(FlowEdge e) =>
-      absorbedBy.containsKey(e.from) &&
-      absorbedBy[e.from] == absorbedBy[e.to];
+      absorbedBy.containsKey(e.from) && absorbedBy[e.from] == absorbedBy[e.to];
 
   final subgraphIndexById = <String, int>{
     for (var i = 0; i < sgs.length; i++) sgs[i].id: i,
@@ -403,8 +425,10 @@ _Fragment _layoutGraph(
     // An icon reserves a square area above the label; inflate the sizing box.
     final hasIcon = node.icon != null && lookupIcon(node.icon!) != null;
     final boxSize = hasIcon
-        ? Size(math.max(textSize.width, _iconSize + 8),
-            textSize.height + _iconSize + _iconGap)
+        ? Size(
+            math.max(textSize.width, _iconSize + 8),
+            textSize.height + _iconSize + _iconGap,
+          )
         : textSize;
     placed[node.id] = _PlacedNode(
       node: node,
@@ -421,7 +445,10 @@ _Fragment _layoutGraph(
     placed[id] = _PlacedNode(
       node: FlowNode(id: id, label: cluster.subgraph.title),
       style: _resolveNodeStyle(
-          FlowNode(id: id, label: cluster.subgraph.title), graph, theme),
+        FlowNode(id: id, label: cluster.subgraph.title),
+        graph,
+        theme,
+      ),
       labelSize: Size.zero,
       shape: _RectShape(cluster.width, cluster.height),
     );
@@ -438,7 +465,11 @@ _Fragment _layoutGraph(
   }
   // Synthetic cluster nodes nest under their nearest surviving ancestor.
   for (final entry in isolatedClusters.entries) {
-    for (var p = sgs[entry.key].parentIndex; p != null; p = sgs[p].parentIndex) {
+    for (
+      var p = sgs[entry.key].parentIndex;
+      p != null;
+      p = sgs[p].parentIndex
+    ) {
       if (!removedSubgraphs.contains(p)) {
         parentOf[entry.value.subgraph.id] = sgs[p].id;
         break;
@@ -460,12 +491,14 @@ _Fragment _layoutGraph(
     g.addNode(dagre.DagreNode(sgs[i].id, parent: p != null ? sgs[p].id : null));
   }
   for (final p in placed.values) {
-    g.addNode(dagre.DagreNode(
-      p.node.id,
-      width: p.shape.width,
-      height: p.shape.height,
-      parent: parentOf[p.node.id],
-    ));
+    g.addNode(
+      dagre.DagreNode(
+        p.node.id,
+        width: p.shape.width,
+        height: p.shape.height,
+        parent: parentOf[p.node.id],
+      ),
+    );
   }
   // Dagre cannot target a compound cluster directly; edges to a (non-
   // isolated) subgraph id are routed to a representative member node and the
@@ -511,8 +544,11 @@ _Fragment _layoutGraph(
         edgeMath[i] = ml;
         labelSize = ml.size;
       } else {
-        labelSize =
-            measurer.measure(label, baseStyle, maxWidth: _wrappingWidth);
+        labelSize = measurer.measure(
+          label,
+          baseStyle,
+          maxWidth: _wrappingWidth,
+        );
       }
       edgeLabelSizes[i] = labelSize;
     }
@@ -521,15 +557,17 @@ _Fragment _layoutGraph(
     // Self-loops are routed manually after layout (dagre would thread them
     // through a degenerate dummy chain).
     if (from == to && clusterFrom == null && clusterTo == null) continue;
-    g.addEdge(dagre.DagreEdge(
-      from,
-      to,
-      id: 'e$i',
-      minLen: e.minLen.toDouble(),
-      width: labelSize?.width ?? 0,
-      height: labelSize?.height ?? 0,
-      labelPos: dagre.LabelPosition.center,
-    ));
+    g.addEdge(
+      dagre.DagreEdge(
+        from,
+        to,
+        id: 'e$i',
+        minLen: e.minLen.toDouble(),
+        width: labelSize?.width ?? 0,
+        height: labelSize?.height ?? 0,
+        labelPos: dagre.LabelPosition.center,
+      ),
+    );
   }
 
   // --- 4. Run layout. -------------------------------------------------------
@@ -549,10 +587,12 @@ _Fragment _layoutGraph(
         sgs[i].id: measurer.measure(sgs[i].title, clusterTitleStyleForElk),
   };
   if (useElk) {
-    elkResult = layoutWithElk(g,
-        direction: graph.direction,
-        options: elkOptions,
-        clusterLabels: clusterLabels);
+    elkResult = layoutWithElk(
+      g,
+      direction: graph.direction,
+      options: elkOptions,
+      clusterLabels: clusterLabels,
+    );
     for (final p in placed.values) {
       final c = elkResult.center(p.node.id);
       if (c != null) p.center = c;
@@ -580,16 +620,16 @@ _Fragment _layoutGraph(
   if (useTidyTree) {
     final ids = [
       for (final p in placed.values)
-        if (!syntheticIds.contains(p.node.id)) p.node.id
+        if (!syntheticIds.contains(p.node.id)) p.node.id,
     ];
     final sizes = {
       for (final p in placed.values)
-        p.node.id: Size(p.shape.width, p.shape.height)
+        p.node.id: Size(p.shape.width, p.shape.height),
     };
     final tEdges = [
       for (final e in graph.edges)
         if (placed.containsKey(e.from) && placed.containsKey(e.to))
-          (e.from, e.to)
+          (e.from, e.to),
     ];
     final flow = switch (graph.direction) {
       FlowDirection.bt => TreeFlow.bottomTop,
@@ -597,8 +637,14 @@ _Fragment _layoutGraph(
       FlowDirection.rl => TreeFlow.rightLeft,
       _ => TreeFlow.topBottom,
     };
-    final centers = tidyTreeLayout(ids, sizes, tEdges,
-        flow: flow, siblingGap: _nodeSpacing, levelGap: _rankSpacing);
+    final centers = tidyTreeLayout(
+      ids,
+      sizes,
+      tEdges,
+      flow: flow,
+      siblingGap: _nodeSpacing,
+      levelGap: _rankSpacing,
+    );
     centers.forEach((id, c) => placed[id]?.center = c);
   }
 
@@ -629,8 +675,7 @@ _Fragment _layoutGraph(
       final sg = sgs[i];
       final contentTops = <double>[
         for (final p in placed.values)
-          if (parentOf[p.node.id] == sg.id)
-            p.center.y - p.shape.height / 2,
+          if (parentOf[p.node.id] == sg.id) p.center.y - p.shape.height / 2,
         for (var child = 0; child < sgs.length; child++)
           if (!removedSubgraphs.contains(child) &&
               sgs[child].parentIndex == i &&
@@ -638,7 +683,8 @@ _Fragment _layoutGraph(
             visibleClusterTops[sgs[child].id]!,
       ];
       if (contentTops.isNotEmpty) {
-        visibleClusterTops[sg.id] = contentTops.reduce(math.min) -
+        visibleClusterTops[sg.id] =
+            contentTops.reduce(math.min) -
             _clusterPadding -
             clusterTitleSizes[sg.id]!.height;
       }
@@ -676,34 +722,37 @@ _Fragment _layoutGraph(
     // HTML labels use line-height 1.5 upstream. Center Flutter's shorter
     // measured line box inside that visual line height without growing the
     // cluster's layout band.
-    final titleTop = (useElk ? pos.top + _clusterPadding : rect.top) +
+    final titleTop =
+        (useElk ? pos.top + _clusterPadding : rect.top) +
         (clusterTitleStyle.fontSize * 1.5 - titleSize.height) / 2;
     clusterRects[sg.id] = rect;
-    clusterGroups.add(SceneGroup(
-      id: sg.id,
-      role: SceneGroupRole.cluster,
-      semanticLabel: sg.title.isEmpty ? null : sg.title,
-      children: [
-        SceneShape(
-          geometry: RectGeometry(rect),
-          fill: Fill(theme.clusterBkg),
-          stroke: Stroke(color: theme.clusterBorder),
-        ),
-        if (sg.title.isNotEmpty)
-          SceneText(
-            // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
-            text: sg.title,
-            bounds: Rect.fromLTWH(
-              rect.center.x - titleSize.width / 2,
-              titleTop,
-              titleSize.width,
-              titleSize.height,
-            ),
-            style: clusterTitleStyle,
-            color: theme.titleColor,
+    clusterGroups.add(
+      SceneGroup(
+        id: sg.id,
+        role: SceneGroupRole.cluster,
+        semanticLabel: sg.title.isEmpty ? null : sg.title,
+        children: [
+          SceneShape(
+            geometry: RectGeometry(rect),
+            fill: Fill(theme.clusterBkg),
+            stroke: Stroke(color: theme.clusterBorder),
           ),
-      ],
-    ));
+          if (sg.title.isNotEmpty)
+            SceneText(
+              // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
+              text: sg.title,
+              bounds: Rect.fromLTWH(
+                rect.center.x - titleSize.width / 2,
+                titleTop,
+                titleSize.width,
+                titleSize.height,
+              ),
+              style: clusterTitleStyle,
+              color: theme.titleColor,
+            ),
+        ],
+      ),
+    );
   }
 
   // Isolated-direction clusters: chrome plus the recursively laid-out
@@ -734,19 +783,24 @@ _Fragment _layoutGraph(
         ),
     ];
     final dx = rect.left + _clusterPadding - cluster.fragment.bounds.left;
-    final dy = rect.top +
+    final dy =
+        rect.top +
         _clusterPadding +
         cluster.titleBand -
         cluster.fragment.bounds.top;
-    children.addAll(
-        [for (final n in cluster.fragment.nodes) _translateNode(n, dx, dy)]);
-    clusterGroups.add(SceneGroup(
-      id: cluster.subgraph.id,
-      role: SceneGroupRole.cluster,
-      semanticLabel:
-          cluster.subgraph.title.isEmpty ? null : cluster.subgraph.title,
-      children: children,
-    ));
+    children.addAll([
+      for (final n in cluster.fragment.nodes) _translateNode(n, dx, dy),
+    ]);
+    clusterGroups.add(
+      SceneGroup(
+        id: cluster.subgraph.id,
+        role: SceneGroupRole.cluster,
+        semanticLabel: cluster.subgraph.title.isEmpty
+            ? null
+            : cluster.subgraph.title,
+        children: children,
+      ),
+    );
   }
 
   // Edges and their labels.
@@ -759,8 +813,7 @@ _Fragment _layoutGraph(
   // Group edges by unordered endpoint pair so straight-line engines (tidy-tree)
   // can fan out parallel/antiparallel edges instead of overlapping them into a
   // single line with arrowheads at both ends.
-  String pairKey(String a, String b) =>
-      a.compareTo(b) <= 0 ? '$a $b' : '$b $a';
+  String pairKey(String a, String b) => a.compareTo(b) <= 0 ? '$a $b' : '$b $a';
   final pairEdges = <String, List<int>>{};
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
@@ -780,12 +833,14 @@ _Fragment _layoutGraph(
     if (e.stroke == EdgeStroke.invisible) {
       // Keep an (empty) group so the edge still participates in spacing and
       // hit-testing structure, but paint nothing.
-      edgeGroups.add(SceneGroup(
-        id: groupId,
-        role: SceneGroupRole.edge,
-        edge: metadata,
-        children: const [],
-      ));
+      edgeGroups.add(
+        SceneGroup(
+          id: groupId,
+          role: SceneGroupRole.edge,
+          edge: metadata,
+          children: const [],
+        ),
+      );
       continue;
     }
     final (fromId, clusterFrom) = resolveEndpoint(e.from);
@@ -802,19 +857,35 @@ _Fragment _layoutGraph(
       final loopIndex = selfLoopCount[fromId] ?? 0;
       selfLoopCount[fromId] = loopIndex + 1;
       final (loopNodes, labelCenter) = _selfLoop(
-          source, e, style, loopIndex, edgeLabelSizes[i]);
-      edgeGroups.add(SceneGroup(
-        id: groupId,
-        role: SceneGroupRole.edge,
-        semanticLabel: e.label,
-        edge: metadata,
-        children: loopNodes,
-      ));
+        source,
+        e,
+        style,
+        loopIndex,
+        edgeLabelSizes[i],
+      );
+      edgeGroups.add(
+        SceneGroup(
+          id: groupId,
+          role: SceneGroupRole.edge,
+          semanticLabel: e.label,
+          edge: metadata,
+          children: loopNodes,
+        ),
+      );
       final labelSize = edgeLabelSizes[i];
       if (labelSize != null) {
-        edgeLabelGroups.add(_edgeLabelGroup(
-            e, i, linkIndex, labelCenter, labelSize, baseStyle, theme,
-            math: edgeMath[i]));
+        edgeLabelGroups.add(
+          _edgeLabelGroup(
+            e,
+            i,
+            linkIndex,
+            labelCenter,
+            labelSize,
+            baseStyle,
+            theme,
+            math: edgeMath[i],
+          ),
+        );
       }
       continue;
     }
@@ -855,8 +926,10 @@ _Fragment _layoutGraph(
               ? _direction(refFrom, refTo)
               : _direction(source.center, target.center);
           final perp = Point(-dir.y, dir.x);
-          final mid = Point((source.center.x + target.center.x) / 2,
-              (source.center.y + target.center.y) / 2);
+          final mid = Point(
+            (source.center.x + target.center.x) / 2,
+            (source.center.y + target.center.y) / 2,
+          );
           points = [source.center, mid + perp * (spread * 28.0), target.center];
         }
       }
@@ -867,16 +940,23 @@ _Fragment _layoutGraph(
       points = _dropInsideRect(points, clusterRects[clusterTo]!, fromEnd: true);
     }
     if (clusterFrom != null) {
-      points =
-          _dropInsideRect(points, clusterRects[clusterFrom]!, fromEnd: false);
+      points = _dropInsideRect(
+        points,
+        clusterRects[clusterFrom]!,
+        fromEnd: false,
+      );
     }
     // Dagre sizes a compound node around its members, while the painted
     // cluster grows upward to make room for its title. Move the final bend
     // outside that visible rect when an edge enters a member from outside;
     // otherwise the diagonal segment cuts through the yellow title band.
     if (!useElk && clusterTo == null) {
-      final enteredCluster =
-          _enteredTargetCluster(fromId, toId, parentOf, clusterRects);
+      final enteredCluster = _enteredTargetCluster(
+        fromId,
+        toId,
+        parentOf,
+        clusterRects,
+      );
       if (enteredCluster != null) {
         final adjusted = _bendBeforeCluster(
           points,
@@ -892,14 +972,17 @@ _Fragment _layoutGraph(
     // a diamond's slanted edge and bends the segment); dagre's curved edges
     // keep the centre-based clip.
     final next0 = points.length > 1 ? points[1] : target.center;
-    final prevN =
-        points.length > 1 ? points[points.length - 2] : source.center;
+    final prevN = points.length > 1 ? points[points.length - 2] : source.center;
     points[0] = useElk
         ? _clipPerpendicular(source.shape, source.center, points[0], next0)
         : source.shape.intersect(source.center, next0);
     points[points.length - 1] = useElk
         ? _clipPerpendicular(
-            target.shape, target.center, points[points.length - 1], prevN)
+            target.shape,
+            target.center,
+            points[points.length - 1],
+            prevN,
+          )
         : target.shape.intersect(target.center, prevN);
 
     final children = <SceneNode>[];
@@ -908,8 +991,7 @@ _Fragment _layoutGraph(
     final endTip = points.last;
     final endDir = _direction(points[points.length - 2], endTip);
     if (e.headTo != ArrowHead.none) {
-      points[points.length - 1] =
-          endTip - endDir * _markerShorten(e.headTo);
+      points[points.length - 1] = endTip - endDir * _markerShorten(e.headTo);
     }
     final startTip = points.first;
     final startDir = _direction(points[1], startTip);
@@ -931,28 +1013,42 @@ _Fragment _layoutGraph(
       // Manhattan route); other engines use the edge's own interpolation.
       _edgeCurve(points, useElk ? 'linear' : e.interpolate),
     );
-    children.add(SceneShape(
-      geometry: pathGeometry,
-      stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
-      paintRole: ScenePaintRole.edgeStroke,
-    ));
+    children.add(
+      SceneShape(
+        geometry: pathGeometry,
+        stroke: Stroke(
+          color: style.color,
+          width: style.width,
+          dash: style.dash,
+        ),
+        paintRole: ScenePaintRole.edgeStroke,
+      ),
+    );
     if (e.headTo != ArrowHead.none) {
-      children.addAll(_withPaintRole(
+      children.addAll(
+        _withPaintRole(
           _marker(e.headTo, endTip, endDir, style.markerColor),
-          ScenePaintRole.edgeMarker));
+          ScenePaintRole.edgeMarker,
+        ),
+      );
     }
     if (e.headFrom != ArrowHead.none) {
-      children.addAll(_withPaintRole(
+      children.addAll(
+        _withPaintRole(
           _marker(e.headFrom, startTip, startDir, style.markerColor),
-          ScenePaintRole.edgeMarker));
+          ScenePaintRole.edgeMarker,
+        ),
+      );
     }
-    edgeGroups.add(SceneGroup(
-      id: groupId,
-      role: SceneGroupRole.edge,
-      semanticLabel: e.label,
-      edge: metadata,
-      children: children,
-    ));
+    edgeGroups.add(
+      SceneGroup(
+        id: groupId,
+        role: SceneGroupRole.edge,
+        semanticLabel: e.label,
+        edge: metadata,
+        children: children,
+      ),
+    );
 
     final labelSize = edgeLabelSizes[i];
     if (labelSize != null) {
@@ -962,10 +1058,23 @@ _Fragment _layoutGraph(
       // far from the visible midpoint.
       final anchor = _pathArcMidpoint(pathGeometry);
       final labelCenter = _nudgeEdgeLabel(
-          anchor.point, anchor.tangent, labelSize, edgeLabelObstacles);
-      edgeLabelGroups.add(_edgeLabelGroup(
-          e, i, linkIndex, labelCenter, labelSize, baseStyle, theme,
-          math: edgeMath[i]));
+        anchor.point,
+        anchor.tangent,
+        labelSize,
+        edgeLabelObstacles,
+      );
+      edgeLabelGroups.add(
+        _edgeLabelGroup(
+          e,
+          i,
+          linkIndex,
+          labelCenter,
+          labelSize,
+          baseStyle,
+          theme,
+          math: edgeMath[i],
+        ),
+      );
     }
   }
 
@@ -974,67 +1083,90 @@ _Fragment _layoutGraph(
     if (syntheticIds.contains(p.node.id)) continue;
     final children = <SceneNode>[
       ..._withPaintRole(
-          p.shape.build(p.center, p.style), ScenePaintRole.nodeBody),
+        p.shape.build(p.center, p.style),
+        ScenePaintRole.nodeBody,
+      ),
     ];
     if (p.math != null) {
       // Math label: paint glyphs/rules centered in the node.
       final lc = p.shape.labelCenter(p.center);
       final origin = Point(
-          lc.x - p.math!.size.width / 2, lc.y - p.math!.size.height / 2);
-      children.addAll(_withPaintRole(
-          p.math!.render(origin), ScenePaintRole.nodeLabel));
+        lc.x - p.math!.size.width / 2,
+        lc.y - p.math!.size.height / 2,
+      );
+      children.addAll(
+        _withPaintRole(p.math!.render(origin), ScenePaintRole.nodeLabel),
+      );
     } else if (p.richLabel != null) {
-      children.addAll(_withPaintRole(
-          p.richLabel!.render(
-            p.shape.labelCenter(p.center),
-            p.style.textColor,
-          ),
-          ScenePaintRole.nodeLabel));
+      children.addAll(
+        _withPaintRole(
+          p.richLabel!.render(p.shape.labelCenter(p.center), p.style.textColor),
+          ScenePaintRole.nodeLabel,
+        ),
+      );
     } else if (p.textSize != null) {
       // Icon node: glyph in the reserved top square, label beneath it.
       final lc = p.shape.labelCenter(p.center);
       final contentTop = lc.y - p.labelSize.height / 2;
-      children.addAll(_withPaintRole(
+      children.addAll(
+        _withPaintRole(
           renderIcon(
             p.node.icon!,
-            Rect.fromLTWH(p.center.x - _iconSize / 2, contentTop, _iconSize, _iconSize),
+            Rect.fromLTWH(
+              p.center.x - _iconSize / 2,
+              contentTop,
+              _iconSize,
+              _iconSize,
+            ),
             p.style.textColor,
           ),
-          ScenePaintRole.nodeLabel));
-      children.add(SceneText(
-        text: p.paintText ?? p.node.label,
-        bounds: Rect.fromCenter(
-          Point(p.center.x, contentTop + _iconSize + _iconGap + p.textSize!.height / 2),
-          p.textSize!.width,
-          p.textSize!.height,
+          ScenePaintRole.nodeLabel,
         ),
-        style: baseStyle,
-        color: p.style.textColor,
-        paintRole: ScenePaintRole.nodeLabel,
-      ));
+      );
+      children.add(
+        SceneText(
+          text: p.paintText ?? p.node.label,
+          bounds: Rect.fromCenter(
+            Point(
+              p.center.x,
+              contentTop + _iconSize + _iconGap + p.textSize!.height / 2,
+            ),
+            p.textSize!.width,
+            p.textSize!.height,
+          ),
+          style: baseStyle,
+          color: p.style.textColor,
+          paintRole: ScenePaintRole.nodeLabel,
+        ),
+      );
     } else {
       final horizontalSlack = math.max(0, p.shape.width - p.labelSize.width);
-      final paintWidth = p.labelSize.width +
+      final paintWidth =
+          p.labelSize.width +
           math.min(_labelPaintTolerance, horizontalSlack / 2);
-      children.add(SceneText(
-        text: p.paintText ?? p.node.label,
-        bounds: Rect.fromCenter(
-          p.shape.labelCenter(p.center),
-          paintWidth,
-          p.labelSize.height,
+      children.add(
+        SceneText(
+          text: p.paintText ?? p.node.label,
+          bounds: Rect.fromCenter(
+            p.shape.labelCenter(p.center),
+            paintWidth,
+            p.labelSize.height,
+          ),
+          style: baseStyle,
+          color: p.style.textColor,
+          paintRole: ScenePaintRole.nodeLabel,
         ),
-        style: baseStyle,
-        color: p.style.textColor,
-        paintRole: ScenePaintRole.nodeLabel,
-      ));
+      );
     }
-    nodeGroups.add(SceneGroup(
-      id: p.node.id,
-      semanticLabel: p.richLabel?.plainText ?? p.node.label,
-      link: p.node.link,
-      tooltip: p.node.tooltip,
-      children: children,
-    ));
+    nodeGroups.add(
+      SceneGroup(
+        id: p.node.id,
+        semanticLabel: p.richLabel?.plainText ?? p.node.label,
+        link: p.node.link,
+        tooltip: p.node.tooltip,
+        children: children,
+      ),
+    );
   }
 
   // Z-order: clusters, edges, edge labels, nodes.
@@ -1062,15 +1194,14 @@ SceneGroup _edgeLabelGroup(
 }) {
   const pad = 2.0;
   final bg = Rect.fromCenter(
-      labelCenter, labelSize.width + 2 * pad, labelSize.height + 2 * pad);
+    labelCenter,
+    labelSize.width + 2 * pad,
+    labelSize.height + 2 * pad,
+  );
   return SceneGroup(
     id: 'edgelabel_${e.from}_${e.to}_$idIndex',
     role: SceneGroupRole.edgeLabel,
-    edge: SceneEdgeMetadata(
-      fromId: e.from,
-      toId: e.to,
-      linkIndex: linkIndex,
-    ),
+    edge: SceneEdgeMetadata(fromId: e.from, toId: e.to, linkIndex: linkIndex),
     children: [
       SceneShape(
         // Solid background: ELK routes the edge straight through the label, so a
@@ -1081,14 +1212,20 @@ SceneGroup _edgeLabelGroup(
         fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
       ),
       if (math != null)
-        ...math.render(Point(
+        ...math.render(
+          Point(
             labelCenter.x - math.size.width / 2,
-            labelCenter.y - math.size.height / 2))
+            labelCenter.y - math.size.height / 2,
+          ),
+        )
       else
         SceneText(
           text: e.label!,
-          bounds:
-              Rect.fromCenter(labelCenter, labelSize.width, labelSize.height),
+          bounds: Rect.fromCenter(
+            labelCenter,
+            labelSize.width,
+            labelSize.height,
+          ),
           style: baseStyle,
           color: theme.textColor,
         ),
@@ -1099,21 +1236,24 @@ SceneGroup _edgeLabelGroup(
 /// Pseudo placed-node standing in for a compound cluster at an edge
 /// endpoint, so boundary clipping can reuse the rect intersect.
 _PlacedNode _clusterEndpointNode(Rect rect) => _PlacedNode(
-      node: const FlowNode(id: '', label: ''),
-      style: _NodeStyle(
-        fill: Color.transparent,
-        stroke: Color.transparent,
-        strokeWidth: 0,
-        textColor: Color.transparent,
-      ),
-      labelSize: Size.zero,
-      shape: _RectShape(rect.width, rect.height),
-    )..center = rect.center;
+  node: const FlowNode(id: '', label: ''),
+  style: _NodeStyle(
+    fill: Color.transparent,
+    stroke: Color.transparent,
+    strokeWidth: 0,
+    textColor: Color.transparent,
+  ),
+  labelSize: Size.zero,
+  shape: _RectShape(rect.width, rect.height),
+)..center = rect.center;
 
 /// Removes the run of path points that lie inside [rect] at one end, leaving
 /// the last kept point ready for boundary-intersect clipping.
-List<Point> _dropInsideRect(List<Point> pts, Rect rect,
-    {required bool fromEnd}) {
+List<Point> _dropInsideRect(
+  List<Point> pts,
+  Rect rect, {
+  required bool fromEnd,
+}) {
   final list = List<Point>.from(pts);
   if (fromEnd) {
     while (list.length > 2 && rect.contains(list[list.length - 2])) {
@@ -1185,9 +1325,8 @@ List<Point> _bendBeforeCluster(
   };
   if (!progressesTowardTarget) return points;
 
-  bool aligned(Point p) => vertical
-      ? (p.x - end.x).abs() < 0.001
-      : (p.y - end.y).abs() < 0.001;
+  bool aligned(Point p) =>
+      vertical ? (p.x - end.x).abs() < 0.001 : (p.y - end.y).abs() < 0.001;
 
   var firstAligned = points.length - 1;
   while (firstAligned > 0 && aligned(points[firstAligned - 1])) {
@@ -1217,10 +1356,14 @@ List<Point> _bendBeforeCluster(
   Size? labelSize,
 ) {
   final c = p.center;
-  final start =
-      p.shape.intersect(c, Point(c.x + p.shape.width, c.y - p.shape.height / 2));
-  final end =
-      p.shape.intersect(c, Point(c.x + p.shape.width, c.y + p.shape.height / 2));
+  final start = p.shape.intersect(
+    c,
+    Point(c.x + p.shape.width, c.y - p.shape.height / 2),
+  );
+  final end = p.shape.intersect(
+    c,
+    Point(c.x + p.shape.width, c.y + p.shape.height / 2),
+  );
   final ext = 40.0 + loopIndex * 16;
   final c1 = Point(start.x + ext, start.y - ext * 0.35);
   final c2 = Point(end.x + ext, end.y + ext * 0.35);
@@ -1236,20 +1379,28 @@ List<Point> _bendBeforeCluster(
   if (e.headFrom != ArrowHead.none) {
     pathStart = start - startDir * _markerShorten(e.headFrom);
   }
-  children.add(SceneShape(
-    geometry: PathGeometry([MoveTo(pathStart), CubicTo(c1, c2, pathEnd)]),
-    stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
-    paintRole: ScenePaintRole.edgeStroke,
-  ));
+  children.add(
+    SceneShape(
+      geometry: PathGeometry([MoveTo(pathStart), CubicTo(c1, c2, pathEnd)]),
+      stroke: Stroke(color: style.color, width: style.width, dash: style.dash),
+      paintRole: ScenePaintRole.edgeStroke,
+    ),
+  );
   if (e.headTo != ArrowHead.none) {
-    children.addAll(_withPaintRole(
+    children.addAll(
+      _withPaintRole(
         _marker(e.headTo, end, endDir, style.markerColor),
-        ScenePaintRole.edgeMarker));
+        ScenePaintRole.edgeMarker,
+      ),
+    );
   }
   if (e.headFrom != ArrowHead.none) {
-    children.addAll(_withPaintRole(
+    children.addAll(
+      _withPaintRole(
         _marker(e.headFrom, start, startDir, style.markerColor),
-        ScenePaintRole.edgeMarker));
+        ScenePaintRole.edgeMarker,
+      ),
+    );
   }
   // Cubic apex (t = 0.5): (p0 + 3c1 + 3c2 + p3) / 8.
   final apexX = (start.x + 3 * c1.x + 3 * c2.x + end.x) / 8;
@@ -1261,11 +1412,11 @@ List<Point> _bendBeforeCluster(
 }
 
 dagre.RankDir _rankDir(FlowDirection d) => switch (d) {
-      FlowDirection.tb => dagre.RankDir.ttb,
-      FlowDirection.bt => dagre.RankDir.btt,
-      FlowDirection.lr => dagre.RankDir.ltr,
-      FlowDirection.rl => dagre.RankDir.rtl,
-    };
+  FlowDirection.tb => dagre.RankDir.ttb,
+  FlowDirection.bt => dagre.RankDir.btt,
+  FlowDirection.lr => dagre.RankDir.ltr,
+  FlowDirection.rl => dagre.RankDir.rtl,
+};
 
 // --- Style resolution -------------------------------------------------------
 
@@ -1288,7 +1439,10 @@ class _NodeStyle {
 }
 
 _NodeStyle _resolveNodeStyle(
-    FlowNode node, FlowGraph graph, MermaidTheme theme) {
+  FlowNode node,
+  FlowGraph graph,
+  MermaidTheme theme,
+) {
   final style = _NodeStyle(
     fill: theme.mainBkg,
     stroke: theme.nodeBorder,
@@ -1359,7 +1513,11 @@ _EdgeStyle _resolveEdgeStyle(FlowEdge edge, MermaidTheme theme) {
     }
   });
   return _EdgeStyle(
-      color: color, width: width, markerColor: markerColor, dash: dash);
+    color: color,
+    width: width,
+    markerColor: markerColor,
+    dash: dash,
+  );
 }
 
 double? _parsePx(String value) =>
@@ -1481,7 +1639,9 @@ sealed class _Shape {
         // doubleCircle.ts: inner radius = bbox.width / 2 + halfPadding,
         // gap 5, outer = inner + gap.
         return _DoubleCircleShape(
-            lw / 2 + p / 2 + _doubleCircleGap, _doubleCircleGap);
+          lw / 2 + p / 2 + _doubleCircleGap,
+          _doubleCircleGap,
+        );
       case FlowNodeShape.ellipse:
         return _EllipseShape(lw / 2 + p, lh / 2 + p);
       case FlowNodeShape.diamond:
@@ -1673,13 +1833,12 @@ class _RectShape implements _Shape {
 
   @override
   List<SceneNode> build(Point c, _NodeStyle style) => [
-        SceneShape(
-          geometry: RectGeometry(Rect.fromCenter(c, width, height),
-              rx: rx, ry: rx),
-          fill: Fill(style.fill),
-          stroke: style.sceneStroke,
-        ),
-      ];
+    SceneShape(
+      geometry: RectGeometry(Rect.fromCenter(c, width, height), rx: rx, ry: rx),
+      fill: Fill(style.fill),
+      stroke: style.sceneStroke,
+    ),
+  ];
 
   @override
   Point intersect(Point c, Point outside) =>
@@ -1752,22 +1911,40 @@ class _CylinderShape implements _Shape {
     final cmds = <PathCommand>[
       MoveTo(Point(left, topMid)),
       // Lower half of the top ellipse.
-      CubicTo(Point(left, topMid + k * ry), Point(c.x - k * rx, top + 2 * ry),
-          Point(c.x, top + 2 * ry)),
-      CubicTo(Point(c.x + k * rx, top + 2 * ry), Point(right, topMid + k * ry),
-          Point(right, topMid)),
+      CubicTo(
+        Point(left, topMid + k * ry),
+        Point(c.x - k * rx, top + 2 * ry),
+        Point(c.x, top + 2 * ry),
+      ),
+      CubicTo(
+        Point(c.x + k * rx, top + 2 * ry),
+        Point(right, topMid + k * ry),
+        Point(right, topMid),
+      ),
       // Upper half of the top ellipse (back to start).
-      CubicTo(Point(right, topMid - k * ry), Point(c.x + k * rx, top),
-          Point(c.x, top)),
-      CubicTo(Point(c.x - k * rx, top), Point(left, topMid - k * ry),
-          Point(left, topMid)),
+      CubicTo(
+        Point(right, topMid - k * ry),
+        Point(c.x + k * rx, top),
+        Point(c.x, top),
+      ),
+      CubicTo(
+        Point(c.x - k * rx, top),
+        Point(left, topMid - k * ry),
+        Point(left, topMid),
+      ),
       // Left wall.
       LineTo(Point(left, bottomMid)),
       // Bottom bulge.
-      CubicTo(Point(left, bottomMid + k * ry), Point(c.x - k * rx, bottom),
-          Point(c.x, bottom)),
-      CubicTo(Point(c.x + k * rx, bottom), Point(right, bottomMid + k * ry),
-          Point(right, bottomMid)),
+      CubicTo(
+        Point(left, bottomMid + k * ry),
+        Point(c.x - k * rx, bottom),
+        Point(c.x, bottom),
+      ),
+      CubicTo(
+        Point(c.x + k * rx, bottom),
+        Point(right, bottomMid + k * ry),
+        Point(right, bottomMid),
+      ),
       // Right wall.
       LineTo(Point(right, topMid)),
     ];
@@ -1789,8 +1966,7 @@ class _CylinderShape implements _Shape {
     final x = pos.x - c.x;
     if (rx != 0 &&
         (x.abs() < width / 2 ||
-            (x.abs() == width / 2 &&
-                (pos.y - c.y).abs() > height / 2 - ry))) {
+            (x.abs() == width / 2 && (pos.y - c.y).abs() > height / 2 - ry))) {
       var y = ry * ry * (1 - (x * x) / (rx * rx));
       if (y > 0) y = math.sqrt(y);
       y = ry - y;
@@ -1816,12 +1992,12 @@ class _CircleShape implements _Shape {
 
   @override
   List<SceneNode> build(Point c, _NodeStyle style) => [
-        SceneShape(
-          geometry: CircleGeometry(c, radius),
-          fill: Fill(style.fill),
-          stroke: style.sceneStroke,
-        ),
-      ];
+    SceneShape(
+      geometry: CircleGeometry(c, radius),
+      fill: Fill(style.fill),
+      stroke: style.sceneStroke,
+    ),
+  ];
 
   @override
   Point intersect(Point c, Point outside) =>
@@ -1844,17 +2020,17 @@ class _DoubleCircleShape implements _Shape {
 
   @override
   List<SceneNode> build(Point c, _NodeStyle style) => [
-        SceneShape(
-          geometry: CircleGeometry(c, outerRadius),
-          fill: Fill(style.fill),
-          stroke: style.sceneStroke,
-        ),
-        SceneShape(
-          geometry: CircleGeometry(c, outerRadius - gap),
-          fill: Fill(style.fill),
-          stroke: style.sceneStroke,
-        ),
-      ];
+    SceneShape(
+      geometry: CircleGeometry(c, outerRadius),
+      fill: Fill(style.fill),
+      stroke: style.sceneStroke,
+    ),
+    SceneShape(
+      geometry: CircleGeometry(c, outerRadius - gap),
+      fill: Fill(style.fill),
+      stroke: style.sceneStroke,
+    ),
+  ];
 
   @override
   Point intersect(Point c, Point outside) =>
@@ -1877,12 +2053,12 @@ class _EllipseShape implements _Shape {
 
   @override
   List<SceneNode> build(Point c, _NodeStyle style) => [
-        SceneShape(
-          geometry: EllipseGeometry(c, rx, ry),
-          fill: Fill(style.fill),
-          stroke: style.sceneStroke,
-        ),
-      ];
+    SceneShape(
+      geometry: EllipseGeometry(c, rx, ry),
+      fill: Fill(style.fill),
+      stroke: style.sceneStroke,
+    ),
+  ];
 
   @override
   Point intersect(Point c, Point outside) =>
@@ -1905,12 +2081,12 @@ class _PolygonShape implements _Shape {
 
   @override
   List<SceneNode> build(Point c, _NodeStyle style) => [
-        SceneShape(
-          geometry: PolygonGeometry([for (final p in points) p + c]),
-          fill: Fill(style.fill),
-          stroke: style.sceneStroke,
-        ),
-      ];
+    SceneShape(
+      geometry: PolygonGeometry([for (final p in points) p + c]),
+      fill: Fill(style.fill),
+      stroke: style.sceneStroke,
+    ),
+  ];
 
   @override
   Point intersect(Point c, Point outside) =>
@@ -1935,17 +2111,17 @@ class _DecoratedRectShape implements _Shape {
 
   @override
   List<SceneNode> build(Point c, _NodeStyle style) => [
-        SceneShape(
-          geometry: RectGeometry(Rect.fromCenter(c, width, height)),
-          fill: Fill(style.fill),
-          stroke: style.sceneStroke,
-        ),
-        for (final seg in lines)
-          SceneShape(
-            geometry: PathGeometry([MoveTo(seg[0] + c), LineTo(seg[1] + c)]),
-            stroke: style.sceneStroke,
-          ),
-      ];
+    SceneShape(
+      geometry: RectGeometry(Rect.fromCenter(c, width, height)),
+      fill: Fill(style.fill),
+      stroke: style.sceneStroke,
+    ),
+    for (final seg in lines)
+      SceneShape(
+        geometry: PathGeometry([MoveTo(seg[0] + c), LineTo(seg[1] + c)]),
+        stroke: style.sceneStroke,
+      ),
+  ];
 
   @override
   Point intersect(Point c, Point outside) =>
@@ -1975,8 +2151,11 @@ class _DocumentShape implements _Shape {
           MoveTo(Point(l, t)),
           LineTo(Point(r, t)),
           LineTo(Point(r, b - wave)),
-          CubicTo(Point(r - width / 4, b - wave * 2.5),
-              Point(l + width / 4, b + wave), Point(l, b - wave)),
+          CubicTo(
+            Point(r - width / 4, b - wave * 2.5),
+            Point(l + width / 4, b + wave),
+            Point(l, b - wave),
+          ),
           const ClosePath(),
         ]),
         fill: Fill(style.fill),
@@ -2043,12 +2222,12 @@ class _ForkJoinShape implements _Shape {
 
   @override
   List<SceneNode> build(Point c, _NodeStyle style) => [
-        SceneShape(
-          geometry: RectGeometry(Rect.fromCenter(c, width, height)),
-          fill: Fill(style.stroke), // filled bar
-          stroke: style.sceneStroke,
-        ),
-      ];
+    SceneShape(
+      geometry: RectGeometry(Rect.fromCenter(c, width, height)),
+      fill: Fill(style.stroke), // filled bar
+      stroke: style.sceneStroke,
+    ),
+  ];
 
   @override
   Point intersect(Point c, Point outside) =>
@@ -2111,8 +2290,12 @@ Point _intersectEllipse(Point c, double rx, double ry, Point point) {
   return Point(c.x + dx, c.y + dy);
 }
 
-Point _intersectPolygon(Point c, List<Point> relativePoints, Point point,
-    {Point? rayFrom}) {
+Point _intersectPolygon(
+  Point c,
+  List<Point> relativePoints,
+  Point point, {
+  Point? rayFrom,
+}) {
   // Polygon vertices are centred at `c`; the clip ray runs from `rayFrom` (the
   // node centre by default, or a perpendicular probe) to `point`.
   final origin = rayFrom ?? c;
@@ -2125,7 +2308,8 @@ Point _intersectPolygon(Point c, List<Point> relativePoints, Point point,
   }
   if (intersections.isEmpty) return c;
   intersections.sort(
-      (a, b) => a.distanceTo(point).compareTo(b.distanceTo(point)));
+    (a, b) => a.distanceTo(point).compareTo(b.distanceTo(point)),
+  );
   return intersections.first;
 }
 
@@ -2163,13 +2347,13 @@ Point _direction(Point from, Point to) {
 }
 
 double _markerShorten(ArrowHead head) => switch (head) {
-      // pointEnd marker: viewBox 0 0 10 10 scaled into an 8x8 box, so the
-      // triangle spans 8px; pull the path back by its length.
-      ArrowHead.point => 8,
-      ArrowHead.circle => 10,
-      ArrowHead.cross => 9,
-      ArrowHead.none => 0,
-    };
+  // pointEnd marker: viewBox 0 0 10 10 scaled into an 8x8 box, so the
+  // triangle spans 8px; pull the path back by its length.
+  ArrowHead.point => 8,
+  ArrowHead.circle => 10,
+  ArrowHead.cross => 9,
+  ArrowHead.none => 0,
+};
 
 /// Marker geometry. [tip] is on the shape boundary, [dir] is the unit
 /// tangent of the path pointing towards the tip.
@@ -2184,11 +2368,7 @@ List<SceneNode> _marker(ArrowHead head, Point tip, Point dir, Color color) {
       final base = tip - dir * 8;
       return [
         SceneShape(
-          geometry: PolygonGeometry([
-            tip,
-            base + perp * 4,
-            base - perp * 4,
-          ]),
+          geometry: PolygonGeometry([tip, base + perp * 4, base - perp * 4]),
           fill: Fill(color),
         ),
       ];
@@ -2221,8 +2401,9 @@ List<SceneNode> _marker(ArrowHead head, Point tip, Point dir, Color color) {
 }
 
 List<SceneNode> _withPaintRole(
-        Iterable<SceneNode> nodes, ScenePaintRole role) =>
-    [for (final node in nodes) _withNodePaintRole(node, role)];
+  Iterable<SceneNode> nodes,
+  ScenePaintRole role,
+) => [for (final node in nodes) _withNodePaintRole(node, role)];
 
 SceneNode _withNodePaintRole(SceneNode node, ScenePaintRole role) =>
     switch (node) {
@@ -2233,22 +2414,25 @@ SceneNode _withNodePaintRole(SceneNode node, ScenePaintRole role) =>
         :final link,
         :final tooltip,
         :final edge,
-        :final children
-      ) => SceneGroup(
+        :final children,
+      ) =>
+        SceneGroup(
           id: id,
           role: groupRole,
           semanticLabel: semanticLabel,
           link: link,
           tooltip: tooltip,
           edge: edge,
-          children: [for (final child in children) _withNodePaintRole(child, role)],
+          children: [
+            for (final child in children) _withNodePaintRole(child, role),
+          ],
         ),
       SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
-          geometry: geometry,
-          fill: fill,
-          stroke: stroke,
-          paintRole: role,
-        ),
+        geometry: geometry,
+        fill: fill,
+        stroke: stroke,
+        paintRole: role,
+      ),
       SceneText(
         :final text,
         :final bounds,
@@ -2256,8 +2440,9 @@ SceneNode _withNodePaintRole(SceneNode node, ScenePaintRole role) =>
         :final color,
         :final align,
         :final rotation,
-        :final underline
-      ) => SceneText(
+        :final underline,
+      ) =>
+        SceneText(
           text: text,
           bounds: bounds,
           style: style,
@@ -2275,7 +2460,10 @@ SceneNode _withNodePaintRole(SceneNode node, ScenePaintRole role) =>
 List<PathCommand> _edgeCurve(List<Point> pts, String? interpolate) {
   switch (interpolate) {
     case 'linear':
-      return [MoveTo(pts.first), for (var i = 1; i < pts.length; i++) LineTo(pts[i])];
+      return [
+        MoveTo(pts.first),
+        for (var i = 1; i < pts.length; i++) LineTo(pts[i]),
+      ];
     case 'step':
     case 'stepAfter':
       return _curveStep(pts, after: true);
@@ -2301,9 +2489,13 @@ List<PathCommand> _curveStep(List<Point> pts, {required bool after}) {
   for (var i = 1; i < pts.length; i++) {
     final a = pts[i - 1], b = pts[i];
     if (after) {
-      cmds..add(LineTo(Point(b.x, a.y)))..add(LineTo(b));
+      cmds
+        ..add(LineTo(Point(b.x, a.y)))
+        ..add(LineTo(b));
     } else {
-      cmds..add(LineTo(Point(a.x, b.y)))..add(LineTo(b));
+      cmds
+        ..add(LineTo(Point(a.x, b.y)))
+        ..add(LineTo(b));
     }
   }
   return cmds;
@@ -2312,7 +2504,10 @@ List<PathCommand> _curveStep(List<Point> pts, {required bool after}) {
 /// Catmull-Rom spline passing through every point (tension 0).
 List<PathCommand> _curveCatmullRom(List<Point> pts) {
   if (pts.length < 3) {
-    return [MoveTo(pts.first), for (var i = 1; i < pts.length; i++) LineTo(pts[i])];
+    return [
+      MoveTo(pts.first),
+      for (var i = 1; i < pts.length; i++) LineTo(pts[i]),
+    ];
   }
   final cmds = <PathCommand>[MoveTo(pts.first)];
   for (var i = 0; i < pts.length - 1; i++) {
@@ -2320,11 +2515,13 @@ List<PathCommand> _curveCatmullRom(List<Point> pts) {
     final p1 = pts[i];
     final p2 = pts[i + 1];
     final p3 = pts[i + 2 < pts.length ? i + 2 : pts.length - 1];
-    cmds.add(CubicTo(
-      Point(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6),
-      Point(p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6),
-      p2,
-    ));
+    cmds.add(
+      CubicTo(
+        Point(p1.x + (p2.x - p0.x) / 6, p1.y + (p2.y - p0.y) / 6),
+        Point(p2.x - (p3.x - p1.x) / 6, p2.y - (p3.y - p1.y) / 6),
+        p2,
+      ),
+    );
   }
   return cmds;
 }
@@ -2335,10 +2532,9 @@ List<PathCommand> _curveBasis(List<Point> pts) {
   if (pts.length == 1) return [MoveTo(pts.first)];
   if (pts.length == 2) return [MoveTo(pts[0]), LineTo(pts[1])];
   final cmds = <PathCommand>[MoveTo(pts[0])];
-  cmds.add(LineTo(Point(
-    (5 * pts[0].x + pts[1].x) / 6,
-    (5 * pts[0].y + pts[1].y) / 6,
-  )));
+  cmds.add(
+    LineTo(Point((5 * pts[0].x + pts[1].x) / 6, (5 * pts[0].y + pts[1].y) / 6)),
+  );
   for (var i = 2; i < pts.length; i++) {
     cmds.add(_basisSegment(pts[i - 2], pts[i - 1], pts[i]));
   }
@@ -2373,10 +2569,10 @@ List<Point> _softenBasisStart(List<Point> points) {
 }
 
 CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
-      Point((2 * p0.x + p1.x) / 3, (2 * p0.y + p1.y) / 3),
-      Point((p0.x + 2 * p1.x) / 3, (p0.y + 2 * p1.y) / 3),
-      Point((p0.x + 4 * p1.x + p.x) / 6, (p0.y + 4 * p1.y + p.y) / 6),
-    );
+  Point((2 * p0.x + p1.x) / 3, (2 * p0.y + p1.y) / 3),
+  Point((p0.x + 2 * p1.x) / 3, (p0.y + 2 * p1.y) / 3),
+  Point((p0.x + 4 * p1.x + p.x) / 6, (p0.y + 4 * p1.y + p.y) / 6),
+);
 
 /// Returns the 50% arc-length point of the final emitted path.
 ///
@@ -2411,10 +2607,12 @@ CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
         for (var i = 1; i <= steps; i++) {
           final t = i / steps;
           final u = 1 - t;
-          addSegment(Point(
-            u * u * start.x + 2 * u * t * c.x + t * t * p.x,
-            u * u * start.y + 2 * u * t * c.y + t * t * p.y,
-          ));
+          addSegment(
+            Point(
+              u * u * start.x + 2 * u * t * c.x + t * t * p.x,
+              u * u * start.y + 2 * u * t * c.y + t * t * p.y,
+            ),
+          );
         }
       case CubicTo(:final c1, :final c2, :final p):
         final start = current;
@@ -2426,16 +2624,18 @@ CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
         for (var i = 1; i <= steps; i++) {
           final t = i / steps;
           final u = 1 - t;
-          addSegment(Point(
-            u * u * u * start.x +
-                3 * u * u * t * c1.x +
-                3 * u * t * t * c2.x +
-                t * t * t * p.x,
-            u * u * u * start.y +
-                3 * u * u * t * c1.y +
-                3 * u * t * t * c2.y +
-                t * t * t * p.y,
-          ));
+          addSegment(
+            Point(
+              u * u * u * start.x +
+                  3 * u * u * t * c1.x +
+                  3 * u * t * t * c2.x +
+                  t * t * t * p.x,
+              u * u * u * start.y +
+                  3 * u * u * t * c1.y +
+                  3 * u * t * t * c2.y +
+                  t * t * t * p.y,
+            ),
+          );
         }
       case ClosePath():
         final start = subpathStart;
@@ -2481,10 +2681,17 @@ CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
 }
 
 Point _nudgeEdgeLabel(
-    Point anchor, Point tangent, Size labelSize, List<Rect> obstacles) {
+  Point anchor,
+  Point tangent,
+  Size labelSize,
+  List<Rect> obstacles,
+) {
   const padding = 4.0;
   Rect labelRect(Point center) => Rect.fromCenter(
-      center, labelSize.width + padding * 2, labelSize.height + padding * 2);
+    center,
+    labelSize.width + padding * 2,
+    labelSize.height + padding * 2,
+  );
   bool isClear(Point center) {
     final rect = labelRect(center);
     return obstacles.every((obstacle) => !_rectsOverlap(rect, obstacle));
@@ -2536,10 +2743,10 @@ Rect? _boundsOfAll(Iterable<SceneNode> nodes) {
 }
 
 Rect? _nodeBounds(SceneNode node) => switch (node) {
-      SceneGroup(:final children) => _boundsOfAll(children),
-      SceneShape(:final geometry) => _geometryBounds(geometry),
-      SceneText(:final bounds) => bounds,
-    };
+  SceneGroup(:final children) => _boundsOfAll(children),
+  SceneShape(:final geometry) => _geometryBounds(geometry),
+  SceneText(:final bounds) => bounds,
+};
 
 Rect _geometryBounds(ShapeGeometry g) {
   switch (g) {
@@ -2552,19 +2759,17 @@ Rect _geometryBounds(ShapeGeometry g) {
     case PolygonGeometry(:final points):
       return _pointsBounds(points);
     case PathGeometry(:final commands):
-      return _pointsBounds([
-        for (final c in commands) ..._commandPoints(c),
-      ]);
+      return _pointsBounds([for (final c in commands) ..._commandPoints(c)]);
   }
 }
 
 List<Point> _commandPoints(PathCommand c) => switch (c) {
-      MoveTo(:final p) => [p],
-      LineTo(:final p) => [p],
-      QuadTo(:final c, :final p) => [c, p],
-      CubicTo(:final c1, :final c2, :final p) => [c1, c2, p],
-      ClosePath() => const [],
-    };
+  MoveTo(:final p) => [p],
+  LineTo(:final p) => [p],
+  QuadTo(:final c, :final p) => [c, p],
+  CubicTo(:final c1, :final c2, :final p) => [c1, c2, p],
+  ClosePath() => const [],
+};
 
 Rect _pointsBounds(List<Point> pts) {
   if (pts.isEmpty) return Rect.fromLTWH(0, 0, 0, 0);
@@ -2588,7 +2793,7 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
         :final link,
         :final tooltip,
         :final edge,
-        :final children
+        :final children,
       ) =>
         SceneGroup(
           id: id,
@@ -2603,8 +2808,9 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
         :final geometry,
         :final fill,
         :final stroke,
-        :final paintRole
-      ) => SceneShape(
+        :final paintRole,
+      ) =>
+        SceneShape(
           geometry: _translateGeometry(geometry, dx, dy),
           fill: fill,
           stroke: stroke,
@@ -2618,7 +2824,7 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
         :final align,
         :final rotation,
         :final underline,
-        :final paintRole
+        :final paintRole,
       ) =>
         SceneText(
           text: text,
@@ -2635,23 +2841,33 @@ SceneNode _translateNode(SceneNode node, double dx, double dy) =>
 ShapeGeometry _translateGeometry(ShapeGeometry g, double dx, double dy) {
   final d = Point(dx, dy);
   return switch (g) {
-    RectGeometry(:final rect, :final rx, :final ry) =>
-      RectGeometry(rect.translate(dx, dy), rx: rx, ry: ry),
-    CircleGeometry(:final center, :final radius) =>
-      CircleGeometry(center + d, radius),
-    EllipseGeometry(:final center, :final rx, :final ry) =>
-      EllipseGeometry(center + d, rx, ry),
-    PolygonGeometry(:final points) =>
-      PolygonGeometry([for (final p in points) p + d]),
-    PathGeometry(:final commands) =>
-      PathGeometry([for (final c in commands) _translateCommand(c, d)]),
+    RectGeometry(:final rect, :final rx, :final ry) => RectGeometry(
+      rect.translate(dx, dy),
+      rx: rx,
+      ry: ry,
+    ),
+    CircleGeometry(:final center, :final radius) => CircleGeometry(
+      center + d,
+      radius,
+    ),
+    EllipseGeometry(:final center, :final rx, :final ry) => EllipseGeometry(
+      center + d,
+      rx,
+      ry,
+    ),
+    PolygonGeometry(:final points) => PolygonGeometry([
+      for (final p in points) p + d,
+    ]),
+    PathGeometry(:final commands) => PathGeometry([
+      for (final c in commands) _translateCommand(c, d),
+    ]),
   };
 }
 
 PathCommand _translateCommand(PathCommand c, Point d) => switch (c) {
-      MoveTo(:final p) => MoveTo(p + d),
-      LineTo(:final p) => LineTo(p + d),
-      QuadTo(:final c, :final p) => QuadTo(c + d, p + d),
-      CubicTo(:final c1, :final c2, :final p) => CubicTo(c1 + d, c2 + d, p + d),
-      ClosePath() => c,
-    };
+  MoveTo(:final p) => MoveTo(p + d),
+  LineTo(:final p) => LineTo(p + d),
+  QuadTo(:final c, :final p) => QuadTo(c + d, p + d),
+  CubicTo(:final c1, :final c2, :final p) => CubicTo(c1 + d, c2 + d, p + d),
+  ClosePath() => c,
+};
