@@ -1,19 +1,25 @@
 ## Unreleased
 
-- Add platform symbol-font fallbacks for Unicode diagram labels.
+- Preserve requested monospace fonts and add platform symbol-font fallbacks for
+  Unicode diagram labels.
+- Add `MermaidViewController` with observable transforms, animated or immediate
+  fit, and focus-by-node-id support.
+- Add `MermaidDiagram.onSceneChanged` for access to post-layout scene geometry.
+- Add `onEdgeTap` to `MermaidDiagram` and `MermaidView`, with precise stroke
+  and label hit testing and stable Mermaid link indices.
 - Add paint-only flowchart node and link overrides to `MermaidDiagram` and
-  `MermaidView`, reusing the parsed and laid-out base scene.
+  `MermaidView`; override changes reuse the parsed and laid-out base scene.
 - Add desktop/web node hover callbacks, node-only cursors, and optional tooltip
   overlays to `MermaidDiagram` and `MermaidView`.
 - Add opt-in node semantics with human labels, stable identifiers, transformed
   bounds, deterministic traversal, and accessible tap actions.
 - Add headless `renderToPng` and `renderSceneToPng` APIs for Flutter runners.
-- Add `MermaidViewController` for observable viewport transforms, animated or
-  immediate fit, and node focus by id.
-- Add `MermaidDiagram.onSceneChanged` for post-layout scene geometry access;
-  paint-only override changes do not emit a new geometry callback.
-- Add `onEdgeTap` to `MermaidDiagram` and `MermaidView`, with precise stroke
-  and label hit testing and stable Mermaid link indices.
+- Add `MaterialMermaidTheme.fromTheme` and `fromColorScheme` to map Material
+  colors and text roles to a light or dark `MermaidTheme`.
+- Render gradient strokes and multiply-composited links consistently in
+  `ScenePainter` and headless PNG output.
+- Keep node, edge, hover, semantics, and scene callbacks working when
+  paint-only overrides change.
 
 ## 0.1.2
 
