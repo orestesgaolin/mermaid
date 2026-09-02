@@ -119,11 +119,18 @@ RenderScene applyFlowchartPaintOverrides(
             ),
         ],
       ),
-    SceneShape(:final geometry, :final fill, :final stroke, :final paintRole) =>
+    SceneShape(
+      :final geometry,
+      :final fill,
+      :final stroke,
+      :final blendMode,
+      :final paintRole,
+    ) =>
       SceneShape(
         geometry: geometry,
         fill: _shapeFill(fill, paintRole, nodeOverride, linkOverride),
         stroke: _shapeStroke(stroke, paintRole, nodeOverride, linkOverride),
+        blendMode: blendMode,
         paintRole: paintRole,
       ),
     SceneText(
@@ -182,40 +189,46 @@ Stroke? _shapeStroke(
 ) {
   if (stroke == null) return null;
   return switch (role) {
-    ScenePaintRole.nodeBody => Stroke(
-      color: node?.stroke ?? stroke.color,
+    ScenePaintRole.nodeBody => _copyStroke(
+      stroke,
+      color: node?.stroke,
       width: node?.strokeWidth ?? stroke.width,
       dash: node?.strokeDash ?? stroke.dash,
     ),
-    ScenePaintRole.nodeFill => Stroke(
-      color: node?.fill ?? stroke.color,
-      width: stroke.width,
-      dash: stroke.dash,
-    ),
-    ScenePaintRole.nodeStroke => Stroke(
-      color: node?.stroke ?? stroke.color,
+    ScenePaintRole.nodeFill => _copyStroke(stroke, color: node?.fill),
+    ScenePaintRole.nodeStroke => _copyStroke(
+      stroke,
+      color: node?.stroke,
       width: node?.strokeWidth ?? stroke.width,
       dash: node?.strokeDash ?? stroke.dash,
     ),
     ScenePaintRole.nodeLabel ||
     ScenePaintRole.nodeLabelFill ||
-    ScenePaintRole.nodeLabelStroke => Stroke(
-      color: node?.textColor ?? stroke.color,
-      width: stroke.width,
-      dash: stroke.dash,
+    ScenePaintRole.nodeLabelStroke => _copyStroke(
+      stroke,
+      color: node?.textColor,
     ),
-    ScenePaintRole.edgeStroke => Stroke(
-      color: link?.stroke ?? stroke.color,
+    ScenePaintRole.edgeStroke => _copyStroke(
+      stroke,
+      color: link?.stroke,
       width: link?.strokeWidth ?? stroke.width,
       dash: link?.strokeDash ?? stroke.dash,
     ),
     ScenePaintRole.edgeMarker ||
     ScenePaintRole.edgeMarkerFill ||
-    ScenePaintRole.edgeMarkerStroke => Stroke(
-      color: link?.stroke ?? stroke.color,
-      width: stroke.width,
-      dash: stroke.dash,
-    ),
+    ScenePaintRole.edgeMarkerStroke => _copyStroke(stroke, color: link?.stroke),
     ScenePaintRole.none => stroke,
   };
 }
+
+Stroke _copyStroke(
+  Stroke stroke, {
+  Color? color,
+  double? width,
+  List<double>? dash,
+}) => Stroke(
+  color: color ?? stroke.color,
+  width: width ?? stroke.width,
+  dash: dash ?? stroke.dash,
+  gradient: color == null ? stroke.gradient : null,
+);

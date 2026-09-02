@@ -54,11 +54,11 @@ extension RenderSceneBounds on RenderScene {
 }
 
 Rect? sceneNodeBounds(SceneNode node) => switch (node) {
-      SceneGroup(:final children) => sceneBounds(children),
-      SceneShape(:final geometry) => geometryBounds(geometry),
-      SceneText(:final bounds, :final rotation) =>
-        rotation == 0 ? bounds : _rotatedBounds(bounds, rotation),
-    };
+  SceneGroup(:final children) => sceneBounds(children),
+  SceneShape(:final geometry) => geometryBounds(geometry),
+  SceneText(:final bounds, :final rotation) =>
+    rotation == 0 ? bounds : _rotatedBounds(bounds, rotation),
+};
 
 /// Axis-aligned bounding box of [r] rotated [deg] degrees about its center.
 Rect _rotatedBounds(Rect r, double deg) {
@@ -70,24 +70,30 @@ Rect _rotatedBounds(Rect r, double deg) {
 }
 
 Rect geometryBounds(ShapeGeometry g) => switch (g) {
-      RectGeometry(:final rect) => rect,
-      CircleGeometry(:final center, :final radius) =>
-        Rect.fromCenter(center, radius * 2, radius * 2),
-      EllipseGeometry(:final center, :final rx, :final ry) =>
-        Rect.fromCenter(center, rx * 2, ry * 2),
-      PolygonGeometry(:final points) => pointsBounds(points),
-      PathGeometry(:final commands) => pointsBounds([
-          for (final c in commands) ...pathCommandPoints(c),
-        ]),
-    };
+  RectGeometry(:final rect) => rect,
+  CircleGeometry(:final center, :final radius) => Rect.fromCenter(
+    center,
+    radius * 2,
+    radius * 2,
+  ),
+  EllipseGeometry(:final center, :final rx, :final ry) => Rect.fromCenter(
+    center,
+    rx * 2,
+    ry * 2,
+  ),
+  PolygonGeometry(:final points) => pointsBounds(points),
+  PathGeometry(:final commands) => pointsBounds([
+    for (final c in commands) ...pathCommandPoints(c),
+  ]),
+};
 
 List<Point> pathCommandPoints(PathCommand c) => switch (c) {
-      MoveTo(:final p) => [p],
-      LineTo(:final p) => [p],
-      QuadTo(:final c, :final p) => [c, p],
-      CubicTo(:final c1, :final c2, :final p) => [c1, c2, p],
-      ClosePath() => const [],
-    };
+  MoveTo(:final p) => [p],
+  LineTo(:final p) => [p],
+  QuadTo(:final c, :final p) => [c, p],
+  CubicTo(:final c1, :final c2, :final p) => [c1, c2, p],
+  ClosePath() => const [],
+};
 
 Rect pointsBounds(List<Point> pts) {
   if (pts.isEmpty) return const Rect.fromLTWH(0, 0, 0, 0);
@@ -111,7 +117,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
         :final link,
         :final tooltip,
         :final edge,
-        :final children
+        :final children,
       ) =>
         SceneGroup(
           id: id,
@@ -126,11 +132,14 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
         :final geometry,
         :final fill,
         :final stroke,
-        :final paintRole
-      ) => SceneShape(
+        :final blendMode,
+        :final paintRole,
+      ) =>
+        SceneShape(
           geometry: translateGeometry(geometry, dx, dy),
           fill: _translateFill(fill, dx, dy),
-          stroke: stroke,
+          stroke: _translateStroke(stroke, dx, dy),
+          blendMode: blendMode,
           paintRole: paintRole,
         ),
       SceneText(
@@ -140,7 +149,7 @@ SceneNode translateSceneNode(SceneNode node, double dx, double dy) =>
         :final color,
         :final align,
         :final underline,
-        :final paintRole
+        :final paintRole,
       ) =>
         SceneText(
           text: text,
@@ -233,12 +242,12 @@ double _distanceToSegment(Point p, Point a, Point b) {
   final dy = b.y - a.y;
   final lengthSquared = dx * dx + dy * dy;
   if (lengthSquared == 0) {
-    return math.sqrt(
-      (p.x - a.x) * (p.x - a.x) + (p.y - a.y) * (p.y - a.y),
-    );
+    return math.sqrt((p.x - a.x) * (p.x - a.x) + (p.y - a.y) * (p.y - a.y));
   }
-  final t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared)
-      .clamp(0.0, 1.0);
+  final t = (((p.x - a.x) * dx + (p.y - a.y) * dy) / lengthSquared).clamp(
+    0.0,
+    1.0,
+  );
   final x = a.x + t * dx;
   final y = a.y + t * dy;
   return math.sqrt((p.x - x) * (p.x - x) + (p.y - y) * (p.y - y));
@@ -258,27 +267,55 @@ Fill? _translateFill(Fill? fill, double dx, double dy) {
   );
 }
 
+/// Translates a stroke's gradient coordinates (a solid stroke is unchanged).
+Stroke? _translateStroke(Stroke? stroke, double dx, double dy) {
+  final g = stroke?.gradient;
+  if (stroke == null || g == null) return stroke;
+  return Stroke(
+    color: stroke.color,
+    width: stroke.width,
+    dash: stroke.dash,
+    gradient: SceneGradient(
+      Point(g.from.x + dx, g.from.y + dy),
+      Point(g.to.x + dx, g.to.y + dy),
+      g.colors,
+    ),
+  );
+}
+
 ShapeGeometry translateGeometry(ShapeGeometry g, double dx, double dy) {
   Point t(Point p) => Point(p.x + dx, p.y + dy);
   return switch (g) {
-    RectGeometry(:final rect, :final rx, :final ry) =>
-      RectGeometry(rect.translate(dx, dy), rx: rx, ry: ry),
-    CircleGeometry(:final center, :final radius) =>
-      CircleGeometry(t(center), radius),
-    EllipseGeometry(:final center, :final rx, :final ry) =>
-      EllipseGeometry(t(center), rx, ry),
-    PolygonGeometry(:final points) =>
-      PolygonGeometry([for (final p in points) t(p)]),
+    RectGeometry(:final rect, :final rx, :final ry) => RectGeometry(
+      rect.translate(dx, dy),
+      rx: rx,
+      ry: ry,
+    ),
+    CircleGeometry(:final center, :final radius) => CircleGeometry(
+      t(center),
+      radius,
+    ),
+    EllipseGeometry(:final center, :final rx, :final ry) => EllipseGeometry(
+      t(center),
+      rx,
+      ry,
+    ),
+    PolygonGeometry(:final points) => PolygonGeometry([
+      for (final p in points) t(p),
+    ]),
     PathGeometry(:final commands) => PathGeometry([
-        for (final c in commands)
-          switch (c) {
-            MoveTo(:final p) => MoveTo(t(p)),
-            LineTo(:final p) => LineTo(t(p)),
-            QuadTo(:final c, :final p) => QuadTo(t(c), t(p)),
-            CubicTo(:final c1, :final c2, :final p) =>
-              CubicTo(t(c1), t(c2), t(p)),
-            ClosePath() => const ClosePath(),
-          },
-      ]),
+      for (final c in commands)
+        switch (c) {
+          MoveTo(:final p) => MoveTo(t(p)),
+          LineTo(:final p) => LineTo(t(p)),
+          QuadTo(:final c, :final p) => QuadTo(t(c), t(p)),
+          CubicTo(:final c1, :final c2, :final p) => CubicTo(
+            t(c1),
+            t(c2),
+            t(p),
+          ),
+          ClosePath() => const ClosePath(),
+        },
+    ]),
   };
 }

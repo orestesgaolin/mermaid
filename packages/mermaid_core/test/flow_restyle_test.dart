@@ -134,6 +134,45 @@ flowchart LR
     expect(shape.fill, isNull);
     expect(shape.stroke?.color, const Color(0xff112233));
   });
+
+  test('restyle preserves blend mode and an unchanged stroke gradient', () {
+    const gradient = SceneGradient(Point(0, 0), Point(20, 0), [
+      Color(0x80ff0000),
+      Color(0x800000ff),
+    ]);
+    const base = RenderScene(
+      size: Size(20, 20),
+      nodes: [
+        SceneGroup(
+          edge: SceneEdgeMetadata(fromId: 'A', toId: 'B', linkIndex: 0),
+          children: [
+            SceneShape(
+              geometry: PathGeometry([
+                MoveTo(Point(0, 10)),
+                LineTo(Point(20, 10)),
+              ]),
+              stroke: Stroke(
+                color: Color(0x80ff0000),
+                width: 4,
+                gradient: gradient,
+              ),
+              blendMode: SceneBlendMode.multiply,
+              paintRole: ScenePaintRole.edgeStroke,
+            ),
+          ],
+        ),
+      ],
+    );
+
+    final restyled = applyFlowchartPaintOverrides(
+      base,
+      links: const {0: FlowLinkPaintOverride(strokeWidth: 6)},
+    );
+    final shape = _shapes(restyled.nodes).single;
+    expect(shape.blendMode, SceneBlendMode.multiply);
+    expect(shape.stroke?.width, 6);
+    expect(shape.stroke?.gradient, same(gradient));
+  });
 }
 
 String _geometry(Iterable<SceneNode> nodes) {

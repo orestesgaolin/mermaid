@@ -27,7 +27,7 @@ Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/
 | **requirement** | — | 🟢 | ✅ | [requirement.md](requirement.md) | classDef/class/style per-node cssStyles + colorIndex color-cycling still deferred (parser/IR feature, not a… |
 | **c4** | — | 🟢 | ✅ | [c4.md](c4.md) | person is a vector rendition of upstream raster avatar; rels straight not curved (cosmetic) |
 | **gitGraph** | — | 🟢 | ✅ | [gitGraph.md](gitGraph.md) | parallelCommits mode and showBranches/showCommitLabel toggles are not wired because layoutGitGraph(graph, m… |
-| **sankey** | — | 🟢 | ✅ | [sankey.md](sankey.md) | mix-blend-mode:multiply on link compositing (no IR blend-mode field) |
+| **sankey** | — | 🟢 | ✅ | [sankey.md](sankey.md) | outlined-label text stroke is approximated with a background copy |
 | **packet** | — | 🟢 | ✅ | [packet.md](packet.md) | default render matches; adapts across themes |
 | **block** | — | 🟢 | ✅ | [block.md](block.md) | marker geometry (circle/cross) approximated vs upstream insertMarkers SVG markers |
 | **radar** | — | 🟢 | ✅ | [radar.md](radar.md) | header keyword: bare `radar` accepted as a lenient alias to `radar-beta` (non-visual, preserves existing te… |
@@ -46,7 +46,7 @@ Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/
 Grouped by what would be needed to close them — all are niche config, custom-theme edge cases, or documented approximations:
 
 - **Config plumbing** (defaults already match upstream): pie donutHole/legendPosition/highlightSlice · gitGraph parallelCommits/showBranches toggles · sequence mirrorActors/bottomMarginAdj · treemap custom config block · xychart `%%{init}%%` JSON data-labels · requirement/kanban per-node style/class overrides.
-- **Shared-IR primitives** (disproportionate for the payoff): C4 raster person avatar (async image decode in sync painter) → vector rendition used · railroad true ArcTo quarter-circles → cubic-bezier approximation · sankey mix-blend-mode multiply on link overlaps.
+- **Shared-IR primitives** (disproportionate for the payoff): C4 raster person avatar (async image decode in sync painter) → vector rendition used · railroad true ArcTo quarter-circles → cubic-bezier approximation.
 - **Layout subsystems**: architecture force-directed fcose → deterministic grid+align approximation · mindmap cose-bilkent → deterministic radial (intentional) · classDiagram note adjacency needs zero-length-edge support in vendored dagre.
 - **Custom-theme color sources without a theme variable upstream**: gantt task/section/crit palette, xychart handled via new field, C4 per-kind colors (config.schema constants) — default renders are exact.
 
@@ -56,4 +56,3 @@ Grouped by what would be needed to close them — all are niche config, custom-t
 2. ✅ **Implement** — 333 fixes; 0 major remained.
 3. ✅ **Theme-wire** — `MermaidTheme` expanded with cScale/pie/git/sequence/journey/quadrant/venn/er/requirement/xychart palettes; diagrams switched from inlined constants to theme reads (default identical, dark/forest/neutral now adapt).
 4. ✅ **Verify** — rendered all 28 in default + dark; structural fidelity confirmed.
-

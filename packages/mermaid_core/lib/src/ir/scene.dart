@@ -14,11 +14,7 @@ import '../text/text_style.dart';
 const String mathSceneGroupId = '__mermaid_math__';
 
 class RenderScene {
-  const RenderScene({
-    required this.size,
-    required this.nodes,
-    this.background,
-  });
+  const RenderScene({required this.size, required this.nodes, this.background});
 
   /// Tight bounding size of the diagram including padding.
   final Size size;
@@ -85,14 +81,18 @@ class SceneShape extends SceneNode {
     required this.geometry,
     this.fill,
     this.stroke,
+    this.blendMode = SceneBlendMode.normal,
     this.paintRole = ScenePaintRole.none,
   });
 
   final ShapeGeometry geometry;
   final Fill? fill;
   final Stroke? stroke;
+  final SceneBlendMode blendMode;
   final ScenePaintRole paintRole;
 }
+
+enum SceneBlendMode { normal, multiply }
 
 class SceneText extends SceneNode {
   const SceneText({
@@ -164,10 +164,11 @@ class SceneGradient {
 }
 
 class Stroke {
-  const Stroke({required this.color, this.width = 1, this.dash});
+  const Stroke({required this.color, this.width = 1, this.dash, this.gradient});
 
   final Color color;
   final double width;
+  final SceneGradient? gradient;
 
   /// SVG-style dash array (on, off, on, off, ...), null for solid.
   final List<double>? dash;

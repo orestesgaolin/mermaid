@@ -472,10 +472,9 @@ RenderScene layoutSankey(
   final nodeShapes = <SceneNode>[];
   final labelLayer = <SceneNode>[];
 
-  // --- Links: bezier ribbons (the filled area of a thick stroked path) ---
+  // --- Links: thick horizontal cubic strokes ----------------------------
   for (final l in links) {
     final w = math.max(1.0, l.width);
-    final half = w / 2;
     final x0 = l.source.x1;
     final x1 = l.target.x0;
     final cx = (x0 + x1) / 2;
@@ -498,25 +497,18 @@ RenderScene layoutSankey(
     ribbons.add(
       SceneShape(
         geometry: PathGeometry([
-          MoveTo(Point(x0, sy - half)),
-          CubicTo(
-            Point(cx, sy - half),
-            Point(cx, ty - half),
-            Point(x1, ty - half),
-          ),
-          LineTo(Point(x1, ty + half)),
-          CubicTo(
-            Point(cx, ty + half),
-            Point(cx, sy + half),
-            Point(x0, sy + half),
-          ),
-          const ClosePath(),
+          MoveTo(Point(x0, sy)),
+          CubicTo(Point(cx, sy), Point(cx, ty), Point(x1, ty)),
         ]),
-        // Upstream renders links with `stroke-opacity:0.5`. A gradient paint
-        // overrides the base fill color, so the half-opacity must live in the
-        // gradient stops themselves (otherwise ribbons paint at full opacity and
-        // visually swallow the node bars).
-        fill: Fill(_linkColor(solidColor), gradient: gradient),
+        stroke: Stroke(
+          color: _linkColor(solidColor),
+          width: w,
+          gradient: gradient,
+        ),
+        // Mermaid.js applies `mix-blend-mode:multiply` to each link group.
+        // This keeps crossings legible instead of allowing the later lane to
+        // visually erase the earlier one.
+        blendMode: SceneBlendMode.multiply,
       ),
     );
   }

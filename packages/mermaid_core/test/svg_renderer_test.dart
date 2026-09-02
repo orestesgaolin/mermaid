@@ -36,16 +36,28 @@ void main() {
             CubicTo(Point(5, 0), Point(10, 5), Point(10, 10)),
             ClosePath(),
           ]),
-          stroke: Stroke(color: Color(0xff333333), width: 2),
-        ),
-        const SceneGroup(id: 'n1', semanticLabel: 'Node "1"', children: [
-          SceneText(
-            text: 'line1\nline2',
-            bounds: Rect.fromLTWH(20, 20, 60, 36),
-            style: style,
-            color: Color(0xff111111),
+          stroke: Stroke(
+            color: Color(0xff333333),
+            width: 2,
+            gradient: SceneGradient(Point(0, 0), Point(10, 10), [
+              Color(0x80ff0000),
+              Color(0x800000ff),
+            ]),
           ),
-        ]),
+          blendMode: SceneBlendMode.multiply,
+        ),
+        const SceneGroup(
+          id: 'n1',
+          semanticLabel: 'Node "1"',
+          children: [
+            SceneText(
+              text: 'line1\nline2',
+              bounds: Rect.fromLTWH(20, 20, 60, 36),
+              style: style,
+              color: Color(0xff111111),
+            ),
+          ],
+        ),
       ],
     );
     final svg = renderSceneToSvg(scene);
@@ -56,6 +68,8 @@ void main() {
     expect(svg, contains('<circle cx="50" cy="50" r="8"'));
     expect(svg, contains('stroke-dasharray="3,3"'));
     expect(svg, contains('<path d="M0 0C5 0 10 5 10 10Z"'));
+    expect(svg, contains('stroke="url(#g'));
+    expect(svg, contains('style="mix-blend-mode:multiply"'));
     expect(svg, contains('<g id="n1" aria-label="Node &quot;1&quot;">'));
     expect(svg, contains('<tspan'));
     expect(svg, contains('line1'));
@@ -65,17 +79,19 @@ void main() {
 
   test('escapes XML special characters in text', () {
     const style = TextStyleSpec(fontFamily: 'arial', fontSize: 14);
-    final svg = renderSceneToSvg(RenderScene(
-      size: const Size(100, 30),
-      nodes: const [
-        SceneText(
-          text: 'a < b & "c"',
-          bounds: Rect.fromLTWH(0, 0, 100, 20),
-          style: style,
-          color: Color(0xff000000),
-        ),
-      ],
-    ));
+    final svg = renderSceneToSvg(
+      RenderScene(
+        size: const Size(100, 30),
+        nodes: const [
+          SceneText(
+            text: 'a < b & "c"',
+            bounds: Rect.fromLTWH(0, 0, 100, 20),
+            style: style,
+            color: Color(0xff000000),
+          ),
+        ],
+      ),
+    );
     expect(svg, contains('a &lt; b &amp; "c"'));
     expect(svg, isNot(contains('a < b')));
   });

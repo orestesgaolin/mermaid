@@ -1,3 +1,5 @@
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
@@ -108,6 +110,68 @@ void main() {
       );
       expect(ScenePainter(otherScene).shouldRepaint(samePainter), isTrue);
     });
+
+    test(
+      'multiply compositing keeps overlapping lanes distinguishable',
+      () async {
+        core.RenderScene scene(core.SceneBlendMode mode) => core.RenderScene(
+          size: const core.Size(20, 20),
+          background: const core.Color(0xffffffff),
+          nodes: [
+            core.SceneShape(
+              geometry: const core.PathGeometry([
+                core.MoveTo(core.Point(0, 10)),
+                core.LineTo(core.Point(20, 10)),
+              ]),
+              stroke: const core.Stroke(
+                color: core.Color(0x80ff0000),
+                width: 8,
+                gradient: core.SceneGradient(
+                  core.Point(0, 10),
+                  core.Point(20, 10),
+                  [core.Color(0x80ff0000), core.Color(0x80ffff00)],
+                ),
+              ),
+              blendMode: mode,
+            ),
+            core.SceneShape(
+              geometry: const core.PathGeometry([
+                core.MoveTo(core.Point(10, 0)),
+                core.LineTo(core.Point(10, 20)),
+              ]),
+              stroke: const core.Stroke(
+                color: core.Color(0x800000ff),
+                width: 8,
+                gradient: core.SceneGradient(
+                  core.Point(10, 0),
+                  core.Point(10, 20),
+                  [core.Color(0x800000ff), core.Color(0x8000ffff)],
+                ),
+              ),
+              blendMode: mode,
+            ),
+          ],
+        );
+
+        final normal = await _pixelAt(
+          scene(core.SceneBlendMode.normal),
+          10,
+          10,
+        );
+        final multiply = await _pixelAt(
+          scene(core.SceneBlendMode.multiply),
+          10,
+          10,
+        );
+
+        expect(multiply, isNot(normal));
+        expect(
+          multiply.computeLuminance(),
+          lessThan(normal.computeLuminance()),
+          reason: 'multiply must darken the crossing instead of covering it',
+        );
+      },
+    );
   });
 
   group('FlutterTextMeasurer', () {
@@ -208,14 +272,15 @@ void main() {
       }
     });
 
-    testWidgets('flowchart identifier breaks are explicit before painting',
-        (tester) async {
+    testWidgets('flowchart identifier breaks are explicit before painting', (
+      tester,
+    ) async {
       const source = '''flowchart TD
   br_recommendation_summary["br_recommendation_summary"]''';
       final scene = core.Mermaid(measurer: measurer).render(source);
-      final node = scene.nodes
-          .whereType<core.SceneGroup>()
-          .singleWhere((group) => group.id == 'br_recommendation_summary');
+      final node = scene.nodes.whereType<core.SceneGroup>().singleWhere(
+        (group) => group.id == 'br_recommendation_summary',
+      );
       final label = node.children.whereType<core.SceneText>().single;
 
       final lines = label.text.split('\n');
@@ -275,4 +340,28 @@ void main() {
       );
     });
   });
+}
+
+Future<ui.Color> _pixelAt(core.RenderScene scene, int x, int y) async {
+  final recorder = ui.PictureRecorder();
+  final canvas = ui.Canvas(recorder);
+  ScenePainter(
+    scene,
+  ).paint(canvas, ui.Size(scene.size.width, scene.size.height));
+  final image = await recorder.endRecording().toImage(
+    scene.size.width.ceil(),
+    scene.size.height.ceil(),
+  );
+  try {
+    final rgba = await image.toByteData(format: ui.ImageByteFormat.rawRgba);
+    final offset = (y * image.width + x) * 4;
+    return ui.Color.fromARGB(
+      rgba!.getUint8(offset + 3),
+      rgba.getUint8(offset),
+      rgba.getUint8(offset + 1),
+      rgba.getUint8(offset + 2),
+    );
+  } finally {
+    image.dispose();
+  }
 }

@@ -64,7 +64,7 @@
 
 1. (high) d3-sankey relaxation / node alignment — **Done.** Added `computeNodeValues`, BFS `computeNodeDepths`/heights, `nodeAlignment` (left/right/center/justify, default `justify` pulls sinks to the right edge), x-assignment via `kx=(width-nodeWidth)/maxDepth`, `initializeNodeBreadths` with per-column `ky`, and the iterative loop (6 passes, `alpha=0.99^i`): `relaxRightToLeft` → `resolveCollisions` → `relaxLeftToRight` → `resolveCollisions` → `computeLinkBreadths`, with link reordering by opposite-end y. Replaces the old single-longest-path + center-stack layout.
 2. (high) Values hidden by default — **Done.** Added `showValues` (default true), `prefix`, `suffix`; label text is `id\n{prefix}{round(value*100)/100}{suffix}` with JS-style integer formatting (`23` not `23.0`).
-3. (high) Links rendered as bands vs strokes — **Done (equivalent).** Kept filled bezier bands but built them as the exact filled area of a d3 `sankeyLinkHorizontal` stroke of width `max(1,width)` (top/bottom edges offset ±width/2 from the link's y0/y1 centers). `Stroke` has no gradient field in the shared IR, so a true gradient-stroked path isn't expressible; the band carries the gradient via `Fill`, which is visually identical. `mix-blend-mode:multiply` is not an IR capability — see deferred.
+3. (high) Links rendered as bands vs strokes — **Done.** Links are open `sankeyLinkHorizontal` cubic centerlines with gradient-aware `Stroke`, width `max(1,width)`, 0.5 opacity, and multiply compositing in SVG and Flutter. This preserves the true stroke-normal silhouette on steep curves and Mermaid.js crossing behavior.
 4. (medium) nodeWidth 16→10 — **Done.** Default `nodeWidth=10`.
 5. (medium) nodePadding 14→12 (+15 with values) — **Done.** `nodePadding=12`, plus `+15` when `showValues`.
 6. (medium) Fixed 600×400 extent — **Done.** Lays out into `[[0,0],[width=600,height=400]]`; removed `colGap`/`targetHeight`.
@@ -76,11 +76,12 @@
 12. (low) Gradient opacity baked into stops — **Done.** Full-opacity source→target gradient stops with a single 0.5 fill opacity (was 0.45 baked into stops + 0.4 solid).
 
 ### Deferred
-- `mix-blend-mode:multiply` on link compositing — requires a blend-mode field on the IR/backends (not editable here). Overlap darkening where ribbons cross will look lighter than upstream.
-- True gradient-stroked link paths and the 4px outlined-label stroke halo — `Stroke` carries no gradient and `SceneText` carries no stroke in the shared IR; approximated as described in #3/#11.
+- The 4px outlined-label stroke halo — `SceneText` carries no stroke, so it remains approximated with a background-colored text copy.
 
 (2026-06-14) Theme wiring pass.
 - **Outlined-label halo color** — `.sankey-label-bg` upstream is `mainBkg || background || '#fff'` (styles.js), not plain white. Changed the outlined background-copy color from `theme.background` to `theme.mainBkg` so the halo tracks the theme (default `#ECECFF`, and adapts under dark/forest/neutral). Default-render output (which uses `labelStyle:'legacy'`, no halo) is unchanged; only the `outlined` config variant is affected.
 - **Foreground label** already correctly uses `theme.textColor` (= `.sankey-label-fg`); link `fill-opacity 0.5` (= `stroke-opacity:0.5`) already applied; scene `background` already `theme.background`. No further wiring needed.
 - **Left inlined:** node/link palette is d3 `schemeTableau10` (a diagram-local ordinal scale, not a mermaid theme variable upstream), so it stays a local `_palette` constant by design.
-- Status set to **full-parity**: matches mermaid.js under the default theme and now adapts to non-default themes; remaining gaps are config/niche only (`mix-blend-mode:multiply` and IR-level gradient-stroke / text-stroke, none of which are editable from this directory).
+- Status set to **full-parity**: matches mermaid.js under the default theme and now adapts to non-default themes; the remaining niche gap is the outlined-label text-stroke approximation.
+
+(2026-09-02) Replaced the filled-band approximation after visual review showed incorrect lane silhouettes and source-over occlusion at crossings. The shared scene IR now supports gradient strokes and multiply compositing, and both SVG and Flutter backends map those primitives directly.

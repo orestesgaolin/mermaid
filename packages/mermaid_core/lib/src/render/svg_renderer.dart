@@ -17,15 +17,20 @@ String renderSceneToSvg(RenderScene scene) {
     ..write('width="${_num(scene.size.width)}" ')
     ..write('height="${_num(scene.size.height)}" ')
     ..write(
-        'viewBox="0 0 ${_num(scene.size.width)} ${_num(scene.size.height)}">');
+      'viewBox="0 0 ${_num(scene.size.width)} ${_num(scene.size.height)}">',
+    );
   // Self-contained KaTeX math fonts: embed @font-face only when used.
   if (_usesKatex(scene.nodes)) {
     b
       ..write('<defs><style>')
-      ..write('@font-face{font-family:"KaTeX_Main";src:url(data:font/ttf;'
-          'base64,$katexMainRegularTtfBase64) format("truetype");}')
-      ..write('@font-face{font-family:"KaTeX_Math";src:url(data:font/ttf;'
-          'base64,$katexMathItalicTtfBase64) format("truetype");}')
+      ..write(
+        '@font-face{font-family:"KaTeX_Main";src:url(data:font/ttf;'
+        'base64,$katexMainRegularTtfBase64) format("truetype");}',
+      )
+      ..write(
+        '@font-face{font-family:"KaTeX_Math";src:url(data:font/ttf;'
+        'base64,$katexMathItalicTtfBase64) format("truetype");}',
+      )
       ..write('</style></defs>');
   }
   final bg = scene.background;
@@ -48,12 +53,12 @@ class _IdGen {
 void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
   switch (node) {
     case SceneGroup(
-        :final id,
-        :final semanticLabel,
-        :final link,
-        :final tooltip,
-        :final children
-      ):
+      :final id,
+      :final semanticLabel,
+      :final link,
+      :final tooltip,
+      :final children,
+    ):
       // A linked group becomes an SVG hyperlink.
       if (link != null) {
         b.write('<a href="${_escapeAttr(link)}" target="_blank">');
@@ -74,14 +79,21 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
       b.write('</g>');
       if (link != null) b.write('</a>');
 
-    case SceneShape(:final geometry, :final fill, :final stroke):
+    case SceneShape(
+      :final geometry,
+      :final fill,
+      :final stroke,
+      :final blendMode,
+    ):
       final paint = StringBuffer();
       final gradient = fill?.gradient;
       if (gradient != null) {
         final gid = ids.next();
         b
           ..write('<linearGradient id="$gid" gradientUnits="userSpaceOnUse" ')
-          ..write('x1="${_num(gradient.from.x)}" y1="${_num(gradient.from.y)}" ')
+          ..write(
+            'x1="${_num(gradient.from.x)}" y1="${_num(gradient.from.y)}" ',
+          )
           ..write('x2="${_num(gradient.to.x)}" y2="${_num(gradient.to.y)}">');
         for (var i = 0; i < gradient.colors.length; i++) {
           final c = gradient.colors[i];
@@ -101,30 +113,61 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
         }
       }
       if (stroke != null) {
-        paint
-          ..write(' stroke="${_color(stroke.color)}"')
-          ..write(' stroke-width="${_num(stroke.width)}"');
-        if (stroke.color.alpha < 255 && stroke.color.alpha > 0) {
-          paint.write(' stroke-opacity="${_num(stroke.color.alpha / 255)}"');
+        final strokeGradient = stroke.gradient;
+        if (strokeGradient != null) {
+          final gid = ids.next();
+          b
+            ..write('<linearGradient id="$gid" gradientUnits="userSpaceOnUse" ')
+            ..write('x1="${_num(strokeGradient.from.x)}" ')
+            ..write('y1="${_num(strokeGradient.from.y)}" ')
+            ..write('x2="${_num(strokeGradient.to.x)}" ')
+            ..write('y2="${_num(strokeGradient.to.y)}">');
+          for (var i = 0; i < strokeGradient.colors.length; i++) {
+            final c = strokeGradient.colors[i];
+            final off = strokeGradient.colors.length == 1
+                ? 0.0
+                : i / (strokeGradient.colors.length - 1);
+            b.write('<stop offset="${_num(off)}" stop-color="${_color(c)}"');
+            if (c.alpha < 255) {
+              b.write(' stop-opacity="${_num(c.alpha / 255)}"');
+            }
+            b.write('/>');
+          }
+          b.write('</linearGradient>');
+          paint.write(' stroke="url(#$gid)"');
+        } else {
+          paint.write(' stroke="${_color(stroke.color)}"');
+          if (stroke.color.alpha < 255 && stroke.color.alpha > 0) {
+            paint.write(' stroke-opacity="${_num(stroke.color.alpha / 255)}"');
+          }
         }
+        paint.write(' stroke-width="${_num(stroke.width)}"');
         final dash = stroke.dash;
         if (dash != null && dash.isNotEmpty) {
-          paint.write(
-              ' stroke-dasharray="${dash.map(_num).join(',')}"');
+          paint.write(' stroke-dasharray="${dash.map(_num).join(',')}"');
         }
+      }
+      if (blendMode == SceneBlendMode.multiply) {
+        paint.write(' style="mix-blend-mode:multiply"');
       }
       switch (geometry) {
         case RectGeometry(:final rect, :final rx):
-          b.write('<rect x="${_num(rect.left)}" y="${_num(rect.top)}" '
-              'width="${_num(rect.width)}" height="${_num(rect.height)}"');
+          b.write(
+            '<rect x="${_num(rect.left)}" y="${_num(rect.top)}" '
+            'width="${_num(rect.width)}" height="${_num(rect.height)}"',
+          );
           if (rx > 0) b.write(' rx="${_num(rx)}"');
           b.write('$paint/>');
         case CircleGeometry(:final center, :final radius):
-          b.write('<circle cx="${_num(center.x)}" cy="${_num(center.y)}" '
-              'r="${_num(radius)}"$paint/>');
+          b.write(
+            '<circle cx="${_num(center.x)}" cy="${_num(center.y)}" '
+            'r="${_num(radius)}"$paint/>',
+          );
         case EllipseGeometry(:final center, :final rx, :final ry):
-          b.write('<ellipse cx="${_num(center.x)}" cy="${_num(center.y)}" '
-              'rx="${_num(rx)}" ry="${_num(ry)}"$paint/>');
+          b.write(
+            '<ellipse cx="${_num(center.x)}" cy="${_num(center.y)}" '
+            'rx="${_num(rx)}" ry="${_num(ry)}"$paint/>',
+          );
         case PolygonGeometry(:final points):
           b.write('<polygon points="');
           b.write(points.map((p) => '${_num(p.x)},${_num(p.y)}').join(' '));
@@ -140,8 +183,10 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
               case QuadTo(:final c, :final p):
                 b.write('Q${_num(c.x)} ${_num(c.y)} ${_num(p.x)} ${_num(p.y)}');
               case CubicTo(:final c1, :final c2, :final p):
-                b.write('C${_num(c1.x)} ${_num(c1.y)} '
-                    '${_num(c2.x)} ${_num(c2.y)} ${_num(p.x)} ${_num(p.y)}');
+                b.write(
+                  'C${_num(c1.x)} ${_num(c1.y)} '
+                  '${_num(c2.x)} ${_num(c2.y)} ${_num(p.x)} ${_num(p.y)}',
+                );
               case ClosePath():
                 b.write('Z');
             }
@@ -150,14 +195,14 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
       }
 
     case SceneText(
-        :final text,
-        :final bounds,
-        :final style,
-        :final color,
-        :final align,
-        :final rotation,
-        :final underline
-      ):
+      :final text,
+      :final bounds,
+      :final style,
+      :final color,
+      :final align,
+      :final rotation,
+      :final underline,
+    ):
       final lines = text.split('\n');
       final lineHeight = bounds.height / lines.length;
       final (anchor, x) = switch (align) {
@@ -166,8 +211,10 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
         TextAlignH.right => ('end', bounds.right),
       };
       if (rotation != 0) {
-        b.write('<g transform="rotate(${_num(rotation)} '
-            '${_num(bounds.center.x)} ${_num(bounds.center.y)})">');
+        b.write(
+          '<g transform="rotate(${_num(rotation)} '
+          '${_num(bounds.center.x)} ${_num(bounds.center.y)})">',
+        );
       }
       b
         ..write('<text text-anchor="$anchor" ')
@@ -194,16 +241,20 @@ void _writeNode(StringBuffer b, SceneNode node, _IdGen ids) {
 String _svgFontFamily(TextStyleSpec style) => style.fontFamily;
 
 /// True if any text node uses a KaTeX math font (so we embed the @font-face).
-bool _usesKatex(List<SceneNode> nodes) => nodes.any((n) => switch (n) {
-      SceneGroup(:final children) => _usesKatex(children),
-      SceneText(:final style) => style.fontFamily.startsWith('KaTeX_'),
-      _ => false,
-    });
+bool _usesKatex(List<SceneNode> nodes) => nodes.any(
+  (n) => switch (n) {
+    SceneGroup(:final children) => _usesKatex(children),
+    SceneText(:final style) => style.fontFamily.startsWith('KaTeX_'),
+    _ => false,
+  },
+);
 
 String _num(double v) {
   if (v == v.roundToDouble()) return v.round().toString();
-  return v.toStringAsFixed(2).replaceFirst(RegExp(r'0+$'), '').replaceFirst(
-      RegExp(r'\.$'), '');
+  return v
+      .toStringAsFixed(2)
+      .replaceFirst(RegExp(r'0+$'), '')
+      .replaceFirst(RegExp(r'\.$'), '');
 }
 
 String _color(Color c) {
@@ -211,10 +262,8 @@ String _color(Color c) {
   return '#${rgb.toRadixString(16).padLeft(6, '0')}';
 }
 
-String _escapeText(String s) => s
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;');
+String _escapeText(String s) =>
+    s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 
 String _escapeAttr(String s) =>
     _escapeText(s).replaceAll('"', '&quot;').replaceAll('\n', ' ');

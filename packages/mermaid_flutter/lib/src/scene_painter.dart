@@ -51,7 +51,9 @@ class ScenePainter extends CustomPainter {
 
     final fill = shape.fill;
     if (fill != null && (fill.gradient != null || fill.color.alpha != 0)) {
-      final paint = Paint()..style = PaintingStyle.fill;
+      final paint = Paint()
+        ..style = PaintingStyle.fill
+        ..blendMode = _blendMode(shape.blendMode);
       final g = fill.gradient;
       if (g != null) {
         paint.shader = ui.Gradient.linear(
@@ -66,20 +68,36 @@ class ScenePainter extends CustomPainter {
     }
 
     final stroke = shape.stroke;
-    if (stroke != null && stroke.color.alpha != 0 && stroke.width > 0) {
+    if (stroke != null &&
+        (stroke.gradient != null || stroke.color.alpha != 0) &&
+        stroke.width > 0) {
       final dash = stroke.dash;
-      final strokePath =
-          (dash != null && dash.isNotEmpty) ? dashPath(path, dash) : path;
-      canvas.drawPath(
-        strokePath,
-        Paint()
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = stroke.width
-          ..strokeJoin = StrokeJoin.round
-          ..color = Color(stroke.color.value),
-      );
+      final strokePath = (dash != null && dash.isNotEmpty)
+          ? dashPath(path, dash)
+          : path;
+      final paint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = stroke.width
+        ..strokeJoin = StrokeJoin.round
+        ..blendMode = _blendMode(shape.blendMode);
+      final gradient = stroke.gradient;
+      if (gradient != null) {
+        paint.shader = ui.Gradient.linear(
+          Offset(gradient.from.x, gradient.from.y),
+          Offset(gradient.to.x, gradient.to.y),
+          [for (final c in gradient.colors) Color(c.value)],
+        );
+      } else {
+        paint.color = Color(stroke.color.value);
+      }
+      canvas.drawPath(strokePath, paint);
     }
   }
+
+  BlendMode _blendMode(core.SceneBlendMode mode) => switch (mode) {
+    core.SceneBlendMode.normal => BlendMode.srcOver,
+    core.SceneBlendMode.multiply => BlendMode.multiply,
+  };
 
   void _paintText(Canvas canvas, core.SceneText text) {
     // +1 for float safety: the measurer ceils sizes, so the painted block may
@@ -90,9 +108,10 @@ class ScenePainter extends CustomPainter {
         text: text.text,
         style: textStyleFromSpec(text.style, color: Color(text.color.value))
             .copyWith(
-          decoration:
-              text.underline ? TextDecoration.underline : TextDecoration.none,
-        ),
+              decoration: text.underline
+                  ? TextDecoration.underline
+                  : TextDecoration.none,
+            ),
       ),
       textAlign: switch (text.align) {
         core.TextAlignH.left => TextAlign.left,

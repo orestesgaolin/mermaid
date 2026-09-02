@@ -71,7 +71,7 @@ A,C,2
       expect(xs.length, 3);
       // Ribbons are filled bezier paths.
       final ribbons = flatten(scene.nodes).whereType<SceneShape>().where(
-        (s) => s.geometry is PathGeometry && s.fill != null,
+        (s) => s.geometry is PathGeometry && s.stroke != null,
       );
       expect(ribbons.length, 2);
       // Labels present. showValues defaults true upstream, so each node label
@@ -109,7 +109,11 @@ A,C,2
       expect(scene.size.width, greaterThan(1200));
       expect(texts, isNotEmpty);
       expect(texts.every((text) => !text.text.contains('\n')), isTrue);
-      expect(ribbons.every((shape) => shape.fill?.gradient != null), isTrue);
+      expect(ribbons.every((shape) => shape.stroke?.gradient != null), isTrue);
+      expect(
+        ribbons.every((shape) => shape.blendMode == SceneBlendMode.multiply),
+        isTrue,
+      );
 
       final rects = nodes
           .whereType<SceneShape>()
@@ -204,10 +208,10 @@ $data''';
       );
       expect(justifyCX, closeTo(justifyDX, 1e-6));
 
-      expect(leftRibbons.first.fill?.gradient, isNull);
-      expect(leftRibbons.first.fill?.color, const Color(0x804e79a7));
-      expect(targetRibbons.first.fill?.gradient, isNull);
-      expect(targetRibbons.first.fill?.color, const Color(0x80f28e2c));
+      expect(leftRibbons.first.stroke?.gradient, isNull);
+      expect(leftRibbons.first.stroke?.color, const Color(0x804e79a7));
+      expect(targetRibbons.first.stroke?.gradient, isNull);
+      expect(targetRibbons.first.stroke?.color, const Color(0x80f28e2c));
     });
 
     test('link opacity multiplies configured alpha', () {
@@ -246,9 +250,9 @@ A,B,1
           .whereType<SceneShape>()
           .firstWhere((shape) => shape.geometry is PathGeometry);
 
-      expect(ribbon(semiTransparent).fill?.color, const Color(0x40ff0000));
-      expect(ribbon(transparent).fill?.color, const Color(0x00000000));
-      expect(ribbon(gradient).fill?.gradient?.colors, [
+      expect(ribbon(semiTransparent).stroke?.color, const Color(0x40ff0000));
+      expect(ribbon(transparent).stroke?.color, const Color(0x00000000));
+      expect(ribbon(gradient).stroke?.gradient?.colors, [
         const Color(0x40ff0000),
         const Color(0x00000000),
       ]);
@@ -313,7 +317,7 @@ B,C,1
         nodes.whereType<SceneText>().every((text) => text.text.contains('\n')),
         isTrue,
       );
-      expect(ribbon.fill?.gradient, isNotNull);
+      expect(ribbon.stroke?.gradient, isNotNull);
     });
   });
 }
