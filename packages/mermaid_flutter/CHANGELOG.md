@@ -6,6 +6,7 @@
   overlays to `MermaidDiagram` and `MermaidView`.
 - Add opt-in node semantics with human labels, stable identifiers, transformed
   bounds, deterministic traversal, and accessible tap actions.
+- Add headless `renderToPng` and `renderSceneToPng` APIs for Flutter runners.
 - Add `MermaidViewController` for observable viewport transforms, animated or
   immediate fit, and node focus by id.
 - Add `MermaidDiagram.onSceneChanged` for post-layout scene geometry access;

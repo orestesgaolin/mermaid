@@ -7,4 +7,5 @@ library;
 export 'src/flutter_text_measurer.dart';
 export 'src/mermaid_diagram.dart';
 export 'src/mermaid_view.dart';
+export 'src/png_renderer.dart';
 export 'src/scene_painter.dart';

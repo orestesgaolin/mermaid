@@ -129,6 +129,27 @@ Widget tests can use `find.bySemanticsLabel('Start')` or
 `find.bySemanticsIdentifier('node_id')`. The option is off by default, so
 existing rendering and interaction costs do not change.
 
+## Headless PNG export
+
+Export source or a previously rendered scene without mounting a widget tree:
+
+```dart
+final png = await renderToPng(
+  source,
+  pixelRatio: 2,
+  theme: core.MermaidTheme.darkTheme,
+  nodePaintOverrides: highlightedNodes,
+  linkPaintOverrides: highlightedLinks,
+);
+```
+
+`renderToPng` and `renderSceneToPng` require a Flutter runner such as
+`flutter test` or `flutter_tester`; they do not run in a pure Dart VM process.
+Registered Flutter fonts determine text metrics and output, so load custom
+fonts before export. Parse, layout, rasterization, and encoding failures are
+preserved. Runtime renderer limits may be lower than the API's preflight size
+limits.
+
 ## Themes and errors
 
 ```dart

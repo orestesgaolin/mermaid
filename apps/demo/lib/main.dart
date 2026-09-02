@@ -18,12 +18,23 @@ void main() {
   runApp(const MermaidDemoApp());
 }
 
+typedef DemoPngExporter =
+    Future<Uint8List> Function(
+      String source, {
+      required double pixelRatio,
+      required core.MermaidTheme? theme,
+      required Map<String, core.FlowNodePaintOverride> nodePaintOverrides,
+      required Map<int, core.FlowLinkPaintOverride> linkPaintOverrides,
+    });
+
 // ---------------------------------------------------------------------------
 // App
 // ---------------------------------------------------------------------------
 
 class MermaidDemoApp extends StatefulWidget {
-  const MermaidDemoApp({super.key});
+  const MermaidDemoApp({super.key, this.pngExporter = renderToPng});
+
+  final DemoPngExporter pngExporter;
 
   @override
   State<MermaidDemoApp> createState() => _MermaidDemoAppState();
@@ -48,6 +59,7 @@ class _MermaidDemoAppState extends State<MermaidDemoApp> {
       themeMode: _dark ? ThemeMode.dark : ThemeMode.light,
       home: EditorPage(
         dark: _dark,
+        pngExporter: widget.pngExporter,
         onToggleDark: () => setState(() => _dark = !_dark),
       ),
     );
@@ -55,9 +67,15 @@ class _MermaidDemoAppState extends State<MermaidDemoApp> {
 }
 
 class EditorPage extends StatefulWidget {
-  const EditorPage({super.key, required this.dark, required this.onToggleDark});
+  const EditorPage({
+    super.key,
+    required this.dark,
+    required this.pngExporter,
+    required this.onToggleDark,
+  });
 
   final bool dark;
+  final DemoPngExporter pngExporter;
   final VoidCallback onToggleDark;
 
   @override
@@ -127,6 +145,41 @@ class _EditorPageState extends State<EditorPage> {
     if (oldWidget.dark != widget.dark) _themeOverride = null;
   }
 
+  Future<void> _showPngExport() async {
+    try {
+      final colors = Theme.of(context).colorScheme;
+      final png = await widget.pngExporter(
+        _renderedSource,
+        pixelRatio: 2,
+        theme: _mermaidTheme,
+        nodePaintOverrides: _nodeOverrides(_selectedNodeId, colors),
+        linkPaintOverrides: _linkOverrides(_selectedEdge, colors),
+      );
+      if (!mounted) return;
+      await showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('PNG export (2×)'),
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 900, maxHeight: 650),
+            child: InteractiveViewer(child: Image.memory(png)),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } catch (error) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('PNG export failed: $error')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final colors = Theme.of(context).colorScheme;
@@ -148,6 +201,11 @@ class _EditorPageState extends State<EditorPage> {
             tooltip: 'Fit diagram',
             icon: const Icon(Icons.fit_screen),
             onPressed: () => _viewController.fitAll(),
+          ),
+          IconButton(
+            tooltip: 'Preview PNG export',
+            icon: const Icon(Icons.image_outlined),
+            onPressed: _showPngExport,
           ),
           IconButton(
             tooltip:

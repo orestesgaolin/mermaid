@@ -10,9 +10,31 @@ void main() {
   testWidgets('demo focuses and highlights tapped flowchart nodes and edges', (
     tester,
   ) async {
+    final previewPng = (await tester.runAsync(
+      () =>
+          renderToPng('flowchart LR\n  A[Start] --> B[Finish]', pixelRatio: 1),
+    ))!;
+    Map<String, core.FlowNodePaintOverride>? exportedNodeOverrides;
+    Map<int, core.FlowLinkPaintOverride>? exportedLinkOverrides;
     await tester.binding.setSurfaceSize(const Size(1400, 900));
     addTearDown(() => tester.binding.setSurfaceSize(null));
-    await tester.pumpWidget(const MermaidDemoApp());
+    await tester.pumpWidget(
+      MermaidDemoApp(
+        pngExporter:
+            (
+              source, {
+              required pixelRatio,
+              required theme,
+              required nodePaintOverrides,
+              required linkPaintOverrides,
+            }) {
+              expect(pixelRatio, 2);
+              exportedNodeOverrides = nodePaintOverrides;
+              exportedLinkOverrides = linkPaintOverrides;
+              return Future.value(previewPng);
+            },
+      ),
+    );
     await tester.pumpAndSettle();
     expect(
       find.text('Hover for node ids · tap to focus · tap edges to inspect'),
@@ -181,6 +203,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.byType(Dialog), findsNothing);
     expect(find.textContaining('Node: B'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('Preview PNG export'));
+    await tester.pumpAndSettle();
+    expect(find.text('PNG export (2×)'), findsOneWidget);
+    expect(find.byType(Image), findsOneWidget);
+    expect(exportedNodeOverrides, contains('B'));
+    expect(exportedLinkOverrides, isEmpty);
+    await tester.tap(find.widgetWithText(TextButton, 'Close'));
+    await tester.pumpAndSettle();
   }, semanticsEnabled: true);
 }
 
