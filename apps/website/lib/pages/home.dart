@@ -95,11 +95,10 @@ class Home extends StatelessComponent {
           h2([.text('Follow ThemeData with one call')]),
           p([
             .text(
-              'The Flutter preview below maps the active Material color '
-              'and text roles into every Mermaid diagram family. For '
-              'samples without an explicit theme directive, use its '
-              'light/dark button to switch ThemeData and repaint the same '
-              'source immediately.',
+              'The Flutter preview uses native Mermaid colors by default. '
+              'Enable Material theme to map the active Material color and '
+              'text roles into every Mermaid diagram family. The light/dark '
+              'button switches brightness independently.',
             ),
           ]),
         ]),

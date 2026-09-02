@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 final _lightScheme =
@@ -76,6 +77,7 @@ class MaterialThemeDemo extends StatefulWidget {
 
 class _MaterialThemeDemoState extends State<MaterialThemeDemo> {
   ThemeMode _themeMode = ThemeMode.light;
+  bool _useMaterialTheme = false;
 
   @override
   Widget build(BuildContext context) {
@@ -89,6 +91,12 @@ class _MaterialThemeDemoState extends State<MaterialThemeDemo> {
           final materialTheme = Theme.of(context);
           final colors = materialTheme.colorScheme;
           final dark = materialTheme.brightness == Brightness.dark;
+          final mermaidTheme = _useMaterialTheme
+              ? MaterialMermaidTheme.fromTheme(materialTheme)
+              : dark
+              ? core.MermaidTheme.darkTheme
+              : core.MermaidTheme.defaultTheme;
+          final diagramBackground = Color(mermaidTheme.background.value);
           return Material(
             color: colors.surface,
             child: Stack(
@@ -96,8 +104,8 @@ class _MaterialThemeDemoState extends State<MaterialThemeDemo> {
                 Positioned.fill(
                   child: MermaidView(
                     source: widget.source,
-                    theme: MaterialMermaidTheme.fromTheme(materialTheme),
-                    backgroundColor: colors.surface,
+                    theme: mermaidTheme,
+                    backgroundColor: diagramBackground,
                     keepLastGoodSceneOnError: false,
                     onRequestFullscreen: widget.onRequestFullscreen,
                   ),
@@ -105,17 +113,34 @@ class _MaterialThemeDemoState extends State<MaterialThemeDemo> {
                 Positioned(
                   top: 8,
                   left: 8,
-                  child: Tooltip(
-                    message: dark
-                        ? 'Use light Material theme'
-                        : 'Use dark Material theme',
-                    child: IconButton.filledTonal(
-                      key: const ValueKey('material-theme-toggle'),
-                      onPressed: () => setState(() {
-                        _themeMode = dark ? ThemeMode.light : ThemeMode.dark;
-                      }),
-                      icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
-                    ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Tooltip(
+                        message: dark ? 'Use light theme' : 'Use dark theme',
+                        child: IconButton.filledTonal(
+                          key: const ValueKey('brightness-theme-toggle'),
+                          onPressed: () => setState(() {
+                            _themeMode = dark
+                                ? ThemeMode.light
+                                : ThemeMode.dark;
+                          }),
+                          icon: Icon(dark ? Icons.light_mode : Icons.dark_mode),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      FilterChip(
+                        key: const ValueKey('material-theme-toggle'),
+                        selected: _useMaterialTheme,
+                        onSelected: (selected) =>
+                            setState(() => _useMaterialTheme = selected),
+                        avatar: const Icon(Icons.palette_outlined, size: 18),
+                        label: const Text('Material theme'),
+                        tooltip: _useMaterialTheme
+                            ? 'Use native Mermaid theme'
+                            : 'Use Material theme bridge',
+                      ),
+                    ],
                   ),
                 ),
               ],

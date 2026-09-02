@@ -1,10 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
 import 'package:website/flutter/material_theme_demo.dart';
 
 void main() {
-  testWidgets('Material theme control recolors the embedded Mermaid view', (
+  testWidgets('uses native Mermaid themes until Material bridge is enabled', (
     tester,
   ) async {
     var fullscreenRequested = false;
@@ -16,21 +17,50 @@ void main() {
     );
 
     final lightView = tester.widget<MermaidView>(find.byType(MermaidView));
-    final lightBackground = lightView.theme.background;
-    expect(lightBackground.value, Colors.white.toARGB32());
-    expect(lightView.theme.primaryColor.value, 0xffd7e3ff);
-    expect(find.byTooltip('Use dark Material theme'), findsOneWidget);
+    expect(lightView.theme, core.MermaidTheme.defaultTheme);
+    expect(
+      tester
+          .widget<FilterChip>(
+            find.byKey(const ValueKey('material-theme-toggle')),
+          )
+          .selected,
+      isFalse,
+    );
+    expect(find.byTooltip('Use dark theme'), findsOneWidget);
+    expect(find.byTooltip('Use Material theme bridge'), findsOneWidget);
     lightView.onRequestFullscreen!();
     expect(fullscreenRequested, isTrue);
 
-    await tester.tap(find.byKey(const ValueKey('material-theme-toggle')));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 300));
+    await tester.tap(find.byKey(const ValueKey('brightness-theme-toggle')));
+    await tester.pumpAndSettle();
 
-    expect(find.byTooltip('Use light Material theme'), findsOneWidget);
-    final darkView = tester.widget<MermaidView>(find.byType(MermaidView));
-    expect(darkView.theme.background, isNot(lightBackground));
-    expect(darkView.theme.background.value, const Color(0xff101214).toARGB32());
-    expect(darkView.theme.primaryColor.value, 0xff174a7e);
+    expect(find.byTooltip('Use light theme'), findsOneWidget);
+    expect(
+      tester.widget<MermaidView>(find.byType(MermaidView)).theme,
+      core.MermaidTheme.darkTheme,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('material-theme-toggle')));
+    await tester.pumpAndSettle();
+
+    final materialDarkView = tester.widget<MermaidView>(
+      find.byType(MermaidView),
+    );
+    expect(materialDarkView.theme, isNot(core.MermaidTheme.darkTheme));
+    expect(
+      materialDarkView.theme.background.value,
+      const Color(0xff101214).toARGB32(),
+    );
+    expect(materialDarkView.theme.primaryColor.value, 0xff174a7e);
+    expect(find.byTooltip('Use native Mermaid theme'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('material-theme-toggle')));
+    await tester.pumpAndSettle();
+
+    expect(
+      tester.widget<MermaidView>(find.byType(MermaidView)).theme,
+      core.MermaidTheme.darkTheme,
+    );
+    expect(find.byTooltip('Use Material theme bridge'), findsOneWidget);
   });
 }

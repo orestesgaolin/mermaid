@@ -7,6 +7,49 @@ import 'package:mermaid_demo/main.dart';
 import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 void main() {
+  testWidgets('Material theme bridge is opt-in and independent of brightness', (
+    tester,
+  ) async {
+    await tester.binding.setSurfaceSize(const Size(1400, 900));
+    addTearDown(() => tester.binding.setSurfaceSize(null));
+    await tester.pumpWidget(const MermaidDemoApp());
+    await tester.pumpAndSettle();
+
+    final materialToggle = find.byKey(const ValueKey('material-theme-toggle'));
+    expect(tester.widget<FilterChip>(materialToggle).selected, isFalse);
+    expect(
+      tester.widget<MermaidView>(find.byType(MermaidView)).theme,
+      core.MermaidTheme.defaultTheme,
+    );
+
+    await tester.tap(find.byTooltip('Switch to dark theme'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(materialToggle).selected, isFalse);
+    expect(
+      tester.widget<MermaidView>(find.byType(MermaidView)).theme,
+      core.MermaidTheme.darkTheme,
+    );
+
+    await tester.tap(materialToggle);
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(materialToggle).selected, isTrue);
+    final view = tester.widget<MermaidView>(find.byType(MermaidView));
+    final materialTheme = Theme.of(tester.element(find.byType(MermaidView)));
+    expect(view.theme, MaterialMermaidTheme.fromTheme(materialTheme));
+
+    await tester.tap(find.byTooltip('Switch to light theme'));
+    await tester.pumpAndSettle();
+    expect(tester.widget<FilterChip>(materialToggle).selected, isTrue);
+    final lightView = tester.widget<MermaidView>(find.byType(MermaidView));
+    final lightMaterialTheme = Theme.of(
+      tester.element(find.byType(MermaidView)),
+    );
+    expect(
+      lightView.theme,
+      MaterialMermaidTheme.fromTheme(lightMaterialTheme),
+    );
+  });
+
   testWidgets('demo focuses and highlights tapped flowchart nodes and edges', (
     tester,
   ) async {

@@ -49,11 +49,11 @@ class _MermaidDemoAppState extends State<MermaidDemoApp> {
       title: 'Mermaid Dart',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        colorSchemeSeed: const Color(0xFF9370DB),
+        colorSchemeSeed: const Color(0xFF0B57D0),
         brightness: Brightness.light,
       ),
       darkTheme: ThemeData(
-        colorSchemeSeed: const Color(0xFF81B1DB),
+        colorSchemeSeed: const Color(0xFF8AB4F8),
         brightness: Brightness.dark,
       ),
       themeMode: _dark ? ThemeMode.dark : ThemeMode.light,
@@ -129,13 +129,18 @@ class _EditorPageState extends State<EditorPage> {
   }
 
   /// Per-session theme overrides from the style editor; reset by the
-  /// light/dark toggle or the editor's reset button.
+  /// light/dark or theme-source toggle, or the editor's reset button.
   core.MermaidTheme? _themeOverride;
+  bool _useMaterialTheme = false;
 
-  // The preview follows the app's complete Material color and text theme.
-  // This also demonstrates the one-call bridge used by consumer apps.
-  core.MermaidTheme get _baseTheme =>
-      MaterialMermaidTheme.fromTheme(Theme.of(context));
+  core.MermaidTheme get _baseTheme {
+    if (_useMaterialTheme) {
+      return MaterialMermaidTheme.fromTheme(Theme.of(context));
+    }
+    return widget.dark
+        ? core.MermaidTheme.darkTheme
+        : core.MermaidTheme.defaultTheme;
+  }
 
   core.MermaidTheme get _mermaidTheme => _themeOverride ?? _baseTheme;
 
@@ -208,6 +213,20 @@ class _EditorPageState extends State<EditorPage> {
             icon: const Icon(Icons.image_outlined),
             onPressed: _showPngExport,
           ),
+          FilterChip(
+            key: const ValueKey('material-theme-toggle'),
+            selected: _useMaterialTheme,
+            onSelected: (selected) => setState(() {
+              _useMaterialTheme = selected;
+              _themeOverride = null;
+            }),
+            avatar: const Icon(Icons.palette_outlined, size: 18),
+            label: const Text('Material theme'),
+            tooltip: _useMaterialTheme
+                ? 'Use native Mermaid theme'
+                : 'Use Material theme bridge',
+          ),
+          const SizedBox(width: 8),
           IconButton(
             tooltip:
                 widget.dark ? 'Switch to light theme' : 'Switch to dark theme',
