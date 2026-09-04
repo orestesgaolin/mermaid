@@ -14,13 +14,22 @@ class Home extends StatelessComponent {
       header(classes: 'site-header', [
         div(classes: 'header-top', [
           h1([.text('mermaid dart')]),
-          a(
-            classes: 'gh-link',
-            href: 'https://github.com/orestesgaolin/mermaid',
-            target: .blank,
-            attributes: {'rel': 'noopener noreferrer'},
-            [.text('GitHub ↗')],
-          ),
+          div(classes: 'header-links', [
+            a(
+              classes: 'gh-link',
+              href: 'https://pub.dev/packages/mermaid_flutter',
+              target: .blank,
+              attributes: const {'rel': 'noopener noreferrer'},
+              [.text('pub.dev ↗')],
+            ),
+            a(
+              classes: 'gh-link',
+              href: 'https://github.com/orestesgaolin/mermaid',
+              target: .blank,
+              attributes: const {'rel': 'noopener noreferrer'},
+              [.text('GitHub ↗')],
+            ),
+          ]),
         ]),
         p(classes: 'subtitle', [
           .text(
@@ -100,6 +109,16 @@ class Home extends StatelessComponent {
               'text roles into every Mermaid diagram family. The light/dark '
               'button switches brightness independently.',
             ),
+          ]),
+          p([
+            .text('Add '),
+            a(
+              [code([.text('mermaid_flutter')])],
+              href: 'https://pub.dev/packages/mermaid_flutter',
+              target: .blank,
+              attributes: const {'rel': 'noopener noreferrer'},
+            ),
+            .text(' from pub.dev to use the same widgets in your app.'),
           ]),
         ]),
         pre(classes: 'theme-bridge-code', [

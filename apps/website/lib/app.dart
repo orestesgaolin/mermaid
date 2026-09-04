@@ -44,6 +44,12 @@ class App extends StatelessComponent {
           flexWrap: .wrap,
           gap: .all(12.px),
         ),
+        css('.header-links').styles(
+          display: .flex,
+          alignItems: .center,
+          flexWrap: .wrap,
+          gap: .all(8.px),
+        ),
         css('.site-header h1').styles(
           fontSize: 2.4.rem,
           margin: .only(bottom: 4.px),
