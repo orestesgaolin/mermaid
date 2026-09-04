@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Version alignment with `mermaid_flutter` 0.2.1. No code changes.
+
 ## 0.2.0
 
 **Behavior changes**

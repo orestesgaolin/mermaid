@@ -1,3 +1,7 @@
+## 0.2.1
+
+- Add rendered diagram examples to the README.
+
 ## 0.2.0
 
 **Behavior changes**
