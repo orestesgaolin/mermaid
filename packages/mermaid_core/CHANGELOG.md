@@ -1,7 +1,43 @@
-## Unreleased
+## 0.2.0
 
+**Behavior changes**
+
+- Scene groups now carry a `SceneGroupRole`. `RenderScene.nodeBounds` and
+  node hit-testing include only `SceneGroupRole.node` groups, so cluster,
+  frame, namespace, boundary, section, and legend ids are no longer reported
+  as nodes.
+- `MermaidTheme` equality and `hashCode` now cover every palette field instead
+  of the 16 base fields, so two themes that differ only in a palette no longer
+  compare equal.
+- Default `cScale*`, `cScaleInv*`, and `cScalePeer*` colors now match
+  Mermaid.js 11, and `forestTheme` defines an XY chart plot palette.
+- Multi-line subgraph titles (`subgraph S["a<br/>b"]`) now sit inside the
+  cluster border instead of above it; the cluster reserves the full title band.
+- Frontmatter `config:` YAML now strips trailing `# comments`, so
+  `width: 800 # note` reads as the number 800 instead of silently falling back
+  to the default. As in YAML, an unquoted value that starts with `#` is a
+  comment, so quote color literals such as `linkColor: '#ff0000'`.
+- Frontmatter config keys may contain hyphens and dots, and values accept
+  flow-style maps such as `nodeColors: {Bio-conversion: '#f00'}`.
+- `layoutSankey` takes a single `config: SankeyConfig` parameter instead of
+  twelve named options. `Mermaid.render` is unaffected.
+- `SankeyConfig.useMaxWidth` was removed; it was parsed but never read.
+- `XyChart.horizontal`, `showDataLabel`, and `showDataLabelOutsideBar` are now
+  getters over `XyChart.config`; the matching constructor parameters were
+  removed.
+
+**Changes**
+
+- Add `resolveDiagramConfig` for reading per-diagram configuration from
+  directives and frontmatter.
+- Add `SceneShape.copyWith` and `SceneText.copyWith`, and value equality on
+  `SceneEdgeMetadata`.
+- Compute `RenderScene.nodeBounds` once per scene and reuse the map, and make
+  `MermaidTheme` equality short-circuit on identity with a cached hash code.
+- Share edge geometry helpers (rect intersection, basis curves, path
+  midpoints) and validated config readers across diagram layouts.
 - Add scene-space node-bound lookup through `RenderScene.nodeBounds` and
-  `RenderScene.boundsOf`.
+  `RenderScene.boundsOfNode`.
 - Add structured flowchart edge metadata and path-distance measurement for
   precise stroke and label interaction.
 - Add paint-only flowchart node and link overrides that reuse an existing
@@ -38,6 +74,52 @@
   `MermaidTheme.copyWith`, equality, and hash-code calculations.
 - Preserve hand-drawn edge markers and legacy Font Awesome labels, and add
   gradient strokes and multiply compositing to render scenes and SVG output.
+
+**Fixes**
+
+- Header-only diagrams (`flowchart TB`, `classDiagram`, `erDiagram`,
+  `requirementDiagram`, `stateDiagram-v2`) render an empty scene instead of
+  throwing from `render()`.
+- A sequence block with no participants, a transition into an empty composite
+  state, and a quadrant chart smaller than its title and axis bands render
+  instead of throwing.
+- Sankey values too large to scale (such as `1e308`) no longer throw; `NaN`
+  and the infinities are reported as a `MermaidParseException` at parse time.
+- `look: handDrawn` keeps gradient link colors and multiply blending instead
+  of flattening them to a solid color.
+- Long flowchart edge labels, flowchart titles, and isolated-direction
+  subgraph titles carry explicit line breaks, so SVG output no longer
+  overflows its label box.
+- Block: a child's span is clamped to its group's column count so a wide span
+  no longer paints over siblings, and round shapes are sized from the shorter
+  side of their cell.
+- C4: boundary descriptions are measured at the width they are drawn at, so a
+  long description no longer paints over the elements inside the boundary;
+  an empty boundary label reserves no space.
+- Class: cross-namespace relations follow `direction`, relation labels use
+  the theme's edge-label background, namespace separation repeats until no
+  clusters overlap, and notes move with their class.
+- Git: the LR commit-tag spear tip is drawn outside the tag body, matching
+  upstream.
+- Venn: the title band is sized from the measured title so it no longer
+  overlaps the circles.
+- ER: attribute bands grow with the minimum-height floor so they cover the
+  whole entity.
+- Requirement: the re-column pass is bounded by each rank's free space, so a
+  relation source no longer drags its target past its neighbours.
+- XY chart: negative, zero, or non-finite `config.xyChart` dimensions fall
+  back to defaults; an all-equal value series maps to the middle of the range
+  and a single category is centered, matching d3.
+- Sankey: a node with a custom `nodeColors` entry no longer consumes a
+  palette slot, and value-less labels are centered on their node.
+- Sequence: a `create`d participant's top box is exposed as `actor_<id>`
+  again, and message arrowheads stop on the target's activation bar.
+- Radar: a body `title` line overrides the frontmatter title, matching every
+  other diagram.
+- Quadrant: a dangling axis label appends the long arrow with surrounding
+  spaces, matching upstream's grammar.
+- Journey section labels use the theme's title color; Ishikawa cause labels
+  are centered on their box.
 
 ## 0.1.2
 

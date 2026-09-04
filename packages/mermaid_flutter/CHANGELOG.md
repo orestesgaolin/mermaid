@@ -1,4 +1,13 @@
-## Unreleased
+## 0.2.0
+
+**Behavior changes**
+
+- `onNodeTap` now fires only for diagram nodes (`SceneGroupRole.node`).
+  Sequence frames, class namespaces, composite states, C4 boundaries, journey
+  sections, and pie legend entries are no longer tap targets.
+- Requires `mermaid_core` 0.2.0.
+
+**Changes**
 
 - Preserve requested monospace fonts and add platform symbol-font fallbacks for
   Unicode diagram labels.
@@ -20,6 +29,9 @@
   `ScenePainter` and headless PNG output.
 - Keep node, edge, hover, semantics, and scene callbacks working when
   paint-only overrides change.
+- The built-in fullscreen popup uses the view's own `padding`, `zoomStep`,
+  `panStep`, and `showControls` instead of falling back to the defaults.
+- Refresh the pub.dev screenshots for the corrected layouts.
 
 ## 0.1.2
 
