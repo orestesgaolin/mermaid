@@ -76,7 +76,7 @@ class BlockGroup extends BlockItem {
 }
 
 /// Endpoint marker shapes (mirrors upstream `point`/`circle`/`cross`).
-enum BlockMarker { none, point, circle, cross }
+enum BlockMarker { point, circle, cross }
 
 class BlockEdge {
   const BlockEdge(
@@ -710,7 +710,7 @@ _GridLayout _layoutGrid(
   var cellW = 40.0;
   var rowH = 30.0;
   for (final s in sized) {
-    cellW = math.max(cellW, s.width / s.item.span);
+    cellW = math.max(cellW, s.width / _spanIn(s.item, cols));
     rowH = math.max(rowH, s.height);
   }
   // Place row by row.
@@ -721,19 +721,21 @@ _GridLayout _layoutGrid(
   // Per-row height (allow tall groups).
   final rows = <List<_Sized>>[[]];
   for (final s in sized) {
-    if (col + s.item.span > cols && col > 0) {
+    final span = _spanIn(s.item, cols);
+    if (col + span > cols && col > 0) {
       rows.add([]);
       col = 0;
     }
     rows.last.add(s);
-    col += s.item.span;
+    col += span;
   }
   for (final row in rows) {
     var rx = 0.0;
     final rh = row.fold(rowH, (a, s) => math.max(a, s.height));
     col = 0;
     for (final s in row) {
-      final spanW = s.item.span * cellW + (s.item.span - 1) * _cellGap;
+      final span = _spanIn(s.item, cols);
+      final spanW = span * cellW + (span - 1) * _cellGap;
       // Upstream `setBlockSizes` equalizes every sibling, including composite
       // groups. When a group grows, its own children grow to fill it too.
       s.width = spanW;
@@ -743,7 +745,7 @@ _GridLayout _layoutGrid(
       }
       s.center = Point(rx + spanW / 2, y + rh / 2);
       rx += spanW + _cellGap;
-      col += s.item.span;
+      col += span;
     }
     maxX = math.max(maxX, rx - _cellGap);
     y += rh + _cellGap;
@@ -751,6 +753,16 @@ _GridLayout _layoutGrid(
   x = maxX;
   return _GridLayout(sized, x, y - _cellGap, cols);
 }
+
+/// Columns an item occupies inside a grid of [columns] columns.
+///
+/// A span wider than the grid is clamped: upstream never lets a block spill
+/// past the row it sits in (`layout.ts` caps `columnsFilled` at the columns
+/// left in the row), so a child can never grow wider than its parent's inner
+/// width. Auto-column grids ([columns] <= 0) size themselves to the total span,
+/// so nothing is clamped there.
+int _spanIn(BlockItem item, int columns) =>
+    columns > 0 ? math.min(item.span, columns) : item.span;
 
 void _expandGridWidth(_GridLayout grid, double targetWidth) {
   if (targetWidth <= grid.width || grid.cells.isEmpty) return;
@@ -761,18 +773,19 @@ void _expandGridWidth(_GridLayout grid, double targetWidth) {
   var col = 0;
   var rx = 0.0;
   for (final cell in grid.cells) {
-    if (col + cell.item.span > grid.columns && col > 0) {
+    final span = _spanIn(cell.item, grid.columns);
+    if (col + span > grid.columns && col > 0) {
       col = 0;
       rx = 0;
     }
-    final spanW = cell.item.span * cellW + (cell.item.span - 1) * _cellGap;
+    final spanW = span * cellW + (span - 1) * _cellGap;
     cell.width = spanW;
     cell.center = Point(rx + spanW / 2, cell.center.y);
     if (cell.childLayout != null) {
       _expandGridWidth(cell.childLayout!, math.max(0, spanW - 2 * _pad));
     }
     rx += spanW + _cellGap;
-    col += cell.item.span;
+    col += span;
   }
   grid.width = targetWidth;
 }
@@ -791,14 +804,18 @@ List<SceneNode> _drawNode(
   final rect = Rect.fromCenter(c, w, h);
   final st = Stroke(color: stroke, width: 1);
   final f = Fill(fill);
+  // A round shape has one radius, so it is bounded by the shorter side of its
+  // cell. Sibling equalization only widens cells, so taking the width alone
+  // would let a circle spill out of a short row.
+  final radius = math.min(w, h) / 2;
   final shapes = switch (n.shape) {
     BlockShape.circle => [
-      SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st),
+      SceneShape(geometry: CircleGeometry(c, radius), fill: f, stroke: st),
     ],
     BlockShape.doubleCircle => [
-      SceneShape(geometry: CircleGeometry(c, w / 2), fill: f, stroke: st),
+      SceneShape(geometry: CircleGeometry(c, radius), fill: f, stroke: st),
       SceneShape(
-        geometry: CircleGeometry(c, math.max(w / 2 - 5, 1)),
+        geometry: CircleGeometry(c, math.max(radius - 5, 1)),
         fill: const Fill(Color.transparent),
         stroke: st,
       ),
@@ -1174,7 +1191,6 @@ List<SceneNode> _marker(
         ),
       ];
     case BlockMarker.point:
-    case BlockMarker.none:
       return [
         SceneShape(
           geometry: PolygonGeometry([

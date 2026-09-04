@@ -6,6 +6,7 @@ import 'dart:math' as math;
 
 import '../../color.dart';
 import '../../directives.dart';
+import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -16,8 +17,12 @@ import '../../vendor/dagre/dart_dagre.dart' as dagre;
 import '../flowchart/flow_model.dart' show FlowDirection;
 import 'er_model.dart';
 
-// Upstream erBox uses the resolved ER entityPadding as vertical padding once
-// per row.
+// Upstream `erBox` uses two different paddings and the port keeps both:
+// `PADDING` (= `config.er.diagramPadding`, the horizontal gutter added once
+// per column, with text inset by half of it on each side) and `TEXT_PADDING`
+// (= `config.er.entityPadding`, the vertical space added once per row, which
+// [ErConfig.entityPadding] resolves). Only the vertical one is configurable
+// here; the horizontal one keeps erBox's own fallback.
 const double _cellPadX = 10;
 const double _diagramPadding = 8;
 const double _markerLen = 18;
@@ -186,15 +191,15 @@ class _ErLayout {
         final dagreEdge = result.graph.findEdgeById('e$i')!;
         points = List<Point>.from(dagreEdge.points);
         if (points.length < 2) points = [from.center, to.center];
-        points[0] = _intersectRect(from.rect, points[1]);
+        points[0] = intersectRect(from.rect, points[1]);
         points[points.length - 1] =
-            _intersectRect(to.rect, points[points.length - 2]);
+            intersectRect(to.rect, points[points.length - 2]);
       }
 
       final startTip = points.first;
-      final startDir = _dir(points[1], startTip);
+      final startDir = direction(points[1], startTip);
       final endTip = points.last;
-      final endDir = _dir(points[points.length - 2], endTip);
+      final endDir = direction(points[points.length - 2], endTip);
       // Crow's foot markers sit between line end and entity; shorten line.
       points[0] = startTip - startDir * _markerLen;
       points[points.length - 1] = endTip - endDir * _markerLen;
@@ -207,7 +212,7 @@ class _ErLayout {
           SceneShape(
             geometry: PathGeometry(points.length == 2
                 ? [MoveTo(points[0]), LineTo(points[1])]
-                : _curveBasis(points)),
+                : curveBasis(points)),
             stroke: Stroke(
               color: theme.lineColor,
               width: 1,
@@ -330,7 +335,16 @@ class _ErLayout {
     if (total < width) colWidths[colCount - 1] += width - total;
     // h = sum(rowHeights) + nameBBox.height, floored at minEntityHeight.
     var height = headerHeight + rowHeights.fold(0.0, (a, b) => a + b);
-    height = math.max(height, _minEntityHeight);
+    if (height < _minEntityHeight) {
+      // The floor grows the box, so grow the rows with it: the attribute bands
+      // are drawn from these heights, and leaving them short would paint a
+      // blank strip across the bottom of the entity.
+      final extra = (_minEntityHeight - height) / rowHeights.length;
+      for (var i = 0; i < rowHeights.length; i++) {
+        rowHeights[i] += extra;
+      }
+      height = _minEntityHeight;
+    }
     return _EntityBox(e, width, height, colWidths, rowHeights, headerHeight);
   }
 
@@ -512,53 +526,4 @@ class _ErLayout {
     return Point((a.x + b.x) / 2, (a.y + b.y) / 2);
   }
 
-  Point _dir(Point from, Point to) {
-    final d = to - from;
-    final len = math.sqrt(d.x * d.x + d.y * d.y);
-    return len == 0 ? const Point(0, 1) : Point(d.x / len, d.y / len);
-  }
 }
-
-// --- helpers (same private ports as class/state layouts) ---------------------
-
-Point _intersectRect(Rect rect, Point outside) {
-  final c = rect.center;
-  final dx = outside.x - c.x;
-  final dy = outside.y - c.y;
-  if (dx == 0 && dy == 0) return c;
-  final w = rect.width / 2;
-  final h = rect.height / 2;
-  double sx, sy;
-  if (dy.abs() * w > dx.abs() * h) {
-    sy = dy < 0 ? -h : h;
-    sx = dx * sy / dy;
-  } else {
-    sx = dx < 0 ? -w : w;
-    sy = dy * sx / dx;
-  }
-  return Point(c.x + sx, c.y + sy);
-}
-
-List<PathCommand> _curveBasis(List<Point> pts) {
-  if (pts.isEmpty) return const [];
-  if (pts.length == 1) return [MoveTo(pts.first)];
-  if (pts.length == 2) return [MoveTo(pts[0]), LineTo(pts[1])];
-  final cmds = <PathCommand>[MoveTo(pts[0])];
-  cmds.add(LineTo(Point(
-    (5 * pts[0].x + pts[1].x) / 6,
-    (5 * pts[0].y + pts[1].y) / 6,
-  )));
-  for (var i = 2; i < pts.length; i++) {
-    cmds.add(_basisSegment(pts[i - 2], pts[i - 1], pts[i]));
-  }
-  final n = pts.length;
-  cmds.add(_basisSegment(pts[n - 2], pts[n - 1], pts[n - 1]));
-  cmds.add(LineTo(pts[n - 1]));
-  return cmds;
-}
-
-CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
-      Point((2 * p0.x + p1.x) / 3, (2 * p0.y + p1.y) / 3),
-      Point((p0.x + 2 * p1.x) / 3, (p0.y + 2 * p1.y) / 3),
-      Point((p0.x + 4 * p1.x + p.x) / 6, (p0.y + 4 * p1.y + p.y) / 6),
-    );

@@ -1,7 +1,7 @@
 /// Tests for the sankey diagram.
 library;
 
-import 'dart:io';
+import 'support/fixtures.dart';
 import 'dart:math' as math;
 
 import 'package:mermaid_core/src/color.dart';
@@ -113,6 +113,22 @@ A,C,2
         throwsA(isA<MermaidParseException>()),
       );
     });
+
+    test('rejects values that parse but cannot be laid out', () {
+      for (final literal in ['NaN', 'Infinity', '-Infinity']) {
+        expect(
+          () => parseSankey('sankey-beta\nA,B,$literal'),
+          throwsA(
+            isA<MermaidParseException>().having(
+              (error) => error.message,
+              'message',
+              contains('finite'),
+            ),
+          ),
+          reason: literal,
+        );
+      }
+    });
   });
 
   group('layout', () {
@@ -143,15 +159,89 @@ A,C,2
       ).whereType<SceneText>().map((t) => t.text.split('\n').first);
       expect(names, containsAll(['A', 'B', 'C']));
     });
+
+    test('layoutSankey takes its options as a SankeyConfig', () {
+      final scene = layoutSankey(
+        parseSankey('sankey-beta\nA,B,10'),
+        measurer: measurer,
+        theme: theme,
+        config: const SankeyConfig(width: 300, height: 200, showValues: false),
+      );
+      final rects = flatten(scene.nodes)
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .toList();
+      final bounds = rects.reduce((a, b) => a.union(b));
+      expect(bounds.width, closeTo(300, 1e-6));
+      expect(bounds.height, lessThanOrEqualTo(200 + 1e-6));
+      expect(
+        flatten(scene.nodes).whereType<SceneText>().map((t) => t.text),
+        ['A', 'B'],
+      );
+    });
+
+    test('a custom node color does not consume a palette slot', () {
+      // d3 keys its ordinal scale by node id and only pulls the next palette
+      // entry for a node it has to color itself, so B — the first node without
+      // an explicit color — must still get the first palette entry.
+      Color fillOf(RenderScene scene, int index) => flatten(scene.nodes)
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .elementAt(index)
+          .fill!
+          .color;
+
+      final plain = layoutSankey(
+        parseSankey('sankey-beta\nA,B,10'),
+        measurer: measurer,
+        theme: theme,
+      );
+      final firstPaletteColor = fillOf(plain, 0);
+      final secondPaletteColor = fillOf(plain, 1);
+      expect(firstPaletteColor, isNot(secondPaletteColor));
+
+      const custom = Color(0xff123456);
+      final tinted = layoutSankey(
+        parseSankey('sankey-beta\nA,B,10'),
+        measurer: measurer,
+        theme: theme,
+        config: const SankeyConfig(nodeColors: {'A': custom}),
+      );
+      expect(fillOf(tinted, 0), custom);
+      expect(fillOf(tinted, 1), firstPaletteColor);
+    });
+
+    test('a value-less label is vertically centered on its node', () {
+      final scene = layoutSankey(
+        parseSankey('sankey-beta\nA,B,10\nA,C,10'),
+        measurer: measurer,
+        theme: theme,
+        config: const SankeyConfig(showValues: false),
+      );
+      final rects = flatten(scene.nodes)
+          .whereType<SceneShape>()
+          .where((shape) => shape.geometry is RectGeometry)
+          .map((shape) => (shape.geometry as RectGeometry).rect)
+          .toList();
+      final labels = flatten(scene.nodes).whereType<SceneText>().toList();
+      expect(labels, hasLength(rects.length));
+      for (var i = 0; i < rects.length; i++) {
+        expect(
+          labels[i].bounds.center.y,
+          closeTo(rects[i].center.y, 1e-9),
+          reason: 'label ${labels[i].text} must sit on its node centre',
+        );
+      }
+    });
   });
 
   group('Mermaid.render configuration', () {
     const renderer = Mermaid(measurer: measurer, theme: theme);
 
     test('fixture frontmatter controls extent, values, and gradient links', () {
-      final source = File(
-        'test/fixtures/upstream_sankey/03.mmd',
-      ).readAsStringSync();
+      final source = readFixture('upstream_sankey/03.mmd');
       final sankey = parseSankey(source);
       final scene = renderer.render(source);
       final nodes = flatten(scene.nodes);
@@ -170,7 +260,13 @@ A,C,2
       expect(diagramBounds.width, closeTo(1200, 1e-6));
       expect(diagramBounds.height, closeTo(600, 1e-6));
       expect(scene.size.width, greaterThan(1200));
-      expect(texts, isNotEmpty);
+      // `showValues: false` in the fixture frontmatter, so every node gets
+      // exactly one single-line label and nothing else is written.
+      expect(texts, hasLength(sankey.nodes.length));
+      expect(
+        texts.map((text) => text.text).toSet(),
+        equals(sankey.nodes.toSet()),
+      );
       expect(texts.every((text) => !text.text.contains('\n')), isTrue);
       expect(ribbons.every((shape) => shape.stroke?.gradient != null), isTrue);
       expect(
@@ -444,12 +540,16 @@ C,Z,0.1
 
       final rectBounds = rects.reduce((a, b) => a.union(b));
       expect(rectBounds.height, lessThanOrEqualTo(100 + 1e-6));
-      expect(rects[4].height, closeTo(2, 1e-6));
+      // `_kMinVisualFlowWidth` (2 px) is the floor the layout keeps for a node
+      // bar and its lane so a near-zero flow stays visible; C,Z,0.1 against a
+      // 100 px height scales below it, so it must land exactly on the floor.
+      const minVisualFlowWidth = 2.0;
+      expect(rects[4].height, closeTo(minVisualFlowWidth, 1e-6));
       final largeWidth = ribbons[0].stroke!.width;
       final mediumWidth = ribbons[1].stroke!.width;
       final smallWidth = ribbons[2].stroke!.width;
       expect(largeWidth / mediumWidth, closeTo(10, 1e-6));
-      expect(smallWidth, closeTo(2, 1e-6));
+      expect(smallWidth, closeTo(minVisualFlowWidth, 1e-6));
       expect(rects[0].height, closeTo(largeWidth, 1e-6));
       expect(rects[2].height, closeTo(mediumWidth, 1e-6));
       expect(rects[4].height, closeTo(smallWidth, 1e-6));

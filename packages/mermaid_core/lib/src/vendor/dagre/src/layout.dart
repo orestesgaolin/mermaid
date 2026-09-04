@@ -23,7 +23,19 @@ import 'order/index.dart';
 
 void layout(Graph g, DagreConfig config) {
   var layoutGraph = _buildLayoutGraph(g);
-  _runLayout(layoutGraph,config);
+  if (layoutGraph.nodeCount == 0) {
+    // Vendored fix: a node-less graph has nothing to rank, order or position.
+    // dagre.js walks the whole pipeline as a chain of no-ops (`_.min([])` and
+    // `_.max([])` are `undefined`, so every loop body is skipped) and leaves a
+    // zero-sized graph. The Dart port asserted those minima were non-null and
+    // crashed instead, so header-only sources (`flowchart TB`, `classDiagram`,
+    // `erDiagram`, `requirementDiagram`, ...) threw out of `render()`.
+    layoutGraph.label.width = 0;
+    layoutGraph.label.height = 0;
+    _updateInputGraph(g, layoutGraph);
+    return;
+  }
+  _runLayout(layoutGraph, config);
   _updateInputGraph(g, layoutGraph);
 }
 

@@ -7,9 +7,27 @@ import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/mermaid.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
+import 'package:mermaid_core/src/text/text_measurer.dart';
+import 'package:mermaid_core/src/text/text_style.dart';
 import 'package:test/test.dart';
 
 const _m = Mermaid(measurer: ApproximateTextMeasurer());
+
+/// A measurer whose line box is taller than [ApproximateTextMeasurer]'s, as a
+/// real text painter's is. A layout that reserves space from a hard-coded font
+/// size instead of from the measured text collides under it.
+class _TallLineMeasurer implements TextMeasurer {
+  const _TallLineMeasurer();
+
+  @override
+  Size measure(String text, TextStyleSpec style, {double? maxWidth}) {
+    final s =
+        const ApproximateTextMeasurer().measure(text, style, maxWidth: maxWidth);
+    return Size(s.width, s.height * 1.35);
+  }
+}
+
+const _tall = Mermaid(measurer: _TallLineMeasurer());
 
 List<SceneNode> _flat(List<SceneNode> n) => [
       for (final x in n) ...[
@@ -80,12 +98,62 @@ venn-beta
   set Frontend
   set Backend
 ''');
-    final title = _flat(s.nodes)
-        .whereType<SceneText>()
-        .singleWhere((text) => text.text == 'Skills overlap');
+    final texts = _flat(s.nodes).whereType<SceneText>();
+    final title = texts.singleWhere((text) => text.text == 'Skills overlap');
+    final setLabel = texts.singleWhere((text) => text.text == 'Frontend');
 
+    // `.venn-title` pins 32px, unlike the `48 * scale` = 24px set labels.
     expect(title.style.fontSize, 32);
-    expect(title.style.fontWeight, 400);
+    expect(title.style.fontSize, greaterThan(setLabel.style.fontSize));
+    // Upstream anchors the title at x="50%" of the viewBox.
+    expect(title.bounds.center.x, closeTo(s.size.width / 2, 0.001));
+  });
+
+  test('venn title band keeps the title clear of the circles', () {
+    // The upstream `demos/venn.html` three-set sample.
+    const source = '''
+venn-beta
+  title Three overlapping sets
+  set A
+  set B
+  set C
+  union A,B["AB"]
+  union B,C["BC"]
+  union A,C["AC"]
+  union A,B,C["ABC"]
+''';
+
+    // The band is sized from the measured title, so a taller line box must not
+    // push the title into the circles either.
+    for (final entry in {'approximate': _m, 'tall lines': _tall}.entries) {
+      final s = entry.value.render(source);
+
+      // Upstream viewBox: nothing may push the scene past 800x450.
+      expect(s.size.width, 800, reason: entry.key);
+      expect(s.size.height, 450, reason: entry.key);
+
+      final nodes = _flat(s.nodes);
+      final title = nodes
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == 'Three overlapping sets');
+      final circles = nodes
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<CircleGeometry>()
+          .toList();
+      expect(circles, hasLength(3));
+
+      expect(title.bounds.top, greaterThanOrEqualTo(0), reason: entry.key);
+      for (final c in circles) {
+        final box = Rect.fromCenter(c.center, c.radius * 2, c.radius * 2);
+        final overlaps = title.bounds.left < box.right &&
+            box.left < title.bounds.right &&
+            title.bounds.top < box.bottom &&
+            box.top < title.bounds.bottom;
+        expect(overlaps, isFalse,
+            reason: '${entry.key}: title ${title.bounds} overlaps circle $box');
+      }
+    }
   });
 
   test('ishikawa renders problem head and categories', () {
@@ -100,7 +168,7 @@ ishikawa-beta
     expect(_texts(s), containsAll(['Blurry Photo', 'Process', 'Out of focus']));
   });
 
-  test('ishikawa middle labels use painter height at branch anchors', () {
+  test('ishikawa sub-labels sit at the free end of their bone', () {
     final s = _m.render('''
 ishikawa-beta
   Slow website
@@ -110,18 +178,70 @@ ishikawa-beta
     final nodes = _flat(s.nodes);
     final label = nodes.whereType<SceneText>()
         .singleWhere((text) => text.text == 'Old servers');
-    expect(label.bounds.height,
-        const ApproximateTextMeasurer().measure(label.text, label.style).height);
-    final branch = nodes.whereType<SceneShape>()
+    // The only thin horizontal segment is the sub-bone: the spine is 2px wide
+    // and the cause branch is diagonal.
+    final bone = nodes.whereType<SceneShape>()
+        .where((shape) => shape.stroke?.width == 1)
         .map((shape) => shape.geometry).whereType<PathGeometry>()
         .where((path) => path.commands.length == 2)
-        .singleWhere((path) {
-      final a = (path.commands.first as MoveTo).p;
-      final b = (path.commands.last as LineTo).p;
-      return a.y == b.y && (b.x - label.bounds.right).abs() < 0.001;
-    });
-    expect(label.bounds.center.y,
-        closeTo((branch.commands.last as LineTo).p.y, 0.001));
+        .singleWhere((path) =>
+            (path.commands.first as MoveTo).p.y ==
+            (path.commands.last as LineTo).p.y);
+    final boneEnd = (bone.commands.last as LineTo).p;
+    // End-anchored with a middle dominant baseline: the label hangs to the left
+    // of the bone tip and is vertically centred on it.
+    expect(label.bounds.right, closeTo(boneEnd.x, 0.001));
+    expect(label.bounds.center.y, closeTo(boneEnd.y, 0.001));
+    expect(label.bounds.left, lessThan(boneEnd.x));
+  });
+
+  test('ishikawa cause labels are centred in their boxes', () {
+    final s = _m.render('''
+ishikawa-beta
+  Blurry Photo
+    Process
+      Camera was not focused correctly
+      Subject moved during exposure
+    Equipment
+      Dirty lens
+''');
+    final nodes = _flat(s.nodes);
+    for (final name in ['Process', 'Equipment']) {
+      final label =
+          nodes.whereType<SceneText>().singleWhere((text) => text.text == name);
+      final box = nodes.whereType<SceneShape>()
+          .map((shape) => shape.geometry).whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .singleWhere((rect) =>
+              rect.top < label.bounds.center.y &&
+              rect.bottom > label.bounds.center.y);
+      expect(label.bounds.center.x, closeTo(box.center.x, 0.001),
+          reason: '$name label is off-centre horizontally');
+      expect(label.bounds.center.y, closeTo(box.center.y, 0.001),
+          reason: '$name label is off-centre vertically');
+    }
+  });
+
+  test('ishikawa stacks a wrapped sub-label without overlapping lines', () {
+    final s = _m.render('''
+ishikawa-beta
+  Blurry Photo
+    Process
+      Camera was not focused correctly
+      Subject moved during exposure
+''');
+    final texts = _flat(s.nodes).whereType<SceneText>();
+    final wrapped =
+        texts.singleWhere((text) => text.text.startsWith('Camera was not'));
+    final next =
+        texts.singleWhere((text) => text.text.startsWith('Subject moved'));
+    final oneLine = texts.singleWhere((text) => text.text == 'Process');
+
+    // A wrapped label is taller than a single line and must not run into the
+    // next label on the same branch.
+    expect(wrapped.text.split('\n'), hasLength(greaterThan(1)));
+    expect(wrapped.bounds.height, greaterThan(oneLine.bounds.height));
+    expect(wrapped.bounds.bottom, lessThan(next.bounds.top));
   });
 
   test('wardley renders components and axis stages', () {

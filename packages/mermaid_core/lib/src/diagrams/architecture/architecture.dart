@@ -10,6 +10,7 @@ import 'dart:math' as math;
 
 import '../../color.dart';
 import '../../detect.dart';
+import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../icons/icon_registry.dart';
 import '../../ir/scene.dart';
@@ -85,17 +86,7 @@ class ArchitectureDiagram {
 
 String _bracketLabel(String? s, String id) {
   if (s == null || s.isEmpty) return id;
-  return _unquote(s);
-}
-
-/// Strips a single layer of surrounding matched quotes (single or double).
-String _unquote(String s) {
-  if (s.length >= 2 &&
-      ((s.startsWith('"') && s.endsWith('"')) ||
-          (s.startsWith("'") && s.endsWith("'")))) {
-    return s.substring(1, s.length - 1);
-  }
-  return s;
+  return unquote(s);
 }
 
 ArchitectureDiagram parseArchitecture(String source) {
@@ -197,7 +188,7 @@ ArchitectureDiagram parseArchitecture(String source) {
         arrowTo,
         label: (rawLabel == null || rawLabel.isEmpty)
             ? null
-            : _unquote(rawLabel),
+            : unquote(rawLabel),
         fromGroup: m.group(2) != null,
         toGroup: m.group(9) != null,
       ));

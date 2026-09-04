@@ -14,6 +14,7 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
 import '../../directives.dart';
 import '../../geometry.dart';
@@ -26,10 +27,10 @@ import '../../theme/theme.dart';
 
 /// Typed values from `config.sankey`.
 ///
-/// [useMaxWidth] controls responsive SVG sizing in Mermaid.js. A [RenderScene]
-/// has an intrinsic logical size instead, so this backend records the option
-/// but does not change layout geometry. `MermaidView` contain-fits that scene
-/// and therefore preserves the configured [width]/[height] aspect ratio.
+/// Upstream's `useMaxWidth` is not represented here: it only switches the SVG
+/// element between a fixed and a responsive width. A [RenderScene] carries an
+/// intrinsic logical size instead, and `MermaidView` contain-fits it, so the
+/// configured [width]/[height] aspect ratio is preserved either way.
 class SankeyConfig {
   const SankeyConfig({
     this.width = 600,
@@ -42,7 +43,6 @@ class SankeyConfig {
     this.prefix = '',
     this.suffix = '',
     this.labelStyle = 'legacy',
-    this.useMaxWidth = false,
     this.nodeColors = const {},
   });
 
@@ -58,36 +58,12 @@ class SankeyConfig {
   final String prefix;
   final String suffix;
   final String labelStyle;
-  final bool useMaxWidth;
   final Map<String, Color> nodeColors;
 
   /// Resolves frontmatter first, then applies init directives in order.
   /// Invalid values use the renderer's documented defaults.
   factory SankeyConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'sankey');
-
-    double positive(String key, double fallback) {
-      final value = values[key];
-      if (value is num) {
-        final resolved = value.toDouble();
-        if (resolved.isFinite && resolved > 0) return resolved;
-      }
-      return fallback;
-    }
-
-    double nonNegative(String key, double fallback) {
-      final value = values[key];
-      if (value is num) {
-        final resolved = value.toDouble();
-        if (resolved.isFinite && resolved >= 0) return resolved;
-      }
-      return fallback;
-    }
-
-    String oneOf(String key, Set<String> supported, String fallback) {
-      final value = values[key];
-      return value is String && supported.contains(value) ? value : fallback;
-    }
 
     var linkColor = values['linkColor'];
     if (linkColor is! String ||
@@ -109,26 +85,26 @@ class SankeyConfig {
     }
 
     return SankeyConfig(
-      width: positive('width', 600),
-      height: positive('height', 600),
-      nodeWidth: positive('nodeWidth', 10),
-      nodePadding: nonNegative('nodePadding', 12),
-      nodeAlignment: oneOf('nodeAlignment', const {
+      width: positiveDouble(values, 'width', 600),
+      height: positiveDouble(values, 'height', 600),
+      nodeWidth: positiveDouble(values, 'nodeWidth', 10),
+      nodePadding: nonNegativeDouble(values, 'nodePadding', 12),
+      nodeAlignment: enumValue(values, 'nodeAlignment', const {
         'left',
         'right',
         'center',
         'justify',
       }, 'justify'),
       linkColor: linkColor,
-      showValues: values['showValues'] is bool
-          ? values['showValues']! as bool
-          : true,
-      prefix: values['prefix'] is String ? values['prefix']! as String : '',
-      suffix: values['suffix'] is String ? values['suffix']! as String : '',
-      labelStyle: oneOf('labelStyle', const {'legacy', 'outlined'}, 'legacy'),
-      useMaxWidth: values['useMaxWidth'] is bool
-          ? values['useMaxWidth']! as bool
-          : false,
+      showValues: boolValue(values, 'showValues', true),
+      prefix: stringValue(values, 'prefix', ''),
+      suffix: stringValue(values, 'suffix', ''),
+      labelStyle: enumValue(
+        values,
+        'labelStyle',
+        const {'legacy', 'outlined'},
+        'legacy',
+      ),
       nodeColors: Map.unmodifiable(nodeColors),
     );
   }
@@ -180,6 +156,17 @@ Sankey parseSankey(String source) {
     if (value == null) {
       throw MermaidParseException(
         'invalid sankey value "${fields[2]}"',
+        line: i + 1,
+      );
+    }
+    // `NaN`, `Infinity` and `-Infinity` parse as doubles but cannot be laid
+    // out: every scale derived from them is non-finite, so the whole scene
+    // would collapse to NaN geometry. Upstream renders the literal text and a
+    // broken chart; rejecting at parse time keeps `render()` to its
+    // documented contract of a finite scene or a MermaidParseException.
+    if (!value.isFinite) {
+      throw MermaidParseException(
+        'sankey value "${fields[2].trim()}" must be a finite number',
         line: i + 1,
       );
     }
@@ -299,19 +286,19 @@ RenderScene layoutSankey(
   // sankeyRenderer.ts uses `height ?? defaultSankeyConfig.width`, so the
   // default canvas is square (600×600) — matching that keeps our aspect ratio
   // identical to mermaid.js so a contain-fit embed renders at the same width.
-  double width = 600,
-  double height = 600,
-  double nodeWidth = 10,
-  double nodePadding = 12,
-  String nodeAlignment = 'justify',
-  String linkColor = 'gradient',
-  bool showValues = true,
-  String prefix = '',
-  String suffix = '',
-  String labelStyle = 'legacy',
-  Map<String, Color> nodeColors = const {},
+  SankeyConfig config = const SankeyConfig(),
 }) {
-  final align = _alignmentFromName(nodeAlignment);
+  final width = config.width;
+  final height = config.height;
+  final nodeWidth = config.nodeWidth;
+  final nodePadding = config.nodePadding;
+  final linkColor = config.linkColor;
+  final showValues = config.showValues;
+  final prefix = config.prefix;
+  final suffix = config.suffix;
+  final labelStyle = config.labelStyle;
+  final nodeColors = config.nodeColors;
+  final align = _alignmentFromName(config.nodeAlignment);
   // d3-sankey: nodePadding(nodePadding + (showValues ? 15 : 0)).
   var py = nodePadding + (showValues ? 15.0 : 0.0);
   const labelFontSize = 14.0;
@@ -323,9 +310,14 @@ RenderScene layoutSankey(
   // Build nodes (first-seen order) and links wired to node objects.
   final nodes = <String, _Node>{};
   final nodeList = <_Node>[];
+  // d3's ordinal scale only draws a palette entry when it is asked for an
+  // unseen key, so a node carrying an explicit `nodeColors` entry never
+  // consumes a slot: the next uncolored node still gets `_palette[0]`.
+  var paletteSlot = 0;
   for (var i = 0; i < diagram.nodes.length; i++) {
     final name = diagram.nodes[i];
-    final color = nodeColors[name] ?? _palette[i % _palette.length];
+    final color =
+        nodeColors[name] ?? _palette[paletteSlot++ % _palette.length];
     final n = _Node(name, i, color);
     nodes[name] = n;
     nodeList.add(n);
@@ -417,9 +409,11 @@ RenderScene layoutSankey(
     0,
     (largest, column) => math.max(largest, column.length),
   );
-  final effectiveMinNodeHeight = maxColumnLength == 0
-      ? _kMinVisualFlowWidth
-      : math.min(_kMinVisualFlowWidth, height / maxColumnLength);
+  // `nodeList` is non-empty here, so at least one column holds a node.
+  final effectiveMinNodeHeight = math.min(
+    _kMinVisualFlowWidth,
+    height / maxColumnLength,
+  );
   if (maxColumnLength > 1) {
     final availableForPadding = math.max(
       0.0,
@@ -511,6 +505,8 @@ RenderScene layoutSankey(
   final labelLayer = <SceneNode>[];
 
   // --- Links: thick horizontal cubic strokes ----------------------------
+  // `linkColor` may name a CSS color; parse it once rather than per link.
+  final customLinkColor = Color.tryParse(linkColor);
   for (final l in links) {
     final w = math.max(_kMinVisualFlowWidth, l.width);
     final x0 = l.source.x1;
@@ -520,7 +516,6 @@ RenderScene layoutSankey(
     final ty = l.y1;
     // Upstream strokes a horizontal cubic centerline at `w`; the visible band
     // is the area between the top and bottom edges of that stroke.
-    final customLinkColor = Color.tryParse(linkColor);
     final solidColor = switch (linkColor) {
       'target' => l.target.color,
       'source' => l.source.color,
@@ -566,12 +561,9 @@ RenderScene layoutSankey(
   // --- Labels -----------------------------------------------------------
   final outlined = labelStyle == 'outlined';
   for (final n in nodeList) {
-    final value = math.max(
-      n.sourceLinks.fold(0.0, (a, l) => a + l.value),
-      n.targetLinks.fold(0.0, (a, l) => a + l.value),
-    );
+    // `n.value` is already `max(sum(out), sum(in))` from computeNodeValues.
     final text = showValues
-        ? '${n.name}\n$prefix${_fmtValue(value)}$suffix'
+        ? '${n.name}\n$prefix${_fmtValue(n.value)}$suffix'
         : n.name;
 
     // Label position. legacy: position-based (x0 < width/2). outlined:
@@ -584,9 +576,10 @@ RenderScene layoutSankey(
     }
 
     final labelSize = measurer.measure(text, labelTextStyle, maxWidth: 400);
+    // Upstream's `dy=0.35em` turns an SVG alphabetic baseline into a centered
+    // one. `bounds` is already a centered box, so applying it again pushed
+    // single-line labels ~4.7px below the node they annotate.
     final cy = (n.y0 + n.y1) / 2;
-    // dy: 0.35em when no values (single baseline), 0 otherwise.
-    final dy = showValues ? 0.0 : labelFontSize * 0.35;
     final lx = onRight
         ? n.x1 + 6 + labelSize.width / 2
         : n.x0 - 6 - labelSize.width / 2;
@@ -594,7 +587,7 @@ RenderScene layoutSankey(
     SceneText makeText(Color color) => SceneText(
       text: text,
       bounds: Rect.fromCenter(
-        Point(lx, cy + dy),
+        Point(lx, cy),
         labelSize.width,
         labelSize.height,
       ),
@@ -630,11 +623,17 @@ RenderScene layoutSankey(
 /// `Math.round(v*100)/100` rendered like JS: drop a trailing `.0` so
 /// integers print as `23`, not `23.0`.
 String _fmtValue(double v) {
-  final rounded = (v * 100).round() / 100;
-  if (rounded == rounded.truncateToDouble()) {
-    return rounded.toInt().toString();
-  }
-  return rounded.toString();
+  final scaled = v * 100;
+  // `v * 100` overflows to infinity near `double.maxFinite`. A double that
+  // large has no fractional part left, so rounding to two decimals is a no-op
+  // and `v` itself is the rounded value. (`(1/0).round()` would throw.)
+  final rounded = scaled.isFinite ? scaled.roundToDouble() / 100 : v;
+  if (rounded != rounded.truncateToDouble()) return rounded.toString();
+  if (rounded == 0) return '0';
+  // JS `String(n)` prints an integral double in full up to 1e21 and switches
+  // to exponential above it. `toStringAsFixed(0)` reproduces that and, unlike
+  // `toInt()`, does not saturate at the 64-bit integer range.
+  return rounded.abs() < 1e21 ? rounded.toStringAsFixed(0) : rounded.toString();
 }
 
 /// Applies Mermaid's 0.5 link opacity without replacing configured alpha.

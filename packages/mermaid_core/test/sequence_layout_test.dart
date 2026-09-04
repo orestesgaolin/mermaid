@@ -1,12 +1,13 @@
 /// Structural tests for the sequence diagram layout.
 library;
 
-import 'dart:io';
+import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/diagrams/sequence/sequence_layout.dart';
 import 'package:mermaid_core/src/diagrams/sequence/sequence_parser.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
+import 'package:mermaid_core/src/ir/scene_utils.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
@@ -75,9 +76,7 @@ Rect groupBounds(SceneGroup g) {
 
 void main() {
   test('fixture 01 wraps explicit wrap labels into a compact scene', () {
-    final source = File(
-      'test/fixtures/upstream_sequence/01.mmd',
-    ).readAsStringSync();
+    final source = readFixture('upstream_sequence/01.mmd');
     final scene = layoutSequence(
       parseSequence(source),
       measurer: const ApproximateTextMeasurer(),
@@ -95,7 +94,24 @@ void main() {
       (text) => text.text.startsWith("John's trying hard"),
     );
     expect(unwrappedNote.text, isNot(contains('\n')));
-    expect(scene.size.width, lessThan(900));
+
+    // Wrapping is what keeps the scene compact: a `wrap:` message is laid out
+    // inside the gap between its two participants (centre distance plus
+    // 2 * wrapPadding), never at its full single-line width.
+    double centerX(String id) => groupBounds(
+      groups(scene, 'actor_$id').firstWhere((g) => g.id == 'actor_$id'),
+    ).center.x;
+    const wrapPadding = 10.0;
+    final wrapBudget = (centerX('John') - centerX('Bob')).abs() +
+        2 * wrapPadding;
+    expect(wrappedMessage.bounds.width, lessThanOrEqualTo(wrapBudget));
+    final unwrappedWidth = const ApproximateTextMeasurer()
+        .measure(
+          wrappedMessage.text.replaceAll('\n', ' '),
+          wrappedMessage.style,
+        )
+        .width;
+    expect(wrappedMessage.bounds.width, lessThan(unwrappedWidth));
   });
 
   test('columns ordered left to right, boxes mirrored top and bottom', () {
@@ -187,8 +203,73 @@ end
     expect(badge('2').center.x, closeTo(webBar.center.x, 1e-9));
     expect(badge('3').center.x, closeTo(authBar.center.x, 1e-9));
 
+    // `Note right of` starts actorMargin/2 right of the lifeline, which clears
+    // the half-width of the activation bar drawn on that lifeline.
+    const actorMargin = 50.0;
+    const activationWidth = 10.0;
     final note = groupBounds(groups(s, 'note').single);
-    expect(note.left - authBar.right, greaterThanOrEqualTo(10));
+    expect(note.left, closeTo(actorCenter('S') + actorMargin / 2, 1e-9));
+    expect(
+      note.left - authBar.right,
+      closeTo(actorMargin / 2 - activationWidth / 2, 1e-9),
+    );
+  });
+
+  test('a created participant exposes both its top and bottom box', () {
+    final s = layout(
+      'participant A\nparticipant B\n'
+      'A->>B: hello\n'
+      'create participant C\n'
+      'B->>C: made you\n',
+    );
+    final ids = flatten(s.nodes)
+        .whereType<SceneGroup>()
+        .map((group) => group.id)
+        .whereType<String>()
+        .toList();
+    // Both boxes used to be emitted as `actor_C_bottom`, which dropped
+    // `actor_C` from the public hover/tap surface entirely.
+    expect(ids.where((id) => id == 'actor_C'), hasLength(1));
+    expect(ids.where((id) => id == 'actor_C_bottom'), hasLength(1));
+    expect(s.nodeBounds.keys, contains('actor_C'));
+
+    final top = groupBounds(
+      groups(s, 'actor_C').firstWhere((group) => group.id == 'actor_C'),
+    );
+    final bottom = groupBounds(groups(s, 'actor_C_bottom').single);
+    expect(bottom.top, greaterThan(top.bottom));
+    // The created box starts below the diagram top, unlike a declared one.
+    final declared = groupBounds(
+      groups(s, 'actor_A').firstWhere((group) => group.id == 'actor_A'),
+    );
+    expect(top.top, greaterThan(declared.bottom));
+  });
+
+  test('an arrow into an active participant stops on its bar', () {
+    // Upstream ends a message on the target's activation-bar edge
+    // (`stopx = isArrowToRight ? toLeft : toRight`), not on its lifeline, and
+    // nested bars step right by half an activation width each. The sending
+    // side already did this; the tip ignored it.
+    final s = layout(
+      'participant A\nparticipant B\n'
+      'A->>B: on the lifeline\n'
+      'activate B\n'
+      'activate B\n'
+      'A->>B: on the nested bar\n'
+      'deactivate B\n'
+      'deactivate B\n',
+    );
+    final arrows = groups(s, 'msg_').map(groupBounds).toList()
+      ..sort((a, b) => a.top.compareTo(b.top));
+    expect(arrows, hasLength(2));
+
+    // The nested bar is drawn at [x, x + activationWidth]; the tip moves with
+    // its centre, half an activation width right of the bare lifeline.
+    const activationWidth = 10.0;
+    expect(
+      arrows[1].right - arrows[0].right,
+      closeTo(activationWidth / 2, 1e-9),
+    );
   });
 
   test('note over two participants spans both lifelines', () {

@@ -1,7 +1,7 @@
 /// Tests for self-loop edges and per-subgraph direction layout.
 library;
 
-import 'dart:io';
+import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart';
@@ -35,6 +35,15 @@ List<(List<String?>, SceneNode)> flatten(
   return out;
 }
 
+/// The point a path command draws to.
+Point endPointOf(PathCommand command) => switch (command) {
+  MoveTo(:final p) => p,
+  LineTo(:final p) => p,
+  QuadTo(:final p) => p,
+  CubicTo(:final p) => p,
+  ClosePath() => fail('a path must not end with a close command'),
+};
+
 SceneGroup groupById(RenderScene scene, String id) => flatten(
   scene.nodes,
 ).map((e) => e.$2).whereType<SceneGroup>().firstWhere((g) => g.id == id);
@@ -53,31 +62,47 @@ Rect groupBounds(SceneGroup g) {
 }
 
 void main() {
-  test('fixture 07 basis edges ease into their final endpoints', () {
-    final source = File(
-      'test/fixtures/upstream_flowcharts/07.mmd',
-    ).readAsStringSync();
+  test('fixture 07 basis edges meet their arrowheads', () {
+    final source = readFixture('upstream_flowcharts/07.mmd');
     final scene = layout(parseFlowchart(source));
 
     for (final id in [
       'edge_c0102290_1ec3_e711_8c5a_005056ad0002_71082290_1ec3_e711_8c5a_005056ad0002_37',
       'edge_9a072290_1ec3_e711_8c5a_005056ad0002_d6072290_1ec3_e711_8c5a_005056ad0002_38',
     ]) {
-      final shape = groupById(scene, id).children
-          .whereType<SceneShape>()
-          .singleWhere((node) => node.geometry is PathGeometry);
-      final commands = (shape.geometry as PathGeometry).commands;
-      final last = commands.last;
-      expect(
-        last,
-        isA<CubicTo>(),
-        reason: '$id must not change from a basis curve to a straight tail',
+      final shapes = groupById(scene, id).children.whereType<SceneShape>();
+      final path = shapes
+          .map((node) => node.geometry)
+          .whereType<PathGeometry>()
+          .single;
+      final head = shapes
+          .map((node) => node.geometry)
+          .whereType<PolygonGeometry>()
+          .single;
+
+      // The arrowhead is `[tip, base + perp * 4, base - perp * 4]`, so the
+      // midpoint of its trailing edge is where the line has to stop: any gap
+      // there shows as a break between the route and its arrow, any overlap
+      // as a line poking through the head.
+      final base = Point(
+        (head.points[1].x + head.points[2].x) / 2,
+        (head.points[1].y + head.points[2].y) / 2,
       );
-      final CubicTo(:c1, :c2, :p) = last as CubicTo;
-      expect(c1.x, closeTo(p.x, 1e-9));
-      expect(c1.y, closeTo(p.y, 1e-9));
-      expect(c2.x, closeTo(p.x, 1e-9));
-      expect(c2.y, closeTo(p.y, 1e-9));
+      final end = endPointOf(path.commands.last);
+      expect(
+        end.distanceTo(base),
+        lessThan(0.01),
+        reason: '$id must end exactly where its arrowhead begins',
+      );
+
+      // ...and approach it, rather than passing the tip and folding back.
+      final beforeEnd = endPointOf(path.commands[path.commands.length - 2]);
+      final tip = head.points.first;
+      expect(
+        end.distanceTo(tip),
+        lessThan(beforeEnd.distanceTo(tip)),
+        reason: '$id must close on its arrow tip, not overshoot it',
+      );
     }
 
     final sqlAgentPath =
@@ -91,7 +116,7 @@ void main() {
             .single;
     final start = (sqlAgentPath.commands.first as MoveTo).p;
     final firstSegmentEnd = (sqlAgentPath.commands[1] as LineTo).p;
-    final end = (sqlAgentPath.commands.last as CubicTo).p;
+    final end = endPointOf(sqlAgentPath.commands.last);
     final firstStep = firstSegmentEnd - start;
     final sourceToTarget = end - start;
     final forwardProgress =
@@ -394,6 +419,76 @@ graph LR
           .rect;
       final memberRect = groupBounds(groupById(scene, memberId));
       expect(clusterRect.center.y, closeTo(memberRect.center.y, 1e-6));
+    }
+  });
+
+  test('a multi-line subgraph title stays inside its cluster', () {
+    // `<br/>` becomes a hard break, so the title block is two lines tall. The
+    // cluster has to reserve that whole band: centring a one-line box inside
+    // 1.5x the font size pushed a two-line title above its own border.
+    final graph = parseFlowchart('''
+flowchart TD
+  subgraph S["First line<br/>Second line"]
+    A[Alpha]
+    B[Beta]
+  end
+  A --> B
+''');
+    final scene = layout(graph);
+    final cluster = groupById(scene, 'S');
+    final rect = cluster.children
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<RectGeometry>()
+        .single
+        .rect;
+    final title = cluster.children.whereType<SceneText>().single;
+
+    expect(title.text, contains('\n'), reason: '<br/> must break the title');
+    expect(title.bounds.top, greaterThanOrEqualTo(rect.top - 1e-6));
+    expect(title.bounds.bottom, lessThanOrEqualTo(rect.bottom + 1e-6));
+    expect(title.bounds.left, greaterThanOrEqualTo(rect.left - 1e-6));
+    expect(title.bounds.right, lessThanOrEqualTo(rect.right + 1e-6));
+
+    for (final id in ['A', 'B']) {
+      final member = groupBounds(groupById(scene, id));
+      expect(
+        member.top,
+        greaterThanOrEqualTo(title.bounds.bottom),
+        reason: '$id must start below the two-line title, not behind it',
+      );
+      expect(member.bottom, lessThanOrEqualTo(rect.bottom + 1e-6));
+    }
+  });
+
+  test('a long edge label carries its own line breaks', () {
+    // The label size is measured as a wrapped block; the backends only break
+    // on explicit newlines, so the emitted text must contain them or the SVG
+    // paints one long line straight out of the label background.
+    const label =
+        'this edge label is far too long to fit on a single rendered line';
+    final scene = layout(parseFlowchart('flowchart LR\n  A -->|$label| B'));
+    final group = flatten(scene.nodes)
+        .map((entry) => entry.$2)
+        .whereType<SceneGroup>()
+        .singleWhere((g) => g.id?.startsWith('edgelabel_') ?? false);
+    final text = group.children.whereType<SceneText>().single;
+    final background = group.children
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<RectGeometry>()
+        .single
+        .rect;
+
+    expect(text.text.split('\n').length, greaterThan(1));
+    expect(text.text.replaceAll('\n', ' '), label);
+    // Every wrapped line has to fit the measured block the background sizes.
+    const measurer = ApproximateTextMeasurer();
+    for (final line in text.text.split('\n')) {
+      expect(
+        measurer.measure(line, text.style).width,
+        lessThanOrEqualTo(background.width),
+      );
     }
   });
 

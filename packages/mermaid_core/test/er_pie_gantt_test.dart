@@ -184,6 +184,41 @@ void main() {
       expect(rowRects.first.top - customerBox.top - name.bounds.height,
           closeTo(15, 0.001));
     });
+    test('attribute bands cover a short entity to its bottom edge', () {
+      // One short attribute measures under the 75px minimum entity height, so
+      // the box is floored -- the bands have to grow with it.
+      final scene = layoutErDiagram(
+        parseErDiagram('erDiagram\nCAR {\nstring vin PK\n}'),
+        measurer: measurer,
+        theme: theme,
+      );
+      final entity = scene.nodes.whereType<SceneGroup>().single;
+      final rects = entity.children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .toList();
+      final outer = rects.reduce(
+          (a, b) => a.width * a.height > b.width * b.height ? a : b);
+      final bands = rects.where((rect) => rect != outer).toList();
+
+      expect(outer.height, closeTo(75, 0.001));
+      expect(bands, hasLength(1));
+      expect(bands.last.bottom, closeTo(outer.bottom, 0.001));
+      expect(bands.first.left, closeTo(outer.left, 0.001));
+      expect(bands.first.right, closeTo(outer.right, 0.001));
+      // The header is the only part of the box the bands leave uncovered.
+      final header = entity.children
+          .whereType<SceneText>()
+          .singleWhere((text) => text.text == 'CAR');
+      expect(bands.first.top, greaterThan(header.bounds.bottom));
+      expect(
+        bands.fold(0.0, (sum, rect) => sum + rect.height) +
+            (bands.first.top - outer.top),
+        closeTo(outer.height, 0.001),
+      );
+    });
     test('entityPadding config overrides the 15 px default end to end', () {
       const source = '''
 %%{init: {"er": {"entityPadding": 24}}}%%

@@ -123,7 +123,6 @@ class _SequenceLayout {
         case SeqAutonumber():
           autonumber = event.on;
           if (event.on) {
-            autoValue = (event.start ?? 1) - (event.step ?? 1);
             autoStep = event.step ?? 1;
             autoValue = event.start != null ? event.start! - autoStep : 0;
           }
@@ -284,7 +283,7 @@ class _SequenceLayout {
       // mirrorActors: repeat at the bottom, unless the participant was
       // destroyed before the end.
       if (destroyY[id] == null) {
-        _actorBox(col, bottomBoxTop);
+        _actorBox(col, bottomBoxTop, isBottom: true);
       } else {
         // ✗ marker where the lifeline ends.
         final d = 6.0;
@@ -454,7 +453,7 @@ class _SequenceLayout {
 
   // --- drawing ----------------------------------------------------------------
 
-  void _actorBox(_Column col, double top) {
+  void _actorBox(_Column col, double top, {bool isBottom = false}) {
     final p = col.participant;
     final rect = Rect.fromLTWH(
       col.x - col.boxWidth / 2,
@@ -526,7 +525,11 @@ class _SequenceLayout {
     }
     actorNodes.add(
       SceneGroup(
-        id: 'actor_${p.id}${top > 0 ? '_bottom' : ''}',
+        // The mirrored bottom box is the only one that takes the `_bottom`
+        // suffix. Deriving it from `top > 0` gave a created participant's top
+        // box the bottom id too, so `actor_<id>` was missing from the public
+        // node bounds and the two boxes collided in the scene.
+        id: 'actor_${p.id}${isBottom ? '_bottom' : ''}',
         semanticLabel: p.label,
         children: children,
       ),
@@ -567,7 +570,9 @@ class _SequenceLayout {
     }
 
     final x1 = edge(msg.from, fromCol);
-    final x2 = toCol.x;
+    // Upstream stops the arrow on the target's activation-bar edge as well
+    // (`stopx = isArrowToRight ? toLeft : toRight`), not on its lifeline.
+    final x2 = edge(msg.to, toCol);
     final children = <SceneNode>[];
 
     if (msg.text.isNotEmpty) {
@@ -768,10 +773,8 @@ class _SequenceLayout {
           final col2 = columns[note.target2!]!;
           final lo = math.min(col.x, col2.x) - 25;
           final hi = math.max(col.x, col2.x) + 25;
-          left = lo;
+          // Center the wider of the span and the requested width over it.
           width = math.max(hi - lo, w);
-          // Center the requested width over the span.
-          if (w > width) width = w;
           left = (lo + hi) / 2 - width / 2;
         } else {
           left = col.x - w / 2;
@@ -809,9 +812,11 @@ class _SequenceLayout {
 
   void _emitFrame(_OpenFrame frame, double endY) {
     if (!frame.minX.isFinite) {
-      // Empty block: give it a nominal extent around the first column.
-      final first = columns[order.first]!;
-      frame.include(first.x - 20, first.x + 20);
+      // Empty block: give it a nominal extent around the first column. A
+      // diagram with no participants at all (`sequenceDiagram / loop x / end`)
+      // has no column to anchor to, so fall back to the origin.
+      final anchorX = order.isEmpty ? 0.0 : columns[order.first]!.x;
+      frame.include(anchorX - 20, anchorX + 20);
     }
     final inset = 10.0 + frame.depth * 6;
     final rect = Rect.fromLTRB(
@@ -946,7 +951,18 @@ class _SequenceLayout {
         ),
       );
       labelChildren.add(
-        _frameLabel('[$label]', Point(rect.center.x, dy + 3), centered: true),
+        SceneText(
+          text: '[$label]',
+          bounds: Rect.fromLTWH(
+            rect.center.x - size.width / 2,
+            dy + 3,
+            size.width,
+            size.height,
+          ),
+          style: baseStyle,
+          color: theme.loopTextColor,
+          align: TextAlignH.center,
+        ),
       );
     }
     frameLabels.add(
@@ -955,23 +971,6 @@ class _SequenceLayout {
         role: SceneGroupRole.internal,
         children: labelChildren,
       ),
-    );
-  }
-
-  SceneText _frameLabel(String text, Point topLeft, {bool centered = false}) {
-    final size = measurer.measure('[$text]', baseStyle);
-    final t = text.startsWith('[') ? text : '[$text]';
-    return SceneText(
-      text: t,
-      bounds: Rect.fromLTWH(
-        centered ? topLeft.x - size.width / 2 : topLeft.x,
-        topLeft.y,
-        size.width,
-        size.height,
-      ),
-      style: baseStyle,
-      color: theme.loopTextColor,
-      align: centered ? TextAlignH.center : TextAlignH.left,
     );
   }
 

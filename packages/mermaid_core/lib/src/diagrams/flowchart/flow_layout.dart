@@ -17,6 +17,7 @@ import '../../color.dart';
 import '../../geometry.dart';
 import '../../icons/icon_registry.dart';
 import '../../ir/scene.dart';
+import '../../ir/scene_utils.dart';
 import '../../math/tex_math.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
@@ -132,10 +133,17 @@ List<String> _wrapLabelLine(
 
     if (split == 0) {
       split = fitting;
-      // Avoid a tiny final fragment when a hard break is unavoidable.
+      // Avoid a tiny final fragment when a hard break is unavoidable — but
+      // never by creating an equally tiny first fragment. Moving the break
+      // left lengthens the tail to exactly [_minimumFragment] runes, so the
+      // line left behind has to clear that same bar (otherwise a 4+1 split
+      // would become a 1+4 split, which is no better).
       final tail = remaining.length - split;
-      if (tail > 0 && tail < 4 && split > 4 - tail) {
-        split -= 4 - tail;
+      final shrink = _minimumFragment - tail;
+      if (tail > 0 &&
+          tail < _minimumFragment &&
+          split - shrink >= _minimumFragment) {
+        split -= shrink;
       }
     }
 
@@ -148,6 +156,21 @@ List<String> _wrapLabelLine(
   }
   return result.isEmpty ? [''] : result;
 }
+
+/// Shortest label fragment a hard break may leave on its own line.
+const int _minimumFragment = 4;
+
+/// Distance from the top of a cluster rect to the top of its title block.
+///
+/// Upstream draws the title as an HTML label with `line-height: 1.5`, so a
+/// single-line title's visual box is taller than the measured text and the
+/// text is centred inside it. A title with explicit line breaks already
+/// measures at least as tall as that box, and centring it would push it above
+/// the cluster border, so it sits flush at the top instead. The cluster's
+/// reserved top band is [_clusterPadding] plus the measured title height, so a
+/// non-negative offset always keeps the whole title inside the rect.
+double _clusterTitleOffset(double fontSize, Size titleSize) =>
+    math.max(0, (fontSize * 1.5 - titleSize.height) / 2);
 
 bool _preferredLabelBreak(String rune) =>
     rune == '_' || rune == '-' || _isLabelWhitespace(rune);
@@ -183,13 +206,12 @@ RenderScene layoutFlowchart(
   if (title != null && title.isNotEmpty) {
     // `.flowchartTitleText`: fixed 18px, normal weight, fill = textColor.
     final titleStyle = baseStyle.copyWith(fontSize: 18, fontWeight: 400);
-    final titleSize = measurer.measure(
-      title,
-      titleStyle,
-      maxWidth: _wrappingWidth,
-    );
+    // Resolve soft wraps here: the measured size assumes a wrapped block, and
+    // the backends only break on explicit `\n`.
+    final wrappedTitle = _wrapLabel(title, titleStyle, measurer);
+    final titleSize = wrappedTitle.size;
     final titleNode = SceneText(
-      text: title,
+      text: wrappedTitle.text,
       bounds: Rect.fromLTWH(
         bounds.center.x - titleSize.width / 2,
         bounds.top - _diagramPadding - titleSize.height,
@@ -206,7 +228,7 @@ RenderScene layoutFlowchart(
   // Translate so the min corner sits at (padding, padding).
   final dx = _diagramPadding - bounds.left;
   final dy = _diagramPadding - bounds.top;
-  sceneNodes = [for (final n in sceneNodes) _translateNode(n, dx, dy)];
+  sceneNodes = [for (final n in sceneNodes) translateSceneNode(n, dx, dy)];
 
   return RenderScene(
     size: Size(
@@ -232,6 +254,7 @@ class _IsolatedCluster {
   _IsolatedCluster({
     required this.subgraph,
     required this.fragment,
+    required this.titleText,
     required this.titleSize,
     required this.width,
     required this.height,
@@ -239,6 +262,9 @@ class _IsolatedCluster {
 
   final FlowSubgraph subgraph;
   final _Fragment fragment;
+
+  /// Cluster title with soft wraps resolved to `\n`, matching [titleSize].
+  final String titleText;
   final Size titleSize;
   final double width;
   final double height;
@@ -354,16 +380,14 @@ _Fragment _layoutGraph(
       elkOptions: elkOptions,
       originalLinkIndices: subLinkIndices,
     );
-    final titleSize = sgs[root].title.isEmpty
-        ? Size.zero
-        : measurer.measure(
-            sgs[root].title,
-            baseStyle,
-            maxWidth: _wrappingWidth,
-          );
+    final wrappedTitle = sgs[root].title.isEmpty
+        ? const _WrappedLabel('', Size.zero)
+        : _wrapLabel(sgs[root].title, baseStyle, measurer);
+    final titleSize = wrappedTitle.size;
     final cluster = _IsolatedCluster(
       subgraph: sgs[root],
       fragment: fragment,
+      titleText: wrappedTitle.text,
       titleSize: titleSize,
       width:
           math.max(fragment.bounds.width, titleSize.width) +
@@ -532,6 +556,9 @@ _Fragment _layoutGraph(
   }
 
   final edgeLabelSizes = <int, Size>{};
+  // Edge label text with soft wraps resolved to `\n`, so the SVG and Flutter
+  // backends break it at the same places the measured size assumed.
+  final edgeLabelText = <int, String>{};
   final edgeMath = <int, MathLayout>{};
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
@@ -544,11 +571,9 @@ _Fragment _layoutGraph(
         edgeMath[i] = ml;
         labelSize = ml.size;
       } else {
-        labelSize = measurer.measure(
-          label,
-          baseStyle,
-          maxWidth: _wrappingWidth,
-        );
+        final wrapped = _wrapLabel(label, baseStyle, measurer);
+        edgeLabelText[i] = wrapped.text;
+        labelSize = wrapped.size;
       }
       edgeLabelSizes[i] = labelSize;
     }
@@ -736,12 +761,9 @@ _Fragment _layoutGraph(
             visibleClusterBottoms[sg.id] ??
                 pos.bottom + _clusterPadding + titleSize.height,
           );
-    // HTML labels use line-height 1.5 upstream. Center Flutter's shorter
-    // measured line box inside that visual line height without growing the
-    // cluster's layout band.
     final titleTop =
         (useElk ? pos.top + _clusterPadding : rect.top) +
-        (clusterTitleStyle.fontSize * 1.5 - titleSize.height) / 2;
+        _clusterTitleOffset(clusterTitleStyle.fontSize, titleSize);
     clusterRects[sg.id] = rect;
     clusterGroups.add(
       SceneGroup(
@@ -786,12 +808,14 @@ _Fragment _layoutGraph(
       if (cluster.subgraph.title.isNotEmpty)
         SceneText(
           // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
-          text: cluster.subgraph.title,
+          text: cluster.titleText,
           bounds: Rect.fromLTWH(
             rect.center.x - cluster.titleSize.width / 2,
             rect.top +
-                (clusterTitleStyle.fontSize * 1.5 - cluster.titleSize.height) /
-                    2,
+                _clusterTitleOffset(
+                  clusterTitleStyle.fontSize,
+                  cluster.titleSize,
+                ),
             cluster.titleSize.width,
             cluster.titleSize.height,
           ),
@@ -806,7 +830,7 @@ _Fragment _layoutGraph(
         cluster.titleBand -
         cluster.fragment.bounds.top;
     children.addAll([
-      for (final n in cluster.fragment.nodes) _translateNode(n, dx, dy),
+      for (final n in cluster.fragment.nodes) translateSceneNode(n, dx, dy),
     ]);
     clusterGroups.add(
       SceneGroup(
@@ -901,6 +925,7 @@ _Fragment _layoutGraph(
             baseStyle,
             theme,
             math: edgeMath[i],
+            paintText: edgeLabelText[i],
           ),
         );
       }
@@ -1090,6 +1115,7 @@ _Fragment _layoutGraph(
           baseStyle,
           theme,
           math: edgeMath[i],
+          paintText: edgeLabelText[i],
         ),
       );
     }
@@ -1195,7 +1221,7 @@ _Fragment _layoutGraph(
   ];
   return _Fragment(
     sceneNodes,
-    _boundsOfAll(sceneNodes) ?? const Rect.fromLTWH(0, 0, 0, 0),
+    sceneBounds(sceneNodes) ?? const Rect.fromLTWH(0, 0, 0, 0),
   );
 }
 
@@ -1208,6 +1234,9 @@ SceneGroup _edgeLabelGroup(
   TextStyleSpec baseStyle,
   MermaidTheme theme, {
   MathLayout? math,
+  // Label text with soft wraps already resolved to `\n`; falls back to the
+  // edge's raw label.
+  String? paintText,
 }) {
   const pad = 2.0;
   final bg = Rect.fromCenter(
@@ -1237,7 +1266,7 @@ SceneGroup _edgeLabelGroup(
         )
       else
         SceneText(
-          text: e.label!,
+          text: paintText ?? e.label!,
           bounds: Rect.fromCenter(
             labelCenter,
             labelSize.width,
@@ -2444,31 +2473,8 @@ SceneNode _withNodePaintRole(SceneNode node, ScenePaintRole role) =>
             for (final child in children) _withNodePaintRole(child, role),
           ],
         ),
-      SceneShape(:final geometry, :final fill, :final stroke) => SceneShape(
-        geometry: geometry,
-        fill: fill,
-        stroke: stroke,
-        paintRole: role,
-      ),
-      SceneText(
-        :final text,
-        :final bounds,
-        :final style,
-        :final color,
-        :final align,
-        :final rotation,
-        :final underline,
-      ) =>
-        SceneText(
-          text: text,
-          bounds: bounds,
-          style: style,
-          color: color,
-          align: align,
-          rotation: rotation,
-          underline: underline,
-          paintRole: role,
-        ),
+      SceneShape() => node.copyWith(paintRole: role),
+      SceneText() => node.copyWith(paintRole: role),
     };
 
 /// Dispatches to the d3 curve named by `linkStyle … interpolate` (basis is
@@ -2558,10 +2564,9 @@ List<PathCommand> _curveBasis(List<Point> pts) {
   final n = pts.length;
   cmds.add(_basisSegment(pts[n - 2], pts[n - 1], pts[n - 1]));
   // d3-shape repeats the final point twice when closing an open basis line.
-  // The second repetition supplies the final cubic that eases into the
-  // endpoint. Replacing it with a LineTo leaves a long straight tail whenever
-  // Dagre's last two route points are far apart.
-  cmds.add(_basisSegment(pts[n - 1], pts[n - 1], pts[n - 1]));
+  // With all three control points equal the resulting cubic degenerates to the
+  // chord (both handles land on the endpoint), so emit that segment directly.
+  cmds.add(LineTo(pts[n - 1]));
   return cmds;
 }
 
@@ -2746,145 +2751,3 @@ double _distance(Point a, Point b) {
   final dy = b.y - a.y;
   return math.sqrt(dx * dx + dy * dy);
 }
-
-// --- Bounds & translation ----------------------------------------------------
-
-Rect? _boundsOfAll(Iterable<SceneNode> nodes) {
-  Rect? acc;
-  for (final n in nodes) {
-    final b = _nodeBounds(n);
-    if (b == null) continue;
-    acc = acc == null ? b : acc.union(b);
-  }
-  return acc;
-}
-
-Rect? _nodeBounds(SceneNode node) => switch (node) {
-  SceneGroup(:final children) => _boundsOfAll(children),
-  SceneShape(:final geometry) => _geometryBounds(geometry),
-  SceneText(:final bounds) => bounds,
-};
-
-Rect _geometryBounds(ShapeGeometry g) {
-  switch (g) {
-    case RectGeometry(:final rect):
-      return rect;
-    case CircleGeometry(:final center, :final radius):
-      return Rect.fromCenter(center, radius * 2, radius * 2);
-    case EllipseGeometry(:final center, :final rx, :final ry):
-      return Rect.fromCenter(center, rx * 2, ry * 2);
-    case PolygonGeometry(:final points):
-      return _pointsBounds(points);
-    case PathGeometry(:final commands):
-      return _pointsBounds([for (final c in commands) ..._commandPoints(c)]);
-  }
-}
-
-List<Point> _commandPoints(PathCommand c) => switch (c) {
-  MoveTo(:final p) => [p],
-  LineTo(:final p) => [p],
-  QuadTo(:final c, :final p) => [c, p],
-  CubicTo(:final c1, :final c2, :final p) => [c1, c2, p],
-  ClosePath() => const [],
-};
-
-Rect _pointsBounds(List<Point> pts) {
-  if (pts.isEmpty) return Rect.fromLTWH(0, 0, 0, 0);
-  var minX = pts.first.x, maxX = pts.first.x;
-  var minY = pts.first.y, maxY = pts.first.y;
-  for (final p in pts) {
-    minX = math.min(minX, p.x);
-    maxX = math.max(maxX, p.x);
-    minY = math.min(minY, p.y);
-    maxY = math.max(maxY, p.y);
-  }
-  return Rect.fromLTRB(minX, minY, maxX, maxY);
-}
-
-SceneNode _translateNode(SceneNode node, double dx, double dy) =>
-    switch (node) {
-      SceneGroup(
-        :final id,
-        :final role,
-        :final semanticLabel,
-        :final link,
-        :final tooltip,
-        :final edge,
-        :final children,
-      ) =>
-        SceneGroup(
-          id: id,
-          role: role,
-          semanticLabel: semanticLabel,
-          link: link,
-          tooltip: tooltip,
-          edge: edge,
-          children: [for (final c in children) _translateNode(c, dx, dy)],
-        ),
-      SceneShape(
-        :final geometry,
-        :final fill,
-        :final stroke,
-        :final paintRole,
-      ) =>
-        SceneShape(
-          geometry: _translateGeometry(geometry, dx, dy),
-          fill: fill,
-          stroke: stroke,
-          paintRole: paintRole,
-        ),
-      SceneText(
-        :final text,
-        :final bounds,
-        :final style,
-        :final color,
-        :final align,
-        :final rotation,
-        :final underline,
-        :final paintRole,
-      ) =>
-        SceneText(
-          text: text,
-          bounds: bounds.translate(dx, dy),
-          style: style,
-          color: color,
-          align: align,
-          rotation: rotation,
-          underline: underline,
-          paintRole: paintRole,
-        ),
-    };
-
-ShapeGeometry _translateGeometry(ShapeGeometry g, double dx, double dy) {
-  final d = Point(dx, dy);
-  return switch (g) {
-    RectGeometry(:final rect, :final rx, :final ry) => RectGeometry(
-      rect.translate(dx, dy),
-      rx: rx,
-      ry: ry,
-    ),
-    CircleGeometry(:final center, :final radius) => CircleGeometry(
-      center + d,
-      radius,
-    ),
-    EllipseGeometry(:final center, :final rx, :final ry) => EllipseGeometry(
-      center + d,
-      rx,
-      ry,
-    ),
-    PolygonGeometry(:final points) => PolygonGeometry([
-      for (final p in points) p + d,
-    ]),
-    PathGeometry(:final commands) => PathGeometry([
-      for (final c in commands) _translateCommand(c, d),
-    ]),
-  };
-}
-
-PathCommand _translateCommand(PathCommand c, Point d) => switch (c) {
-  MoveTo(:final p) => MoveTo(p + d),
-  LineTo(:final p) => LineTo(p + d),
-  QuadTo(:final c, :final p) => QuadTo(c + d, p + d),
-  CubicTo(:final c1, :final c2, :final p) => CubicTo(c1 + d, c2 + d, p + d),
-  ClosePath() => c,
-};

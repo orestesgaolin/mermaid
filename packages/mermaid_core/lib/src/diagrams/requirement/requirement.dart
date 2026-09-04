@@ -6,6 +6,7 @@ library;
 import 'dart:math' as math;
 
 import '../../detect.dart';
+import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -53,6 +54,14 @@ class ReqRelation {
   /// contains / copies / derives / satisfies / verifies / refines / traces.
   final String label;
 }
+
+/// Gap dagre is asked to leave between boxes, and the same gap this layout
+/// re-applies whenever it places a column by hand.
+const double _nodeSpacing = 50;
+
+/// How far apart two boxes' centres may sit vertically and still count as the
+/// same dagre rank.
+const double _rankTolerance = 25;
 
 const _kinds = {
   'requirement',
@@ -289,8 +298,12 @@ RenderScene layoutRequirementDiagram(
         height: size.height,
         labelPos: dagre.LabelPosition.center));
   }
-  final result = dagre.layout(g,
-      dagre.DagreConfig(rankDir: dagre.RankDir.ttb, nodeSep: 50, rankSep: 50));
+  final result = dagre.layout(
+      g,
+      dagre.DagreConfig(
+          rankDir: dagre.RankDir.ttb,
+          nodeSep: _nodeSpacing,
+          rankSep: _nodeSpacing));
 
   final nodes = <SceneNode>[];
   final centers = <String, Point>{};
@@ -309,7 +322,8 @@ RenderScene layoutRequirementDiagram(
   final rankGroups = <List<String>>[];
   for (final id in byY) {
     if (rankGroups.isEmpty ||
-        (centers[id]!.y - centers[rankGroups.last.first]!.y).abs() > 25) {
+        (centers[id]!.y - centers[rankGroups.last.first]!.y).abs() >
+            _rankTolerance) {
       rankGroups.add([id]);
     } else {
       rankGroups.last.add(id);
@@ -337,12 +351,11 @@ RenderScene layoutRequirementDiagram(
       });
     final current = [...rank]
       ..sort((a, b) => centers[a]!.x.compareTo(centers[b]!.x));
-    if (List.generate(
-      ordered.length,
-      (i) => ordered[i] == current[i],
-    ).every((same) => same)) {
-      continue;
+    var alreadyOrdered = true;
+    for (var i = 0; i < ordered.length && alreadyOrdered; i++) {
+      alreadyOrdered = ordered[i] == current[i];
     }
+    if (alreadyOrdered) continue;
 
     int incomingFromAbove(String id) => diagram.relations
         .where((relation) => relation.to == id)
@@ -362,7 +375,7 @@ RenderScene layoutRequirementDiagram(
       assigned[ordered[i]] =
           assigned[next]! -
           boxes[next]!.$1.width / 2 -
-          50 -
+          _nodeSpacing -
           boxes[ordered[i]]!.$1.width / 2;
     }
     for (var i = anchor + 1; i < ordered.length; i++) {
@@ -370,7 +383,7 @@ RenderScene layoutRequirementDiagram(
       assigned[ordered[i]] =
           assigned[previous]! +
           boxes[previous]!.$1.width / 2 +
-          50 +
+          _nodeSpacing +
           boxes[ordered[i]]!.$1.width / 2;
     }
     for (final id in ordered) {
@@ -380,45 +393,41 @@ RenderScene layoutRequirementDiagram(
       centers[id] = Point(x, center.y);
     }
   }
+  // A source the pass above moved has left its relations leaning sideways, so
+  // pull each of its targets toward the source's column -- but no further than
+  // the target's own rank leaves room. A target is claimed by the first source
+  // that reaches it, and a node this pass already placed is never moved twice.
+  final draggedTargets = <String>{};
   for (final sourceId in movedNodes.toList()) {
-    ReqRelation? relation;
-    for (final candidate in diagram.relations) {
-      if (candidate.from == sourceId) {
-        relation = candidate;
-        break;
+    for (final relation in diagram.relations) {
+      if (relation.from != sourceId || relation.to == sourceId) continue;
+      final targetId = relation.to;
+      if (movedNodes.contains(targetId) || !draggedTargets.add(targetId)) {
+        continue;
       }
-    }
-    if (relation == null) continue;
-    final targetId = relation.to;
-    final target = centers[targetId]!;
-    final peers =
-        centers.keys
-            .where((id) => id != targetId)
-            .where((id) => (centers[id]!.y - target.y).abs() <= 25)
-            .toList()
-          ..sort((a, b) => centers[a]!.x.compareTo(centers[b]!.x));
-    var x = centers[sourceId]!.x;
-    for (final peerId in peers) {
-      final peer = centers[peerId]!;
-      if (peer.x < target.x) {
-        x = math.max(
-          x,
-          peer.x +
-              boxes[peerId]!.$1.width / 2 +
-              50 +
-              boxes[targetId]!.$1.width / 2,
-        );
-      } else {
-        x = math.min(
-          x,
-          peer.x -
-              boxes[peerId]!.$1.width / 2 -
-              50 -
-              boxes[targetId]!.$1.width / 2,
-        );
+      final target = centers[targetId]!;
+      final halfWidth = boxes[targetId]!.$1.width / 2;
+      // Every rank peer contributes one bound. Collect them all before moving:
+      // applying them one at a time lets a later peer undo an earlier one.
+      var lowerBound = double.negativeInfinity;
+      var upperBound = double.infinity;
+      for (final peerId in centers.keys) {
+        if (peerId == targetId) continue;
+        final peer = centers[peerId]!;
+        if ((peer.y - target.y).abs() > _rankTolerance) continue;
+        final clearance =
+            boxes[peerId]!.$1.width / 2 + _nodeSpacing + halfWidth;
+        if (peer.x < target.x) {
+          lowerBound = math.max(lowerBound, peer.x + clearance);
+        } else {
+          upperBound = math.min(upperBound, peer.x - clearance);
+        }
       }
-    }
-    if ((target.x - x).abs() > 0.001) {
+      // A crowded rank can leave no feasible column at all; then the target
+      // keeps the position dagre gave it rather than overlapping a peer.
+      if (lowerBound > upperBound) continue;
+      final x = centers[sourceId]!.x.clamp(lowerBound, upperBound).toDouble();
+      if ((target.x - x).abs() <= 0.001) continue;
       centers[targetId] = Point(x, target.y);
       movedNodes.add(targetId);
     }
@@ -440,8 +449,8 @@ RenderScene layoutRequirementDiagram(
         Rect.fromCenter(centers[r.from]!, boxes[r.from]!.$1.width, boxes[r.from]!.$1.height);
     final toRect =
         Rect.fromCenter(centers[r.to]!, boxes[r.to]!.$1.width, boxes[r.to]!.$1.height);
-    pts[0] = _intersectRect(fromRect, pts[1]);
-    pts[pts.length - 1] = _intersectRect(toRect, pts[pts.length - 2]);
+    pts[0] = intersectRect(fromRect, pts[1]);
+    pts[pts.length - 1] = intersectRect(toRect, pts[pts.length - 2]);
     final isContains = r.label == 'contains';
 
     // Upstream: `contains` is solid (`pattern: normal`), other relations are
@@ -456,7 +465,7 @@ RenderScene layoutRequirementDiagram(
       const markerRadius = 9.0;
       final start = _outsideMarkerCenter(fromRect, border, markerRadius);
       pts[0] = start;
-      final sdir = _dir(pts[1], start); // points from line toward the source
+      final sdir = direction(pts[1], start); // points from line toward the source
       // Marker center sits at the start point; the crosshair lines span the
       // circle. Reproduce circle (r=9) + two crossing lines.
       final perp = Point(-sdir.y, sdir.x);
@@ -490,7 +499,7 @@ RenderScene layoutRequirementDiagram(
       // Non-contains: dashed line ending in an open `>` arrow (two strokes,
       // unfilled) — `markers.js:requirement_arrow`, `edgeMarker.ts` fill:false.
       final tip = pts.last;
-      final dir = _dir(pts[pts.length - 2], tip);
+      final dir = direction(pts[pts.length - 2], tip);
       pts[pts.length - 1] = tip - dir * 10;
       final perp = Point(-dir.y, dir.x);
       children.add(SceneShape(
@@ -516,7 +525,7 @@ RenderScene layoutRequirementDiagram(
       children: children,
     ));
     final size = labelSizes[i]!;
-    final mid = _pathMidpoint(pts);
+    final mid = polylineMidpoint(pts);
     // Upstream label: `relationLabelColor` (=actorTextColor) on
     // `relationLabelBackground` (=labelBackground='rgba(232,232,232,0.8)').
     nodes.add(SceneGroup(
@@ -611,32 +620,17 @@ RenderScene layoutRequirementDiagram(
   );
 }
 
-Point _intersectRect(Rect rect, Point outside) {
-  final c = rect.center;
-  final dx = outside.x - c.x;
-  final dy = outside.y - c.y;
-  if (dx == 0 && dy == 0) return c;
-  final w = rect.width / 2;
-  final h = rect.height / 2;
-  double sx, sy;
-  if (dy.abs() * w > dx.abs() * h) {
-    sy = dy < 0 ? -h : h;
-    sx = dx * sy / dy;
-  } else {
-    sx = dx < 0 ? -w : w;
-    sy = dy * sx / dx;
-  }
-  return Point(c.x + sx, c.y + sy);
-}
-
 Point _outsideMarkerCenter(Rect rect, Point border, double radius) {
-  final distances = <(double, Point)>[
+  // A border point on a corner is equidistant from two sides. Picking the
+  // strict minimum -- and keeping the earlier side on a tie -- fixes the
+  // winner, where sorting left it to an unspecified ordering.
+  final candidates = <(double, Point)>[
     ((border.x - rect.left).abs(), Point(rect.left - radius, border.y)),
     ((border.x - rect.right).abs(), Point(rect.right + radius, border.y)),
     ((border.y - rect.top).abs(), Point(border.x, rect.top - radius)),
     ((border.y - rect.bottom).abs(), Point(border.x, rect.bottom + radius)),
-  ]..sort((a, b) => a.$1.compareTo(b.$1));
-  return distances.first.$2;
+  ];
+  return candidates.reduce((best, next) => next.$1 < best.$1 ? next : best).$2;
 }
 
 /// Moves both ends of a routed polyline while retaining Dagre's bends.
@@ -667,32 +661,3 @@ List<Point> _translateRoute(
   ];
 }
 
-Point _pathMidpoint(List<Point> points) {
-  if (points.isEmpty) return Point.zero;
-  if (points.length == 1) return points.first;
-  var total = 0.0;
-  for (var i = 1; i < points.length; i++) {
-    total += points[i].distanceTo(points[i - 1]);
-  }
-  var remaining = total / 2;
-  for (var i = 1; i < points.length; i++) {
-    final length = points[i].distanceTo(points[i - 1]);
-    if (length >= remaining) {
-      final fraction = length == 0 ? 0.0 : remaining / length;
-      return Point(
-        points[i - 1].x + (points[i].x - points[i - 1].x) * fraction,
-        points[i - 1].y + (points[i].y - points[i - 1].y) * fraction,
-      );
-    }
-    remaining -= length;
-  }
-  return points.last;
-}
-
-Point _dir(Point from, Point to) {
-  final d = to - from;
-  final len = (d.x * d.x + d.y * d.y);
-  if (len == 0) return const Point(0, 1);
-  final l = math.sqrt(len);
-  return Point(d.x / l, d.y / l);
-}

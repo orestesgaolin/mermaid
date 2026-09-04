@@ -109,7 +109,7 @@ gitGraph
       expect(texts.containsAll({'main', 'develop', 'first'}), isTrue);
     });
 
-    test('rotates commit label backgrounds and keeps tag notch compact', () {
+    test('rotates commit label backgrounds', () {
       final scene = layoutGitGraph(
         parseGitGraph('''
 gitGraph
@@ -132,13 +132,69 @@ gitGraph
       );
       expect(labelBackground.points.map((point) => point.x).toSet().length, 4);
       expect(labelBackground.points.map((point) => point.y).toSet().length, 4);
+    });
 
-      final tag = polygons.singleWhere((polygon) => polygon.points.length == 6);
-      expect(
-        tag.points.first.x,
-        greaterThan(tag.points[2].x),
-        reason: 'the tag notch belongs inside the body edge',
+    test('LR tag spear tip points left, outside the tag body', () {
+      final scene = layoutGitGraph(
+        parseGitGraph('''
+gitGraph LR:
+   commit id: "Tagged" tag: "v1.0.0"
+'''),
+        measurer: measurer,
+        theme: theme,
       );
+      final commit = scene.nodes.whereType<SceneGroup>().singleWhere(
+        (group) => group.id == 'commit_Tagged',
+      );
+      final shapes = commit.children.whereType<SceneShape>().toList();
+
+      // The commit bullet is the largest circle in the group; the tag hole is
+      // the small one. Both come straight out of the rendered scene.
+      final circles = shapes
+          .map((shape) => shape.geometry)
+          .whereType<CircleGeometry>()
+          .toList();
+      final bullet = circles.reduce((a, b) => a.radius >= b.radius ? a : b);
+      final hole = circles.reduce((a, b) => a.radius <= b.radius ? a : b);
+      expect(hole.radius, lessThan(bullet.radius));
+
+      final tagBody = shapes
+          .map((shape) => shape.geometry)
+          .whereType<PolygonGeometry>()
+          .singleWhere((polygon) => polygon.points.length == 6);
+      final tagText = commit.children.whereType<SceneText>().singleWhere(
+        (text) => text.text == 'v1.0.0',
+      );
+
+      // Polygon order is: notch top, notch bottom, then the four body corners
+      // starting at the top-left one.
+      final notchX = tagBody.points[0].x;
+      expect(tagBody.points[1].x, notchX);
+      final bodyLeft = tagBody.points[2].x;
+      final bodyRight = tagBody.points[3].x;
+      expect(bodyRight, greaterThan(bodyLeft));
+
+      // The spear tip must stick out to the LEFT of the body, with the hole
+      // between the tip and the body edge.
+      expect(
+        notchX,
+        lessThan(bodyLeft),
+        reason: 'the LR tag notch must sit outside (left of) the body edge',
+      );
+      expect(hole.center.x, greaterThan(notchX));
+      expect(hole.center.x, lessThan(bodyLeft));
+      expect(hole.center.y, closeTo(tagText.bounds.center.y, 0.001));
+
+      // Upstream (gitGraphRenderer.drawCommitTags) draws the notch and hole
+      // from `pos` and the body from `pos + LAYOUT_OFFSET`, which is the
+      // commit centre: notch = cx - w/2 - 12, hole = cx - w/2 - 8,
+      // body = cx - w/2 - 4.
+      final cx = bullet.center.x;
+      final halfWidth = tagText.bounds.width / 2;
+      expect(notchX, closeTo(cx - halfWidth - 12, 0.001));
+      expect(hole.center.x, closeTo(cx - halfWidth - 8, 0.001));
+      expect(bodyLeft, closeTo(cx - halfWidth - 4, 0.001));
+      expect(bodyRight, closeTo(cx + halfWidth + 4, 0.001));
     });
   });
 }

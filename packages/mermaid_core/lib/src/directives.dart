@@ -273,6 +273,13 @@ Map<String, Object?> _frontmatterThemeVariables(String body) {
   return out;
 }
 
+/// A `key: value` line. Keys may contain hyphens and dots so real-world names
+/// survive (`Bio-conversion` in a sankey `nodeColors:` block, `chart.width`).
+final RegExp _yamlEntry = RegExp(r'^([A-Za-z0-9_][\w.-]*)\s*:\s*(.+)$');
+
+/// A `key:` line that opens a nested block.
+final RegExp _yamlBlockKey = RegExp(r'^([A-Za-z0-9_][\w.-]*)\s*:\s*$');
+
 Map<String, Object?> _frontmatterConfigBlock(String body, String name) {
   final lines = body.split('\n');
   final out = <String, Object?>{};
@@ -283,7 +290,8 @@ Map<String, Object?> _frontmatterConfigBlock(String body, String name) {
   for (final raw in lines) {
     if (raw.trim().isEmpty) continue;
     final indent = raw.length - raw.trimLeft().length;
-    final line = raw.trim();
+    final line = _stripYamlComment(raw.trim());
+    if (line.isEmpty) continue;
     if (configIndent == null) {
       if (line == 'config:') configIndent = indent;
       continue;
@@ -297,18 +305,18 @@ Map<String, Object?> _frontmatterConfigBlock(String body, String name) {
     propertyIndent ??= indent;
     if (indent == propertyIndent) {
       nestedProperty = null;
-      final nested = RegExp(r'^([A-Za-z_]\w*)\s*:\s*$').firstMatch(line);
+      final nested = _yamlBlockKey.firstMatch(line);
       if (nested != null) {
         nestedProperty = nested.group(1)!;
         out[nestedProperty] = <String, Object?>{};
         continue;
       }
-      final match = RegExp(r'^([A-Za-z_]\w*)\s*:\s*(.+)$').firstMatch(line);
+      final match = _yamlEntry.firstMatch(line);
       if (match != null) {
         out[match.group(1)!] = _parseYamlScalar(match.group(2)!.trim());
       }
     } else if (indent > propertyIndent && nestedProperty != null) {
-      final match = RegExp(r'^([A-Za-z_]\w*)\s*:\s*(.+)$').firstMatch(line);
+      final match = _yamlEntry.firstMatch(line);
       if (match != null) {
         (out[nestedProperty]! as Map<String, Object?>)[match.group(1)!] =
             _parseYamlScalar(match.group(2)!.trim());
@@ -318,15 +326,94 @@ Map<String, Object?> _frontmatterConfigBlock(String body, String name) {
   return out;
 }
 
-Object? _parseYamlScalar(String value) {
+/// Removes a trailing YAML comment from [value].
+///
+/// As in YAML, `#` opens a comment only at the start of the text or after a
+/// space or tab, and never inside single or double quotes. So `800 # note`
+/// becomes `800`, while `'#ff0000'` and `sha#1` are returned unchanged.
+String _stripYamlComment(String value) {
+  String? quote;
+  for (var i = 0; i < value.length; i++) {
+    final c = value[i];
+    if (quote != null) {
+      if (c == quote) quote = null;
+      continue;
+    }
+    if (c == '"' || c == "'") {
+      quote = c;
+      continue;
+    }
+    if (c == '#' && (i == 0 || value[i - 1] == ' ' || value[i - 1] == '\t')) {
+      return value.substring(0, i).trimRight();
+    }
+  }
+  return value;
+}
+
+/// Splits a flow-collection body on top-level commas, ignoring commas inside
+/// quotes or nested braces/brackets.
+List<String> _splitFlowEntries(String body) {
+  final out = <String>[];
+  final buffer = StringBuffer();
+  String? quote;
+  var depth = 0;
+  for (var i = 0; i < body.length; i++) {
+    final c = body[i];
+    if (quote != null) {
+      buffer.write(c);
+      if (c == quote) quote = null;
+      continue;
+    }
+    switch (c) {
+      case '"':
+      case "'":
+        quote = c;
+        buffer.write(c);
+      case '{':
+      case '[':
+        depth++;
+        buffer.write(c);
+      case '}':
+      case ']':
+        depth--;
+        buffer.write(c);
+      case ',' when depth == 0:
+        out.add(buffer.toString());
+        buffer.clear();
+      default:
+        buffer.write(c);
+    }
+  }
+  if (buffer.isNotEmpty) out.add(buffer.toString());
+  return out;
+}
+
+/// Parses a flow-style mapping such as `{width: 800, linkColor: gradient}`.
+/// Entries that are not `key: value` are skipped; values are parsed with
+/// [_parseYamlScalar], so nested flow mappings work too.
+Map<String, Object?> _parseFlowMap(String value) {
+  final out = <String, Object?>{};
+  for (final entry in _splitFlowEntries(value.substring(1, value.length - 1))) {
+    final match = _yamlEntry.firstMatch(entry.trim());
+    if (match == null) continue;
+    out[match.group(1)!] = _parseYamlScalar(match.group(2)!.trim());
+  }
+  return out;
+}
+
+Object? _parseYamlScalar(String raw) {
+  final value = _stripYamlComment(raw).trim();
   if (value.length >= 2 &&
       ((value.startsWith('"') && value.endsWith('"')) ||
           (value.startsWith("'") && value.endsWith("'")))) {
     return value.substring(1, value.length - 1);
   }
+  if (value.length >= 2 && value.startsWith('{') && value.endsWith('}')) {
+    return _parseFlowMap(value);
+  }
+  if (value.isEmpty || value == 'null' || value == '~') return null;
   if (value == 'true') return true;
   if (value == 'false') return false;
-  if (value == 'null') return null;
   return num.tryParse(value) ?? value;
 }
 

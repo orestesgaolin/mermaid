@@ -6,6 +6,7 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
 import '../../directives.dart';
 import '../../geometry.dart';
@@ -25,18 +26,23 @@ class XyAxisConfig {
   final double labelFontSize, labelPadding, titleFontSize, titlePadding;
   final double tickLength, tickWidth, axisLineWidth;
 
+  /// Reads one `xyChart.xAxis` / `xyChart.yAxis` object, applying the bounds
+  /// from upstream's `XYChartAxisConfig` schema: font sizes and line metrics
+  /// must be positive, paddings merely non-negative. Out-of-range or
+  /// non-numeric values fall back to the documented default.
   factory XyAxisConfig.fromMap(Object? value) {
-    final map = value is Map ? value : const <Object?, Object?>{};
-    double number(String key, double fallback) =>
-        map[key] is num ? (map[key] as num).toDouble() : fallback;
+    final map = <String, Object?>{
+      if (value is Map)
+        for (final entry in value.entries) '${entry.key}': entry.value,
+    };
     return XyAxisConfig(
-      labelFontSize: number('labelFontSize', 14),
-      labelPadding: number('labelPadding', 5),
-      titleFontSize: number('titleFontSize', 16),
-      titlePadding: number('titlePadding', 5),
-      tickLength: number('tickLength', 5),
-      tickWidth: number('tickWidth', 2),
-      axisLineWidth: number('axisLineWidth', 2),
+      labelFontSize: positiveDouble(map, 'labelFontSize', 14),
+      labelPadding: nonNegativeDouble(map, 'labelPadding', 5),
+      titleFontSize: positiveDouble(map, 'titleFontSize', 16),
+      titlePadding: nonNegativeDouble(map, 'titlePadding', 5),
+      tickLength: positiveDouble(map, 'tickLength', 5),
+      tickWidth: positiveDouble(map, 'tickWidth', 2),
+      axisLineWidth: positiveDouble(map, 'axisLineWidth', 2),
     );
   }
 }
@@ -55,22 +61,44 @@ class XyChartConfig {
   final bool horizontal, showDataLabel, showDataLabelOutsideBar;
   final XyAxisConfig xAxis, yAxis;
 
+  /// Reads `config.xyChart`, applying upstream's `XYChartConfig` schema
+  /// bounds: the canvas dimensions and the title font size must be positive
+  /// and finite, the title padding non-negative, and
+  /// `plotReservedSpacePercent` a percentage of at least 30. A value outside
+  /// its range (or of the wrong type) falls back to the documented default,
+  /// so a config can never drive the scene to a negative or non-finite size.
   factory XyChartConfig.fromSource(String source) {
     final map = resolveDiagramConfig(source, 'xyChart');
-    double number(String key, double fallback) =>
-        map[key] is num ? (map[key] as num).toDouble() : fallback;
     return XyChartConfig(
-      width: number('width', 700), height: number('height', 500),
-      titleFontSize: number('titleFontSize', 20),
-      titlePadding: number('titlePadding', 10),
-      plotReservedSpacePercent: number('plotReservedSpacePercent', 50),
-      horizontal: map['chartOrientation'] == 'horizontal',
-      showDataLabel: map['showDataLabel'] == true,
-      showDataLabelOutsideBar: map['showDataLabelOutsideBar'] == true,
+      width: positiveDouble(map, 'width', 700),
+      height: positiveDouble(map, 'height', 500),
+      titleFontSize: positiveDouble(map, 'titleFontSize', 20),
+      titlePadding: nonNegativeDouble(map, 'titlePadding', 10),
+      plotReservedSpacePercent: clampedDouble(
+          map, 'plotReservedSpacePercent', 50,
+          min: 30, max: 100),
+      horizontal: stringValue(map, 'chartOrientation', 'vertical') ==
+          'horizontal',
+      showDataLabel: boolValue(map, 'showDataLabel', false),
+      showDataLabelOutsideBar:
+          boolValue(map, 'showDataLabelOutsideBar', false),
       xAxis: XyAxisConfig.fromMap(map['xAxis']),
       yAxis: XyAxisConfig.fromMap(map['yAxis']),
     );
   }
+
+  /// Returns a copy with [horizontal] replaced — used by the parser to fold
+  /// the `xychart-beta horizontal` header into the resolved config so that
+  /// orientation has a single source of truth.
+  XyChartConfig withHorizontal(bool value) => XyChartConfig(
+        width: width, height: height,
+        titleFontSize: titleFontSize, titlePadding: titlePadding,
+        plotReservedSpacePercent: plotReservedSpacePercent,
+        horizontal: value,
+        showDataLabel: showDataLabel,
+        showDataLabelOutsideBar: showDataLabelOutsideBar,
+        xAxis: xAxis, yAxis: yAxis,
+      );
 }
 
 class XyChart {
@@ -82,9 +110,6 @@ class XyChart {
     this.xRange,
     this.yRange,
     this.series = const [],
-    this.horizontal = false,
-    this.showDataLabel = false,
-    this.showDataLabelOutsideBar = false,
     this.config = const XyChartConfig(),
   });
 
@@ -97,14 +122,20 @@ class XyChart {
   final (double, double)? xRange;
   final (double, double)? yRange;
   final List<XySeries> series;
-  final bool horizontal;
+
+  /// Resolved `config.xyChart`, with the `xychart-beta horizontal` header
+  /// already folded into [XyChartConfig.horizontal]. These three flags live
+  /// only here; the getters below exist so callers need not reach through.
+  final XyChartConfig config;
+
+  /// Plot orientation (`chartOrientation`, or the `horizontal` header).
+  bool get horizontal => config.horizontal;
 
   /// Render each bar's value as text in/over the bar (`XYChartConfig`).
-  final bool showDataLabel;
+  bool get showDataLabel => config.showDataLabel;
 
   /// When [showDataLabel], place the label outside (above/right of) the bar.
-  final bool showDataLabelOutsideBar;
-  final XyChartConfig config;
+  bool get showDataLabelOutsideBar => config.showDataLabelOutsideBar;
 }
 
 enum XySeriesKind { bar, line }
@@ -127,7 +158,7 @@ class XySeries {
 }
 
 XyChart parseXyChart(String source) {
-  final config = XyChartConfig.fromSource(source);
+  var config = XyChartConfig.fromSource(source);
   final frontTitle = frontmatterTitle(source);
   final text = stripMetadata(source);
   String? title = frontTitle;
@@ -135,7 +166,6 @@ XyChart parseXyChart(String source) {
   var categories = <String>[];
   (double, double)? xRange, yRange;
   final series = <XySeries>[];
-  var horizontal = config.horizontal;
   var seenHeader = false;
 
   String unquote(String s) {
@@ -181,7 +211,7 @@ XyChart parseXyChart(String source) {
         throw MermaidParseException('expected "xychart-beta" header',
             line: i + 1);
       }
-      if (m.group(2) != null) horizontal = true;
+      if (m.group(2) != null) config = config.withHorizontal(true);
       seenHeader = true;
       continue;
     }
@@ -249,9 +279,6 @@ XyChart parseXyChart(String source) {
     xRange: xRange,
     yRange: yRange,
     series: series,
-    horizontal: horizontal,
-    showDataLabel: config.showDataLabel,
-    showDataLabelOutsideBar: config.showDataLabelOutsideBar,
     config: config,
   );
 }
@@ -260,7 +287,7 @@ XyChart parseXyChart(String source) {
 /// `xyChartPlotColorPalette` (default-theme values match upstream
 /// theme-default.js `plotColorPalette`; dark/forest/neutral adapt).
 Color _plotColor(List<Color> palette, int plotIndex) =>
-    palette[plotIndex == 0 ? 0 : plotIndex % palette.length];
+    palette[plotIndex % palette.length];
 
 const _maxOuterPaddingPercentForLabel = 0.2;
 const _barWidthToTickWidthRatio = 0.7;
@@ -369,11 +396,18 @@ class _Axis {
 
   /// Pixel position for a category index (band) — `scaleBand` with
   /// paddingInner=1, paddingOuter=0, align=0.5 ⇒ evenly spaced, bandwidth 0.
+  ///
+  /// d3 computes `step = span / max(1, n - 1)` and then shifts the origin by
+  /// `(span - step * (n - 1)) * align`. That shift is zero for two or more
+  /// categories, but for a single category it is half the span — so a lone
+  /// category sits in the middle of the plot, not on its left edge.
   double bandScale(int i) {
     final n = categories.length;
     if (n == 0) return innerStart;
-    final step = (innerEnd - innerStart) / math.max(1, n - 1);
-    return innerStart + step * i;
+    final span = innerEnd - innerStart;
+    final step = span / math.max(1, n - 1);
+    final origin = innerStart + (span - step * (n - 1)) / 2;
+    return origin + step * i;
   }
 
   /// Pixel position for a value (linear). Left axis reverses the domain so the
@@ -382,8 +416,10 @@ class _Axis {
     final reverse = position == 'left';
     final d0 = reverse ? domainMax : domainMin;
     final d1 = reverse ? domainMin : domainMax;
-    if (d1 == d0) return innerStart;
-    final t = (v - d0) / (d1 - d0);
+    // d3's `normalize(a, b)` returns `constant(0.5)` when the domain has zero
+    // extent, so a degenerate domain (`bar [5, 5, 5]`) maps to the middle of
+    // the range rather than to its start.
+    final t = d1 == d0 ? 0.5 : (v - d0) / (d1 - d0);
     return innerStart + t * (innerEnd - innerStart);
   }
 

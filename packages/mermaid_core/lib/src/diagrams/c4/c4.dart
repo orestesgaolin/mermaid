@@ -10,6 +10,7 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../edge_geometry.dart';
 import '../../detect.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -208,15 +209,13 @@ C4Diagram parseC4Diagram(String source) {
     return out;
   }
 
-  String unquote(String a) {
-    a = a.trim();
-    if (a.length >= 2 && a.startsWith('"') && a.endsWith('"')) {
-      a = a.substring(1, a.length - 1);
-    }
-    return a.replaceAll('<br/>', '\n').replaceAll('<br>', '\n');
-  }
+  // C4 labels may embed `<br/>`; `'` is ordinary text here, never a quote.
+  String unquoteLabel(String a) => unquote(a, singleQuotes: false)
+      .replaceAll('<br/>', '\n')
+      .replaceAll('<br>', '\n');
 
-  List<String> args(String s) => [for (final a in rawArgs(s)) unquote(a)];
+  List<String> args(String s) =>
+      [for (final a in rawArgs(s)) unquoteLabel(a)];
 
   // Positional args only: drops `$key=value` named args (e.g. $sprite, $tags,
   // $link, $type) so trailing/extra named args don't get mistaken for
@@ -224,7 +223,10 @@ C4Diagram parseC4Diagram(String source) {
   // "$5 / item" is never dropped.
   final namedArg = RegExp(r'^\$\w+\s*=');
   List<String> positional(String s) =>
-      [for (final a in rawArgs(s)) if (!namedArg.hasMatch(a.trim())) unquote(a)];
+      [
+        for (final a in rawArgs(s))
+          if (!namedArg.hasMatch(a.trim())) unquoteLabel(a),
+      ];
 
   final lines = text.split('\n');
   for (var i = 0; i < lines.length; i++) {
@@ -283,7 +285,8 @@ C4Diagram parseC4Diagram(String source) {
         type: a.length > 2 ? a[2] : defaultType,
         description: a.length > 3 ? a[3] : '',
         parent: boundaryStack.isEmpty ? null : boundaryStack.last,
-        isNode: fn == 'Deployment_Node' || fn.startsWith('Node'),
+        // The keyword decides both: only node keywords default to 'Node'.
+        isNode: defaultType == 'Node',
       ));
       boundaryStack.add(id);
       continue;
@@ -489,6 +492,10 @@ const _c4BoundaryInRow = 2;
 const _diagramMarginX = 50.0;
 const _diagramMarginY = 10.0;
 
+/// Gap between a boundary's border and everything it holds: its contents on
+/// all four sides and the header text drawn inside the top edge.
+const _boundaryPadding = 14.0;
+
 // A laid-out shape rectangle plus its precomputed text blocks.
 class _ShapeBox {
   _ShapeBox(this.size, this.stereo, this.label, this.techn, this.desc);
@@ -528,7 +535,11 @@ RenderScene layoutC4Diagram(
   final boundaryTypeStyle =
       TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
 
-  double boundaryHeaderHeight(C4Boundary boundary) {
+  /// Space the header text needs inside the top of a boundary [width] wide.
+  /// The description wraps to the same width the drawing pass uses, so a long
+  /// one reserves every line it will occupy instead of just the first.
+  double boundaryHeaderHeight(C4Boundary boundary, double width) {
+    final textWidth = math.max(1.0, width - 2 * _boundaryPadding);
     var height = 6.0;
     if (boundary.label.isNotEmpty) {
       height += measurer.measure(boundary.label, boundaryLabelStyle).height + 2;
@@ -538,8 +549,11 @@ RenderScene layoutC4Diagram(
           measurer.measure('[${boundary.type}]', boundaryTypeStyle).height + 2;
     }
     if (boundary.description.isNotEmpty) {
-      height +=
-          measurer.measure(boundary.description, boundaryTypeStyle).height + 2;
+      height += measurer
+              .measure(boundary.description, boundaryTypeStyle,
+                  maxWidth: textWidth)
+              .height +
+          2;
     }
     return height + 8;
   }
@@ -631,6 +645,21 @@ RenderScene layoutC4Diagram(
     return Rect.fromLTRB(minX, minY, maxX, maxY);
   }
 
+  // Moves everything a boundary holds (its shapes and its nested boundaries,
+  // recursively) down by [dy], to open the gap its header needs.
+  void shiftBoundaryContents(String boundaryId, double dy) {
+    if (dy == 0) return;
+    for (final n in childNodes[boundaryId] ?? const <C4Node>[]) {
+      final rect = placedRects[n.id];
+      if (rect != null) placedRects[n.id] = rect.translate(0, dy);
+    }
+    for (final sub in childBoundaries[boundaryId] ?? const <C4Boundary>[]) {
+      final rect = boundaryRects[sub.id];
+      if (rect != null) boundaryRects[sub.id] = rect.translate(0, dy);
+      shiftBoundaryContents(sub.id, dy);
+    }
+  }
+
   // Recursively lays out a boundary's contents (shapes + nested boundaries),
   // starting at (originX, originY). Returns the inner content rect.
   Rect? layoutContainer(String? boundaryId, double originX, double originY) {
@@ -655,17 +684,28 @@ RenderScene layoutC4Diagram(
           x = originX + _diagramMarginX;
           rowMaxBottom = rowStartY;
         }
-        final headerHeight = boundaryHeaderHeight(subs[bi]);
-        final inner = layoutContainer(
-            subs[bi].id, x + 14, rowStartY + 14 + headerHeight);
+        // A boundary is exactly as wide as its contents, and the header wraps
+        // to that width -- so lay the contents out at the unshifted origin
+        // first, measure the header against the resulting width, then slide
+        // the whole subtree down to make room for it.
+        final packed = layoutContainer(
+            subs[bi].id, x + _boundaryPadding, rowStartY + _boundaryPadding);
+        final width = packed == null
+            ? _confWidth
+            : packed.width + 2 * _boundaryPadding;
+        final headerHeight = boundaryHeaderHeight(subs[bi], width);
         Rect rect;
-        if (inner == null) {
+        if (packed == null) {
           rect = Rect.fromLTWH(x, rowStartY, _confWidth,
-              math.max(_confHeight, headerHeight + 28));
+              math.max(_confHeight, headerHeight + 2 * _boundaryPadding));
         } else {
+          shiftBoundaryContents(subs[bi].id, headerHeight);
+          final inner = packed.translate(0, headerHeight);
           rect = Rect.fromLTRB(
-              inner.left - 14, inner.top - 14 - headerHeight, inner.right + 14,
-              inner.bottom + 14);
+              inner.left - _boundaryPadding,
+              inner.top - _boundaryPadding - headerHeight,
+              inner.right + _boundaryPadding,
+              inner.bottom + _boundaryPadding);
         }
         boundaryRects[subs[bi].id] = rect;
         include(rect);
@@ -719,18 +759,21 @@ RenderScene layoutC4Diagram(
             color: borderColor, dash: b.isNode ? null : const [7, 7]),
       ),
     ];
-    // Label near the top of the cluster rect (upstream label.Y).
-    final labelSize = measurer.measure(b.label, boundaryLabelStyle);
+    // Label near the top of the cluster rect (upstream label.Y). An unnamed
+    // boundary reserves no label line, so it draws none either.
     var ty = rect.top + 6;
-    children.add(SceneText(
-      text: b.label,
-      bounds: Rect.fromLTWH(
-          rect.center.x - labelSize.width / 2, ty, labelSize.width,
-          labelSize.height),
-      style: boundaryLabelStyle,
-      color: fontColor,
-    ));
-    ty += labelSize.height + 2;
+    if (b.label.isNotEmpty) {
+      final labelSize = measurer.measure(b.label, boundaryLabelStyle);
+      children.add(SceneText(
+        text: b.label,
+        bounds: Rect.fromLTWH(
+            rect.center.x - labelSize.width / 2, ty, labelSize.width,
+            labelSize.height),
+        style: boundaryLabelStyle,
+        color: fontColor,
+      ));
+      ty += labelSize.height + 2;
+    }
     if (b.type.isNotEmpty) {
       final s = measurer.measure('[${b.type}]', boundaryTypeStyle);
       children.add(SceneText(
@@ -744,7 +787,7 @@ RenderScene layoutC4Diagram(
     }
     if (b.description.isNotEmpty) {
       final s = measurer.measure(b.description, boundaryTypeStyle,
-          maxWidth: rect.width - 16);
+          maxWidth: rect.width - 2 * _boundaryPadding);
       children.add(SceneText(
         text: b.description,
         bounds: Rect.fromLTWH(
@@ -771,12 +814,14 @@ RenderScene layoutC4Diagram(
     final fromRect = placedRects[relation.from];
     final toRect = placedRects[relation.to];
     if (fromRect == null || toRect == null) continue;
-    final start = _intersectRect(fromRect, toRect.center);
-    final tip = _intersectRect(toRect, fromRect.center);
-    final dir = _dir(start, tip);
+    final start = intersectRect(fromRect, toRect.center);
+    final tip = intersectRect(toRect, fromRect.center);
+    final dir = direction(start, tip);
     relationSegments.add((start: start, end: tip - dir * 9));
   }
-  final obstacleSegments = [...relationSegments];
+  // `relationSegments` doubles as the obstacle list: a label must not sit on
+  // another relation's stroke, nor on a boundary border.
+  final obstacleSegments = relationSegments;
   for (final rect in boundaryRects.values) {
     final topLeft = Point(rect.left, rect.top);
     final topRight = Point(rect.right, rect.top);
@@ -807,15 +852,26 @@ RenderScene layoutC4Diagram(
     return null;
   }
 
+  // Element boxes and boundary headers never move while relations are drawn,
+  // so their obstruction rects are built once; only the labels placed so far
+  // are re-read per relation.
+  final staticObstructions = [
+    ...placedRects.values.map((rect) => rect.inflate(4)),
+    ...boundaryHeaderRects,
+  ];
+  bool overlapsObstruction(Rect candidate) =>
+      staticObstructions.any((other) => rectsOverlap(candidate, other)) ||
+      relationAnnotationRects.any((other) => rectsOverlap(candidate, other));
+
   // ---- Relations ----
   for (var i = 0; i < diagram.rels.length; i++) {
     final r = diagram.rels[i];
     if (!centers.containsKey(r.from) || !centers.containsKey(r.to)) continue;
     final fromRect = placedRects[r.from]!;
     final toRect = placedRects[r.to]!;
-    final start = _intersectRect(fromRect, toRect.center);
-    var end = _intersectRect(toRect, fromRect.center);
-    final dir = _dir(start, end);
+    final start = intersectRect(fromRect, toRect.center);
+    var end = intersectRect(toRect, fromRect.center);
+    final dir = direction(start, end);
     final tip = end;
     end = tip - dir * 9;
     final perp = Point(-dir.y, dir.x);
@@ -837,7 +893,7 @@ RenderScene layoutC4Diagram(
     }
     // Start arrowhead for BiRel / Rel_Back.
     if (r.bidirectional || r.backwards) {
-      final sdir = _dir(end, start);
+      final sdir = direction(end, start);
       final sperp = Point(-sdir.y, sdir.x);
       children.add(SceneShape(
         geometry: PolygonGeometry([
@@ -869,6 +925,11 @@ RenderScene layoutC4Diagram(
           : measurer.measure('[${r.technology}]', technStyle,
               maxWidth: 150);
       final gap = labelText.isNotEmpty && r.technology.isNotEmpty ? 2.0 : 0.0;
+      // `$offsetX`/`$offsetY` move the label's anchor. Fold them in once here
+      // rather than adding them to every candidate below: the offset is
+      // loop-invariant, and folding it in keeps the search honest, since the
+      // spot it reports clear is the spot the label actually lands on.
+      mid = mid + Point(r.offsetX, r.offsetY);
       final annotationWidth = math.max(labelSize.width, technologySize.width);
       final annotationHeight = labelSize.height + gap + technologySize.height;
       final annotationTopOffset = labelText.isNotEmpty
@@ -886,11 +947,6 @@ RenderScene layoutC4Diagram(
                           technologySize.height / 2),
               technologySize.width,
               technologySize.height),
-      ];
-      final obstructions = [
-        ...placedRects.values.map((rect) => rect.inflate(4)),
-        ...boundaryHeaderRects,
-        ...relationAnnotationRects,
       ];
       final commonBoundary = commonBoundaryRect(r);
       final containingBoundary = commonBoundary == null
@@ -932,10 +988,8 @@ RenderScene layoutC4Diagram(
                 : [slidePass * 8.0, slidePass * -8.0];
             for (final slideOffset in slideOffsets) {
               final normalDistance = baseDistance + normalPass * 8;
-              final candidateMid = mid +
-                  direction * normalDistance +
-                  dir * slideOffset +
-                  Point(r.offsetX, r.offsetY);
+              final candidateMid =
+                  mid + direction * normalDistance + dir * slideOffset;
               final candidateBounds = Rect.fromLTWH(
                   candidateMid.x - annotationWidth / 2,
                   candidateMid.y + annotationTopOffset,
@@ -954,11 +1008,11 @@ RenderScene layoutC4Diagram(
               final crossesStroke = obstacleSegments.any((segment) =>
                   textBounds.any((bounds) => _segmentIntersectsRect(
                       segment.start, segment.end, bounds.inflate(3))));
-              final overlapsObstruction = obstructions.any((obstruction) =>
-                  _rectsOverlap(candidateBounds, obstruction));
               final insideBoundary = containingBoundary == null ||
-                  _rectContainsRect(containingBoundary, candidateBounds);
-              if (!crossesStroke && !overlapsObstruction && insideBoundary) {
+                  rectContainsRect(containingBoundary, candidateBounds);
+              if (!crossesStroke &&
+                  !overlapsObstruction(candidateBounds) &&
+                  insideBoundary) {
                 candidates.add((
                   mid: candidateMid,
                   bounds: candidateBounds,
@@ -1198,36 +1252,6 @@ PolygonGeometry _shouldersPath(double cx, double topY, double w, double h) {
   ]);
 }
 
-Point _intersectRect(Rect rect, Point outside) {
-  final c = rect.center;
-  final dx = outside.x - c.x;
-  final dy = outside.y - c.y;
-  if (dx == 0 && dy == 0) return c;
-  final w = rect.width / 2;
-  final h = rect.height / 2;
-  double sx, sy;
-  if (dy.abs() * w > dx.abs() * h) {
-    sy = dy < 0 ? -h : h;
-    sx = dx * sy / dy;
-  } else {
-    sx = dx < 0 ? -w : w;
-    sy = dy * sx / dx;
-  }
-  return Point(c.x + sx, c.y + sy);
-}
-
-bool _rectsOverlap(Rect a, Rect b) =>
-    a.left < b.right &&
-    a.right > b.left &&
-    a.top < b.bottom &&
-    a.bottom > b.top;
-
-bool _rectContainsRect(Rect outer, Rect inner) =>
-    inner.left >= outer.left &&
-    inner.right <= outer.right &&
-    inner.top >= outer.top &&
-    inner.bottom <= outer.bottom;
-
 bool _segmentIntersectsRect(Point a, Point b, Rect rect) {
   if (rect.contains(a) || rect.contains(b)) return true;
 
@@ -1263,10 +1287,4 @@ bool _segmentIntersectsRect(Point a, Point b, Rect rect) {
       intersects(topRight, bottomRight) ||
       intersects(bottomRight, bottomLeft) ||
       intersects(bottomLeft, topLeft);
-}
-
-Point _dir(Point from, Point to) {
-  final d = to - from;
-  final len = math.sqrt(d.x * d.x + d.y * d.y);
-  return len == 0 ? const Point(0, 1) : Point(d.x / len, d.y / len);
 }

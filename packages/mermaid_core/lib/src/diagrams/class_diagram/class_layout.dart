@@ -6,6 +6,7 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -160,45 +161,60 @@ class _ClassLayout {
     // relations can still leave two top-level compound bounds overlapping.
     // Separate disjoint namespaces on the cross axis before emitting geometry.
     final nodeOffsets = <String, Point>{};
-    final occupiedNamespaces = <({Rect rect, Set<String> members})>[];
+
+    // Namespaces are separated in declaration order; a namespace whose members
+    // are already claimed by an earlier one is nested, so it moves with it.
+    final separable = <({String label, Set<String> members})>[];
+    final claimed = <String>{};
     for (final ns in diagram.namespaces) {
       final members = ns.classIds.where(boxes.containsKey).toSet();
-      if (members.isEmpty || occupiedNamespaces.any(
-          (placed) => placed.members.intersection(members).isNotEmpty)) {
-        continue;
-      }
-      Rect? bounds;
+      if (members.isEmpty || members.any(claimed.contains)) continue;
+      claimed.addAll(members);
+      separable.add((label: ns.label, members: members));
+    }
+
+    void shiftMembers(Set<String> members, Point delta) {
       for (final id in members) {
-        final rect = boxes[id]!.rectAt(boxes[id]!.center);
-        bounds = bounds == null ? rect : bounds.union(rect);
+        boxes[id]!.center = boxes[id]!.center + delta;
+        nodeOffsets[id] = (nodeOffsets[id] ?? Point.zero) + delta;
       }
-      if (bounds == null) continue;
-      final titleSize = measurer.measure(ns.label, baseStyle);
-      var clusterRect = Rect.fromLTRB(bounds.left - 12,
-          bounds.top - 16 - titleSize.height, bounds.right + 12,
-          bounds.bottom + 12);
-      var dx = 0.0, dy = 0.0;
-      for (final placed in occupiedNamespaces) {
-        final overlaps = clusterRect.left < placed.rect.right &&
-            clusterRect.right > placed.rect.left &&
-            clusterRect.top < placed.rect.bottom &&
-            clusterRect.bottom > placed.rect.top;
-        if (!overlaps) continue;
-        if (diagram.direction == FlowDirection.tb ||
-            diagram.direction == FlowDirection.bt) {
-          dx = math.max(dx, placed.rect.right + _nodeSpacing - clusterRect.left);
-        } else {
-          dy = math.max(dy, placed.rect.bottom + _nodeSpacing - clusterRect.top);
+      // A note is anchored beside its class, so it travels with it.
+      for (var i = 0; i < diagram.notes.length; i++) {
+        final target = diagram.notes[i].forClass;
+        if (target == null || !members.contains(target)) continue;
+        final note = noteBoxes[i];
+        if (note != null) note.center = note.center + delta;
+      }
+    }
+
+    // Pushing one namespace clear can drive it into the next, so sweep until
+    // the arrangement settles. The bound stops a pathological diagram from
+    // looping; one pass is enough whenever the namespaces are already ordered.
+    final separationPasses = math.max(2, separable.length);
+    for (var pass = 0; pass < separationPasses; pass++) {
+      var moved = false;
+      final placedRects = <Rect>[];
+      for (final entry in separable) {
+        var clusterRect = _namespaceRect(entry.label, entry.members);
+        if (clusterRect == null) continue;
+        var dx = 0.0, dy = 0.0;
+        for (final placed in placedRects) {
+          if (!rectsOverlap(clusterRect, placed)) continue;
+          if (diagram.direction == FlowDirection.tb ||
+              diagram.direction == FlowDirection.bt) {
+            dx = math.max(dx, placed.right + _nodeSpacing - clusterRect.left);
+          } else {
+            dy = math.max(dy, placed.bottom + _nodeSpacing - clusterRect.top);
+          }
         }
-      }
-      if (dx != 0 || dy != 0) {
-        for (final id in members) {
-          boxes[id]!.center = boxes[id]!.center + Point(dx, dy);
-          nodeOffsets[id] = Point(dx, dy);
+        if (dx != 0 || dy != 0) {
+          shiftMembers(entry.members, Point(dx, dy));
+          clusterRect = clusterRect.translate(dx, dy);
+          moved = true;
         }
-        clusterRect = clusterRect.translate(dx, dy);
+        placedRects.add(clusterRect);
       }
-      occupiedNamespaces.add((rect: clusterRect, members: members));
+      if (!moved) break;
     }
 
     final clusterNodes = <SceneNode>[];
@@ -214,17 +230,9 @@ class _ClassLayout {
     // Reversed: namespaces close innermost-first during parsing, so painting
     // in reverse puts enclosing clusters behind nested ones.
     for (final ns in diagram.namespaces.reversed) {
-      Rect? acc;
-      for (final id in ns.classIds) {
-        final b = boxes[id];
-        if (b == null) continue;
-        final r = b.rectAt(b.center);
-        acc = acc == null ? r : acc.union(r);
-      }
-      if (acc == null) continue;
-      final titleSize = measurer.measure(ns.label, baseStyle);
-      final rect = Rect.fromLTRB(acc.left - 12, acc.top - 16 - titleSize.height,
-          acc.right + 12, acc.bottom + 12);
+      final rect = _namespaceRect(ns.label, ns.classIds);
+      if (rect == null) continue;
+      final titleSize = _namespaceTitleSize(ns.label);
       clusterNodes.add(SceneGroup(
         id: 'namespace_${ns.id}',
         role: SceneGroupRole.cluster,
@@ -262,44 +270,42 @@ class _ClassLayout {
                 toOffset * (pi / (points.length - 1)),
         ];
       }
-      // Cross-namespace links are laid out before the namespace overlap pass
-      // moves their endpoints apart. Restore a short vertical approach to the
-      // destination so Mermaid's unified renderer port choice is preserved;
-      // otherwise interpolation can turn the final segment sideways.
-      if (parentOf[r.from] != null &&
+      // Cross-namespace links are routed before the namespace overlap pass
+      // moves their endpoints apart, so interpolating the old route can turn
+      // the final segment sideways. Restore a short approach along the rank
+      // axis -- which is horizontal under `direction LR`/`RL` -- but only when
+      // the pass actually displaced one of the endpoints.
+      if ((fromOffset != Point.zero || toOffset != Point.zero) &&
+          parentOf[r.from] != null &&
           parentOf[r.to] != null &&
           parentOf[r.from] != parentOf[r.to] &&
-          points.length >= 2) {
-        final verticalDirection = from.center.y <= to.center.y ? -1.0 : 1.0;
-        points[points.length - 2] = Point(
-          to.center.x,
-          to.center.y + verticalDirection * (to.height / 2 + _rankSpacing / 2),
-        );
+          points.length >= 3) {
+        points[points.length - 2] = _rankApproachPoint(to, from.center);
       }
       // Keep inheritance markers on the rank-facing edge of their class.
-      if (r.endFrom == RelationEnd.extension && points.length >= 2) {
+      if (r.endFrom == RelationEnd.extension && points.length >= 3) {
         points[1] = _rankApproachPoint(
           from,
           to.center,
           crossAxis: extensionPorts[(i, r.from)],
         );
       }
-      if (r.endTo == RelationEnd.extension && points.length >= 2) {
+      if (r.endTo == RelationEnd.extension && points.length >= 3) {
         points[points.length - 2] = _rankApproachPoint(
           to,
           from.center,
           crossAxis: extensionPorts[(i, r.to)],
         );
       }
-      points[0] = _intersectRect(from.rectAt(from.center), points[1]);
+      points[0] = intersectRect(from.rectAt(from.center), points[1]);
       points[points.length - 1] =
-          _intersectRect(to.rectAt(to.center), points[points.length - 2]);
+          intersectRect(to.rectAt(to.center), points[points.length - 2]);
 
       final children = <SceneNode>[];
       final startTip = points.first;
-      final startDir = _dir(points[1], startTip);
+      final startDir = direction(points[1], startTip);
       final endTip = points.last;
-      final endDir = _dir(points[points.length - 2], endTip);
+      final endDir = direction(points[points.length - 2], endTip);
       // Pull the line back behind solid markers.
       if (_markerInset(r.endFrom) > 0) {
         points[0] = startTip - startDir * _markerInset(r.endFrom);
@@ -307,7 +313,7 @@ class _ClassLayout {
       if (_markerInset(r.endTo) > 0) {
         points[points.length - 1] = endTip - endDir * _markerInset(r.endTo);
       }
-      final path = PathGeometry(_curveBasis(points));
+      final path = PathGeometry(curveBasis(points));
       children.add(SceneShape(
         geometry: path,
         stroke: Stroke(
@@ -328,7 +334,7 @@ class _ClassLayout {
       if (labelSize != null) {
         // Namespace separation changes the route after Dagre calculates its
         // label position. Anchor the label on the final painted curve.
-        final c = _pathMidpoint(path);
+        final c = pathMidpoint(path);
         labelNodes.add(SceneGroup(
           id: 'rellabel_$i',
           role: SceneGroupRole.edgeLabel,
@@ -338,9 +344,11 @@ class _ClassLayout {
                 Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
                 rx: 2,
                 ry: 2),
-            // Mermaid 11's unified renderer uses the opaque generic edge-label
+            // Mermaid 11's unified renderer uses the generic edge-label
             // background rather than the legacy translucent `.classLabel` box.
-            fill: Fill(theme.mainBkg),
+            // Opaque (the theme colour carries its own alpha) so the relation
+            // line does not show through the label.
+            fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
           ),
           SceneText(
             text: r.label!,
@@ -374,8 +382,8 @@ class _ClassLayout {
       final noteBox = noteBoxes[i]!;
       if (target != null && boxes.containsKey(target)) {
         final to = boxes[target]!;
-        final p1 = _intersectRect(noteBox.rectAt(noteBox.center), to.center);
-        final p2 = _intersectRect(to.rectAt(to.center), noteBox.center);
+        final p1 = intersectRect(noteBox.rectAt(noteBox.center), to.center);
+        final p2 = intersectRect(to.rectAt(to.center), noteBox.center);
         edgeNodes.add(SceneShape(
           geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
           stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
@@ -626,10 +634,31 @@ class _ClassLayout {
     }
   }
 
-  Point _dir(Point from, Point to) {
-    final d = to - from;
-    final len = math.sqrt(d.x * d.x + d.y * d.y);
-    return len == 0 ? const Point(0, 1) : Point(d.x / len, d.y / len);
+  final _namespaceTitleSizes = <String, Size>{};
+
+  /// Measured once per namespace label: the separation sweep and the paint
+  /// pass both need it, and the sweep can run several times.
+  Size _namespaceTitleSize(String label) =>
+      _namespaceTitleSizes[label] ??= measurer.measure(label, baseStyle);
+
+  /// The cluster rect a namespace occupies given where its members sit right
+  /// now. Null when none of [memberIds] has a box.
+  Rect? _namespaceRect(String label, Iterable<String> memberIds) {
+    Rect? acc;
+    for (final id in memberIds) {
+      final b = boxes[id];
+      if (b == null) continue;
+      final r = b.rectAt(b.center);
+      acc = acc == null ? r : acc.union(r);
+    }
+    if (acc == null) return null;
+    final titleSize = _namespaceTitleSize(label);
+    return Rect.fromLTRB(
+      acc.left - 12,
+      acc.top - 16 - titleSize.height,
+      acc.right + 12,
+      acc.bottom + 12,
+    );
   }
 
   Map<(int, String), double> _extensionPorts() {
@@ -661,12 +690,8 @@ class _ClassLayout {
         return crossOrder != 0 ? crossOrder : a.$1.compareTo(b.$1);
       });
 
-      if (relations.length == 1) {
-        ports[(relations.single.$1, endpointId)] =
-            vertical ? endpoint.center.x : endpoint.center.y;
-        continue;
-      }
-
+      // A single relation lands on the centre of the endpoint's edge, which is
+      // what the even spread below yields for a one-element list.
       final extent = vertical ? endpoint.width : endpoint.height;
       final start = (vertical ? endpoint.center.x : endpoint.center.y) -
           extent / 2;
@@ -691,103 +716,4 @@ class _ClassLayout {
             sign * (endpoint.width / 2 + _rankSpacing / 2),
         crossAxis ?? endpoint.center.y);
   }
-}
-
-// --- small geometry helpers (private ports, same as flow_layout) -------------
-
-Point _intersectRect(Rect rect, Point outside) {
-  final c = rect.center;
-  final dx = outside.x - c.x;
-  final dy = outside.y - c.y;
-  if (dx == 0 && dy == 0) return c;
-  final w = rect.width / 2;
-  final h = rect.height / 2;
-  double sx, sy;
-  if (dy.abs() * w > dx.abs() * h) {
-    sy = dy < 0 ? -h : h;
-    sx = dx * sy / dy;
-  } else {
-    sx = dx < 0 ? -w : w;
-    sy = dy * sx / dx;
-  }
-  return Point(c.x + sx, c.y + sy);
-}
-
-List<PathCommand> _curveBasis(List<Point> pts) {
-  if (pts.isEmpty) return const [];
-  if (pts.length == 1) return [MoveTo(pts.first)];
-  if (pts.length == 2) return [MoveTo(pts[0]), LineTo(pts[1])];
-  final cmds = <PathCommand>[MoveTo(pts[0])];
-  cmds.add(LineTo(Point(
-    (5 * pts[0].x + pts[1].x) / 6,
-    (5 * pts[0].y + pts[1].y) / 6,
-  )));
-  for (var i = 2; i < pts.length; i++) {
-    cmds.add(_basisSegment(pts[i - 2], pts[i - 1], pts[i]));
-  }
-  final n = pts.length;
-  cmds.add(_basisSegment(pts[n - 2], pts[n - 1], pts[n - 1]));
-  cmds.add(LineTo(pts[n - 1]));
-  return cmds;
-}
-
-CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
-      Point((2 * p0.x + p1.x) / 3, (2 * p0.y + p1.y) / 3),
-      Point((p0.x + 2 * p1.x) / 3, (p0.y + 2 * p1.y) / 3),
-      Point((p0.x + 4 * p1.x + p.x) / 6, (p0.y + 4 * p1.y + p.y) / 6),
-    );
-
-/// Arc-length midpoint of a path, sampled finely enough for label placement.
-Point _pathMidpoint(PathGeometry path) {
-  final samples = <Point>[];
-  Point? current;
-  for (final command in path.commands) {
-    switch (command) {
-      case MoveTo(:final p):
-        current = p;
-        samples.add(p);
-      case LineTo(:final p):
-        current = p;
-        samples.add(p);
-      case CubicTo(:final c1, :final c2, :final p):
-        final start = current;
-        if (start == null) break;
-        for (var step = 1; step <= 16; step++) {
-          final t = step / 16;
-          final u = 1 - t;
-          samples.add(Point(
-            u * u * u * start.x +
-                3 * u * u * t * c1.x +
-                3 * u * t * t * c2.x +
-                t * t * t * p.x,
-            u * u * u * start.y +
-                3 * u * u * t * c1.y +
-                3 * u * t * t * c2.y +
-                t * t * t * p.y,
-          ));
-        }
-        current = p;
-      case QuadTo():
-      case ClosePath():
-        break;
-    }
-  }
-  if (samples.length < 2) return samples.isEmpty ? Point.zero : samples.first;
-
-  final lengths = <double>[];
-  var total = 0.0;
-  for (var i = 1; i < samples.length; i++) {
-    final d = samples[i] - samples[i - 1];
-    total += math.sqrt(d.x * d.x + d.y * d.y);
-    lengths.add(total);
-  }
-  final target = total / 2;
-  for (var i = 0; i < lengths.length; i++) {
-    if (lengths[i] < target) continue;
-    final before = i == 0 ? 0.0 : lengths[i - 1];
-    final segment = lengths[i] - before;
-    final t = segment == 0 ? 0.0 : (target - before) / segment;
-    return samples[i] + (samples[i + 1] - samples[i]) * t;
-  }
-  return samples.last;
 }

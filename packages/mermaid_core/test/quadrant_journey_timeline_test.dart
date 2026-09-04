@@ -89,9 +89,14 @@ quadrantChart
       final scene = renderer.render(source);
 
       expect(scene.size, const Size(600, 600));
+      // Upstream's grammar appends `" \u27F6 "` (long right arrow, kept
+      // spaces) when an axis has a delimiter but no right-hand label.
       expect(
         texts(scene),
-        containsAll(['Completeness of Vision ❤ →', 'Ability to Execute']),
+        containsAll([
+          'Completeness of Vision ❤ ⟶ ',
+          'Ability to Execute',
+        ]),
       );
       expect(texts(scene).where((text) => text.contains('"')), isEmpty);
       expect(texts(scene).where((text) => text.contains('-->')), isEmpty);
@@ -106,10 +111,18 @@ quadrantChart
           .whereType<RectGeometry>()
           .map((geometry) => geometry.rect)
           .reduce((a, b) => a.union(b));
-      expect(regionBounds.left, 31);
-      expect(regionBounds.right, 595);
-      expect(regionBounds.top, 45);
-      expect(regionBounds.bottom, 569);
+      // Bands reserved by QuadrantBuilder around the quadrant region, from the
+      // upstream defaults: an axis label band on the left and (because the
+      // chart has points) below, plus a title band on top.
+      const chartWidth = 600.0;
+      const chartHeight = 600.0;
+      const quadrantPadding = 5.0; // quadrantChart.quadrantPadding
+      const axisBand = 2 * 5.0 + 16.0; // axisLabelPadding * 2 + fontSize
+      const titleBand = 20.0 + 2 * 10.0; // titleFontSize + titlePadding * 2
+      expect(regionBounds.left, quadrantPadding + axisBand);
+      expect(regionBounds.right, chartWidth - quadrantPadding);
+      expect(regionBounds.top, quadrantPadding + titleBand);
+      expect(regionBounds.bottom, chartHeight - quadrantPadding - axisBand);
 
       final yAxis = flatten(scene.nodes)
           .whereType<SceneText>()
@@ -182,7 +195,10 @@ quadrantChart
         throwsA(isA<MermaidParseException>()),
       );
     });
-    test('rejects dimensions that cannot contain visible chart bands', () {
+    test('clamps dimensions that cannot contain visible chart bands', () {
+      // `Mermaid.render` documents only MermaidParseException and
+      // UnsupportedError, so a chart too small for its reserved bands must
+      // collapse the quadrant region rather than raise an ArgumentError.
       const source = '''
 %%{init: {"quadrantChart": {"chartWidth": 20, "chartHeight": 20}}}%%
 quadrantChart
@@ -191,17 +207,22 @@ quadrantChart
   y-axis Bottom --> Top
   A: [0.5, 0.5]
 ''';
+      final scene = const Mermaid(
+        measurer: ApproximateTextMeasurer(),
+      ).render(source);
+      expect(scene.size, const Size(20, 20));
+
+      final regions = flatten(scene.nodes)
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
+          .map((geometry) => geometry.rect)
+          .toList();
+      expect(regions, isNotEmpty);
       expect(
-        () => const Mermaid(
-          measurer: ApproximateTextMeasurer(),
-        ).render(source),
-        throwsA(
-          isA<ArgumentError>().having(
-            (error) => error.message,
-            'message',
-            contains('too small'),
-          ),
-        ),
+        regions.every((rect) => rect.width == 0 && rect.height == 0),
+        isTrue,
+        reason: 'the quadrant region collapses instead of going negative',
       );
     });
     test('ignores diagram-shaped YAML outside frontmatter config', () {

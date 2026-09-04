@@ -355,17 +355,20 @@ class _LayoutContext {
     );
   }
 
-  // Measure a (possibly multi-line) label, returning its width/height.
-  Size _measureMultiline(String text, TextStyleSpec style) {
+  /// Splits [text] into its rendered lines and measures the resulting block.
+  /// The result feeds both the geometry that surrounds a label (head wedge,
+  /// cause box) and [_drawMultilineText], so a label is only measured once.
+  _MeasuredText _measureMultiline(String text, TextStyleSpec style) {
     final lines = _splitLines(text);
     var w = 0.0;
     for (final line in lines) {
       final s = measurer.measure(line, style);
       if (s.width > w) w = s.width;
     }
+    final joined = lines.join('\n');
     // Keep layout bounds identical to the active painter's line metrics.
-    final h = measurer.measure(lines.join('\n'), style).height;
-    return Size(w, h);
+    final h = measurer.measure(joined, style).height;
+    return _MeasuredText(joined, Size(w, h));
   }
 
   /// Draws the fish-head shape and label centered at (x, y). The head nodes can
@@ -375,8 +378,8 @@ class _LayoutContext {
     final maxChars = math.max(6, (110 / (14 * 0.6)).floor());
     final wrapped = _wrapText(label, maxChars);
     final tb = _measureMultiline(wrapped, headStyle);
-    final w = math.max(60.0, tb.width + 6);
-    final h = math.max(40.0, tb.height * 2 + 40);
+    final w = math.max(60.0, tb.size.width + 6);
+    final h = math.max(40.0, tb.size.height * 2 + 40);
 
     // Path: M 0 -h/2 L 0 h/2 Q w*2.4 0 0 -h/2 Z (relative to the head origin).
     nodes.add(SceneShape(
@@ -391,13 +394,7 @@ class _LayoutContext {
     ));
     // Label horizontally centered within the head wedge body.
     final labelCx = x + w / 2 + 3;
-    _drawMultilineText(
-      wrapped,
-      labelCx,
-      y,
-      headStyle,
-      TextAlignH.center,
-    );
+    _drawMultilineText(tb, labelCx, y, headStyle, TextAlignH.center);
 
     _headEnd = nodes.length;
   }
@@ -528,44 +525,44 @@ class _LayoutContext {
   /// Top-level cause label: centered text with a white background box behind.
   /// Returns the leftmost x of the box.
   double _drawCauseLabel(String text, double x, double y, int direction) {
-    final wrapped = _wrapText(text, 15);
-    final size = _measureMultiline(wrapped, labelStyle);
+    final label = _measureMultiline(_wrapText(text, 15), labelStyle);
     final cy = y + 11 * direction;
     final boxRect = Rect.fromLTWH(
-      x - size.width / 2 - 20,
-      cy - size.height / 2 - 2,
-      size.width + 40,
-      size.height + 4,
+      x - label.size.width / 2 - 20,
+      cy - label.size.height / 2 - 2,
+      label.size.width + 40,
+      label.size.height + 4,
     );
     nodes.add(SceneShape(
       geometry: RectGeometry(boxRect),
       fill: Fill(theme.mainBkg),
       stroke: Stroke(color: theme.lineColor, width: 2),
     ));
-    // SVG's middle dominant baseline paints Trebuchet's glyphs about one
-    // pixel above the center of its measured label box.
-    _drawMultilineText(wrapped, x, cy - 1, labelStyle, TextAlignH.center);
+    // Upstream anchors every `dominant-baseline: middle` label on its own
+    // point, so the text block is centred on (x, cy) exactly like the head and
+    // the `align` sub-labels.
+    _drawMultilineText(label, x, cy, labelStyle, TextAlignH.center);
     return boxRect.left;
   }
 
   /// Sub-branch label (no box). End-anchored at (x, y). Returns leftmost x.
   double _drawSubLabel(String text, double x, double y, _SubAnchor anchor) {
-    final size = _measureMultiline(text, labelStyle);
+    final label = _measureMultiline(text, labelStyle);
     // End-anchored: text extends to the left of x.
-    final lines = _splitLines(text);
     double topY;
     switch (anchor) {
       case _SubAnchor.middle:
-        topY = y - size.height / 2;
+        topY = y - label.size.height / 2;
       case _SubAnchor.up: // baseline at y => block sits above y
-        topY = y - size.height;
+        topY = y - label.size.height;
       case _SubAnchor.down: // hanging at y => block sits below y
         topY = y;
     }
     // Multi-line block right-aligned to x.
-    final bounds = Rect.fromLTWH(x - size.width, topY, size.width, size.height);
+    final bounds = Rect.fromLTWH(
+        x - label.size.width, topY, label.size.width, label.size.height);
     nodes.add(SceneText(
-      text: lines.join('\n'),
+      text: label.text,
       bounds: bounds,
       style: labelStyle,
       color: theme.textColor,
@@ -574,24 +571,18 @@ class _LayoutContext {
     return bounds.left;
   }
 
-  // Draws a center-anchored multi-line text block centered at (cx, cy).
+  // Draws an already-measured multi-line text block centered at (cx, cy).
   void _drawMultilineText(
-    String text,
+    _MeasuredText label,
     double cx,
     double cy,
     TextStyleSpec style,
     TextAlignH align,
   ) {
-    final lines = _splitLines(text);
-    var w = 0.0;
-    for (final line in lines) {
-      final s = measurer.measure(line, style);
-      if (s.width > w) w = s.width;
-    }
-    final h = measurer.measure(lines.join('\n'), style).height;
     nodes.add(SceneText(
-      text: lines.join('\n'),
-      bounds: Rect.fromCenter(Point(cx, cy), w, h),
+      text: label.text,
+      bounds:
+          Rect.fromCenter(Point(cx, cy), label.size.width, label.size.height),
       style: style,
       color: theme.textColor,
       align: align,
@@ -620,6 +611,16 @@ class _LayoutContext {
 }
 
 enum _SubAnchor { middle, up, down }
+
+/// A label split into its rendered lines together with the size of the block
+/// they occupy.
+class _MeasuredText {
+  const _MeasuredText(this.text, this.size);
+
+  /// Lines joined with '\n', as handed to [SceneText].
+  final String text;
+  final Size size;
+}
 
 List<String> _splitLines(String text) =>
     text.split(RegExp(r'<br\s*/?>|\n'));

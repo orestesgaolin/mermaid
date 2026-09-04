@@ -4,6 +4,12 @@ library;
 import '../../color.dart';
 import '../../ir/scene.dart';
 
+/// Paint-only replacement values for one flowchart node.
+///
+/// Every field is optional; a null field keeps whatever the base scene already
+/// paints. These overrides deliberately cannot change geometry — text, shape,
+/// size, and position come from the laid-out scene they are applied to. Pass
+/// them to [applyFlowchartPaintOverrides].
 class FlowNodePaintOverride {
   const FlowNodePaintOverride({
     this.fill,
@@ -41,6 +47,12 @@ class FlowNodePaintOverride {
   );
 }
 
+/// Paint-only replacement values for one flowchart link, addressed by its
+/// zero-based source order (the same index `linkStyle` uses).
+///
+/// Every field is optional; a null field keeps whatever the base scene already
+/// paints. The stroke color applies to the routed line and its arrowheads.
+/// Pass them to [applyFlowchartPaintOverrides].
 class FlowLinkPaintOverride {
   const FlowLinkPaintOverride({this.stroke, this.strokeWidth, this.strokeDash})
     : assert(strokeWidth == null || strokeWidth >= 0);
@@ -214,9 +226,7 @@ Stroke? _shapeStroke(
       width: link?.strokeWidth ?? stroke.width,
       dash: link?.strokeDash ?? stroke.dash,
     ),
-    ScenePaintRole.edgeMarker ||
-    ScenePaintRole.edgeMarkerFill ||
-    ScenePaintRole.edgeMarkerStroke => _copyStroke(stroke, color: link?.stroke),
+    ScenePaintRole.edgeMarker => _copyStroke(stroke, color: link?.stroke),
     ScenePaintRole.none => stroke,
   };
 }

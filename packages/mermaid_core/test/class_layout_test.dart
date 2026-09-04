@@ -1,7 +1,7 @@
 /// Structural tests for the class diagram layout.
 library;
 
-import 'dart:io';
+import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/diagrams/class_diagram/class_layout.dart';
 import 'package:mermaid_core/src/diagrams/class_diagram/class_parser.dart';
@@ -12,32 +12,52 @@ import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
 
 RenderScene layoutSource(String source) => layoutClassDiagram(
-      parseClassDiagram(source),
-      measurer: const ApproximateTextMeasurer(),
-      theme: MermaidTheme.defaultTheme,
-    );
+  parseClassDiagram(source),
+  measurer: const ApproximateTextMeasurer(),
+  theme: MermaidTheme.defaultTheme,
+);
 
 RenderScene layout(String body) => layoutSource('classDiagram\n$body');
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
+  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
+];
 
-SceneGroup group(RenderScene s, String id) => flatten(s.nodes)
-    .whereType<SceneGroup>()
-    .firstWhere((g) => g.id == id);
+SceneGroup group(RenderScene s, String id) =>
+    flatten(s.nodes).whereType<SceneGroup>().firstWhere((g) => g.id == id);
+
+/// The edge group for the `from --> to` relation. Relation ids carry the
+/// parse index as a suffix, so looking one up by endpoints keeps the test
+/// stable when statements are added or reordered in a fixture.
+SceneGroup relationGroup(RenderScene s, String from, String to) => flatten(
+  s.nodes,
+).whereType<SceneGroup>().singleWhere(
+  (g) =>
+      g.role == SceneGroupRole.edge &&
+      (g.id?.startsWith('rel_${from}_${to}_') ?? false),
+);
+
+/// The label group that belongs to [edge] (same parse index).
+SceneGroup relationLabel(RenderScene s, SceneGroup edge) =>
+    group(s, 'rellabel_${edge.id!.split('_').last}');
+
+PathGeometry edgePath(SceneGroup edge) => flatten(edge.children)
+    .whereType<SceneShape>()
+    .map((shape) => shape.geometry)
+    .whereType<PathGeometry>()
+    .first;
 
 void main() {
   test('box contains name, attributes and methods in order', () {
     final s = layout('class Animal {\n+String name\n+eat() : bool\n}');
-    final texts = flatten(group(s, 'Animal').children)
-        .whereType<SceneText>()
-        .toList();
-    expect(texts.map((t) => t.text).toList(),
-        ['Animal', '+String name', '+eat() : bool']);
+    final texts = flatten(
+      group(s, 'Animal').children,
+    ).whereType<SceneText>().toList();
+    expect(texts.map((t) => t.text).toList(), [
+      'Animal',
+      '+String name',
+      '+eat() : bool',
+    ]);
     expect(texts[0].bounds.top, lessThan(texts[1].bounds.top));
     expect(texts[1].bounds.top, lessThan(texts[2].bounds.top));
   });
@@ -45,26 +65,31 @@ void main() {
   test('separator lines split the compartments', () {
     final s = layout('class A {\n+x\n+f()\n}');
     final seps = flatten(group(s, 'A').children).whereType<SceneShape>().where(
-        (n) => n.geometry is PathGeometry && n.fill == null);
+      (n) => n.geometry is PathGeometry && n.fill == null,
+    );
     expect(seps.length, 2);
   });
 
   test('annotation renders in guillemets above the name', () {
     final s = layout('class Shape {\n<<interface>>\n}');
-    final texts =
-        flatten(group(s, 'Shape').children).whereType<SceneText>().toList();
+    final texts = flatten(
+      group(s, 'Shape').children,
+    ).whereType<SceneText>().toList();
     expect(texts.first.text, '«interface»');
-    expect(texts.first.bounds.top,
-        lessThan(texts.firstWhere((t) => t.text == 'Shape').bounds.top));
+    expect(
+      texts.first.bounds.top,
+      lessThan(texts.firstWhere((t) => t.text == 'Shape').bounds.top),
+    );
   });
 
   test('inheritance emits a hollow triangle near the parent box', () {
     final s = layout('Animal <|-- Duck');
     final rel = group(s, 'rel_Animal_Duck_0');
     final triangle = flatten(rel.children).whereType<SceneShape>().firstWhere(
-        (n) =>
-            n.geometry is PolygonGeometry &&
-            (n.geometry as PolygonGeometry).points.length == 3);
+      (n) =>
+          n.geometry is PolygonGeometry &&
+          (n.geometry as PolygonGeometry).points.length == 3,
+    );
     expect(triangle.fill!.color, MermaidTheme.defaultTheme.background);
     final triBounds = geometryBounds(triangle.geometry);
     final parent = sceneNodeBounds(group(s, 'Animal'))!;
@@ -78,7 +103,8 @@ void main() {
     final s = layout('A ..> B');
     final rel = group(s, 'rel_A_B_0');
     final line = flatten(rel.children).whereType<SceneShape>().firstWhere(
-        (n) => n.geometry is PathGeometry && n.stroke?.dash != null);
+      (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
+    );
     expect(line.stroke!.dash, isNotEmpty);
   });
 
@@ -94,7 +120,12 @@ void main() {
     expect(texts, contains('uses'));
     final label = group(s, 'rellabel_0');
     final background = label.children.whereType<SceneShape>().single;
+    final themed = MermaidTheme.defaultTheme.edgeLabelBackground;
+    // The generic edge-label colour, painted opaque so the relation line does
+    // not show through it.
+    expect(background.fill?.color, themed.withOpacity(1));
     expect(background.fill?.color.alpha, 255);
+    expect(background.fill?.color.red, themed.red);
   });
 
   test('direction LR orders boxes horizontally', () {
@@ -134,7 +165,8 @@ Bike --> Square : Logo Shape
 ''');
     final shapes = sceneNodeBounds(group(s, 'namespace_Shapes'))!;
     final vehicles = sceneNodeBounds(group(s, 'namespace_Vehicles'))!;
-    final overlaps = shapes.left < vehicles.right &&
+    final overlaps =
+        shapes.left < vehicles.right &&
         shapes.right > vehicles.left &&
         shapes.top < vehicles.bottom &&
         shapes.bottom > vehicles.top;
@@ -157,43 +189,63 @@ Car --> Circle : Logo Shape
 Bike --> Square : Logo Shape
 ''');
 
-    for (final entry in [('rel_Car_Circle_0', 'Circle'), ('rel_Bike_Square_1', 'Square')]) {
-      final path = flatten(group(s, entry.$1).children)
-          .whereType<SceneShape>()
-          .map((shape) => shape.geometry)
-          .whereType<PathGeometry>()
-          .first;
+    for (final entry in [('Car', 'Circle'), ('Bike', 'Square')]) {
+      final path = edgePath(relationGroup(s, entry.$1, entry.$2));
       final endpoint = (path.commands.last as LineTo).p;
       final destination = sceneNodeBounds(group(s, entry.$2))!;
 
       expect(endpoint.x, closeTo(destination.center.x, 0.001));
       expect(
         endpoint.y,
-        anyOf(closeTo(destination.top, 0.001), closeTo(destination.bottom, 0.001)),
+        anyOf(
+          closeTo(destination.top, 0.001),
+          closeTo(destination.bottom, 0.001),
+        ),
       );
     }
   });
 
+  test('cross-namespace relations follow the rank axis under direction LR', () {
+    final s = layout('''
+direction LR
+namespace Shapes {
+  class Circle
+  class Square
+}
+namespace Vehicles {
+  class Car
+  class Bike
+}
+Car --> Circle : Logo Shape
+Bike --> Square : Logo Shape
+''');
+
+    for (final entry in [('Car', 'Circle'), ('Bike', 'Square')]) {
+      final path = edgePath(relationGroup(s, entry.$1, entry.$2));
+      final endpoint = (path.commands.last as LineTo).p;
+      final source = sceneNodeBounds(group(s, entry.$1))!;
+      final destination = sceneNodeBounds(group(s, entry.$2))!;
+
+      // LR ranks run left to right, so the arrowhead must land on the
+      // destination's left edge, not on its top or bottom.
+      expect(source.right, lessThan(destination.left));
+      expect(endpoint.x, closeTo(destination.left, 0.001));
+      expect(endpoint.y, inInclusiveRange(destination.top, destination.bottom));
+    }
+  });
+
   test('fixture 11 labels sit on edges and inheritance enters rank edge', () {
-    final source =
-        File('test/fixtures/upstream_class/11.mmd').readAsStringSync();
+    final source = readFixture('upstream_class/11.mmd');
     final s = layoutSource(source);
-    for (final entry in [
-      ('rel_Car_Circle_4', 'rellabel_4'),
-      ('rel_Bike_Square_5', 'rellabel_5'),
-    ]) {
-      final path = flatten(group(s, entry.$1).children)
-          .whereType<SceneShape>()
-          .map((shape) => shape.geometry)
-          .whereType<PathGeometry>()
-          .first;
-      final labelCenter = sceneNodeBounds(group(s, entry.$2))!.center;
-      expect(distanceToPath(path, labelCenter), lessThan(0.6));
+    for (final entry in [('Car', 'Circle'), ('Bike', 'Square')]) {
+      final edge = relationGroup(s, entry.$1, entry.$2);
+      final labelCenter = sceneNodeBounds(relationLabel(s, edge))!.center;
+      expect(distanceToPath(edgePath(edge), labelCenter), lessThan(0.6));
     }
 
     final vehicle = sceneNodeBounds(group(s, 'Vehicle'))!;
-    for (final edgeId in ['rel_Vehicle_Car_2', 'rel_Vehicle_Bike_3']) {
-      final triangle = flatten(group(s, edgeId).children)
+    for (final child in ['Car', 'Bike']) {
+      final triangle = flatten(relationGroup(s, 'Vehicle', child).children)
           .whereType<SceneShape>()
           .map((shape) => shape.geometry)
           .whereType<PolygonGeometry>()
@@ -204,16 +256,19 @@ Bike --> Square : Logo Shape
     }
 
     for (final inheritance in [
-      ('Shape', ['rel_Shape_Circle_0', 'rel_Shape_Square_1']),
-      ('Vehicle', ['rel_Vehicle_Car_2', 'rel_Vehicle_Bike_3']),
+      ('Shape', ['Circle', 'Square']),
+      ('Vehicle', ['Car', 'Bike']),
     ]) {
-      final edgeGeometry = inheritance.$2.map((edgeId) {
-        final geometry = flatten(group(s, edgeId).children)
-            .whereType<SceneShape>()
-            .map((shape) => shape.geometry);
+      final edgeGeometry = inheritance.$2.map((child) {
+        final geometry = flatten(
+          relationGroup(s, inheritance.$1, child).children,
+        ).whereType<SceneShape>().map((shape) => shape.geometry);
         final triangle = geometry.whereType<PolygonGeometry>().single;
         final path = geometry.whereType<PathGeometry>().single;
-        return (tip: triangle.points.first, pathStart: (path.commands.first as MoveTo).p);
+        return (
+          tip: triangle.points.first,
+          pathStart: (path.commands.first as MoveTo).p,
+        );
       }).toList();
       final tips = edgeGeometry.map((edge) => edge.tip).toList();
       final parent = sceneNodeBounds(group(s, inheritance.$1))!;
@@ -223,13 +278,15 @@ Bike --> Square : Logo Shape
       expect(
         (tips[0].x - tips[1].x).abs(),
         greaterThan(1),
-        reason: '${inheritance.$1} inheritance routes must keep separate '
+        reason:
+            '${inheritance.$1} inheritance routes must keep separate '
             'ports and arrowheads',
       );
       expect(
         (edgeGeometry[0].pathStart.x - edgeGeometry[1].pathStart.x).abs(),
         greaterThan(1),
-        reason: '${inheritance.$1} inheritance strokes must remain separate '
+        reason:
+            '${inheritance.$1} inheritance strokes must remain separate '
             'through their parent-edge approach',
       );
     }
@@ -240,13 +297,16 @@ Bike --> Square : Logo Shape
     final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
     expect(texts, contains('remember'));
     final dashed = flatten(s.nodes).whereType<SceneShape>().where(
-        (n) => n.geometry is PathGeometry && n.stroke?.dash != null);
+      (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
+    );
     expect(dashed, isNotEmpty);
   });
 
   test('scene bounds enclose everything', () {
-    final s = layout('Animal <|-- Duck : isa\nAnimal : +int age\n'
-        'namespace N {\nclass X\n}\nnote for X "hi"');
+    final s = layout(
+      'Animal <|-- Duck : isa\nAnimal : +int age\n'
+      'namespace N {\nclass X\n}\nnote for X "hi"',
+    );
     for (final n in flatten(s.nodes)) {
       final b = sceneNodeBounds(n);
       if (b == null) continue;

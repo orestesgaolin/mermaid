@@ -17,6 +17,34 @@ Rect? sceneBounds(Iterable<SceneNode> nodes) {
   return acc;
 }
 
+/// Caches [RenderSceneBounds.nodeBounds] per scene instance.
+///
+/// [RenderScene] is immutable, so the map is valid for the scene's lifetime.
+/// Interaction layers call `boundsOfNode` from build and hover callbacks; a
+/// fresh tree walk plus an unmodifiable map on every frame is wasted work.
+final Expando<Map<String, Rect>> _nodeBoundsCache = Expando<Map<String, Rect>>(
+  'RenderScene.nodeBounds',
+);
+
+Map<String, Rect> _computeNodeBounds(RenderScene scene) {
+  final result = <String, Rect>{};
+
+  void walk(Iterable<SceneNode> nodes) {
+    for (final node in nodes) {
+      if (node is! SceneGroup) continue;
+      final id = node.id;
+      if (id != null && node.role == SceneGroupRole.node) {
+        final bounds = sceneBounds(node.children);
+        if (bounds != null) result[id] = bounds;
+      }
+      walk(node.children);
+    }
+  }
+
+  walk(scene.nodes);
+  return Map.unmodifiable(result);
+}
+
 extension RenderSceneBounds on RenderScene {
   /// Bounds of non-empty diagram-node groups, keyed by stable node id.
   ///
@@ -27,30 +55,17 @@ extension RenderSceneBounds on RenderScene {
   /// Nested nodes are reported independently. If an id occurs more than once,
   /// the last-painted occurrence wins. Empty groups and groups whose role is
   /// not [SceneGroupRole.node] are omitted.
-  Map<String, Rect> get nodeBounds {
-    final result = <String, Rect>{};
+  ///
+  /// The result is computed once per scene and cached, so repeated lookups
+  /// from a paint or hover callback are cheap. The returned map is
+  /// unmodifiable and shared between callers — do not hold it past the
+  /// scene's own lifetime.
+  Map<String, Rect> get nodeBounds =>
+      _nodeBoundsCache[this] ??= _computeNodeBounds(this);
 
-    void walk(Iterable<SceneNode> nodes) {
-      for (final node in nodes) {
-        if (node is! SceneGroup) continue;
-        final id = node.id;
-        if (id != null && node.role == SceneGroupRole.node) {
-          final bounds = sceneBounds(node.children);
-          if (bounds != null) result[id] = bounds;
-        }
-        walk(node.children);
-      }
-    }
-
-    walk(nodes);
-    return Map.unmodifiable(result);
-  }
-
-  /// Scene-space bounds for [id], or null when no non-empty node has that id.
-  Rect? boundsOf(String id) => nodeBounds[id];
-
-  /// Explicit alias for [boundsOf].
-  Rect? boundsOfNode(String id) => boundsOf(id);
+  /// Scene-space bounds for the node [id], or null when no non-empty node has
+  /// that id.
+  Rect? boundsOfNode(String id) => nodeBounds[id];
 }
 
 Rect? sceneNodeBounds(SceneNode node) => switch (node) {

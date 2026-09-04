@@ -134,7 +134,9 @@ RadarChart parseRadar(String source) {
     }
     var m = RegExp(r'^title\s+(.+)$').firstMatch(line);
     if (m != null) {
-      title ??= m.group(1)!.trim();
+      // A body `title` wins over the frontmatter one, as in every other
+      // diagram (upstream's `setDiagramTitle` simply overwrites).
+      title = m.group(1)!.trim();
       continue;
     }
     m = RegExp(r'^axis\s+(.+)$').firstMatch(line);

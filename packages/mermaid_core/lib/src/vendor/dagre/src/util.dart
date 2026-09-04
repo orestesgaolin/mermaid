@@ -139,7 +139,13 @@ void normalizeRanks(Graph g) {
     return rank;
   }).toList();
 
-  var minV = min(nodeRanks)!;
+  // Vendored fix: an empty graph has no ranks at all. dagre.js computes
+  // `_.min([]) === undefined` and then never enters the loop body, so the
+  // pass is a no-op; the Dart port asserted the minimum was non-null and
+  // crashed instead. Header-only sources (`flowchart TB`, `classDiagram`,
+  // ...) reach layout with zero nodes and must render an empty scene.
+  final minV = min(nodeRanks);
+  if (minV == null) return;
   for (var v in g.nodesIterable) {
     var node = g.node(v);
     if (node.hasOwn(rankK)) {

@@ -134,6 +134,81 @@ block-beta
     expect(marker.points.map((point) => point.x).reduce(math.max), target.left);
   });
 
+  test('block: a span wider than the grid stays inside its group', () {
+    final scene = layoutBlock(
+      parseBlock('''
+block-beta
+  columns 2
+  block:g1
+    columns 1
+    a["inner"]:3
+  end
+  wide["a really quite extremely wide block label here that is long"]
+'''),
+      measurer: measurer,
+      theme: theme,
+    );
+
+    Rect nodeRect(String id) {
+      final group = flatten(
+        scene.nodes,
+      ).whereType<SceneGroup>().firstWhere((node) => node.id == id);
+      return (group.children.whereType<SceneShape>().first.geometry
+              as RectGeometry)
+          .rect;
+    }
+
+    // The only bare shape at the top level is the group's own cluster rect.
+    final groupRect =
+        (scene.nodes.whereType<SceneShape>().single.geometry as RectGeometry)
+            .rect;
+    final inner = nodeRect('a');
+    final sibling = nodeRect('wide');
+
+    expect(inner.left, greaterThanOrEqualTo(groupRect.left));
+    expect(inner.right, lessThanOrEqualTo(groupRect.right));
+    expect(inner.top, greaterThanOrEqualTo(groupRect.top));
+    expect(inner.bottom, lessThanOrEqualTo(groupRect.bottom));
+    // ... and therefore never paints across the sibling in the next column.
+    expect(inner.right, lessThanOrEqualTo(sibling.left));
+  });
+
+  test('block: a round shape fits the height of its row', () {
+    final scene = layoutBlock(
+      parseBlock('''
+block-beta
+  columns 2
+  block:g1
+    columns 1
+    a(("A"))
+  end
+  wide["a really quite extremely wide block label here that is long"]
+'''),
+      measurer: measurer,
+      theme: theme,
+    );
+
+    final groupRect =
+        (scene.nodes.whereType<SceneShape>().single.geometry as RectGeometry)
+            .rect;
+    final circle = flatten(scene.nodes)
+        .whereType<SceneGroup>()
+        .firstWhere((node) => node.id == 'a')
+        .children
+        .whereType<SceneShape>()
+        .map((shape) => shape.geometry)
+        .whereType<CircleGeometry>()
+        .single;
+
+    expect(circle.center.y - circle.radius, greaterThanOrEqualTo(groupRect.top));
+    expect(
+      circle.center.y + circle.radius,
+      lessThanOrEqualTo(groupRect.bottom),
+    );
+    expect(circle.center.x - circle.radius, greaterThanOrEqualTo(groupRect.left));
+    expect(circle.center.x + circle.radius, lessThanOrEqualTo(groupRect.right));
+  });
+
   test('radar: axes, curves, range', () {
     final c = parseRadar('''
 radar-beta
@@ -198,7 +273,7 @@ treemap-beta
     expect(leaves[2].top, leaves[3].top);
   });
 
-  test('treemap uses the configured default aspect ratio for leaf rows', () {
+  test('treemap: squarify packs sibling leaves into a shared row', () {
     final scene = layoutTreemap(
       parseTreemap('''
 treemap-beta

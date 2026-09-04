@@ -228,13 +228,19 @@ RenderScene layoutJourney(
   var globalIndex = 0;
   var lastX = leftMargin;
   var sectionIndex = 0;
+  // Upstream fills the section band from `journey.sectionColours` (default
+  // `['#fff']`) over the dark `sectionFills`. This port paints the band from
+  // the theme's light `fillType` palette instead, so the band label follows
+  // the diagram's title colour and the task labels the body text colour —
+  // both readable on that palette in every bundled theme.
+  final sectionTitleColor = theme.titleColor;
+  final textColor = theme.textColor;
   for (final section in diagram.sections) {
     final count = section.tasks.length;
     // n = sectionNumber % sectionFills.length; use the matching fillType for
-    // the section and task boxes, and the theme text colour for their labels.
+    // the section and task boxes.
     final n = sectionIndex % _sectionFillCount;
     final fill = theme.fillType[n];
-    final textColor = theme.textColor;
     final sectionX = globalIndex * _taskMargin + globalIndex * _boxWidth +
         leftMargin;
     if (section.name.isNotEmpty) {
@@ -260,7 +266,7 @@ RenderScene layoutJourney(
               size.width,
               size.height),
           style: baseStyle,
-          color: textColor,
+          color: sectionTitleColor,
         ),
         ],
       ));

@@ -306,9 +306,10 @@ RenderScene layoutTreemap(
   final spacing = isComplex ? 1.0 : 2.0;
 
   // D3's golden-ratio squarifier. [rect] is the tiling area after the parent's
-  // directional padding has been applied; [gap] becomes half-padding on each
-  // child, exactly as d3-hierarchy's padding stack does.
-  List<Rect> squarify(List<TreemapNode> children, Rect rect, double gap) {
+  // directional padding has been applied; `_innerPadding` becomes half-padding
+  // on each child, exactly as d3-hierarchy's padding stack does.
+  List<Rect> squarify(List<TreemapNode> children, Rect rect) {
+    const gap = _innerPadding;
     final n = children.length;
     final placed = List<Rect?>.filled(n, null);
     if (n == 0) return const [];
@@ -352,8 +353,11 @@ RenderScene layoutTreemap(
         final rh = remainingValue == 0 ? dy : dy * sumValue / remainingValue;
         var cx = x;
         for (var i = i0; i < i1; i++) {
+          // d3 `treemapDice`: `k = parent.value && (x1 - x0) / parent.value`,
+          // so a zero-valued row yields k = 0 and every child collapses to
+          // zero width rather than each taking the whole row.
           final cw = sumValue == 0
-              ? dx
+              ? 0.0
               : dx * math.max(children[i].total, 0) / sumValue;
           placed[i] = Rect.fromLTWH(cx, y, cw, rh);
           cx += cw;
@@ -364,8 +368,9 @@ RenderScene layoutTreemap(
         final rw = remainingValue == 0 ? dx : dx * sumValue / remainingValue;
         var cy = y;
         for (var i = i0; i < i1; i++) {
+          // d3 `treemapSlice`, same zero-value rule as `treemapDice` above.
           final ch = sumValue == 0
-              ? dy
+              ? 0.0
               : dy * math.max(children[i].total, 0) / sumValue;
           placed[i] = Rect.fromLTWH(x, cy, rw, ch);
           cy += ch;
@@ -396,10 +401,10 @@ RenderScene layoutTreemap(
 
   // Draws one node's children into [rect]. [rect] is the area available to the
   // node's children (header already removed for sections by the caller).
-  void layout(TreemapNode node, Rect rect, int depth) {
+  void layout(TreemapNode node, Rect rect) {
     final kids = node.children;
     if (kids.isEmpty) return;
-    final rects = squarify(kids, rect, _innerPadding);
+    final rects = squarify(kids, rect);
     for (var ki = 0; ki < kids.length; ki++) {
       final child = kids[ki];
       final cellRect = rects[ki];
@@ -468,7 +473,7 @@ RenderScene layoutTreemap(
           math.max(0, cellRect.height - top - left),
         );
         if (inner.width > 0 && inner.height > 0) {
-          layout(child, inner, depth + 1);
+          layout(child, inner);
         }
       }
     }
@@ -484,7 +489,7 @@ RenderScene layoutTreemap(
     h - (_sectionHeaderHeight + _sectionInnerPadding - halfInner) -
         (_sectionInnerPadding - halfInner),
   );
-  layout(root, rootTileRect, 0);
+  layout(root, rootTileRect);
 
   if (titleH > 0) {
     final titleStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 14);

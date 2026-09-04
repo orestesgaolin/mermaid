@@ -3,7 +3,10 @@
 /// Reference: upstream quadrant-chart jison grammar + quadrantBuilder.ts.
 library;
 
+import 'dart:math' as math;
+
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
 import '../../directives.dart';
 import '../../geometry.dart';
@@ -59,28 +62,10 @@ class QuadrantConfig {
   /// Resolves frontmatter first, then applies every init directive in order.
   factory QuadrantConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'quadrantChart');
-    double positive(String key, double fallback) {
-      final value = values[key];
-      if (value is num) {
-        final resolved = value.toDouble();
-        if (resolved.isFinite && resolved > 0) return resolved;
-      }
-      return fallback;
-    }
-
-    double nonNegative(String key, double fallback) {
-      final value = values[key];
-      if (value is num) {
-        final resolved = value.toDouble();
-        if (resolved.isFinite && resolved >= 0) return resolved;
-      }
-      return fallback;
-    }
-
     return QuadrantConfig(
-      chartWidth: positive('chartWidth', 500),
-      chartHeight: positive('chartHeight', 500),
-      quadrantPadding: nonNegative('quadrantPadding', 5),
+      chartWidth: positiveDouble(values, 'chartWidth', 500),
+      chartHeight: positiveDouble(values, 'chartHeight', 500),
+      quadrantPadding: nonNegativeDouble(values, 'quadrantPadding', 5),
     );
   }
 }
@@ -301,7 +286,9 @@ QuadrantChart parseQuadrantChart(String source) {
     );
   }
   final right = _unquote(raw.substring(delimiter.$2).trim());
-  return right.isEmpty ? ('$left →', null) : (left, right);
+  // Upstream appends `" \u27F6 "` (long right arrow, both spaces kept) to the
+  // left label when the delimiter has nothing after it (quadrant.jison).
+  return right.isEmpty ? ('$left \u27F6 ', null) : (left, right);
 }
 
 (int, int)? _axisDelimiter(String text) {
@@ -359,7 +346,6 @@ SceneText _anchoredText({
   required Color color,
   required bool left,
   required bool top,
-  double rotation = 0,
 }) {
   final bx = left ? x : x - size.width / 2;
   final by = top ? y : y - size.height / 2;
@@ -369,7 +355,6 @@ SceneText _anchoredText({
     style: style,
     color: color,
     align: left ? TextAlignH.left : TextAlignH.center,
-    rotation: rotation,
   );
 }
 
@@ -402,19 +387,23 @@ RenderScene layoutQuadrantChart(
 
   final quadrantLeft = config.quadrantPadding + yAxisLeftSpace;
   final quadrantTop = config.quadrantPadding + xAxisTopSpace + titleTopSpace;
-  final quadrantWidth =
-      config.chartWidth - config.quadrantPadding * 2 - yAxisLeftSpace;
-  final quadrantHeight = config.chartHeight -
-      config.quadrantPadding * 2 -
-      xAxisTopSpace -
-      xAxisBottomSpace -
-      titleTopSpace;
-  if (quadrantWidth <= 0 || quadrantHeight <= 0) {
-    throw ArgumentError(
-      'quadrantChart dimensions ${config.chartWidth}x${config.chartHeight} '
-      'are too small for the configured padding and visible title/axes.',
-    );
-  }
+  // A `chartWidth`/`chartHeight` smaller than the padding plus the reserved
+  // title/axis bands leaves a negative plot region. Upstream just draws the
+  // degenerate (invisible) region; clamp to zero so `render()` keeps to its
+  // documented contract — a finite scene, or MermaidParseException /
+  // UnsupportedError — instead of throwing ArgumentError.
+  final quadrantWidth = math.max(
+    0.0,
+    config.chartWidth - config.quadrantPadding * 2 - yAxisLeftSpace,
+  );
+  final quadrantHeight = math.max(
+    0.0,
+    config.chartHeight -
+        config.quadrantPadding * 2 -
+        xAxisTopSpace -
+        xAxisBottomSpace -
+        titleTopSpace,
+  );
   final quadrantHalfWidth = quadrantWidth / 2;
   final quadrantHalfHeight = quadrantHeight / 2;
 
@@ -452,8 +441,8 @@ RenderScene layoutQuadrantChart(
     ));
     final label = chart.quadrantLabels[q];
     if (label != null && label.isNotEmpty) {
-      final size =
-          measurer.measure(label, quadrantStyle, maxWidth: quadrantHalfWidth);
+      final size = measurer.measure(label, quadrantStyle,
+          maxWidth: math.max(1.0, quadrantHalfWidth));
       final cx = regions[q].left + regions[q].width / 2;
       // No points => centered in region; points => anchored at region top.
       final top = hasPoints;

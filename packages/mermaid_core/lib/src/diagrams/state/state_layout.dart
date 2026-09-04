@@ -8,6 +8,7 @@ import 'dart:math' as math;
 import 'package:elk/elk.dart' as elk;
 
 import '../../color.dart';
+import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -86,9 +87,16 @@ class _StateLayout {
       diagram.direction == FlowDirection.lr ||
       diagram.direction == FlowDirection.rl;
 
+  /// A composite declared with an empty body (`state B { }`) has nothing to
+  /// wrap, so it is laid out and drawn as an ordinary box instead of a
+  /// cluster. Upstream does the same: `dataFetcher` marks it a group, but the
+  /// renderer has no children to place inside it.
+  bool _isEmptyComposite(StateNode s) =>
+      s.kind == StateKind.composite && s.children.isEmpty;
+
   RenderScene run() {
     for (final s in diagram.states.values) {
-      if (s.kind == StateKind.composite) continue;
+      if (s.kind == StateKind.composite && !_isEmptyComposite(s)) continue;
       placed[s.id] = _measure(s);
     }
     final noteBoxes = <int, _Placed>{};
@@ -112,7 +120,7 @@ class _StateLayout {
           width: p.width, height: p.height, parent: p.node.parent));
     }
     for (final s in diagram.states.values) {
-      if (s.kind == StateKind.composite) {
+      if (s.kind == StateKind.composite && !_isEmptyComposite(s)) {
         g.addNode(dagre.DagreNode(s.id, parent: s.parent));
       }
     }
@@ -286,7 +294,7 @@ class _StateLayout {
     // when edges cross the cluster boundary.
 
     for (final s in diagram.states.values) {
-      if (s.kind != StateKind.composite) continue;
+      if (s.kind != StateKind.composite || _isEmptyComposite(s)) continue;
       final rect = compositeBounds(s.id);
       if (rect == null) continue;
       final titleSize = measurer.measure(s.label, baseStyle);
@@ -393,7 +401,7 @@ class _StateLayout {
         final end = Point(anchor.right, anchor.center.y + anchor.height / 4);
         final c1 = Point(start.x + ext, start.y - ext * 0.3);
         final c2 = Point(end.x + ext, end.y + ext * 0.3);
-        final endDir = _dir(c2, end);
+        final endDir = direction(c2, end);
         final children = <SceneNode>[
           SceneShape(
             geometry: PathGeometry(
@@ -530,13 +538,13 @@ class _StateLayout {
         points[points.length - 1] = _clipRectPerp(
             targetRect, points[points.length - 1], points[points.length - 2]);
       } else {
-        points[0] = _intersectRect(sourceRect, points[1]);
+        points[0] = intersectRect(sourceRect, points[1]);
         points[points.length - 1] =
-            _intersectRect(targetRect, points[points.length - 2]);
+            intersectRect(targetRect, points[points.length - 2]);
       }
 
       final endTip = points.last;
-      final endDir = _dir(points[points.length - 2], endTip);
+      final endDir = direction(points[points.length - 2], endTip);
       points[points.length - 1] = endTip - endDir * 8;
 
       edgeNodes.add(SceneGroup(
@@ -546,7 +554,7 @@ class _StateLayout {
         children: [
           SceneShape(
             geometry:
-                PathGeometry(useElk ? _linearPath(points) : _curveBasis(points)),
+                PathGeometry(useElk ? _linearPath(points) : curveBasis(points)),
             stroke: Stroke(color: theme.lineColor, width: 1),
           ),
           SceneShape(
@@ -568,10 +576,10 @@ class _StateLayout {
         // (NOT the index-midpoint, which lands near an end on an orthogonal path
         // and overlaps the target node). Dagre supplies its own labelX/Y.
         final c = useElk
-            ? _pathMidpoint(points)
+            ? polylineMidpoint(points)
             : (dagreEdge?.labelX != null && dagreEdge?.labelY != null
                 ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
-                : _pathMidpoint(points));
+                : polylineMidpoint(points));
         labelNodes.add(SceneGroup(
           id: 'translabel_$i',
           role: SceneGroupRole.edgeLabel,
@@ -603,8 +611,8 @@ class _StateLayout {
       if (target != null) {
         edgeNodes.add(SceneShape(
           geometry: PathGeometry([
-            MoveTo(_intersectRect(b.rect, target.center)),
-            LineTo(_intersectRect(target.rect, b.center)),
+            MoveTo(intersectRect(b.rect, target.center)),
+            LineTo(intersectRect(target.rect, b.center)),
           ]),
           stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
         ));
@@ -821,32 +829,9 @@ class _StateLayout {
         children: children);
   }
 
-  Point _dir(Point from, Point to) {
-    final d = to - from;
-    final len = math.sqrt(d.x * d.x + d.y * d.y);
-    return len == 0 ? const Point(0, 1) : Point(d.x / len, d.y / len);
-  }
 }
 
 // --- helpers (private ports, same shapes as class_layout) --------------------
-
-Point _intersectRect(Rect rect, Point outside) {
-  final c = rect.center;
-  final dx = outside.x - c.x;
-  final dy = outside.y - c.y;
-  if (dx == 0 && dy == 0) return c;
-  final w = rect.width / 2;
-  final h = rect.height / 2;
-  double sx, sy;
-  if (dy.abs() * w > dx.abs() * h) {
-    sy = dy < 0 ? -h : h;
-    sx = dx * sy / dy;
-  } else {
-    sx = dx < 0 ? -w : w;
-    sy = dy * sx / dx;
-  }
-  return Point(c.x + sx, c.y + sy);
-}
 
 /// Straight polyline through [pts] — used for elk's orthogonal edge routes
 /// (the points are already axis-aligned, so no smoothing is applied).
@@ -873,28 +858,6 @@ Point _clipRectPerp(Rect rect, Point end, Point next) {
   return Point(next.x < rect.center.x ? rect.left : rect.right, y);
 }
 
-/// The point halfway along [pts] by arc length (not by index). Used to place an
-/// edge label centred on the visible middle of an orthogonal polyline.
-Point _pathMidpoint(List<Point> pts) {
-  if (pts.isEmpty) return Point.zero;
-  if (pts.length == 1) return pts.first;
-  var total = 0.0;
-  for (var i = 1; i < pts.length; i++) {
-    total += pts[i].distanceTo(pts[i - 1]);
-  }
-  var half = total / 2;
-  for (var i = 1; i < pts.length; i++) {
-    final seg = pts[i].distanceTo(pts[i - 1]);
-    if (seg >= half) {
-      final f = seg == 0 ? 0.0 : half / seg;
-      return Point(pts[i - 1].x + (pts[i].x - pts[i - 1].x) * f,
-          pts[i - 1].y + (pts[i].y - pts[i - 1].y) * f);
-    }
-    half -= seg;
-  }
-  return pts.last;
-}
-
 List<Point> _dropInsideRect(List<Point> pts, Rect rect,
     {required bool fromEnd}) {
   final list = List<Point>.from(pts);
@@ -909,27 +872,3 @@ List<Point> _dropInsideRect(List<Point> pts, Rect rect,
   }
   return list;
 }
-
-List<PathCommand> _curveBasis(List<Point> pts) {
-  if (pts.isEmpty) return const [];
-  if (pts.length == 1) return [MoveTo(pts.first)];
-  if (pts.length == 2) return [MoveTo(pts[0]), LineTo(pts[1])];
-  final cmds = <PathCommand>[MoveTo(pts[0])];
-  cmds.add(LineTo(Point(
-    (5 * pts[0].x + pts[1].x) / 6,
-    (5 * pts[0].y + pts[1].y) / 6,
-  )));
-  for (var i = 2; i < pts.length; i++) {
-    cmds.add(_basisSegment(pts[i - 2], pts[i - 1], pts[i]));
-  }
-  final n = pts.length;
-  cmds.add(_basisSegment(pts[n - 2], pts[n - 1], pts[n - 1]));
-  cmds.add(LineTo(pts[n - 1]));
-  return cmds;
-}
-
-CubicTo _basisSegment(Point p0, Point p1, Point p) => CubicTo(
-      Point((2 * p0.x + p1.x) / 3, (2 * p0.y + p1.y) / 3),
-      Point((p0.x + 2 * p1.x) / 3, (p0.y + 2 * p1.y) / 3),
-      Point((p0.x + 4 * p1.x + p.x) / 6, (p0.y + 4 * p1.y + p.y) / 6),
-    );

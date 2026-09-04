@@ -8,6 +8,7 @@ import 'dart:math' as math;
 
 import '../../color.dart';
 import '../../detect.dart';
+import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../parse_error.dart';
@@ -156,16 +157,6 @@ WardleyMap parseWardley(String source) {
   // Pipeline parsing state.
   String? pipelineParent;
   List<String>? pipelineMembers;
-
-  String unquote(String s) {
-    final t = s.trim();
-    if (t.length >= 2 &&
-        ((t.startsWith('"') && t.endsWith('"')) ||
-            (t.startsWith("'") && t.endsWith("'")))) {
-      return t.substring(1, t.length - 1).trim();
-    }
-    return t;
-  }
 
   // Parse optional trailing `label [x, y]` and decorators from a component
   // tail. Returns (cleanedTail, labelOffsets, sourceStrategy, inertia).

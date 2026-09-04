@@ -1,7 +1,7 @@
 /// Tests for xychart, mindmap, requirement and C4 diagrams.
 library;
 
-import 'dart:io';
+import 'support/fixtures.dart';
 import 'dart:math' as math;
 
 import 'package:mermaid_core/src/diagrams/c4/c4.dart';
@@ -20,11 +20,8 @@ const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
+  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
+];
 
 Iterable<String> texts(RenderScene s) =>
     flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
@@ -69,19 +66,28 @@ xychart-beta
     });
     test('layout centers titles on the final left-axis range', () {
       void expectCenteredOnEndTicks(
-          RenderScene scene, String title, String firstTick, String lastTick) {
+        RenderScene scene,
+        String title,
+        String firstTick,
+        String lastTick,
+      ) {
         final allText = flatten(scene.nodes).whereType<SceneText>();
         final titleNode = allText.singleWhere((text) => text.text == title);
-        final first =
-            allText.singleWhere((text) => text.text == firstTick).bounds.center;
-        final last =
-            allText.singleWhere((text) => text.text == lastTick).bounds.center;
+        final first = allText
+            .singleWhere((text) => text.text == firstTick)
+            .bounds
+            .center;
+        final last = allText
+            .singleWhere((text) => text.text == lastTick)
+            .bounds
+            .center;
 
         expect(titleNode.rotation, 270);
-        expect(titleNode.bounds.center.y,
-            closeTo(first.y + (last.y - first.y) / 2, 0.001));
-        expect(titleNode.bounds.center.x,
-            lessThan(math.min(first.x, last.x)));
+        expect(
+          titleNode.bounds.center.y,
+          closeTo(first.y + (last.y - first.y) / 2, 0.001),
+        );
+        expect(titleNode.bounds.center.x, lessThan(math.min(first.x, last.x)));
       }
 
       final vertical = layoutXyChart(
@@ -97,7 +103,11 @@ xychart-beta
         theme: theme,
       );
       expectCenteredOnEndTicks(
-          vertical, 'Revenue (thousands)', '4000', '11000');
+        vertical,
+        'Revenue (thousands)',
+        '4000',
+        '11000',
+      );
 
       final horizontal = layoutXyChart(
         parseXyChart('''
@@ -112,24 +122,33 @@ xychart-beta horizontal
       expectCenteredOnEndTicks(horizontal, 'Quarter', 'jan', 'mar');
     });
     test('fixture frontmatter controls theme, size and orientation', () {
-      final source = File(
-          'test/fixtures/upstream_xychart/18.mmd')
-          .readAsStringSync();
+      final source = readFixture('upstream_xychart/18.mmd');
       final chart = parseXyChart(source);
-      final scene = const Mermaid(measurer: ApproximateTextMeasurer())
-          .render(source);
+      final scene = const Mermaid(
+        measurer: ApproximateTextMeasurer(),
+      ).render(source);
       expect(chart.horizontal, isTrue);
       expect(scene.size, const Size(1000, 600));
       expect(chart.config.xAxis.labelFontSize, 20);
       final nodes = flatten(scene.nodes);
-      final bars = nodes.whereType<SceneShape>().where((shape) =>
-          shape.fill?.color.value == 0xffcde498 &&
-          shape.geometry is RectGeometry).toList();
+      final bars = nodes
+          .whereType<SceneShape>()
+          .where(
+            (shape) =>
+                shape.fill?.color.value == 0xffcde498 &&
+                shape.geometry is RectGeometry,
+          )
+          .toList();
       expect(bars, hasLength(12));
-      expect(nodes.whereType<SceneShape>().any(
-          (shape) => shape.stroke?.color.value == 0xffff6b6b), isTrue);
-      SceneText text(String value) => nodes.whereType<SceneText>()
-          .singleWhere((node) => node.text == value);
+      expect(
+        nodes.whereType<SceneShape>().any(
+          (shape) => shape.stroke?.color.value == 0xffff6b6b,
+        ),
+        isTrue,
+      );
+      SceneText text(String value) => nodes.whereType<SceneText>().singleWhere(
+        (node) => node.text == value,
+      );
       expect(text('Sales Revenue').style.fontSize, 10);
       expect(text('Months').style.fontSize, 30);
       expect(text('jan').style.fontSize, 20);
@@ -153,7 +172,9 @@ mindmap
       expect(m.root.children[1].shape, MindmapShape.rect);
     });
     test('icon decorations are tolerated', () {
-      final m = parseMindmap('mindmap\n  root\n    A\n    ::icon(fa fa-book)\n    B');
+      final m = parseMindmap(
+        'mindmap\n  root\n    A\n    ::icon(fa fa-book)\n    B',
+      );
       expect(m.root.children.map((c) => c.label), ['A', 'B']);
     });
     test('layout splits branches around the root', () {
@@ -177,10 +198,17 @@ mindmap
           .bounds
           .center
           .y;
-      final radial =
-          layoutMindmap(parseMindmap(src), measurer: measurer, theme: theme);
-      final elk = layoutMindmap(parseMindmap(src),
-          measurer: measurer, theme: theme, engine: 'elk');
+      final radial = layoutMindmap(
+        parseMindmap(src),
+        measurer: measurer,
+        theme: theme,
+      );
+      final elk = layoutMindmap(
+        parseMindmap(src),
+        measurer: measurer,
+        theme: theme,
+        engine: 'elk',
+      );
       // Under elk the root sits on top and every child is on the row below it
       // (a hierarchical tree), unlike the radial spread.
       final rootY = yOf(elk, 'R');
@@ -188,8 +216,10 @@ mindmap
         expect(yOf(elk, c), greaterThan(rootY));
       }
       // Radial places at least one child above the root; the tree never does.
-      expect(['A', 'B', 'C', 'D'].any((c) => yOf(radial, c) < yOf(radial, 'R')),
-          isTrue);
+      expect(
+        ['A', 'B', 'C', 'D'].any((c) => yOf(radial, c) < yOf(radial, 'R')),
+        isTrue,
+      );
     });
   });
 
@@ -209,42 +239,132 @@ requirementDiagram
     test_entity - satisfies -> test_req
 ''');
       expect(d.nodes['test_req']!.kind, 'requirement');
-      expect(d.nodes['test_req']!.fields,
-          contains(('verifyMethod', 'test')));
+      expect(d.nodes['test_req']!.fields, contains(('verifyMethod', 'test')));
       expect(d.nodes['test_entity']!.kind, 'element');
       final r = d.relations.single;
       expect(r.from, 'test_entity');
       expect(r.label, 'satisfies');
     });
     test('reversed arrow form and spaced names', () {
-      final d = parseRequirementDiagram('requirementDiagram\n'
-          'requirement Some Req {\nid: 2\n}\n'
-          'Some Req <- copies - other');
+      final d = parseRequirementDiagram(
+        'requirementDiagram\n'
+        'requirement Some Req {\nid: 2\n}\n'
+        'Some Req <- copies - other',
+      );
       expect(d.relations.single.from, 'other');
       expect(d.relations.single.to, 'Some Req');
     });
     test('layout renders kind line, id and dashed labeled relation', () {
       final s = layoutRequirementDiagram(
-        parseRequirementDiagram('requirementDiagram\n'
-            'requirement r1 {\nid: 1\n}\nelement e1 {\ntype: sim\n}\n'
-            'e1 - satisfies -> r1'),
+        parseRequirementDiagram(
+          'requirementDiagram\n'
+          'requirement r1 {\nid: 1\n}\nelement e1 {\ntype: sim\n}\n'
+          'e1 - satisfies -> r1',
+        ),
         measurer: measurer,
         theme: theme,
       );
       // Upstream shows the kind as its display name («Requirement»), not the
       // raw keyword; relation labels stay lowercase («satisfies»).
-      expect(texts(s),
-          containsAll(['«Requirement»', 'r1', '«satisfies»', 'e1']));
+      expect(
+        texts(s),
+        containsAll(['«Requirement»', 'r1', '«satisfies»', 'e1']),
+      );
       expect(
         flatten(s.nodes).whereType<SceneShape>().any(
-            (n) => n.geometry is PathGeometry && n.stroke?.dash != null),
+          (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
+        ),
         isTrue,
       );
     });
+    test('boxes keep their rank clearance when sources are re-columned', () {
+      // The re-column pass drags a moved source's targets toward its column.
+      // Whatever it picks, no box may end up on top of a rank neighbour, and
+      // the gap dagre was asked for has to survive.
+      const spacing = 50.0;
+      const rankTolerance = 25.0;
+      const crowded = '''
+requirementDiagram
+  requirement Root {
+  id: 0
+  text: root
+  }
+  requirement L1 {
+  id: 1
+  text: left one with a fairly long text so it is wide
+  }
+  requirement L2 {
+  id: 2
+  text: mid
+  }
+  requirement L3 {
+  id: 3
+  text: right three with an even longer text so it is much wider still
+  }
+  element e1 {
+  type: sim
+  }
+  element e2 {
+  type: sim
+  }
+  Root - contains -> L1
+  Root - contains -> L2
+  Root - contains -> L3
+  e1 - satisfies -> L2
+  e2 - satisfies -> L3
+  L1 - derives -> L3
+''';
+
+      for (final source in [
+        readFixture('upstream_requirement/01.mmd'),
+        readFixture('upstream_requirement/02.mmd'),
+        crowded,
+      ]) {
+        final scene = layoutRequirementDiagram(
+          parseRequirementDiagram(source),
+          measurer: measurer,
+          theme: theme,
+        );
+        final boxes = <String, Rect>{};
+        for (final node in flatten(scene.nodes).whereType<SceneGroup>()) {
+          if (node.role != SceneGroupRole.node) continue;
+          final rect = node.children
+              .whereType<SceneShape>()
+              .map((shape) => shape.geometry)
+              .whereType<RectGeometry>()
+              .firstOrNull;
+          if (rect != null) boxes[node.id!] = rect.rect;
+        }
+        expect(boxes, isNotEmpty);
+
+        final ids = boxes.keys.toList();
+        for (var i = 0; i < ids.length; i++) {
+          for (var j = i + 1; j < ids.length; j++) {
+            final a = boxes[ids[i]]!;
+            final b = boxes[ids[j]]!;
+            expect(
+              a.left < b.right &&
+                  a.right > b.left &&
+                  a.top < b.bottom &&
+                  a.bottom > b.top,
+              isFalse,
+              reason: '${ids[i]} $a overlaps ${ids[j]} $b',
+            );
+            if ((a.center.y - b.center.y).abs() > rankTolerance) continue;
+            final gap = a.center.x < b.center.x
+                ? b.left - a.right
+                : a.left - b.right;
+            expect(
+              gap,
+              greaterThanOrEqualTo(spacing - 0.001),
+              reason: '${ids[i]} and ${ids[j]} share a rank but sit $gap apart',
+            );
+          }
+        }
+      }
+    });
     test('fixture 02 orders relation sources and clears contains markers', () {
-      final source = File(
-        'test/fixtures/upstream_requirement/02.mmd',
-      ).readAsStringSync();
+      final source = readFixture('upstream_requirement/02.mmd');
       final scene = layoutRequirementDiagram(
         parseRequirementDiagram(source),
         measurer: measurer,
@@ -347,24 +467,27 @@ C4Context
     });
     test('layout renders boundary, person head and rel label', () {
       final s = layoutC4Diagram(
-        parseC4Diagram('C4Context\nPerson(p, "User")\n'
-            'Enterprise_Boundary(b, "Org") {\nSystem(sys, "System")\n}\n'
-            'Rel(p, sys, "Uses")'),
+        parseC4Diagram(
+          'C4Context\nPerson(p, "User")\n'
+          'Enterprise_Boundary(b, "Org") {\nSystem(sys, "System")\n}\n'
+          'Rel(p, sys, "Uses")',
+        ),
         measurer: measurer,
         theme: theme,
       );
       expect(texts(s), containsAll(['User', 'System', 'Uses', 'Org']));
       // Person head circle present.
       expect(
-        flatten(s.nodes)
-            .whereType<SceneShape>()
-            .any((n) => n.geometry is CircleGeometry),
+        flatten(
+          s.nodes,
+        ).whereType<SceneShape>().any((n) => n.geometry is CircleGeometry),
         isTrue,
       );
       // Dashed boundary rect.
       expect(
-        flatten(s.nodes).whereType<SceneShape>().any((n) =>
-            n.geometry is RectGeometry && n.stroke?.dash != null),
+        flatten(s.nodes).whereType<SceneShape>().any(
+          (n) => n.geometry is RectGeometry && n.stroke?.dash != null,
+        ),
         isTrue,
       );
     });
@@ -379,9 +502,9 @@ C4Context
         measurer: measurer,
         theme: theme,
       );
-      final database = flatten(s.nodes)
-          .whereType<SceneGroup>()
-          .singleWhere((group) => group.id == 'mainframe');
+      final database = flatten(
+        s.nodes,
+      ).whereType<SceneGroup>().singleWhere((group) => group.id == 'mainframe');
       final paths = database.children
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is PathGeometry)
@@ -404,112 +527,193 @@ C4Deployment
         measurer: measurer,
         theme: theme,
       );
-      final boundary = flatten(s.nodes)
-          .whereType<SceneGroup>()
-          .singleWhere((group) => group.id == 'boundary_mob');
-      final mobile = flatten(s.nodes)
-          .whereType<SceneGroup>()
-          .singleWhere((group) => group.id == 'mobile');
-      final boundaryRect = (boundary.children
-              .whereType<SceneShape>()
-              .single
-              .geometry as RectGeometry)
-          .rect;
-      final mobileRect = (mobile.children
-              .whereType<SceneShape>()
-              .first
-              .geometry as RectGeometry)
-          .rect;
-      final type = boundary.children
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == '[Apple IOS or Android]');
+      final boundary = flatten(s.nodes).whereType<SceneGroup>().singleWhere(
+        (group) => group.id == 'boundary_mob',
+      );
+      final mobile = flatten(
+        s.nodes,
+      ).whereType<SceneGroup>().singleWhere((group) => group.id == 'mobile');
+      final boundaryRect =
+          (boundary.children.whereType<SceneShape>().single.geometry
+                  as RectGeometry)
+              .rect;
+      final mobileRect =
+          (mobile.children.whereType<SceneShape>().first.geometry
+                  as RectGeometry)
+              .rect;
+      final type = boundary.children.whereType<SceneText>().singleWhere(
+        (text) => text.text == '[Apple IOS or Android]',
+      );
 
-      expect(boundary.children.whereType<SceneShape>().single.stroke?.dash,
-          isNull);
+      expect(
+        boundary.children.whereType<SceneShape>().single.stroke?.dash,
+        isNull,
+      );
       expect(type.bounds.bottom, lessThan(mobileRect.top));
       expect(boundaryRect.contains(mobileRect.center), isTrue);
     });
-    test('UpdateRelStyle moves the complete annotation while retaining clearance', () {
-      const base = '''
+    test('boundary header reserves room for its wrapped description', () {
+      final s = layoutC4Diagram(
+        parseC4Diagram('''
+C4Context
+  System_Boundary(b, "Banking platform", "System", "Everything the retail bank runs in its own data centre, including the batch jobs that reconcile the ledger overnight, the fraud scoring service, the payments gateway and the nightly statement generator") {
+    System(s1, "Web app", "Serves the customer portal")
+    System(s2, "Ledger", "Books every transaction")
+  }
+'''),
+        measurer: measurer,
+        theme: theme,
+      );
+      final nodes = flatten(s.nodes);
+      final description = nodes.whereType<SceneText>().singleWhere(
+        (text) => text.text.startsWith('Everything the retail bank'),
+      );
+      final boundaryRect =
+          (nodes
+                      .whereType<SceneGroup>()
+                      .singleWhere((group) => group.id == 'boundary_b')
+                      .children
+                      .whereType<SceneShape>()
+                      .first
+                      .geometry
+                  as RectGeometry)
+              .rect;
+
+      // The description wraps to more than one line, so this only holds when
+      // the reserved header height is measured at the same wrap width.
+      expect(description.bounds.height, greaterThan(40));
+      expect(description.bounds.width, lessThanOrEqualTo(boundaryRect.width));
+      for (final id in ['s1', 's2']) {
+        final child =
+            (nodes
+                        .whereType<SceneGroup>()
+                        .singleWhere((group) => group.id == id)
+                        .children
+                        .whereType<SceneShape>()
+                        .first
+                        .geometry
+                    as RectGeometry)
+                .rect;
+        expect(description.bounds.bottom, lessThan(child.top));
+        expect(boundaryRect.contains(child.center), isTrue);
+      }
+    });
+    test('fixture 04 boundary header clears the elements it wraps', () {
+      final s = layoutC4Diagram(
+        parseC4Diagram(readFixture('upstream_c4/04.mmd')),
+        measurer: measurer,
+        theme: theme,
+      );
+      final nodes = flatten(s.nodes);
+      final boundary = nodes.whereType<SceneGroup>().singleWhere(
+        (group) => group.id == 'boundary_b',
+      );
+      final headerBottom = boundary.children
+          .whereType<SceneText>()
+          .map((text) => text.bounds.bottom)
+          .reduce(math.max);
+      for (final id in ['c2', 'c3']) {
+        final child =
+            (nodes
+                        .whereType<SceneGroup>()
+                        .singleWhere((group) => group.id == id)
+                        .children
+                        .whereType<SceneShape>()
+                        .first
+                        .geometry
+                    as RectGeometry)
+                .rect;
+        expect(headerBottom, lessThan(child.top));
+      }
+    });
+    test(
+      'UpdateRelStyle moves the complete annotation while retaining clearance',
+      () {
+        const base = '''
 C4Context
   Person(a, "User")
   System(b, "System")
   Rel(a, b, "Uses", "HTTPS")
 ''';
-      final updated = '$base\n'
-          'UpdateRelStyle(a, b, \$offsetX="-40", \$offsetY="-20")';
-      final parsed = parseC4Diagram(updated).rels.single;
-      expect(parsed.offsetX, -40);
-      expect(parsed.offsetY, -20);
+        final updated =
+            '$base\n'
+            'UpdateRelStyle(a, b, \$offsetX="-40", \$offsetY="-20")';
+        final parsed = parseC4Diagram(updated).rels.single;
+        expect(parsed.offsetX, -40);
+        expect(parsed.offsetY, -20);
 
-      RenderScene render(String source) => layoutC4Diagram(
-            parseC4Diagram(source),
-            measurer: measurer,
-            theme: theme,
-          );
-      Point center(RenderScene scene, String value) => flatten(scene.nodes)
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == value)
-          .bounds
-          .center;
-      Point relationMidpoint(RenderScene scene) {
-        final relation = flatten(scene.nodes)
-            .whereType<SceneGroup>()
-            .singleWhere((node) => node.id == 'rel_a_b_0');
-        final points = (relation.children
-                    .whereType<SceneShape>()
-                    .first
-                    .geometry as PathGeometry)
-                .commands
-                .map((command) => switch (command) {
+        RenderScene render(String source) => layoutC4Diagram(
+          parseC4Diagram(source),
+          measurer: measurer,
+          theme: theme,
+        );
+        Point center(RenderScene scene, String value) => flatten(scene.nodes)
+            .whereType<SceneText>()
+            .singleWhere((text) => text.text == value)
+            .bounds
+            .center;
+        Point relationMidpoint(RenderScene scene) {
+          final relation = flatten(scene.nodes)
+              .whereType<SceneGroup>()
+              .singleWhere((node) => node.id == 'rel_a_b_0');
+          final points =
+              (relation.children.whereType<SceneShape>().first.geometry
+                      as PathGeometry)
+                  .commands
+                  .map(
+                    (command) => switch (command) {
                       MoveTo(:final p) => p,
                       LineTo(:final p) => p,
                       _ => null,
-                    })
-                .whereType<Point>()
-                .toList();
-        return Point((points.first.x + points.last.x) / 2,
-            (points.first.y + points.last.y) / 2);
-      }
-      final original = render(base);
-      final shifted = render(updated);
-      final deltas = <Point>[];
-      for (final value in ['Uses', '[HTTPS]']) {
-        final originalOffset =
-            center(original, value) - relationMidpoint(original);
-        final shiftedOffset =
-            center(shifted, value) - relationMidpoint(shifted);
-        deltas.add(shiftedOffset - originalOffset);
-      }
-      expect(deltas[1].x, closeTo(deltas[0].x, 0.001));
-      expect(deltas[1].y, closeTo(deltas[0].y, 0.001));
-      expect(deltas[0].x, isNegative);
-      expect(deltas[0].y, isNegative);
-    });
+                    },
+                  )
+                  .whereType<Point>()
+                  .toList();
+          return Point(
+            (points.first.x + points.last.x) / 2,
+            (points.first.y + points.last.y) / 2,
+          );
+        }
+
+        final original = render(base);
+        final shifted = render(updated);
+        final deltas = <Point>[];
+        for (final value in ['Uses', '[HTTPS]']) {
+          final originalOffset =
+              center(original, value) - relationMidpoint(original);
+          final shiftedOffset =
+              center(shifted, value) - relationMidpoint(shifted);
+          deltas.add(shiftedOffset - originalOffset);
+        }
+        expect(deltas[1].x, closeTo(deltas[0].x, 0.001));
+        expect(deltas[1].y, closeTo(deltas[0].y, 0.001));
+        expect(deltas[0].x, isNegative);
+        expect(deltas[0].y, isNegative);
+      },
+    );
     test('fixture 05 relation annotations clear headers and strokes', () {
-      final source = File('test/fixtures/upstream_c4/05.mmd')
-          .readAsStringSync();
+      final source = readFixture('upstream_c4/05.mmd');
       final scene = layoutC4Diagram(
         parseC4Diagram(source),
         measurer: measurer,
         theme: theme,
       );
       final nodes = flatten(scene.nodes);
-      SceneGroup group(String id) => nodes.whereType<SceneGroup>()
-          .singleWhere((node) => node.id == id);
+      SceneGroup group(String id) =>
+          nodes.whereType<SceneGroup>().singleWhere((node) => node.id == id);
       bool overlaps(Rect a, Rect b) =>
           a.left < b.right &&
           a.right > b.left &&
           a.top < b.bottom &&
           a.bottom > b.top;
       double cross(Point a, Point b, Point c) =>
-          (b.x - a.x) * (c.y - a.y) -
-          (b.y - a.y) * (c.x - a.x);
+          (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
       int orientation(Point a, Point b, Point c) {
         final value = cross(a, b, c);
         if (value.abs() < 1e-9) return 0;
         return value > 0 ? 1 : -1;
       }
+
       bool onSegment(Point a, Point b, Point c) =>
           b.x >= math.min(a.x, c.x) - 1e-9 &&
           b.x <= math.max(a.x, c.x) + 1e-9 &&
@@ -526,38 +730,60 @@ C4Context
             (o3 == 0 && onSegment(c, a, d)) ||
             (o4 == 0 && onSegment(c, b, d));
       }
+
       bool segmentIntersectsRect(Point a, Point b, Rect rect) =>
           rect.contains(a) ||
           rect.contains(b) ||
-          segmentsIntersect(a, b, Point(rect.left, rect.top),
-              Point(rect.right, rect.top)) ||
-          segmentsIntersect(a, b, Point(rect.right, rect.top),
-              Point(rect.right, rect.bottom)) ||
-          segmentsIntersect(a, b, Point(rect.right, rect.bottom),
-              Point(rect.left, rect.bottom)) ||
-          segmentsIntersect(a, b, Point(rect.left, rect.bottom),
-              Point(rect.left, rect.top));
-      List<Point> relationPoints(String id) => (group(id).children
-                  .whereType<SceneShape>()
-                  .first
-                  .geometry as PathGeometry)
+          segmentsIntersect(
+            a,
+            b,
+            Point(rect.left, rect.top),
+            Point(rect.right, rect.top),
+          ) ||
+          segmentsIntersect(
+            a,
+            b,
+            Point(rect.right, rect.top),
+            Point(rect.right, rect.bottom),
+          ) ||
+          segmentsIntersect(
+            a,
+            b,
+            Point(rect.right, rect.bottom),
+            Point(rect.left, rect.bottom),
+          ) ||
+          segmentsIntersect(
+            a,
+            b,
+            Point(rect.left, rect.bottom),
+            Point(rect.left, rect.top),
+          );
+      List<Point> relationPoints(String id) =>
+          (group(id).children.whereType<SceneShape>().first.geometry
+                  as PathGeometry)
               .commands
-              .map((command) => switch (command) {
-                    MoveTo(:final p) => p,
-                    LineTo(:final p) => p,
-                    _ => null,
-                  })
+              .map(
+                (command) => switch (command) {
+                  MoveTo(:final p) => p,
+                  LineTo(:final p) => p,
+                  _ => null,
+                },
+              )
               .whereType<Point>()
               .toList();
 
-      final plcHeader = group('boundary_plc')
-          .children
+      final plcHeader = group('boundary_plc').children
           .whereType<SceneText>()
           .map((text) => text.bounds)
           .reduce((a, b) => a.union(b))
           .inflate(4);
-      final apiCallAnnotations = nodes.whereType<SceneText>().where((text) =>
-          text.text == 'Makes API calls to' || text.text == '[json/HTTPS]')
+      final apiCallAnnotations = nodes
+          .whereType<SceneText>()
+          .where(
+            (text) =>
+                text.text == 'Makes API calls to' ||
+                text.text == '[json/HTTPS]',
+          )
           .toList();
       expect(apiCallAnnotations, hasLength(4));
       for (final annotation in apiCallAnnotations) {
@@ -566,64 +792,96 @@ C4Context
       final apiRelationIds = ['rel_mobile_api_0', 'rel_spa_api_1'];
       for (var i = 0; i < apiRelationIds.length; i++) {
         final edge = relationPoints(apiRelationIds[i]);
-        final annotation = apiCallAnnotations[i * 2].bounds
-            .union(apiCallAnnotations[i * 2 + 1].bounds);
-        expect(segmentIntersectsRect(edge.first, edge.last, annotation),
-            isFalse);
+        final annotation = apiCallAnnotations[i * 2].bounds.union(
+          apiCallAnnotations[i * 2 + 1].bounds,
+        );
+        expect(
+          segmentIntersectsRect(edge.first, edge.last, annotation),
+          isFalse,
+        );
       }
 
       final vertical = relationPoints('rel_api_db_3');
       final lineX = vertical.first.x;
-      final readAnnotations = nodes.whereType<SceneText>()
+      final readAnnotations = nodes
+          .whereType<SceneText>()
           .where((text) => text.text == 'Reads from and writes to')
           .toList();
-      final readTechnologies = nodes.whereType<SceneText>()
+      final readTechnologies = nodes
+          .whereType<SceneText>()
           .where((text) => text.text == '[JDBC]')
           .toList();
       expect(readAnnotations, hasLength(2));
       expect(readTechnologies, hasLength(2));
-      expect(overlaps(readAnnotations[0].bounds, readAnnotations[1].bounds),
-          isFalse);
-      final reads = readAnnotations.reduce((a, b) =>
-              (a.bounds.center.x - lineX).abs() <
-                      (b.bounds.center.x - lineX).abs()
-                  ? a
-                  : b);
+      expect(
+        overlaps(readAnnotations[0].bounds, readAnnotations[1].bounds),
+        isFalse,
+      );
+      final reads = readAnnotations.reduce(
+        (a, b) =>
+            (a.bounds.center.x - lineX).abs() <
+                (b.bounds.center.x - lineX).abs()
+            ? a
+            : b,
+      );
       final readsIndex = readAnnotations.indexOf(reads);
-      final verticalAnnotation =
-          reads.bounds.union(readTechnologies[readsIndex].bounds).inflate(3);
-      expect(segmentIntersectsRect(
-          vertical.first, vertical.last, verticalAnnotation), isFalse);
+      final verticalAnnotation = reads.bounds
+          .union(readTechnologies[readsIndex].bounds)
+          .inflate(3);
+      expect(
+        segmentIntersectsRect(
+          vertical.first,
+          vertical.last,
+          verticalAnnotation,
+        ),
+        isFalse,
+      );
 
       final diagonal = relationPoints('rel_api_db2_4');
-      final diagonalAnnotation =
-          readAnnotations[1].bounds.union(readTechnologies[1].bounds);
+      final diagonalAnnotation = readAnnotations[1].bounds.union(
+        readTechnologies[1].bounds,
+      );
       for (final bounds in [
         readAnnotations[1].bounds,
         readTechnologies[1].bounds,
       ]) {
-        expect(segmentIntersectsRect(
-            diagonal.first, diagonal.last, bounds.inflate(3)), isFalse);
+        expect(
+          segmentIntersectsRect(
+            diagonal.first,
+            diagonal.last,
+            bounds.inflate(3),
+          ),
+          isFalse,
+        );
       }
-      final plcBounds = (group('boundary_plc').children
-              .whereType<SceneShape>()
-              .first
-              .geometry as RectGeometry)
-          .rect;
-      expect(plcBounds.contains(
-          Point(diagonalAnnotation.left, diagonalAnnotation.top)), isTrue);
-      expect(plcBounds.contains(
-          Point(diagonalAnnotation.right, diagonalAnnotation.bottom)), isTrue);
+      final plcBounds =
+          (group('boundary_plc').children.whereType<SceneShape>().first.geometry
+                  as RectGeometry)
+              .rect;
+      expect(
+        plcBounds.contains(
+          Point(diagonalAnnotation.left, diagonalAnnotation.top),
+        ),
+        isTrue,
+      );
+      expect(
+        plcBounds.contains(
+          Point(diagonalAnnotation.right, diagonalAnnotation.bottom),
+        ),
+        isTrue,
+      );
 
       final horizontal = relationPoints('rel_db_db2_5');
-      final replicates = nodes.whereType<SceneText>()
-          .singleWhere((text) => text.text == 'Replicates data to');
-      expect(replicates.bounds.bottom,
-          lessThanOrEqualTo(horizontal.first.y - 4));
+      final replicates = nodes.whereType<SceneText>().singleWhere(
+        (text) => text.text == 'Replicates data to',
+      );
+      expect(
+        replicates.bounds.bottom,
+        lessThanOrEqualTo(horizontal.first.y - 4),
+      );
     });
     test('horizontal relation technology clears its stroke', () {
-      final fixture = File('test/fixtures/upstream_c4/05.mmd')
-          .readAsStringSync();
+      final fixture = readFixture('upstream_c4/05.mmd');
       for (final replacement in [
         'Rel_R(db, db2, "Replicates data to", "SYNC")',
         'Rel_R(db, db2, "", "SYNC")',
@@ -638,23 +896,25 @@ C4Context
           theme: theme,
         );
         final nodes = flatten(scene.nodes);
-        final relation = nodes
-            .whereType<SceneGroup>()
-            .singleWhere((node) => node.id == 'rel_db_db2_5');
-        final points = (relation.children
-                    .whereType<SceneShape>()
-                    .first
-                    .geometry as PathGeometry)
+        final relation = nodes.whereType<SceneGroup>().singleWhere(
+          (node) => node.id == 'rel_db_db2_5',
+        );
+        final points =
+            (relation.children.whereType<SceneShape>().first.geometry
+                    as PathGeometry)
                 .commands
-                .map((command) => switch (command) {
-                      MoveTo(:final p) => p,
-                      LineTo(:final p) => p,
-                      _ => null,
-                    })
+                .map(
+                  (command) => switch (command) {
+                    MoveTo(:final p) => p,
+                    LineTo(:final p) => p,
+                    _ => null,
+                  },
+                )
                 .whereType<Point>()
                 .toList();
-        final annotations = nodes.whereType<SceneText>().where((text) =>
-            text.text == 'Replicates data to' || text.text == '[SYNC]');
+        final annotations = nodes.whereType<SceneText>().where(
+          (text) => text.text == 'Replicates data to' || text.text == '[SYNC]',
+        );
 
         expect(annotations, isNotEmpty);
         for (final annotation in annotations) {
@@ -665,8 +925,10 @@ C4Context
       }
     });
     test('garbage throws', () {
-      expect(() => parseC4Diagram('C4Context\nnonsense here'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseC4Diagram('C4Context\nnonsense here'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 }

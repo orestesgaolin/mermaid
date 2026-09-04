@@ -2,7 +2,7 @@
 /// stateDiagram.spec.js.
 library;
 
-import 'dart:io';
+import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart'
     show FlowDirection;
@@ -17,28 +17,22 @@ import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
 
-StateDiagram parse(String body) =>
-    parseStateDiagram('stateDiagram-v2\n$body');
+StateDiagram parse(String body) => parseStateDiagram('stateDiagram-v2\n$body');
 
 RenderScene layout(String body) => layoutStateDiagram(
-      parse(body),
-      measurer: const ApproximateTextMeasurer(),
-      theme: MermaidTheme.defaultTheme,
-    );
+  parse(body),
+  measurer: const ApproximateTextMeasurer(),
+  theme: MermaidTheme.defaultTheme,
+);
 
-String stateFixture(String name) =>
-    File('test/fixtures/upstream_state/$name.mmd').readAsStringSync();
+String stateFixture(String name) => readFixture('upstream_state/$name.mmd');
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
+  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
+];
 
-SceneGroup sceneGroup(RenderScene s, String id) => flatten(s.nodes)
-    .whereType<SceneGroup>()
-    .firstWhere((g) => g.id == id);
+SceneGroup sceneGroup(RenderScene s, String id) =>
+    flatten(s.nodes).whereType<SceneGroup>().firstWhere((g) => g.id == id);
 
 PathGeometry transitionPath(RenderScene scene, String id) =>
     flatten(sceneGroup(scene, id).children)
@@ -55,13 +49,14 @@ PolygonGeometry transitionArrow(RenderScene scene, String id) =>
         .single;
 
 List<Point> transitionPoints(RenderScene scene, String id) =>
-    transitionPath(scene, id)
-        .commands
-        .map((command) => switch (command) {
-              MoveTo(:final p) => p,
-              LineTo(:final p) => p,
-              _ => null,
-            })
+    transitionPath(scene, id).commands
+        .map(
+          (command) => switch (command) {
+            MoveTo(:final p) => p,
+            LineTo(:final p) => p,
+            _ => null,
+          },
+        )
         .whereType<Point>()
         .toList();
 
@@ -154,24 +149,23 @@ void main() {
       final d = parseStateDiagram(stateFixture('05'));
       expect(d.states['2nd']!.parent, 'Second');
       expect(d.states['First']!.children, isNot(contains('2nd')));
-      expect(d.states['Second']!.children.where((id) => id == '2nd'),
-          hasLength(1));
+      expect(
+        d.states['Second']!.children.where((id) => id == '2nd'),
+        hasLength(1),
+      );
       expect(
         d.transitions,
         contains(
           isA<StateTransition>()
               .having((transition) => transition.from, 'from', '2nd')
-              .having(
-                (transition) => transition.to,
-                'to',
-                '__end_Second',
-              ),
+              .having((transition) => transition.to, 'to', '__end_Second'),
         ),
       );
     });
-    test('adoption updates regions without moving declared cross-boundary states',
-        () {
-      final d = parse('''
+    test(
+      'adoption updates regions without moving declared cross-boundary states',
+      () {
+        final d = parse('''
 state First {
   Declared
   A --> Adopted
@@ -183,19 +177,23 @@ state Second {
   Adopted --> [*]
 }
 ''');
-      expect(d.states['Declared']!.parent, 'First');
-      expect(d.states['Adopted']!.parent, 'Second');
-      expect(d.states['First']!.children, isNot(contains('Adopted')));
-      expect(
-        d.states['First']!.regions.expand((region) => region),
-        isNot(contains('Adopted')),
-      );
-      expect(d.states['Second']!.children.where((id) => id == 'Adopted'),
-          hasLength(1));
-    });
-    test('root references preserve nested ownership and adoption rejects cycles',
-        () {
-      final d = parse('''
+        expect(d.states['Declared']!.parent, 'First');
+        expect(d.states['Adopted']!.parent, 'Second');
+        expect(d.states['First']!.children, isNot(contains('Adopted')));
+        expect(
+          d.states['First']!.regions.expand((region) => region),
+          isNot(contains('Adopted')),
+        );
+        expect(
+          d.states['Second']!.children.where((id) => id == 'Adopted'),
+          hasLength(1),
+        );
+      },
+    );
+    test(
+      'root references preserve nested ownership and adoption rejects cycles',
+      () {
+        final d = parse('''
 state Parent {
   X --> Nested
   state Child {
@@ -204,9 +202,36 @@ state Parent {
 }
 Nested --> RootTarget
 ''');
-      expect(d.states['Nested']!.parent, 'Parent');
-      expect(d.states['Parent']!.parent, isNull);
-      expect(d.states['Child']!.parent, 'Parent');
+        expect(d.states['Nested']!.parent, 'Parent');
+        expect(d.states['Child']!.parent, 'Parent');
+        // `state Parent` inside Child would make Parent its own grandchild;
+        // the adoption is rejected outright, so Parent keeps the root scope and
+        // Child never lists it as a member.
+        expect(d.states['Parent']!.parent, isNull);
+        expect(d.states['Child']!.children, isNot(contains('Parent')));
+      },
+    );
+    test('a state named in two composites belongs to the last one', () {
+      // Upstream resolves this in `dataFetcher`: every mention rebuilds the
+      // node and `insertOrUpdateNode` Object.assigns it over the previous one,
+      // so the parentId of the last enclosing document wins.
+      final d = parse('''
+state Outer {
+  X --> Y
+}
+state Other {
+  X --> Z
+}
+''');
+      expect(d.states['X']!.parent, 'Other');
+      expect(d.states['Outer']!.children, isNot(contains('X')));
+      expect(d.states['Outer']!.children, contains('Y'));
+      expect(d.states['Other']!.children, containsAll(['X', 'Z']));
+      // Both relations survive the move.
+      expect(
+        d.transitions.map((t) => (t.from, t.to)),
+        containsAll([('X', 'Y'), ('X', 'Z')]),
+      );
     });
     test('[*] inside composite is scoped', () {
       final d = parse('state A {\n[*] --> X\n}\n[*] --> A');
@@ -250,14 +275,16 @@ Nested --> RootTarget
     });
     test('frontmatter title', () {
       final d = parseStateDiagram(
-          '---\ntitle: Machine\n---\nstateDiagram-v2\nA --> B');
+        '---\ntitle: Machine\n---\nstateDiagram-v2\nA --> B',
+      );
       expect(d.title, 'Machine');
     });
     test('garbage throws with line number', () {
       expect(
         () => parse('A --> B\n!!!nope'),
-        throwsA(isA<MermaidParseException>()
-            .having((e) => e.line, 'line', isNotNull)),
+        throwsA(
+          isA<MermaidParseException>().having((e) => e.line, 'line', isNotNull),
+        ),
       );
     });
   });
@@ -265,14 +292,14 @@ Nested --> RootTarget
   group('layout', () {
     test('start is filled circle, end is double circle', () {
       final s = layout('[*] --> A\nA --> [*]');
-      final start = flatten(sceneGroup(s, '__start_').children)
-          .whereType<SceneShape>()
-          .toList();
+      final start = flatten(
+        sceneGroup(s, '__start_').children,
+      ).whereType<SceneShape>().toList();
       expect(start.single.geometry, isA<CircleGeometry>());
       expect(start.single.fill, isNotNull);
-      final end = flatten(sceneGroup(s, '__end_').children)
-          .whereType<SceneShape>()
-          .toList();
+      final end = flatten(
+        sceneGroup(s, '__end_').children,
+      ).whereType<SceneShape>().toList();
       expect(end.length, 2);
     });
     test('transition direction follows statement', () {
@@ -283,15 +310,16 @@ Nested --> RootTarget
     });
     test('choice renders a diamond', () {
       final s = layout('state c <<choice>>\nA --> c\nc --> B : yes');
-      final shapes =
-          flatten(sceneGroup(s, 'c').children).whereType<SceneShape>();
+      final shapes = flatten(
+        sceneGroup(s, 'c').children,
+      ).whereType<SceneShape>();
       expect(shapes.single.geometry, isA<PolygonGeometry>());
     });
     test('fork renders a filled bar', () {
       final s = layout('state f <<fork>>\n[*] --> f\nf --> A\nf --> B');
-      final bar = flatten(sceneGroup(s, 'f').children)
-          .whereType<SceneShape>()
-          .single;
+      final bar = flatten(
+        sceneGroup(s, 'f').children,
+      ).whereType<SceneShape>().single;
       final rect = (bar.geometry as RectGeometry).rect;
       expect(rect.width, greaterThan(rect.height));
       expect(bar.fill, isNotNull);
@@ -300,13 +328,36 @@ Nested --> RootTarget
       final s = layout('state Active {\nIdle --> Busy\n}\n[*] --> Active');
       final cluster = sceneNodeBounds(sceneGroup(s, 'Active'))!;
       for (final id in ['Idle', 'Busy']) {
-        expect(cluster.contains(sceneNodeBounds(sceneGroup(s, id))!.center),
-            isTrue);
+        expect(
+          cluster.contains(sceneNodeBounds(sceneGroup(s, id))!.center),
+          isTrue,
+        );
       }
       expect(
         flatten(s.nodes).whereType<SceneText>().any((t) => t.text == 'Active'),
         isTrue,
       );
+    });
+    test('empty composite renders as a box that transitions can target', () {
+      final s = layout('A --> B\nstate B {\n}\n');
+      final box = sceneNodeBounds(sceneGroup(s, 'B'))!;
+      expect(box.width, greaterThan(0));
+      expect(box.height, greaterThan(0));
+      expect(
+        flatten(s.nodes).whereType<SceneText>().map((t) => t.text),
+        contains('B'),
+      );
+
+      // The transition ends on the box instead of dangling at the origin.
+      final route = transitionPath(s, 'trans_A_B_0');
+      final end = switch (route.commands.last) {
+        LineTo(:final p) => p,
+        CubicTo(:final p) => p,
+        final other => fail('unexpected terminal command $other'),
+      };
+      expect(end.x, inInclusiveRange(box.left, box.right));
+      expect(end.y, inInclusiveRange(box.top - 12, box.bottom));
+      expect(sceneNodeBounds(sceneGroup(s, 'A'))!.bottom, lessThan(box.top));
     });
     test('adopted fixture state renders only inside its final composite', () {
       final diagram = parseStateDiagram(stateFixture('05'));
@@ -317,75 +368,84 @@ Nested --> RootTarget
       );
       final first = sceneNodeBounds(sceneGroup(s, 'First'))!;
       final second = sceneNodeBounds(sceneGroup(s, 'Second'))!;
-      final adoptedGroups = flatten(s.nodes)
-          .whereType<SceneGroup>()
-          .where((group) => group.id == '2nd')
-          .toList();
+      final adoptedGroups = flatten(
+        s.nodes,
+      ).whereType<SceneGroup>().where((group) => group.id == '2nd').toList();
       expect(adoptedGroups, hasLength(1));
       final adopted = sceneNodeBounds(adoptedGroups.single)!.center;
       expect(second.contains(adopted), isTrue);
       expect(first.contains(adopted), isFalse);
     });
-    test('nested fixture preserves hierarchical placement and straight routes',
-        () {
-      final diagram = parseStateDiagram(stateFixture('05'));
-      final s = layoutStateDiagram(
-        diagram,
-        measurer: const ApproximateTextMeasurer(),
-        theme: MermaidTheme.defaultTheme,
-      );
+    test(
+      'nested fixture preserves hierarchical placement and straight routes',
+      () {
+        final diagram = parseStateDiagram(stateFixture('05'));
+        final s = layoutStateDiagram(
+          diagram,
+          measurer: const ApproximateTextMeasurer(),
+          theme: MermaidTheme.defaultTheme,
+        );
 
-      final first = sceneNodeBounds(sceneGroup(s, 'First'))!;
-      final inner = sceneNodeBounds(sceneGroup(s, 'innerFirst'))!;
-      final firstState = sceneNodeBounds(sceneGroup(s, '1st'))!;
-      final second = sceneNodeBounds(sceneGroup(s, 'Second'))!;
-      final third = sceneNodeBounds(sceneGroup(s, 'Third'))!;
+        final first = sceneNodeBounds(sceneGroup(s, 'First'))!;
+        final inner = sceneNodeBounds(sceneGroup(s, 'innerFirst'))!;
+        final firstState = sceneNodeBounds(sceneGroup(s, '1st'))!;
+        final second = sceneNodeBounds(sceneGroup(s, 'Second'))!;
+        final third = sceneNodeBounds(sceneGroup(s, 'Third'))!;
 
-      expect(inner.top, greaterThan(firstState.bottom));
-      expect((inner.center.x - firstState.center.x).abs(), lessThan(25));
-      expect(first.bottom - inner.bottom, greaterThan(5));
-      expect(second.top, greaterThan(first.bottom));
-      expect(third.left, greaterThan(first.right));
+        expect(inner.top, greaterThan(firstState.bottom));
+        expect((inner.center.x - firstState.center.x).abs(), lessThan(25));
+        expect(first.bottom - inner.bottom, greaterThan(5));
+        expect(second.top, greaterThan(first.bottom));
+        expect(third.left, greaterThan(first.right));
 
-      final nestedBodyShapes = sceneGroup(s, 'innerFirst')
-          .children
-          .whereType<SceneShape>()
-          .where((shape) => shape.geometry is RectGeometry)
-          .toList();
-      expect(nestedBodyShapes, hasLength(2));
-      expect(
-        nestedBodyShapes.last.fill?.color.value,
-        0xfff0f0f0,
-      );
-
-      final rootBranch = flatten(sceneGroup(s, 'trans_First_Third_2').children)
-          .whereType<SceneShape>()
-          .map((shape) => shape.geometry)
-          .whereType<PathGeometry>()
-          .single;
-      final start = (rootBranch.commands.first as MoveTo).p;
-      final end = (rootBranch.commands.last as LineTo).p;
-      expect(start.x, closeTo(first.right, 0.001));
-      expect(third.left - end.x, inInclusiveRange(0, 8.1));
-
-      for (final id in [
-        'trans___start_innerFirst_1st1st_4',
-        'trans_1st1st_1st2nd_5',
-      ]) {
-        final path = flatten(sceneGroup(s, id).children)
+        // Composite bodies alternate with depth: a root composite shows the
+        // theme background, a nested one a slight tint of it.
+        final background = MermaidTheme.defaultTheme.background;
+        List<SceneShape> bodyShapes(String id) => sceneGroup(s, id).children
             .whereType<SceneShape>()
-            .map((shape) => shape.geometry)
-            .whereType<PathGeometry>()
-            .single;
-        expect(path.commands.whereType<CubicTo>(), isEmpty);
-      }
+            .where((shape) => shape.geometry is RectGeometry)
+            .toList();
+        final rootBodyShapes = bodyShapes('First');
+        final nestedBodyShapes = bodyShapes('innerFirst');
+        expect(rootBodyShapes, hasLength(2));
+        expect(nestedBodyShapes, hasLength(2));
+        expect(rootBodyShapes.last.fill?.color, background);
+        final nestedBody = nestedBodyShapes.last.fill!.color;
+        expect(nestedBody, isNot(background));
+        expect((nestedBody.red - background.red).abs(), lessThan(32));
+        expect(nestedBody.red, nestedBody.green);
+        expect(nestedBody.green, nestedBody.blue);
 
-      final parentRoute = transitionPath(s, 'trans_First_Second_1');
-      final nestedRoute = transitionPath(s, 'trans_innerFirst_2nd_7');
-      final parentStart = (parentRoute.commands.first as MoveTo).p;
-      final nestedStart = (nestedRoute.commands.first as MoveTo).p;
-      expect((parentStart.x - nestedStart.x).abs(), greaterThan(5));
-    });
+        final rootBranch =
+            flatten(sceneGroup(s, 'trans_First_Third_2').children)
+                .whereType<SceneShape>()
+                .map((shape) => shape.geometry)
+                .whereType<PathGeometry>()
+                .single;
+        final start = (rootBranch.commands.first as MoveTo).p;
+        final end = (rootBranch.commands.last as LineTo).p;
+        expect(start.x, closeTo(first.right, 0.001));
+        expect(third.left - end.x, inInclusiveRange(0, 8.1));
+
+        for (final id in [
+          'trans___start_innerFirst_1st1st_4',
+          'trans_1st1st_1st2nd_5',
+        ]) {
+          final path = flatten(sceneGroup(s, id).children)
+              .whereType<SceneShape>()
+              .map((shape) => shape.geometry)
+              .whereType<PathGeometry>()
+              .single;
+          expect(path.commands.whereType<CubicTo>(), isEmpty);
+        }
+
+        final parentRoute = transitionPath(s, 'trans_First_Second_1');
+        final nestedRoute = transitionPath(s, 'trans_innerFirst_2nd_7');
+        final parentStart = (parentRoute.commands.first as MoveTo).p;
+        final nestedStart = (nestedRoute.commands.first as MoveTo).p;
+        expect((parentStart.x - nestedStart.x).abs(), greaterThan(5));
+      },
+    );
     test('fixture pseudo-state arrows use the shared vertical centre line', () {
       final s = layoutStateDiagram(
         parseStateDiagram(stateFixture('05')),
@@ -447,13 +507,12 @@ state Root {
         theme: MermaidTheme.defaultTheme,
         engine: 'dagre',
       );
-      final path = flatten(
-        sceneGroup(s, 'trans___start_innerFirst_1st1st_4').children,
-      )
-          .whereType<SceneShape>()
-          .map((shape) => shape.geometry)
-          .whereType<PathGeometry>()
-          .single;
+      final path =
+          flatten(sceneGroup(s, 'trans___start_innerFirst_1st1st_4').children)
+              .whereType<SceneShape>()
+              .map((shape) => shape.geometry)
+              .whereType<PathGeometry>()
+              .single;
       expect(path.commands.whereType<CubicTo>(), isNotEmpty);
     });
     test('self-transition on composite renders a loop', () {
@@ -475,20 +534,23 @@ state Root {
     test('note renders beside the state with dashed connector', () {
       final s = layout('A --> B\nnote right of A : check this');
       expect(
-        flatten(s.nodes)
-            .whereType<SceneText>()
-            .any((t) => t.text == 'check this'),
+        flatten(
+          s.nodes,
+        ).whereType<SceneText>().any((t) => t.text == 'check this'),
         isTrue,
       );
       expect(
-        flatten(s.nodes).whereType<SceneShape>().any((n) =>
-            n.geometry is PathGeometry && n.stroke?.dash != null),
+        flatten(s.nodes).whereType<SceneShape>().any(
+          (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
+        ),
         isTrue,
       );
     });
     test('scene bounds enclose everything', () {
-      final s = layout('[*] --> A\nstate A {\nx --> y\n}\nA --> A : again\n'
-          'note right of A : hi');
+      final s = layout(
+        '[*] --> A\nstate A {\nx --> y\n}\nA --> A : again\n'
+        'note right of A : hi',
+      );
       for (final n in flatten(s.nodes)) {
         final b = sceneNodeBounds(n);
         if (b == null) continue;

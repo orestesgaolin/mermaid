@@ -453,7 +453,14 @@ List<SceneNode> _roughenShape(SceneShape shape, int seed) {
         // (the old value) left wide gaps so the page showed through as stripes
         // — illegible over a dark background. Full weight makes the dense lines
         // read as a solid fill, as upstream does.
-        stroke: Stroke(color: shape.fill!.color, width: o.fillWeight),
+        stroke: Stroke(
+          color: shape.fill!.color,
+          width: o.fillWeight,
+          // A gradient fill must stay a gradient once it becomes hachure
+          // strokes, otherwise the sketch collapses to the fallback color.
+          gradient: shape.fill!.gradient,
+        ),
+        blendMode: shape.blendMode,
         paintRole: _roughFillRole(shape.paintRole),
       ));
     }
@@ -475,7 +482,15 @@ List<SceneNode> _roughenShape(SceneShape shape, int seed) {
     }
     out.add(SceneShape(
       geometry: PathGeometry(_toCommands(ops)),
-      stroke: Stroke(color: strokeColor, width: width, dash: shape.stroke?.dash),
+      stroke: Stroke(
+        color: strokeColor,
+        width: width,
+        dash: shape.stroke?.dash,
+        // Gradient strokes (sankey lanes) must survive the sketch pass; the
+        // gradient is in absolute scene coordinates, which roughening keeps.
+        gradient: shape.stroke?.gradient,
+      ),
+      blendMode: shape.blendMode,
       paintRole: _roughStrokeRole(shape.paintRole),
     ));
   }
@@ -483,17 +498,18 @@ List<SceneNode> _roughenShape(SceneShape shape, int seed) {
   return out;
 }
 
+/// Role for the hachure pass that replaces a filled primitive. Arrowheads
+/// ([ScenePaintRole.edgeMarker]) never reach here — they are copied verbatim.
 ScenePaintRole _roughFillRole(ScenePaintRole role) => switch (role) {
       ScenePaintRole.nodeBody => ScenePaintRole.nodeFill,
       ScenePaintRole.nodeLabel => ScenePaintRole.nodeLabelFill,
-      ScenePaintRole.edgeMarker => ScenePaintRole.edgeMarkerFill,
       _ => role,
     };
 
+/// Role for the sketch pass that replaces a stroked primitive.
 ScenePaintRole _roughStrokeRole(ScenePaintRole role) => switch (role) {
       ScenePaintRole.nodeBody => ScenePaintRole.nodeStroke,
       ScenePaintRole.nodeLabel => ScenePaintRole.nodeLabelStroke,
-      ScenePaintRole.edgeMarker => ScenePaintRole.edgeMarkerStroke,
       _ => role,
     };
 

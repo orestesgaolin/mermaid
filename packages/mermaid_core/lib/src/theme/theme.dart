@@ -25,8 +25,15 @@ const _forestXyChartPlotColorPalette = <Color>[
   Color(0xfffaf3e0), Color(0xfffff176),
 ];
 
+/// Caches [MermaidTheme.hashCode] per instance.
+///
+/// The class has a const constructor, so the cache cannot be a `late final`
+/// field. Themes are deeply immutable, so an instance's hash never changes.
+final Expando<int> _themeHashCodes = Expando<int>('MermaidTheme.hashCode');
+
 bool _sameValues(List<Object> a, List<Object> b) {
-  if (identical(a, b)) return true;
+  // Not `identical`-guarded: `_equalityValues` builds a fresh list per call,
+  // so the two lists are never the same object.
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {
     if (a[i] != b[i]) return false;
@@ -409,6 +416,13 @@ class MermaidTheme {
   List<Color> get fillType => [fillType0, fillType1, fillType2, fillType3, fillType4, fillType5, fillType6, fillType7];
   List<Color> get venn => [venn1, venn2, venn3, venn4, venn5, venn6, venn7, venn8];
 
+  /// A copy of this theme with the given base values replaced.
+  ///
+  /// Only the sixteen constructor-required base fields are settable here. Every
+  /// other palette (`cScale*`, `pie*`, `git*`, `fillType*`, `quadrant*`,
+  /// `venn*`, `xyChartPlotColorPalette`, the sequence and requirement colors,
+  /// ...) is carried over from this theme unchanged — including palettes that a
+  /// named theme customized. A null argument keeps the current value.
   MermaidTheme copyWith({
     Color? background,
     Color? primaryColor,
@@ -681,13 +695,18 @@ class MermaidTheme {
         ...xyChartPlotColorPalette,
       ];
 
+  /// Two themes are equal when every palette value matches, not just the base
+  /// colors. Building the comparison lists is O(number of fields), so the
+  /// common `theme == theme` case short-circuits on identity — Flutter
+  /// compares themes on every widget update.
   @override
   bool operator ==(Object other) =>
+      identical(this, other) ||
       other is MermaidTheme &&
-      _sameValues(other._equalityValues, _equalityValues);
+          _sameValues(other._equalityValues, _equalityValues);
 
   @override
-  int get hashCode => Object.hashAll(_equalityValues);
+  int get hashCode => _themeHashCodes[this] ??= Object.hashAll(_equalityValues);
 
   /// Values from upstream theme-default.js.
   static const MermaidTheme defaultTheme = MermaidTheme(

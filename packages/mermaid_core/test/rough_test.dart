@@ -1,6 +1,8 @@
 /// Tests for hand-drawn (`look: 'handDrawn'`) rendering and look config.
 library;
 
+import 'support/fixtures.dart';
+
 import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/directives.dart';
 import 'package:mermaid_core/src/geometry.dart';
@@ -154,6 +156,44 @@ void main() {
           greaterThan(flatten(classic.nodes).length));
     });
 
+    test('sketching sankey lanes keeps their gradient and multiply blend', () {
+      // Sankey ribbons are the only primitives that use both a gradient stroke
+      // and multiply blending. Roughening rebuilds every shape, so it has to
+      // carry those two paint properties across or the lanes collapse to a
+      // flat fallback colour and crossings paint over each other.
+      const renderer = Mermaid(measurer: ApproximateTextMeasurer());
+      final classic = renderer.render(readFixture('upstream_sankey/03.mmd'));
+      final classicRibbons = flatten(classic.nodes)
+          .whereType<SceneShape>()
+          .where((s) => s.stroke?.gradient != null)
+          .toList();
+      expect(classicRibbons, isNotEmpty,
+          reason: 'fixture must produce gradient lanes to begin with');
+
+      final sketched = flatten(roughenScene(classic, seed: 3).nodes)
+          .whereType<SceneShape>()
+          .toList();
+      final sketchedRibbons =
+          sketched.where((s) => s.stroke?.gradient != null).toList();
+
+      expect(sketchedRibbons, hasLength(classicRibbons.length));
+      expect(
+        sketchedRibbons.every((s) => s.blendMode == SceneBlendMode.multiply),
+        isTrue,
+        reason: 'every sketched lane must still multiply-blend',
+      );
+      // The sketch keeps each lane's endpoints, so the gradient axes survive
+      // unchanged rather than being dropped or re-derived.
+      expect(
+        sketchedRibbons.map((s) => s.stroke!.gradient!.colors),
+        classicRibbons.map((s) => s.stroke!.gradient!.colors),
+      );
+      expect(
+        sketchedRibbons.map((s) => s.stroke!.gradient!.from.x),
+        classicRibbons.map((s) => s.stroke!.gradient!.from.x),
+      );
+    });
+
     test('handDrawn keeps flowchart arrow markers crisp', () {
       const m = Mermaid(measurer: ApproximateTextMeasurer());
       final hand = m.render('''
@@ -170,7 +210,13 @@ graph TD
       expect(returnEdge.children, hasLength(2));
       expect(returnEdge.children.first, isA<SceneGroup>());
       expect(returnEdge.children.last, isA<SceneShape>());
-      expect((returnEdge.children.last as SceneShape).fill, isNotNull);
+      final marker = returnEdge.children.last as SceneShape;
+      expect(marker.fill, isNotNull);
+      // The marker is copied through untouched, so it keeps the single
+      // `edgeMarker` role — the rough pass never splits it into separate
+      // fill/stroke passes the way it does a node body.
+      expect(marker.paintRole, ScenePaintRole.edgeMarker);
+      expect(marker.geometry, isNot(isA<PathGeometry>()));
     });
   });
 }

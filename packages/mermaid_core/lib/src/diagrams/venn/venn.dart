@@ -461,7 +461,18 @@ RenderScene layoutVenn(
   const svgHeight = 450.0;
   const scale = svgWidth / 1600.0;
   const padding = 15.0;
-  final titleHeight = (d.title != null && d.title!.isNotEmpty) ? 48.0 * scale : 0.0;
+
+  // Mermaid's `.venn-title` stylesheet fixes the rendered font at 32px,
+  // overriding the scaled `font-size` presentation attribute from its renderer.
+  // Upstream reserves a nominal `48 * scale` header band, which is shorter than
+  // a 32px line box; reserve the measured line box instead so the title always
+  // clears the circle area and the scene keeps the 800x450 viewBox.
+  final titleText = (d.title?.isNotEmpty ?? false) ? d.title! : null;
+  final titleStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 32);
+  final titleSize =
+      titleText == null ? null : measurer.measure(titleText, titleStyle);
+  final titleHeight =
+      titleSize == null ? 0.0 : math.max(48.0 * scale, titleSize.height);
 
   final themeDark = _isDark(theme.background);
   // Upstream intersection/text-node fill = `vennSetTextColor`.
@@ -568,16 +579,17 @@ RenderScene layoutVenn(
 
   final children = <SceneNode>[...nodes];
 
-  // Mermaid's `.venn-title` stylesheet fixes the rendered font at 32px,
-  // overriding the scaled `font-size` presentation attribute from its
-  // renderer. The position and reserved header band remain scaled.
-  if (d.title != null && d.title!.isNotEmpty) {
-    final style = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 32);
-    final ts = measurer.measure(d.title!, style);
+  // Title centred in the reserved header band, horizontally centred on the
+  // viewBox (upstream `x="50%"`).
+  if (titleText != null && titleSize != null) {
     children.add(SceneText(
-      text: d.title!,
-      bounds: Rect.fromCenter(Point(svgWidth / 2, 32 * scale), ts.width, ts.height),
-      style: style,
+      text: titleText,
+      bounds: Rect.fromCenter(
+        Point(svgWidth / 2, titleHeight / 2),
+        titleSize.width,
+        titleSize.height,
+      ),
+      style: titleStyle,
       color: theme.vennTitleTextColor,
     ));
   }

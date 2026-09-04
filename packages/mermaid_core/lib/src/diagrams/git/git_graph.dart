@@ -12,6 +12,7 @@ import 'dart:math' as math;
 
 import '../../color.dart';
 import '../../detect.dart';
+import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -90,14 +91,6 @@ GitGraph parseGitGraph(String source) {
   var autoId = 0;
   var seenHeader = false;
 
-  String unquote(String s) {
-    final t = s.trim();
-    if (t.length >= 2 && t.startsWith('"') && t.endsWith('"')) {
-      return t.substring(1, t.length - 1);
-    }
-    return t;
-  }
-
   // Parses `key: value` / `key:value` attributes (id/type/tag) from the
   // remainder of a commit/merge line. `tag` may appear more than once.
   ({String? id, GitCommitType type, List<String> tags}) parseAttrs(
@@ -109,7 +102,7 @@ GitGraph parseGitGraph(String source) {
     final re = RegExp(r'(id|type|tag)\s*:\s*("[^"]*"|\S+)');
     for (final m in re.allMatches(rest)) {
       final key = m.group(1)!;
-      final value = unquote(m.group(2)!);
+      final value = unquote(m.group(2)!, singleQuotes: false);
       switch (key) {
         case 'id':
           id = value;
@@ -177,7 +170,9 @@ GitGraph parseGitGraph(String source) {
         branchHead[current] = id;
 
       case 'branch':
-        final name = unquote(rest.split(RegExp(r'\s+order\s*:')).first);
+        final name = unquote(
+            rest.split(RegExp(r'\s+order\s*:')).first,
+            singleQuotes: false);
         if (name.isEmpty) {
           throw MermaidParseException('branch requires a name', line: i + 1);
         }
@@ -189,7 +184,7 @@ GitGraph parseGitGraph(String source) {
 
       case 'checkout':
       case 'switch':
-        final name = unquote(rest);
+        final name = unquote(rest, singleQuotes: false);
         if (!branchHead.containsKey(name)) {
           throw MermaidParseException('unknown branch "$name"', line: i + 1);
         }
@@ -197,7 +192,7 @@ GitGraph parseGitGraph(String source) {
 
       case 'merge':
         final parts = rest.split(RegExp(r'\s+'));
-        final from = unquote(parts.first);
+        final from = unquote(parts.first, singleQuotes: false);
         if (!branchHead.containsKey(from)) {
           throw MermaidParseException(
             'cannot merge unknown branch "$from"',
@@ -318,8 +313,8 @@ RenderScene layoutGitGraph(
   final laneOf = <String, int>{
     for (var i = 0; i < graph.branchOrder.length; i++) graph.branchOrder[i]: i,
   };
-  Color branchColor(String b) => gitColors[(laneOf[b] ?? 0) % gitColors.length];
   int branchIndex(String b) => (laneOf[b] ?? 0) % gitColors.length;
+  Color branchColor(String b) => gitColors[branchIndex(b)];
 
   // Lane spine coordinate (perpendicular to the time axis) for a branch.
   double laneCoord(String b) => (laneOf[b] ?? 0) * laneGap;
@@ -576,19 +571,26 @@ RenderScene layoutGitGraph(
           // toward the spine.
           final cy = center.y - 19.2 - tagOffset;
           final cx = center.x;
-          // Upstream places the two-point tag hole just inside the body edge.
-          // Extending it beyond the body produces an oversized spear shape.
-          final notchX = cx - w / 2 - px / 2;
+          // Upstream draws the spear notch and the hole from `pos` — the
+          // commit's time position *before* LAYOUT_OFFSET is added — while the
+          // body uses `posWithOffset`, which is our `cx`. The tip therefore
+          // sticks out one LAYOUT_OFFSET to the left of the body edge:
+          //   notch = cx - w/2 - 12, hole = cx - w/2 - 8, body = cx - w/2 - 4.
+          final tagOrigin = cx - layoutOffset;
+          final notchX = tagOrigin - w / 2 - px / 2;
+          final holeX = tagOrigin - w / 2 + px / 2;
+          final bodyLeft = cx - w / 2 - px;
+          final bodyRight = cx + w / 2 + px;
           final h2 = h / 2;
           children.add(
             SceneShape(
               geometry: PolygonGeometry([
                 Point(notchX, cy + py),
                 Point(notchX, cy - py),
-                Point(cx - w / 2 - px, cy - h2 - py),
-                Point(cx + w / 2 + px, cy - h2 - py),
-                Point(cx + w / 2 + px, cy + h2 + py),
-                Point(cx - w / 2 - px, cy + h2 + py),
+                Point(bodyLeft, cy - h2 - py),
+                Point(bodyRight, cy - h2 - py),
+                Point(bodyRight, cy + h2 + py),
+                Point(bodyLeft, cy + h2 + py),
               ]),
               fill: Fill(theme.tagLabelBackground),
               stroke: Stroke(color: theme.tagLabelBorder, width: 1),
@@ -596,7 +598,7 @@ RenderScene layoutGitGraph(
           );
           children.add(
             SceneShape(
-              geometry: CircleGeometry(Point(notchX + px / 2, cy), 1.5),
+              geometry: CircleGeometry(Point(holeX, cy), 1.5),
               fill: Fill(theme.textColor),
             ),
           );
