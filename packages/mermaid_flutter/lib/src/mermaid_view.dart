@@ -33,6 +33,10 @@ class MermaidViewController extends ChangeNotifier {
   Matrix4 get transformation => _transformation.clone();
 
   /// Whether this controller is currently attached to a [MermaidView].
+  ///
+  /// A detached or disposed controller answers `false`, and every command it
+  /// receives returns `false` without moving a view. Check this when a
+  /// controller is moved between views or outlives the view it was built for.
   bool get isAttached => !_disposed && _binding != null;
 
   /// Fits the complete diagram inside the viewport.
@@ -201,6 +205,35 @@ class MermaidView extends StatefulWidget {
 
   /// Background painted behind the diagram (defaults to transparent).
   final Color? backgroundColor;
+
+  /// The copy of this view shown inside the built-in fullscreen dialog.
+  ///
+  /// Every pass-through option is listed once here, so an option added to
+  /// [MermaidView] cannot silently stop reaching the fullscreen copy. The
+  /// dialog closes with its own button instead of a nested fullscreen button,
+  /// and it cannot share [controller], which drives one view at a time.
+  MermaidView _fullscreenCopy() => MermaidView(
+    source: source,
+    theme: theme,
+    errorBuilder: errorBuilder,
+    keepLastGoodSceneOnError: keepLastGoodSceneOnError,
+    onNodeTap: onNodeTap,
+    onNodeHover: onNodeHover,
+    hoverCursor: hoverCursor,
+    nodeTooltipBuilder: nodeTooltipBuilder,
+    semanticNodes: semanticNodes,
+    onEdgeTap: onEdgeTap,
+    nodePaintOverrides: nodePaintOverrides,
+    linkPaintOverrides: linkPaintOverrides,
+    minScale: minScale,
+    maxScale: maxScale,
+    zoomStep: zoomStep,
+    panStep: panStep,
+    padding: padding,
+    showControls: showControls,
+    allowFullscreen: false,
+    backgroundColor: backgroundColor ?? Colors.white,
+  );
 
   @override
   State<MermaidView> createState() => _MermaidViewState();
@@ -442,26 +475,7 @@ class _MermaidViewState extends State<MermaidView>
         clipBehavior: Clip.antiAlias,
         child: Stack(
           children: [
-            Positioned.fill(
-              child: MermaidView(
-                source: widget.source,
-                theme: widget.theme,
-                errorBuilder: widget.errorBuilder,
-                keepLastGoodSceneOnError: widget.keepLastGoodSceneOnError,
-                onNodeTap: widget.onNodeTap,
-                onNodeHover: widget.onNodeHover,
-                hoverCursor: widget.hoverCursor,
-                nodeTooltipBuilder: widget.nodeTooltipBuilder,
-                semanticNodes: widget.semanticNodes,
-                onEdgeTap: widget.onEdgeTap,
-                nodePaintOverrides: widget.nodePaintOverrides,
-                linkPaintOverrides: widget.linkPaintOverrides,
-                minScale: widget.minScale,
-                maxScale: widget.maxScale,
-                backgroundColor: widget.backgroundColor ?? Colors.white,
-                allowFullscreen: false,
-              ),
-            ),
+            Positioned.fill(child: widget._fullscreenCopy()),
             Positioned(
               top: 8,
               right: 8,

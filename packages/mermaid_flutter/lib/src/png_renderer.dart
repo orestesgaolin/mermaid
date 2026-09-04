@@ -38,7 +38,7 @@ Future<Uint8List> renderToPng(
     nodes: nodePaintOverrides,
     links: linkPaintOverrides,
   );
-  return renderSceneToPng(scene, pixelRatio: pixelRatio);
+  return _rasterize(scene, pixelRatio);
 }
 
 /// Renders an existing scene to PNG bytes without mounting widgets.
@@ -52,6 +52,11 @@ Future<Uint8List> renderSceneToPng(
   double pixelRatio = 2,
 }) async {
   _validatePixelRatio(pixelRatio);
+  return _rasterize(scene, pixelRatio);
+}
+
+/// Rasterizes [scene] with an already validated [pixelRatio].
+Future<Uint8List> _rasterize(core.RenderScene scene, double pixelRatio) async {
   if (!scene.size.width.isFinite ||
       !scene.size.height.isFinite ||
       scene.size.width <= 0 ||
@@ -117,7 +122,8 @@ void _validatePixelRatio(double pixelRatio) {
     throw RangeError.value(
       pixelRatio,
       'pixelRatio',
-      'Must be finite, greater than zero, and no greater than 8.',
+      'Must be finite, greater than zero, and no greater than '
+          '$_maxPixelRatio.',
     );
   }
 }

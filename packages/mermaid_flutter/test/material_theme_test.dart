@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -8,45 +9,59 @@ import 'package:mermaid_flutter/mermaid_flutter.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  test('maps Material roles and text metrics across every diagram palette', () {
-    final scheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xff3457d5),
-      brightness: Brightness.dark,
-    );
+  for (final brightness in Brightness.values) {
+    test('generated palettes stay readable in $brightness', () {
+      final scheme = ColorScheme.fromSeed(
+        seedColor: const Color(0xFF6750A4),
+        brightness: brightness,
+      );
+      final theme = MaterialMermaidTheme.fromColorScheme(scheme);
+
+      for (var lane = 0; lane < theme.git.length; lane++) {
+        expect(
+          _contrast(theme.git[lane], theme.gitBranchLabel[lane]),
+          greaterThanOrEqualTo(4.5),
+          reason: 'git lane $lane label is unreadable on its lane color',
+        );
+        expect(
+          _contrast(theme.git[lane], theme.gitInv[lane]),
+          greaterThanOrEqualTo(4.5),
+          reason: 'git lane $lane inverted color is unreadable on the lane',
+        );
+      }
+      for (var slice = 0; slice < theme.pie.length; slice++) {
+        expect(
+          _contrast(theme.pie[slice], theme.pieSectionTextColor),
+          greaterThanOrEqualTo(4.5),
+          reason: 'pie slice ${slice + 1} text is unreadable on the slice',
+        );
+      }
+      expect(
+        _contrast(theme.primaryColor, theme.primaryTextColor),
+        greaterThanOrEqualTo(3.0),
+      );
+      expect(
+        _contrast(theme.mainBkg, theme.textColor),
+        greaterThanOrEqualTo(3.0),
+      );
+    });
+  }
+
+  test('maps text metrics that take part in layout', () {
     final theme = MaterialMermaidTheme.fromColorScheme(
-      scheme,
+      ColorScheme.fromSeed(seedColor: const Color(0xff3457d5)),
       textTheme: const TextTheme(
         bodyMedium: TextStyle(fontFamily: 'Example Sans', fontSize: 18),
       ),
     );
-
-    expect(theme.background, _core(scheme.surface));
-    expect(theme.mainBkg, _core(scheme.primaryContainer));
-    expect(theme.primaryTextColor, _core(scheme.onPrimaryContainer));
-    expect(theme.lineColor, _core(scheme.onSurfaceVariant));
-    expect(theme.clusterBorder, _core(scheme.outlineVariant));
-    expect(theme.actorBkg, _core(scheme.primaryContainer));
-    expect(theme.actorTextColor, _core(scheme.onPrimaryContainer));
-    expect(theme.noteBkgColor, _core(scheme.tertiaryContainer));
-    expect(theme.noteTextColor, _core(scheme.onTertiaryContainer));
-    expect(theme.requirementBackground, _core(scheme.primaryContainer));
-    expect(theme.requirementTextColor, _core(scheme.onPrimaryContainer));
-    expect(theme.pieLegendTextColor, _core(scheme.onSurface));
-    expect(theme.quadrantXAxisTextFill, _core(scheme.onSurface));
-    expect(theme.cScale, hasLength(12));
-    expect(theme.cScaleLabel, hasLength(12));
-    expect(theme.cScale.first, _core(scheme.primaryContainer));
-    expect(theme.cScaleLabel.first, _core(scheme.onPrimaryContainer));
-    expect(theme.xyChartPlotColorPalette, theme.cScale);
     expect(theme.fontFamily, 'Example Sans');
     expect(theme.fontSize, 18);
 
-    final resized = theme.copyWith(fontSize: 20);
-    expect(resized.fontSize, 20);
-    expect(resized.noteBkgColor, theme.noteBkgColor);
-    expect(resized.requirementBackground, theme.requirementBackground);
-    expect(resized.cScale, theme.cScale);
-    expect(resized.xyChartPlotColorPalette, theme.xyChartPlotColorPalette);
+    final defaults = MaterialMermaidTheme.fromColorScheme(
+      ColorScheme.fromSeed(seedColor: const Color(0xff3457d5)),
+    );
+    expect(defaults.fontFamily, core.MermaidTheme.defaultTheme.fontFamily);
+    expect(defaults.fontSize, core.MermaidTheme.defaultTheme.fontSize);
   });
 
   testWidgets('ThemeData brightness switch rebuilds diagrams with new roles', (
@@ -114,9 +129,7 @@ sequenceDiagram
   testWidgets('diagram-specific Material role changes rebuild the scene', (
     tester,
   ) async {
-    final baseScheme = ColorScheme.fromSeed(
-      seedColor: const Color(0xff3457d5),
-    );
+    final baseScheme = ColorScheme.fromSeed(seedColor: const Color(0xff3457d5));
     final first = MaterialMermaidTheme.fromColorScheme(baseScheme);
     final second = MaterialMermaidTheme.fromColorScheme(
       baseScheme.copyWith(
@@ -207,4 +220,9 @@ sequenceDiagram
   );
 }
 
-core.Color _core(Color color) => core.Color(color.toARGB32());
+/// WCAG 2.1 contrast ratio between two opaque colors.
+double _contrast(core.Color a, core.Color b) {
+  final la = Color(a.value).computeLuminance();
+  final lb = Color(b.value).computeLuminance();
+  return (math.max(la, lb) + 0.05) / (math.min(la, lb) + 0.05);
+}

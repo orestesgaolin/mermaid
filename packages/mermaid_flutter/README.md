@@ -11,7 +11,6 @@ side-by-side output from this implementation and mermaid.js.
 
 ```dart
 import 'package:flutter/material.dart';
-import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
 
 class Example extends StatelessWidget {
@@ -61,6 +60,8 @@ controller.addListener(() {
 
 A controller attaches to one view at a time. Remove the view before reusing
 the controller elsewhere, and dispose the controller when its owner is done.
+`controller.isAttached` reports whether a view is currently attached; while it
+is `false` every command returns `false` without moving a view.
 
 Flowchart highlights can change without parsing or laying out the source
 again. Use resolved node ids and Mermaid link declaration indices:
@@ -94,7 +95,10 @@ combines these overrides with node focus, edge metadata, and fit controls.
 
 Desktop and web applications can expose node hover state without adding a
 widget per node. Hover uses the same scene bounds and paint-order precedence as
-node taps. The tooltip is an overlay and does not change diagram geometry.
+node taps. The tooltip is an overlay and does not change diagram geometry, and
+it is optional: `onNodeHover` works on its own. When the diagram leaves the
+tree while a node is hovered (a closing fullscreen dialog, for example),
+`onNodeHover` reports `null`, so a consumer highlight does not stick.
 
 ```dart
 MermaidView(

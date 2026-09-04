@@ -65,11 +65,19 @@ const double kMermaidTextHeightFactor = 1.2;
 /// painted text have identical metrics.
 TextStyle textStyleFromSpec(core.TextStyleSpec spec, {Color? color}) {
   final families = parseCssFontFamily(spec.fontFamily);
-  final fallback = [...families.fallback];
-  final known = {for (final family in fallback) family.toLowerCase()};
-  for (final family in _symbolFallbackFamilies) {
-    if (known.add(family.toLowerCase())) fallback.add(family);
-  }
+  final parsed = families.fallback;
+  // Most specs carry no CSS fallback list, so the shared const list is used
+  // as-is instead of building one list per measured or painted text block.
+  final fallback = parsed.isEmpty
+      ? _symbolFallbackFamilies
+      : <String>[
+          ...parsed,
+          for (final family in _symbolFallbackFamilies)
+            if (!parsed.any(
+              (known) => known.toLowerCase() == family.toLowerCase(),
+            ))
+              family,
+        ];
   return TextStyle(
     color: color,
     fontFamily: families.family,

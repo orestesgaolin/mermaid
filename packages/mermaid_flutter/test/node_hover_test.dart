@@ -95,6 +95,150 @@ void main() {
     );
   });
 
+  testWidgets('hover without a tooltip builder reports nodes and no error', (
+    tester,
+  ) async {
+    const source = 'flowchart LR\n  A[Start] --> B[Finish]';
+    final scene = _render(source);
+    final hovered = <String?>[];
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: Align(
+            alignment: Alignment.topLeft,
+            child: MermaidDiagram(source: source, onNodeHover: hovered.add),
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final origin = tester.getTopLeft(find.byType(MermaidDiagram));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: origin + const Offset(1, 1));
+    await tester.pump();
+
+    final a = scene.boundsOfNode('A')!.center;
+    await mouse.moveTo(origin + Offset(a.x, a.y));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(hovered, ['A']);
+
+    await mouse.moveTo(origin + const Offset(1, 1));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(hovered, ['A', null]);
+  });
+
+  testWidgets('dropping the tooltip builder while hovering keeps hover alive', (
+    tester,
+  ) async {
+    const source = 'flowchart LR\n  A[Start] --> B[Finish]';
+    final scene = _render(source);
+    final hovered = <String?>[];
+    var withTooltip = true;
+    late StateSetter update;
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return Align(
+                alignment: Alignment.topLeft,
+                child: MermaidDiagram(
+                  source: source,
+                  onNodeHover: hovered.add,
+                  nodeTooltipBuilder: withTooltip
+                      ? (context, id) => Material(child: Text('Tooltip $id'))
+                      : null,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pump();
+    final origin = tester.getTopLeft(find.byType(MermaidDiagram));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    addTearDown(mouse.removePointer);
+    await mouse.addPointer(location: origin + const Offset(1, 1));
+    await tester.pump();
+
+    final a = scene.boundsOfNode('A')!.center;
+    await mouse.moveTo(origin + Offset(a.x, a.y));
+    await tester.pump();
+    expect(find.text('Tooltip A'), findsOneWidget);
+
+    update(() => withTooltip = false);
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Tooltip A'), findsNothing);
+
+    // The overlay is gone, so leaving and re-entering must not touch it.
+    final b = scene.boundsOfNode('B')!.center;
+    await mouse.moveTo(origin + Offset(b.x, b.y));
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(hovered, ['A', 'B']);
+
+    update(() => withTooltip = true);
+    await tester.pump();
+    // A rebuilt overlay is shown after the frame that added it back.
+    await tester.pump();
+    expect(tester.takeException(), isNull);
+    expect(find.text('Tooltip B'), findsOneWidget);
+  });
+
+  testWidgets(
+    'unmounting while hovered reports the node as no longer hovered',
+    (tester) async {
+      const source = 'flowchart LR\n  A[Start] --> B[Finish]';
+      final scene = _render(source);
+      final hovered = <String?>[];
+      var mounted = true;
+      late StateSetter update;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Scaffold(
+            body: StatefulBuilder(
+              builder: (context, setState) {
+                update = setState;
+                return Align(
+                  alignment: Alignment.topLeft,
+                  child: mounted
+                      ? MermaidDiagram(source: source, onNodeHover: hovered.add)
+                      : const SizedBox.shrink(),
+                );
+              },
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+      final origin = tester.getTopLeft(find.byType(MermaidDiagram));
+      final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+      addTearDown(mouse.removePointer);
+      await mouse.addPointer(location: origin + const Offset(1, 1));
+      await tester.pump();
+      final a = scene.boundsOfNode('A')!.center;
+      await mouse.moveTo(origin + Offset(a.x, a.y));
+      await tester.pump();
+      expect(hovered, ['A']);
+
+      update(() => mounted = false);
+      await tester.pump();
+
+      expect(tester.takeException(), isNull);
+      expect(find.byType(MermaidDiagram), findsNothing);
+      expect(hovered, ['A', null], reason: 'a removed region emits no exit');
+    },
+  );
+
   testWidgets('MermaidView forwards hover through its fitted transform', (
     tester,
   ) async {
@@ -195,7 +339,8 @@ void main() {
         .transformationController!
         .value;
     final a = scene.boundsOfNode('A')!.center;
-    final target = tester.getTopLeft(viewport) +
+    final target =
+        tester.getTopLeft(viewport) +
         MatrixUtils.transformPoint(transformation, Offset(a.x, a.y));
     final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
     addTearDown(mouse.removePointer);

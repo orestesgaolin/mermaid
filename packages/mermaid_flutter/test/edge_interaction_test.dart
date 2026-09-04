@@ -62,15 +62,15 @@ flowchart LR
     await _pumpDiagram(tester, source, (_, _, _) => edgeTaps++);
     final origin = tester.getTopLeft(find.byType(MermaidDiagram));
 
-    final targetBounds = scene.boundsOf('B')!;
+    final targetBounds = scene.boundsOfNode('B')!;
     final inside = core.Point(targetBounds.left + 1, targetBounds.center.y);
     await tester.tapAt(origin + Offset(inside.x, inside.y));
     await tester.pump();
     expect(edgeTaps, 0, reason: 'the node must occlude the nearby edge');
 
     final hiddenMid = _midpoint(
-      scene.boundsOf('A')!.center,
-      scene.boundsOf('C')!.center,
+      scene.boundsOfNode('A')!.center,
+      scene.boundsOfNode('C')!.center,
     );
     await tester.tapAt(origin + Offset(hiddenMid.x, hiddenMid.y));
     await tester.pump();

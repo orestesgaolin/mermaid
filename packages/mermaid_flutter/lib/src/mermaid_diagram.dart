@@ -3,7 +3,7 @@ library;
 
 import 'dart:math' as math;
 
-import 'package:flutter/foundation.dart' show mapEquals;
+import 'package:flutter/foundation.dart' show mapEquals, visibleForTesting;
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
@@ -11,10 +11,15 @@ import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'flutter_text_measurer.dart';
 import 'scene_painter.dart';
 
-typedef MermaidSceneRenderer = core.RenderScene Function(
-  String source,
-  core.MermaidTheme theme,
-);
+/// Builds the complete render scene for a source and theme.
+///
+/// This replaces the built-in renderer and exists for tests and
+/// instrumentation. It is not part of the supported production surface: the
+/// widget rebuilds its base scene whenever this callback's identity changes,
+/// so an inline closure re-renders on every widget rebuild.
+@visibleForTesting
+typedef MermaidSceneRenderer =
+    core.RenderScene Function(String source, core.MermaidTheme theme);
 
 /// Builds the tooltip shown for a hovered Mermaid node.
 typedef MermaidNodeTooltipBuilder =
@@ -97,9 +102,10 @@ class MermaidDiagram extends StatefulWidget {
   /// Resolved paint-only flowchart edge updates keyed by Mermaid link index.
   final Map<int, core.FlowLinkPaintOverride> linkPaintOverrides;
 
-  /// Optional full-scene renderer, useful for instrumentation and custom
-  /// renderer ownership. A change to this callback rebuilds the base scene,
-  /// so callers must retain the same callback instance across widget rebuilds.
+  /// Optional full-scene renderer, useful for instrumentation in tests. A
+  /// change to this callback rebuilds the base scene, so callers must retain
+  /// the same callback instance across widget rebuilds.
+  @visibleForTesting
   final MermaidSceneRenderer? sceneRenderer;
 
   /// Mermaid diagram source text.
@@ -133,9 +139,17 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
   Map<String, core.FlowNodePaintOverride> _builtNodeOverrides = const {};
   Map<int, core.FlowLinkPaintOverride> _builtLinkOverrides = const {};
   String? _hoveredNodeId;
+  _SceneIndex? _index;
   final _tooltipController = OverlayPortalController(
     debugLabel: 'Mermaid node tooltip',
   );
+
+  /// Whether the overlay portal that owns [_tooltipController] is in the tree.
+  ///
+  /// The portal is only built while a tooltip builder is supplied. Calling
+  /// `show()` or `hide()` on a controller with no portal asserts inside
+  /// Flutter, so every controller command is guarded by this.
+  bool get _hasTooltipOverlay => widget.nodeTooltipBuilder != null;
 
   @override
   void didUpdateWidget(MermaidDiagram oldWidget) {
@@ -147,37 +161,63 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     if (_hoveredNodeId != null && sceneChanged) {
       _hoveredNodeId = null;
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted && _hoveredNodeId == null) {
-          _tooltipController.hide();
-          widget.onNodeHover?.call(null);
-        }
+        if (!mounted || _hoveredNodeId != null) return;
+        if (_hasTooltipOverlay) _tooltipController.hide();
+        widget.onNodeHover?.call(null);
       });
-    } else if (oldWidget.nodeTooltipBuilder != widget.nodeTooltipBuilder) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        if (_hoveredNodeId != null && widget.nodeTooltipBuilder != null) {
+    } else if ((oldWidget.nodeTooltipBuilder != null) != _hasTooltipOverlay) {
+      // Only the presence of a builder changes the overlay's lifetime; an
+      // inline closure has a new identity on every rebuild and must not
+      // schedule work. Removing a builder disposes the portal, which leaves
+      // nothing to hide.
+      if (_hasTooltipOverlay && _hoveredNodeId != null) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted || _hoveredNodeId == null || !_hasTooltipOverlay) return;
           _tooltipController.show();
-        } else {
-          _tooltipController.hide();
-        }
-      });
+        });
+      }
     }
+  }
+
+  @override
+  void dispose() {
+    final onNodeHover = widget.onNodeHover;
+    if (_hoveredNodeId != null && onNodeHover != null) {
+      _hoveredNodeId = null;
+      // MouseRegion reports no exit when its region leaves the tree, so a
+      // consumer's hover highlight would stick after the diagram is gone.
+      // The tree is locked during teardown; report after the frame so a
+      // listener that calls setState is not building into a locked tree.
+      WidgetsBinding.instance.addPostFrameCallback((_) => onNodeHover(null));
+    }
+    super.dispose();
   }
 
   void _updateHoveredNode(String? id) {
     if (_hoveredNodeId == id) return;
     setState(() => _hoveredNodeId = id);
-    if (id != null && widget.nodeTooltipBuilder != null) {
-      _tooltipController.show();
-    } else {
-      _tooltipController.hide();
+    if (_hasTooltipOverlay) {
+      if (id == null) {
+        _tooltipController.hide();
+      } else {
+        _tooltipController.show();
+      }
     }
     widget.onNodeHover?.call(id);
   }
 
+  /// Node geometry and metadata for [scene], memoized on scene identity so
+  /// pointer moves and hover-driven rebuilds do not walk the scene again.
+  _SceneIndex _indexOf(core.RenderScene scene) {
+    final cached = _index;
+    if (cached != null && identical(cached.scene, scene)) return cached;
+    return _index = _SceneIndex(scene);
+  }
+
   void _rebuildSceneIfNeeded() {
     final renderer = widget.sceneRenderer;
-    final rebuildBase = _builtSource != widget.source ||
+    final rebuildBase =
+        _builtSource != widget.source ||
         _builtTheme != widget.theme ||
         _builtRenderer != renderer;
     if (rebuildBase) {
@@ -186,7 +226,8 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       _builtRenderer = renderer;
       _sceneGeneration++;
       try {
-        _baseScene = renderer?.call(widget.source, widget.theme) ??
+        _baseScene =
+            renderer?.call(widget.source, widget.theme) ??
             core.Mermaid(
               measurer: const FlutterTextMeasurer(),
               theme: widget.theme,
@@ -210,7 +251,8 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       for (final entry in widget.linkPaintOverrides.entries)
         entry.key: _snapshotLinkOverride(entry.value),
     };
-    final overridesChanged = !mapEquals(_builtNodeOverrides, nodeOverrides) ||
+    final overridesChanged =
+        !mapEquals(_builtNodeOverrides, nodeOverrides) ||
         !mapEquals(_builtLinkOverrides, linkOverrides);
     if ((rebuildBase && _error == null) || overridesChanged) {
       _builtNodeOverrides = nodeOverrides;
@@ -228,53 +270,34 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
 
   core.FlowNodePaintOverride _snapshotNodeOverride(
     core.FlowNodePaintOverride value,
-  ) =>
-      core.FlowNodePaintOverride(
-        fill: value.fill,
-        stroke: value.stroke,
-        strokeWidth: value.strokeWidth,
-        strokeDash: value.strokeDash == null
-            ? null
-            : List.unmodifiable(value.strokeDash!),
-        textColor: value.textColor,
-      );
+  ) => core.FlowNodePaintOverride(
+    fill: value.fill,
+    stroke: value.stroke,
+    strokeWidth: value.strokeWidth,
+    strokeDash: value.strokeDash == null
+        ? null
+        : List.unmodifiable(value.strokeDash!),
+    textColor: value.textColor,
+  );
 
   core.FlowLinkPaintOverride _snapshotLinkOverride(
     core.FlowLinkPaintOverride value,
-  ) =>
-      core.FlowLinkPaintOverride(
-        stroke: value.stroke,
-        strokeWidth: value.strokeWidth,
-        strokeDash: value.strokeDash == null
-            ? null
-            : List.unmodifiable(value.strokeDash!),
-      );
+  ) => core.FlowLinkPaintOverride(
+    stroke: value.stroke,
+    strokeWidth: value.strokeWidth,
+    strokeDash: value.strokeDash == null
+        ? null
+        : List.unmodifiable(value.strokeDash!),
+  );
 
-  /// Finds the topmost (last-painted) node group with an id/link whose bounds
-  /// contain [p]. Returns (id, link) or null.
-  (String, String?)? _hitTest(List<core.SceneNode> nodes, Offset p) {
-    (String, String?)? found;
-    void walk(List<core.SceneNode> ns) {
-      for (final n in ns) {
-        if (n is core.SceneGroup) {
-          if (n.role == core.SceneGroupRole.node &&
-              (n.id != null || n.link != null)) {
-            final b = core.sceneBounds(n.children);
-            if (b != null &&
-                p.dx >= b.left &&
-                p.dx <= b.right &&
-                p.dy >= b.top &&
-                p.dy <= b.bottom) {
-              // Later in paint order wins; keep updating.
-              found = (n.id ?? '', n.link);
-            }
-          }
-          walk(n.children);
-        }
-      }
+  /// Finds the topmost (last-painted) node whose bounds contain [p].
+  _DiagramNode? _hitTest(core.RenderScene scene, Offset p) {
+    final point = core.Point(p.dx, p.dy);
+    _DiagramNode? found;
+    for (final node in _indexOf(scene).nodes) {
+      // Later in paint order wins; keep updating.
+      if (node.bounds.contains(point)) found = node;
     }
-
-    walk(nodes);
     return found;
   }
 
@@ -380,9 +403,9 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       paint = GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTapUp: (d) {
-          final hit = _hitTest(scene.nodes, d.localPosition);
+          final hit = _hitTest(scene, d.localPosition);
           if (hit != null) {
-            if (onNodeTap != null) onNodeTap(hit.$1, hit.$2);
+            if (onNodeTap != null) onNodeTap(hit.id ?? '', hit.link);
             return;
           }
           if (onEdgeTap != null) {
@@ -397,7 +420,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
     }
 
     if (widget.semanticNodes) {
-      final semanticNodes = _collectSemanticNodes(scene.nodes);
+      final semanticNodes = _indexOf(scene).semanticNodes;
       paint = Stack(
         fit: StackFit.expand,
         children: [
@@ -411,7 +434,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
                 onTap: onNodeTap == null
                     ? null
                     : () => onNodeTap(
-                        semanticNodes[index].id,
+                        semanticNodes[index].id!,
                         semanticNodes[index].link,
                       ),
               ),
@@ -430,8 +453,8 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
       paint = MouseRegion(
         cursor: hoveredNodeId == null ? MouseCursor.defer : widget.hoverCursor,
         onHover: (event) {
-          final hit = _hitTest(scene.nodes, event.localPosition);
-          _updateHoveredNode(hit?.$1);
+          final hit = _hitTest(scene, event.localPosition);
+          _updateHoveredNode(hit?.id);
         },
         onExit: (_) => _updateHoveredNode(null),
         child: paint,
@@ -453,7 +476,7 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
         controller: _tooltipController,
         overlayChildBuilder: (context, info) {
           final id = _hoveredNodeId;
-          final bounds = id == null ? null : scene.boundsOfNode(id);
+          final bounds = id == null ? null : _indexOf(scene).boundsOf(id);
           if (id == null || bounds == null) return const SizedBox.shrink();
           final below =
               MatrixUtils.transformPoint(
@@ -499,55 +522,90 @@ class _MermaidDiagramState extends State<MermaidDiagram> {
   }
 }
 
-List<_SemanticNodeInfo> _collectSemanticNodes(
-  Iterable<core.SceneNode> nodes,
-) {
-  final byId = <String, _SemanticNodeInfo>{};
+/// One scene's interactive nodes, measured once.
+///
+/// Hit testing, semantics, and tooltip anchoring all need the same node
+/// bounds, so they share [core.RenderSceneBounds.nodeBounds] instead of each
+/// walking the scene and recomputing bounds.
+class _SceneIndex {
+  _SceneIndex(this.scene) : nodes = _indexDiagramNodes(scene);
+
+  final core.RenderScene scene;
+
+  /// Hit-testable nodes in paint order (last painted last).
+  final List<_DiagramNode> nodes;
+
+  List<_DiagramNode>? _semanticNodes;
+  Map<String, _DiagramNode>? _byId;
+
+  /// The subset exposed to the semantics tree: nodes with a stable id.
+  List<_DiagramNode> get semanticNodes => _semanticNodes ??= List.unmodifiable([
+    for (final node in nodes)
+      if (node.id != null) node,
+  ]);
+
+  /// Scene-space bounds of the node with [id], or null when it has none.
+  core.Rect? boundsOf(String id) => (_byId ??= {
+    for (final node in semanticNodes) node.id!: node,
+  })[id]?.bounds;
+}
+
+List<_DiagramNode> _indexDiagramNodes(core.RenderScene scene) {
+  final boundsById = scene.nodeBounds;
+  final ordered = <Object, _DiagramNode>{};
 
   void walk(Iterable<core.SceneNode> children) {
     for (final child in children) {
       if (child is! core.SceneGroup) continue;
       final id = child.id;
-      if (id != null && child.role == core.SceneGroupRole.node) {
-        final bounds = core.sceneBounds(child.children);
+      if (child.role == core.SceneGroupRole.node &&
+          (id != null || child.link != null)) {
+        // Named nodes reuse the scene's own bounds index; a group carrying
+        // only a link has no key there and is measured directly.
+        final bounds = id != null
+            ? boundsById[id]
+            : core.sceneBounds(child.children);
         if (bounds != null) {
           final label = child.semanticLabel?.trim();
-          // Reinsert duplicates so order and geometry both follow the
-          // last-painted node, matching pointer hit testing.
-          byId.remove(id);
-          byId[id] = _SemanticNodeInfo(
+          final node = _DiagramNode(
             id: id,
-            label: label == null || label.isEmpty ? id : label,
+            label: label == null || label.isEmpty ? id ?? '' : label,
+            bounds: bounds,
             link: child.link,
             tooltip: child.tooltip,
-            rect: Rect.fromLTRB(
-              bounds.left,
-              bounds.top,
-              bounds.right,
-              bounds.bottom,
-            ),
           );
+          // Reinsert duplicates so order and geometry both follow the
+          // last-painted node, matching pointer hit testing.
+          final key = id ?? node;
+          ordered.remove(key);
+          ordered[key] = node;
         }
       }
       walk(child.children);
     }
   }
 
-  walk(nodes);
-  return List.unmodifiable(byId.values);
+  walk(scene.nodes);
+  return List.unmodifiable(ordered.values);
 }
 
-class _SemanticNodeInfo {
-  const _SemanticNodeInfo({
+class _DiagramNode {
+  _DiagramNode({
     required this.id,
     required this.label,
-    required this.rect,
+    required this.bounds,
     this.link,
     this.tooltip,
-  });
+  }) : rect = Rect.fromLTRB(
+         bounds.left,
+         bounds.top,
+         bounds.right,
+         bounds.bottom,
+       );
 
-  final String id;
+  final String? id;
   final String label;
+  final core.Rect bounds;
   final Rect rect;
   final String? link;
   final String? tooltip;
@@ -560,12 +618,13 @@ class _SemanticNodeTarget extends StatelessWidget {
     required this.onTap,
   });
 
-  final _SemanticNodeInfo node;
+  final _DiagramNode node;
   final OrdinalSortKey sortKey;
   final VoidCallback? onTap;
 
   @override
   Widget build(BuildContext context) {
+    final id = node.id!;
     final tap = onTap;
     final child = tap == null
         ? const SizedBox.expand()
@@ -576,10 +635,10 @@ class _SemanticNodeTarget extends StatelessWidget {
             child: const SizedBox.expand(),
           );
     return Semantics(
-      key: ValueKey('mermaid-node:${node.id}'),
+      key: ValueKey('mermaid-node:$id'),
       container: true,
       excludeSemantics: true,
-      identifier: node.id,
+      identifier: id,
       label: node.label,
       tooltip: node.tooltip,
       sortKey: sortKey,

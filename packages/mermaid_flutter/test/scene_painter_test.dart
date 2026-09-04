@@ -325,18 +325,28 @@ void main() {
       expect(parsed.fallback, isEmpty);
     });
 
-    test('text styles append cross-platform symbol fallbacks', () {
-      final style = textStyleFromSpec(
+    test('symbol fallbacks follow the source families without repeating', () {
+      final symbols = textStyleFromSpec(
         const core.TextStyleSpec(fontFamily: 'trebuchet ms', fontSize: 16),
-      );
+      ).fontFamilyFallback!;
+      expect(symbols, isNotEmpty, reason: 'symbol families are appended');
+
+      final withCss = textStyleFromSpec(
+        core.TextStyleSpec(
+          fontFamily: '"trebuchet ms", verdana, "${symbols.first}"',
+          fontSize: 16,
+        ),
+      ).fontFamilyFallback!;
       expect(
-        style.fontFamilyFallback,
-        containsAll([
-          'Arial Unicode MS',
-          'Apple Symbols',
-          'Segoe UI Symbol',
-          'Noto Sans Symbols 2',
-        ]),
+        withCss.take(1),
+        ['verdana'],
+        reason: 'the source list keeps priority over platform symbol fonts',
+      );
+      expect(withCss, containsAll(symbols));
+      expect(
+        withCss.toSet(),
+        hasLength(withCss.length),
+        reason: 'a family named by the source is not appended twice',
       );
     });
   });

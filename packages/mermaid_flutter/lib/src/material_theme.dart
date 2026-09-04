@@ -7,6 +7,14 @@ import 'package:mermaid_core/mermaid_core.dart' as core;
 /// for text, outline roles for borders, and `onSurfaceVariant` for edges.
 /// [fromTheme] also maps `bodyMedium.fontFamily` and `bodyMedium.fontSize`.
 /// Those text values affect measurement and can therefore change layout.
+///
+/// Every fill is paired with the `on*` role of that same fill, so text stays
+/// readable in both brightness modes. Git lane labels therefore use the
+/// on-roles of the lane colors (`git0` is `primary`, so `gitBranchLabel0` is
+/// `onPrimary`). Pie slices all share one `pieSectionTextColor`, so that
+/// palette stays on container and surface roles, which keep enough contrast
+/// with `onSurface`, and wraps around rather than using the bright
+/// primary, secondary, tertiary and error roles.
 abstract final class MaterialMermaidTheme {
   /// Creates a Mermaid theme from [theme].
   static core.MermaidTheme fromTheme(ThemeData theme) =>
@@ -68,6 +76,18 @@ abstract final class MaterialMermaidTheme {
       colorScheme.outlineVariant,
       colorScheme.onSurfaceVariant,
       colorScheme.onSurface,
+    ];
+
+    // Git lanes are painted with [peers], which is [fills] rotated by four, so
+    // their label colors are the on-roles rotated the same way.
+    final gitLabels = <Color>[...labels.skip(4).take(4), ...labels.take(4)];
+    // One text color has to work on every pie slice, so the pie palette stays
+    // on container and surface roles and repeats instead of reaching for the
+    // bright primary, secondary, tertiary and error roles.
+    final pieFills = <Color>[
+      ...fills.take(4),
+      ...fills.skip(8),
+      ...fills.take(4),
     ];
 
     core.Color c(Color value) => core.Color(value.toARGB32());
@@ -137,18 +157,18 @@ abstract final class MaterialMermaidTheme {
       cScalePeer9: c(peers[9]),
       cScalePeer10: c(peers[10]),
       cScalePeer11: c(peers[11]),
-      pie1: c(fills[0]),
-      pie2: c(fills[1]),
-      pie3: c(fills[2]),
-      pie4: c(fills[3]),
-      pie5: c(fills[4]),
-      pie6: c(fills[5]),
-      pie7: c(fills[6]),
-      pie8: c(fills[7]),
-      pie9: c(fills[8]),
-      pie10: c(fills[9]),
-      pie11: c(fills[10]),
-      pie12: c(fills[11]),
+      pie1: c(pieFills[0]),
+      pie2: c(pieFills[1]),
+      pie3: c(pieFills[2]),
+      pie4: c(pieFills[3]),
+      pie5: c(pieFills[4]),
+      pie6: c(pieFills[5]),
+      pie7: c(pieFills[6]),
+      pie8: c(pieFills[7]),
+      pie9: c(pieFills[8]),
+      pie10: c(pieFills[9]),
+      pie11: c(pieFills[10]),
+      pie12: c(pieFills[11]),
       pieStrokeColor: c(colorScheme.outline),
       pieOuterStrokeColor: c(colorScheme.outline),
       pieSectionTextColor: c(colorScheme.onSurface),
@@ -162,22 +182,22 @@ abstract final class MaterialMermaidTheme {
       git5: c(peers[5]),
       git6: c(peers[6]),
       git7: c(peers[7]),
-      gitInv0: c(labels[0]),
-      gitInv1: c(labels[1]),
-      gitInv2: c(labels[2]),
-      gitInv3: c(labels[3]),
-      gitInv4: c(labels[4]),
-      gitInv5: c(labels[5]),
-      gitInv6: c(labels[6]),
-      gitInv7: c(labels[7]),
-      gitBranchLabel0: c(labels[0]),
-      gitBranchLabel1: c(labels[1]),
-      gitBranchLabel2: c(labels[2]),
-      gitBranchLabel3: c(labels[3]),
-      gitBranchLabel4: c(labels[4]),
-      gitBranchLabel5: c(labels[5]),
-      gitBranchLabel6: c(labels[6]),
-      gitBranchLabel7: c(labels[7]),
+      gitInv0: c(gitLabels[0]),
+      gitInv1: c(gitLabels[1]),
+      gitInv2: c(gitLabels[2]),
+      gitInv3: c(gitLabels[3]),
+      gitInv4: c(gitLabels[4]),
+      gitInv5: c(gitLabels[5]),
+      gitInv6: c(gitLabels[6]),
+      gitInv7: c(gitLabels[7]),
+      gitBranchLabel0: c(gitLabels[0]),
+      gitBranchLabel1: c(gitLabels[1]),
+      gitBranchLabel2: c(gitLabels[2]),
+      gitBranchLabel3: c(gitLabels[3]),
+      gitBranchLabel4: c(gitLabels[4]),
+      gitBranchLabel5: c(gitLabels[5]),
+      gitBranchLabel6: c(gitLabels[6]),
+      gitBranchLabel7: c(gitLabels[7]),
       commitLabelColor: c(colorScheme.onSecondaryContainer),
       commitLabelBackground: c(colorScheme.secondaryContainer),
       tagLabelColor: c(colorScheme.onTertiaryContainer),

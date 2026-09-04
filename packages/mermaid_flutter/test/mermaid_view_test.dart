@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
@@ -46,7 +48,7 @@ void main() {
     final scene = core.Mermaid(
       measurer: const FlutterTextMeasurer(),
     ).render(source);
-    final nodeCenter = scene.boundsOf('B')!.center;
+    final nodeCenter = scene.boundsOfNode('B')!.center;
     final viewportPoint = MatrixUtils.transformPoint(
       controller.transformation,
       Offset(nodeCenter.x, nodeCenter.y),
@@ -102,7 +104,7 @@ void main() {
     final scene = core.Mermaid(
       measurer: const FlutterTextMeasurer(),
     ).render(source);
-    final center = scene.boundsOf('C')!.center;
+    final center = scene.boundsOfNode('C')!.center;
     final viewportPoint = MatrixUtils.transformPoint(
       controller.transformation,
       Offset(center.x, center.y),
@@ -316,6 +318,59 @@ void main() {
     // The dialog hosts its own viewer (without a nested popup button).
     expect(find.byType(MermaidView), findsNWidgets(2));
     expect(find.byIcon(Icons.close), findsOneWidget);
+  });
+
+  testWidgets('fullscreen popup fits and zooms with the options it was given', (
+    tester,
+  ) async {
+    const padding = 60.0;
+    const zoomStep = 2.0;
+    await tester.pumpWidget(
+      _host(
+        const MermaidView(
+          source: 'graph TD\nA-->B',
+          padding: padding,
+          zoomStep: zoomStep,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byIcon(Icons.open_in_full));
+    await tester.pumpAndSettle();
+
+    final dialog = find.byType(Dialog);
+    final viewer = find.descendant(
+      of: dialog,
+      matching: find.byType(InteractiveViewer),
+    );
+    final transformation = tester
+        .widget<InteractiveViewer>(viewer)
+        .transformationController!;
+    final viewport = tester.getSize(viewer);
+    final diagram = tester.getSize(
+      find.descendant(of: dialog, matching: find.byType(MermaidDiagram)),
+    );
+    double fitFor(double pad) => math.min(
+      (viewport.width - 2 * pad) / diagram.width,
+      (viewport.height - 2 * pad) / diagram.height,
+    );
+
+    final fitted = transformation.value.getMaxScaleOnAxis();
+    expect(fitted, closeTo(fitFor(padding), 0.001));
+    expect(
+      fitted,
+      isNot(closeTo(fitFor(20), 0.001)),
+      reason: 'the default padding must not be what the popup used',
+    );
+
+    await tester.tap(
+      find.descendant(of: dialog, matching: find.byIcon(Icons.add)),
+    );
+    await tester.pump();
+    expect(
+      transformation.value.getMaxScaleOnAxis(),
+      closeTo(fitted * zoomStep, 0.001),
+    );
   });
 
   testWidgets('hides controls when showControls is false', (tester) async {
