@@ -11,7 +11,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -24,6 +26,37 @@ import '../../theme/theme.dart';
 enum GitCommitType { normal, reverse, highlight }
 
 enum GitDirection { leftRight, topBottom, bottomTop }
+
+/// Typed parser and layout values from `config.gitGraph`.
+class GitGraphConfig {
+  const GitGraphConfig({
+    this.showBranches = true,
+    this.showCommitLabel = true,
+    bool? rotateCommitLabel,
+    this.parallelCommits = false,
+    this.mainBranchName = 'main',
+  })  : rotateCommitLabel = rotateCommitLabel ?? true,
+        _rotateCommitLabelOverride = rotateCommitLabel;
+
+  final bool showBranches;
+  final bool showCommitLabel;
+  final bool rotateCommitLabel;
+  final bool parallelCommits;
+  final String mainBranchName;
+  final bool? _rotateCommitLabelOverride;
+
+  factory GitGraphConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'gitGraph');
+    final mainBranchName = stringValue(values, 'mainBranchName', 'main');
+    return GitGraphConfig(
+      showBranches: boolValue(values, 'showBranches', true),
+      showCommitLabel: boolValue(values, 'showCommitLabel', true),
+      rotateCommitLabel: boolValueOrNull(values, 'rotateCommitLabel'),
+      parallelCommits: boolValue(values, 'parallelCommits', false),
+      mainBranchName: mainBranchName.isEmpty ? 'main' : mainBranchName,
+    );
+  }
+}
 
 class GitCommit {
   GitCommit({
@@ -76,17 +109,19 @@ class GitGraph {
   final GitDirection direction;
 }
 
-GitGraph parseGitGraph(String source) {
+GitGraph parseGitGraph(String source, {GitGraphConfig? config}) {
+  config ??= GitGraphConfig.fromSource(source);
   final text = stripMetadata(source);
   final lines = text.split('\n');
   var direction = GitDirection.leftRight;
 
   final commits = <GitCommit>[];
   final commitById = <String, GitCommit>{};
-  final branchOrder = <String>['main'];
-  final branchHead = <String, String?>{'main': null};
-  final branchOrderValue = <String, int>{'main': 0};
-  var current = 'main';
+  final mainBranchName = config.mainBranchName;
+  final branchOrder = <String>[mainBranchName];
+  final branchHead = <String, String?>{mainBranchName: null};
+  final branchOrderValue = <String, int>{mainBranchName: 0};
+  var current = mainBranchName;
   var seq = 0;
   var autoId = 0;
   var seenHeader = false;
@@ -273,6 +308,7 @@ RenderScene layoutGitGraph(
   GitGraph graph, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  GitGraphConfig config = const GitGraphConfig(),
 }) {
   const commitR = 10.0;
   const commitStep = 40.0; // COMMIT_STEP
@@ -280,7 +316,7 @@ RenderScene layoutGitGraph(
   const defaultPos = 30.0; // TB/BT lane time-origin
   // LR lane gap: 50 + 40 (rotateCommitLabel defaults true). TB/BT lanes add
   // half the (rotated) commit-label width; we approximate with the same gap.
-  const laneGap = 90.0;
+  final laneGap = config.rotateCommitLabel ? 90.0 : 50.0;
   const commitLabelSize = 10.0;
   const tagLabelSize = 10.0;
   final lr = graph.direction == GitDirection.leftRight;
@@ -322,11 +358,10 @@ RenderScene layoutGitGraph(
   final commitById = {for (final c in graph.commits) c.id: c};
   final branchOf = {for (final c in graph.commits) c.id: c.branch};
 
-  // Parent-relative time positions: a commit sits one COMMIT_STEP past its
-  // closest parent along the time axis. Commits are walked in seq order; the
-  // running `pos` advances by COMMIT_STEP+LAYOUT_OFFSET each commit, and a
-  // commit's time is max(running pos, closestParent + step) so side branches
-  // can share a fork's slot. (Mirrors calculatePosition + the pos cursor.)
+  // Parent-relative time positions. In the default mode, the running cursor
+  // keeps every commit in a distinct slot. With `parallelCommits`, independent
+  // sibling branches advance directly from their closest parent and can share
+  // a time position, matching upstream calculatePosition behavior.
   final timeOf = <String, double>{};
   var pos = tb ? defaultPos : 0.0;
   var maxPos = 0.0;
@@ -345,11 +380,15 @@ RenderScene layoutGitGraph(
           ? parentMax + commitStep
           : pos + layoutOffset;
       final cursor = pos + layoutOffset;
-      t = math.max(fromParent, cursor);
+      t = config.parallelCommits
+          ? fromParent + layoutOffset
+          : math.max(fromParent, cursor);
     }
     timeOf[c.id] = t;
     if (t > maxPos) maxPos = t;
-    pos = math.max(pos, t - layoutOffset) + commitStep + layoutOffset;
+    if (!config.parallelCommits) {
+      pos = math.max(pos, t - layoutOffset) + commitStep + layoutOffset;
+    }
   }
   final timeSpanMax = maxPos + commitStep;
 
@@ -370,21 +409,26 @@ RenderScene layoutGitGraph(
   // Branch lane lines: a dashed neutral line at strokeWidth=1 spanning the
   // whole diagram (0..maxPos along the time axis), colored lineColor — not the
   // branch color (upstream `.branch` style).
-  for (final b in graph.branchOrder) {
-    if (!graph.commits.any((c) => c.branch == b) && b != 'main') continue;
-    final spine = laneCoord(b);
-    final start = timeToCoord(tb ? defaultPos : 0);
-    final end = timeToCoord(timeSpanMax);
-    final lo = math.min(start, end);
-    final hi = math.max(start, end);
-    final p1 = lr ? Point(lo, spine - 2) : Point(spine, lo);
-    final p2 = lr ? Point(hi, spine - 2) : Point(spine, hi);
-    nodes.add(
-      SceneShape(
-        geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
-        stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
-      ),
-    );
+  if (config.showBranches) {
+    for (final b in graph.branchOrder) {
+      if (!graph.commits.any((c) => c.branch == b) &&
+          b != config.mainBranchName) {
+        continue;
+      }
+      final spine = laneCoord(b);
+      final start = timeToCoord(tb ? defaultPos : 0);
+      final end = timeToCoord(timeSpanMax);
+      final lo = math.min(start, end);
+      final hi = math.max(start, end);
+      final p1 = lr ? Point(lo, spine - 2) : Point(spine, lo);
+      final p2 = lr ? Point(hi, spine - 2) : Point(spine, hi);
+      nodes.add(
+        SceneShape(
+          geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
+          stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
+        ),
+      );
+    }
   }
 
   // Arrows: one for EVERY parent → child edge (including consecutive
@@ -526,7 +570,8 @@ RenderScene layoutGitGraph(
     // commitLabelColor on a 50%-opacity commitLabelBackground rect (upstream
     // `.commit-label-bkg { opacity: 0.5 }`). Rotated −45° for LR
     // (rotateCommitLabel defaults true).
-    final showLabel = !c.isCherryPick && (c.customId || !c.isMerge);
+    final showLabel =
+        config.showCommitLabel && !c.isCherryPick && (c.customId || !c.isMerge);
     if (showLabel) {
       final size = measurer.measure(c.id, commitLabelStyle, maxWidth: 200);
       final lblCenter = lr
@@ -538,9 +583,12 @@ RenderScene layoutGitGraph(
         size.width + 2 * py,
         size.height + 2 * py,
       );
+      final rotateLabel = lr
+          ? config.rotateCommitLabel
+          : config._rotateCommitLabelOverride == true;
       children.add(
         SceneShape(
-          geometry: lr
+          geometry: rotateLabel
               ? PolygonGeometry(_rotatedRectPoints(labelBounds, -45))
               : RectGeometry(labelBounds),
           fill: Fill(theme.commitLabelBackground.withOpacity(0.5)),
@@ -552,7 +600,7 @@ RenderScene layoutGitGraph(
           bounds: Rect.fromCenter(lblCenter, size.width, size.height),
           style: commitLabelStyle,
           color: theme.commitLabelColor,
-          rotation: lr ? -45 : 0,
+          rotation: rotateLabel ? -45 : 0,
         ),
       );
     }
@@ -654,38 +702,40 @@ RenderScene layoutGitGraph(
   // Branch labels: chip filled with the branch (label{i}=git{i}) color, text
   // gitBranchLabel{i} (white for branch 0/3, black otherwise), placed to the
   // left of the spine origin (LR) / above the lane (TB).
-  for (final b in graph.branchOrder) {
-    final hasCommit = graph.commits.any((c) => c.branch == b);
-    if (!hasCommit && b != 'main') continue;
-    final idx = branchIndex(b);
-    final color = gitColors[idx];
-    final size = measurer.measure(b, branchLabelStyle, maxWidth: 200);
-    final spine = laneCoord(b);
-    final Point center;
-    if (lr) {
-      // Left of the spine origin (x=0). bbox.width + ~14 to the left.
-      center = Point(-(size.width / 2 + 11), spine - 2);
-    } else {
-      center = Point(spine, timeToCoord(tb ? 0 : defaultPos) - 4);
-    }
-    nodes.add(
-      SceneShape(
-        geometry: RectGeometry(
-          Rect.fromCenter(center, size.width + 14, size.height + 4),
-          rx: 4,
-          ry: 4,
+  if (config.showBranches) {
+    for (final b in graph.branchOrder) {
+      final hasCommit = graph.commits.any((c) => c.branch == b);
+      if (!hasCommit && b != config.mainBranchName) continue;
+      final idx = branchIndex(b);
+      final color = gitColors[idx];
+      final size = measurer.measure(b, branchLabelStyle, maxWidth: 200);
+      final spine = laneCoord(b);
+      final Point center;
+      if (lr) {
+        // Left of the spine origin (x=0). bbox.width + ~14 to the left.
+        center = Point(-(size.width / 2 + 11), spine - 2);
+      } else {
+        center = Point(spine, timeToCoord(tb ? 0 : defaultPos) - 4);
+      }
+      nodes.add(
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromCenter(center, size.width + 14, size.height + 4),
+            rx: 4,
+            ry: 4,
+          ),
+          fill: Fill(color),
         ),
-        fill: Fill(color),
-      ),
-    );
-    nodes.add(
-      SceneText(
-        text: b,
-        bounds: Rect.fromCenter(center, size.width, size.height),
-        style: branchLabelStyle,
-        color: gitBranchLabelColors[idx],
-      ),
-    );
+      );
+      nodes.add(
+        SceneText(
+          text: b,
+          bounds: Rect.fromCenter(center, size.width, size.height),
+          style: branchLabelStyle,
+          color: gitBranchLabelColors[idx],
+        ),
+      );
+    }
   }
 
   final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 120, 80);

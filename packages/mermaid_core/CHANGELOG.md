@@ -34,6 +34,8 @@
 
 - Add `resolveDiagramConfig` for reading per-diagram configuration from
   directives and frontmatter.
+- Honor common layout configuration for sequence, flowchart, state, class,
+  Gantt, pie, and gitGraph diagrams through directives and frontmatter.
 - Add `SceneShape.copyWith` and `SceneText.copyWith`, and value equality on
   `SceneEdgeMetadata`.
 - Compute `RenderScene.nodeBounds` once per scene and reuse the map, and make

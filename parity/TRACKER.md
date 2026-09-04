@@ -45,7 +45,7 @@ Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/
 
 Grouped by what would be needed to close them — all are niche config, custom-theme edge cases, or documented approximations:
 
-- **Config plumbing** (defaults already match upstream): pie donutHole/legendPosition/highlightSlice · gitGraph parallelCommits/showBranches toggles · sequence mirrorActors/bottomMarginAdj · treemap custom config block · xychart `%%{init}%%` JSON data-labels · requirement/kanban per-node style/class overrides.
+- **Config plumbing** (defaults already match upstream): pie highlightSlice · sequence bottomMarginAdj · treemap custom config block · xychart `%%{init}%%` JSON data-labels · requirement/kanban per-node style/class overrides. Common layout config is now wired for sequence, flowchart, state, class, gantt, pie, and gitGraph.
 - **Shared-IR primitives** (disproportionate for the payoff): C4 raster person avatar (async image decode in sync painter) → vector rendition used · railroad true ArcTo quarter-circles → cubic-bezier approximation.
 - **Layout subsystems**: architecture force-directed fcose → deterministic grid+align approximation · mindmap cose-bilkent → deterministic radial (intentional) · classDiagram note adjacency needs zero-length-edge support in vendored dagre.
 - **Custom-theme color sources without a theme variable upstream**: gantt task/section/crit palette, xychart handled via new field, C4 per-kind colors (config.schema constants) — default renders are exact.

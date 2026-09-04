@@ -14,6 +14,8 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../icons/icon_registry.dart';
 import '../../ir/scene.dart';
@@ -22,6 +24,7 @@ import '../../math/tex_math.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
+
 import 'package:elk/elk.dart' as elk;
 
 import '../../vendor/dagre/dart_dagre.dart' as dagre;
@@ -31,16 +34,11 @@ import 'layout_engines.dart';
 import 'markdown_label.dart';
 
 /// Upstream flowchart defaults (defaultConfig.ts / flowchart schema).
-const double _nodePadding = 15;
-
 /// Icon glyph square + gap to the label below it, for `@{ icon: }` nodes.
 const double _iconSize = 36;
 const double _iconGap = 4;
 const double _diagramPadding = 8;
 const double _clusterPadding = 8;
-const double _wrappingWidth = 200;
-const double _nodeSpacing = 50;
-const double _rankSpacing = 50;
 const double _doubleCircleGap = 5;
 const double _subroutineFrame = 8;
 
@@ -53,7 +51,52 @@ const double _labelPaintTolerance = 16;
 /// A preferred identifier/word boundary may widen the label this far beyond
 /// [_wrappingWidth]. This avoids hard-breaking a complete component merely to
 /// enforce the soft target (notably with Flutter test's wide Ahem font).
-const double _preferredWrapWidth = _wrappingWidth * 1.5;
+/// Layout values resolved from `config.flowchart`.
+class FlowchartConfig {
+  const FlowchartConfig({
+    double? nodeSpacing,
+    double? rankSpacing,
+    this.curve = 'basis',
+    this.padding = 15,
+    this.wrappingWidth = 200,
+  })  : nodeSpacing = nodeSpacing ?? 50,
+        rankSpacing = rankSpacing ?? 50,
+        _nodeSpacingOverride = nodeSpacing,
+        _rankSpacingOverride = rankSpacing;
+
+  final double nodeSpacing;
+  final double rankSpacing;
+  final String curve;
+  final double padding;
+  final double wrappingWidth;
+  final double? _nodeSpacingOverride;
+  final double? _rankSpacingOverride;
+
+  factory FlowchartConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'flowchart');
+    return FlowchartConfig(
+      nodeSpacing: nonNegativeDoubleOrNull(values, 'nodeSpacing'),
+      rankSpacing: nonNegativeDoubleOrNull(values, 'rankSpacing'),
+      curve: enumValue(values, 'curve', const {
+        'basis',
+        'bumpX',
+        'bumpY',
+        'cardinal',
+        'catmullRom',
+        'linear',
+        'monotoneX',
+        'monotoneY',
+        'natural',
+        'step',
+        'stepAfter',
+        'stepBefore',
+        'rounded',
+      }, 'basis'),
+      padding: nonNegativeDouble(values, 'padding', 15),
+      wrappingWidth: positiveDouble(values, 'wrappingWidth', 200),
+    );
+  }
+}
 
 /// Text and dimensions after resolving portable flowchart label breaks.
 ///
@@ -71,10 +114,11 @@ _WrappedLabel _wrapLabel(
   String text,
   TextStyleSpec style,
   TextMeasurer measurer,
+  double wrappingWidth,
 ) {
   final lines = <String>[];
   for (final hardLine in text.split('\n')) {
-    lines.addAll(_wrapLabelLine(hardLine, style, measurer));
+    lines.addAll(_wrapLabelLine(hardLine, style, measurer, wrappingWidth));
   }
   final resolved = lines.join('\n');
   return _WrappedLabel(resolved, measurer.measure(resolved, style));
@@ -84,13 +128,16 @@ List<String> _wrapLabelLine(
   String line,
   TextStyleSpec style,
   TextMeasurer measurer,
+  double wrappingWidth,
 ) {
-  if (measurer.measure(line, style).width <= _wrappingWidth) return [line];
+  if (measurer.measure(line, style).width <= wrappingWidth) return [line];
+
+  final preferredWrapWidth = wrappingWidth * 1.5;
 
   var remaining = line.runes.map(String.fromCharCode).toList();
   final result = <String>[];
   while (remaining.isNotEmpty) {
-    if (measurer.measure(remaining.join(), style).width <= _wrappingWidth) {
+    if (measurer.measure(remaining.join(), style).width <= wrappingWidth) {
       result.add(remaining.join());
       break;
     }
@@ -98,7 +145,7 @@ List<String> _wrapLabelLine(
     var fitting = 0;
     for (var i = 1; i <= remaining.length; i++) {
       if (measurer.measure(remaining.take(i).join(), style).width >
-          _wrappingWidth) {
+          wrappingWidth) {
         break;
       }
       fitting = i;
@@ -115,13 +162,13 @@ List<String> _wrapLabelLine(
     final preferredWidth = split == 0
         ? 0.0
         : measurer.measure(remaining.take(split).join(), style).width;
-    if (split == 0 || preferredWidth < _wrappingWidth * 0.6) {
+    if (split == 0 || preferredWidth < wrappingWidth * 0.6) {
       // The only strict boundary may be so early that it creates an avoidable
       // extra line (for example `br_`). Prefer the first nearby later boundary
       // and let the node widen within the documented limit.
       for (var i = fitting; i < remaining.length; i++) {
         final candidate = remaining.take(i + 1).join();
-        if (measurer.measure(candidate, style).width > _preferredWrapWidth) {
+        if (measurer.measure(candidate, style).width > preferredWrapWidth) {
           break;
         }
         if (_preferredLabelBreak(remaining[i])) {
@@ -183,6 +230,7 @@ RenderScene layoutFlowchart(
   required MermaidTheme theme,
   String engine = 'dagre',
   elk.ElkLayoutOptions? elkOptions,
+  FlowchartConfig config = const FlowchartConfig(),
 }) {
   ensureBuiltinIconPacks();
   final baseStyle = TextStyleSpec(
@@ -195,6 +243,7 @@ RenderScene layoutFlowchart(
     theme,
     baseStyle,
     engine,
+    config: config,
     elkOptions: elkOptions ?? const elk.ElkLayoutOptions(),
     originalLinkIndices: List<int>.generate(graph.edges.length, (i) => i),
   );
@@ -208,7 +257,12 @@ RenderScene layoutFlowchart(
     final titleStyle = baseStyle.copyWith(fontSize: 18, fontWeight: 400);
     // Resolve soft wraps here: the measured size assumes a wrapped block, and
     // the backends only break on explicit `\n`.
-    final wrappedTitle = _wrapLabel(title, titleStyle, measurer);
+    final wrappedTitle = _wrapLabel(
+      title,
+      titleStyle,
+      measurer,
+      config.wrappingWidth,
+    );
     final titleSize = wrappedTitle.size;
     final titleNode = SceneText(
       text: wrappedTitle.text,
@@ -281,6 +335,7 @@ _Fragment _layoutGraph(
   MermaidTheme theme,
   TextStyleSpec baseStyle,
   String engine, {
+  required FlowchartConfig config,
   required elk.ElkLayoutOptions elkOptions,
   required List<int> originalLinkIndices,
 }) {
@@ -377,12 +432,18 @@ _Fragment _layoutGraph(
       // diagram lays its nested clusters out with elk too (tidy-tree, which
       // doesn't model clusters, stays on dagre for the fragment).
       engine == 'elk' ? 'elk' : 'dagre',
+      config: config,
       elkOptions: elkOptions,
       originalLinkIndices: subLinkIndices,
     );
     final wrappedTitle = sgs[root].title.isEmpty
         ? const _WrappedLabel('', Size.zero)
-        : _wrapLabel(sgs[root].title, baseStyle, measurer);
+        : _wrapLabel(
+            sgs[root].title,
+            baseStyle,
+            measurer,
+            config.wrappingWidth,
+          );
     final titleSize = wrappedTitle.size;
     final cluster = _IsolatedCluster(
       subgraph: sgs[root],
@@ -428,7 +489,11 @@ _Fragment _layoutGraph(
         style: style,
         labelSize: richLabel.size,
         richLabel: richLabel,
-        shape: _Shape.forNode(node.shape, richLabel.size),
+        shape: _Shape.forNode(
+          node.shape,
+          richLabel.size,
+          padding: config.padding,
+        ),
       );
       continue;
     }
@@ -440,11 +505,16 @@ _Fragment _layoutGraph(
         style: style,
         labelSize: ml.size,
         math: ml,
-        shape: _Shape.forNode(node.shape, ml.size),
+        shape: _Shape.forNode(node.shape, ml.size, padding: config.padding),
       );
       continue;
     }
-    final wrappedLabel = _wrapLabel(node.label, baseStyle, measurer);
+    final wrappedLabel = _wrapLabel(
+      node.label,
+      baseStyle,
+      measurer,
+      config.wrappingWidth,
+    );
     final textSize = wrappedLabel.size;
     // An icon reserves a square area above the label; inflate the sizing box.
     final hasIcon = node.icon != null && lookupIcon(node.icon!) != null;
@@ -460,7 +530,7 @@ _Fragment _layoutGraph(
       labelSize: boxSize,
       textSize: hasIcon ? textSize : null,
       paintText: wrappedLabel.text,
-      shape: _Shape.forNode(node.shape, boxSize),
+      shape: _Shape.forNode(node.shape, boxSize, padding: config.padding),
     );
   }
   for (final cluster in isolatedClusters.values) {
@@ -571,7 +641,12 @@ _Fragment _layoutGraph(
         edgeMath[i] = ml;
         labelSize = ml.size;
       } else {
-        final wrapped = _wrapLabel(label, baseStyle, measurer);
+        final wrapped = _wrapLabel(
+          label,
+          baseStyle,
+          measurer,
+          config.wrappingWidth,
+        );
         edgeLabelText[i] = wrapped.text;
         labelSize = wrapped.size;
       }
@@ -612,10 +687,16 @@ _Fragment _layoutGraph(
         sgs[i].id: measurer.measure(sgs[i].title, clusterTitleStyleForElk),
   };
   if (useElk) {
+    final effectiveElkOptions = elkOptions.copyWith(
+      spacingNodeNode:
+          elkOptions.spacingNodeNode ?? config._nodeSpacingOverride,
+      spacingNodeNodeBetweenLayers:
+          elkOptions.spacingNodeNodeBetweenLayers ?? config._rankSpacingOverride,
+    );
     elkResult = layoutWithElk(
       g,
       direction: graph.direction,
-      options: elkOptions,
+      options: effectiveElkOptions,
       clusterLabels: clusterLabels,
     );
     for (final p in placed.values) {
@@ -627,8 +708,8 @@ _Fragment _layoutGraph(
       g,
       dagre.DagreConfig(
         rankDir: _rankDir(graph.direction),
-        nodeSep: _nodeSpacing,
-        rankSep: _rankSpacing,
+        nodeSep: config.nodeSpacing,
+        rankSep: config.rankSpacing,
       ),
     );
     for (final p in placed.values) {
@@ -667,8 +748,8 @@ _Fragment _layoutGraph(
       sizes,
       tEdges,
       flow: flow,
-      siblingGap: _nodeSpacing,
-      levelGap: _rankSpacing,
+      siblingGap: config.nodeSpacing,
+      levelGap: config.rankSpacing,
     );
     centers.forEach((id, c) => placed[id]?.center = c);
   }
@@ -1046,14 +1127,15 @@ _Fragment _layoutGraph(
     // through that bend starts by moving away from the target, then folds back
     // into a near-hairpin. Apply this after clipping so it measures progress
     // from the visible edge start, not Dagre's node-center route.
-    if (!useElk && (e.interpolate == null || e.interpolate == 'basis')) {
+    final interpolation = e.interpolate ?? config.curve;
+    if (!useElk && interpolation == 'basis') {
       points = _softenBasisStart(points);
     }
 
     final pathGeometry = PathGeometry(
       // ELK draws orthogonal edges with sharp corners (linear through the
       // Manhattan route); other engines use the edge's own interpolation.
-      _edgeCurve(points, useElk ? 'linear' : e.interpolate),
+      _edgeCurve(points, useElk ? 'linear' : interpolation),
     );
     children.add(
       SceneShape(
@@ -1653,8 +1735,12 @@ sealed class _Shape {
   Point labelCenter(Point c) => c;
 
   /// Sizing math ported from upstream shape constructors.
-  factory _Shape.forNode(FlowNodeShape shape, Size label) {
-    const p = _nodePadding;
+  factory _Shape.forNode(
+    FlowNodeShape shape,
+    Size label, {
+    required double padding,
+  }) {
+    final p = padding;
     final lw = label.width;
     final lh = label.height;
     switch (shape) {

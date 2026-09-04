@@ -120,8 +120,9 @@ class _SequenceParser {
       return;
     }
 
-    m = RegExp(r'^[Nn]ote\s+(right of|left of|over)\s+([^:]+):\s*(.*)$')
-        .firstMatch(line);
+    m = RegExp(
+      r'^[Nn]ote\s+(right of|left of|over)\s+([^:]+):\s*(.*)$',
+    ).firstMatch(line);
     if (m != null) {
       final placement = switch (m.group(1)!) {
         'right of' => NotePlacement.rightOf,
@@ -143,12 +144,14 @@ class _SequenceParser {
         target2: targets.length > 1 ? targets[1] : null,
         text: content.text,
         wrap: content.wrap,
+        wrapSpecified: content.wrapSpecified,
       ));
       return;
     }
 
-    m = RegExp(r'^(loop|opt|alt|par|critical|break|rect)\b\s*(.*)$')
-        .firstMatch(line);
+    m = RegExp(
+      r'^(loop|opt|alt|par|critical|break|rect)\b\s*(.*)$',
+    ).firstMatch(line);
     if (m != null) {
       final kind = switch (m.group(1)!) {
         'loop' => SeqBlockKind.loop,
@@ -283,6 +286,7 @@ class _SequenceParser {
         arrow: arrow,
         text: content.text,
         wrap: content.wrap,
+        wrapSpecified: content.wrapSpecified,
       ));
       // `A->>+B` activates the receiver, `B-->>-A` deactivates the sender
       // (upstream signal rules).
@@ -344,11 +348,17 @@ class _SequenceParser {
         .trim();
   }
 
-  ({String text, bool wrap}) _parseWrappedText(String source) {
+  ({String text, bool wrap, bool wrapSpecified}) _parseWrappedText(
+    String source,
+  ) {
     var text = source.trim();
     final directive = RegExp(r'^:?(wrap|nowrap):').firstMatch(text);
     final wrap = directive?.group(1) == 'wrap';
     if (directive != null) text = text.substring(directive.end).trim();
-    return (text: _normalizeText(text), wrap: wrap);
+    return (
+      text: _normalizeText(text),
+      wrap: wrap,
+      wrapSpecified: directive != null,
+    );
   }
 }

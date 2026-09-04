@@ -4,6 +4,8 @@ library;
 
 import 'dart:math' as math;
 
+import '../../config_values.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -23,9 +25,6 @@ const double _outerStrokeWidth = 2;
 const double _legendRectSize = 18;
 const double _legendSpacing = 4;
 
-// Upstream default textPosition (pieRenderer: labelArc inner=outer=radius*0.75).
-const double _textPosition = 0.75;
-
 // Upstream pieOpacity (theme-default).
 const double _pieOpacity = 0.7;
 
@@ -34,10 +33,44 @@ const double _sectionTextSize = 17;
 const double _legendTextSize = 17;
 const double _titleTextSize = 25;
 
+/// Typed layout values from `config.pie`.
+class PieConfig {
+  const PieConfig({
+    this.textPosition = 0.75,
+    this.donutHole = 0,
+    this.legendPosition = 'right',
+  });
+
+  /// Radial label position, from the center (`0`) to the outer edge (`1`).
+  final double textPosition;
+
+  /// Inner radius as a fraction of the pie radius (`0` to `0.9`).
+  final double donutHole;
+
+  /// One of `top`, `bottom`, `left`, `right`, or `center`.
+  final String legendPosition;
+
+  factory PieConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'pie');
+    return PieConfig(
+      textPosition: clampedDouble(values, 'textPosition', 0.75, min: 0, max: 1),
+      donutHole: clampedDouble(values, 'donutHole', 0, min: 0, max: 0.9),
+      legendPosition: enumValue(values, 'legendPosition', const {
+        'top',
+        'bottom',
+        'left',
+        'right',
+        'center',
+      }, 'right'),
+    );
+  }
+}
+
 RenderScene layoutPieChart(
   PieChart chart, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  PieConfig config = const PieConfig(),
 }) {
   // Upstream pieStrokeColor / pieOuterStrokeColor (theme-default: black).
   final strokeColor = theme.pieStrokeColor;
@@ -56,6 +89,25 @@ RenderScene layoutPieChart(
   final nodes = <SceneNode>[];
   final center = const Point(_radius + 20, _radius + 20);
   final total = chart.slices.fold(0.0, (a, s) => a + s.value);
+  final legendStyleSizes = <Size>[];
+  for (final slice in chart.slices) {
+    final text = chart.showData
+        ? '${slice.label} [${_fmt(slice.value)}]'
+        : slice.label;
+    legendStyleSizes.add(measurer.measure(text, legendStyle));
+  }
+  final longestLegendWidth = legendStyleSizes.fold(
+    0.0,
+    (width, size) => math.max(width, size.width),
+  );
+  final legendHeight = _legendRectSize + _legendSpacing;
+  final totalLegendHeight = legendHeight * chart.slices.length;
+  final Point pieOffset = switch (config.legendPosition) {
+    'top' => Point(0, totalLegendHeight + legendHeight),
+    'left' => Point(longestLegendWidth + _legendRectSize + _legendSpacing, 0),
+    _ => const Point(0, 0),
+  };
+  final pieCenter = Point(center.x + pieOffset.x, center.y + pieOffset.y);
 
   // Mirror upstream createPieArcs / draw filtering:
   //  - createPieArcs drops sections where (value/sum)*100 < 1.
@@ -73,10 +125,12 @@ RenderScene layoutPieChart(
   }
 
   // Outer ring (pieOuterCircle): radius + outerStrokeWidth/2, black 2px, no fill.
-  nodes.add(SceneShape(
-    geometry: CircleGeometry(center, _radius + _outerStrokeWidth / 2),
-    stroke: Stroke(color: outerStrokeColor, width: _outerStrokeWidth),
-  ));
+  nodes.add(
+    SceneShape(
+      geometry: CircleGeometry(pieCenter, _radius + _outerStrokeWidth / 2),
+      stroke: Stroke(color: outerStrokeColor, width: _outerStrokeWidth),
+    ),
+  );
 
   // Slices, clockwise from 12 o'clock (upstream d3.pie default, sort=null).
   var angle = -math.pi / 2;
@@ -87,45 +141,68 @@ RenderScene layoutPieChart(
     final end = angle + sweep;
     final pct = '${(slice.value / total * 100).round()}%';
     final size = measurer.measure(pct, sectionStyle);
-    final pos = _polar(center, _radius * _textPosition, angle + sweep / 2);
-    nodes.add(SceneGroup(
-      id: 'slice_$i',
-      semanticLabel: slice.label,
-      children: [
-        SceneShape(
-          geometry: PathGeometry([
-            MoveTo(center),
-            LineTo(_polar(center, _radius, angle)),
-            ..._arc(center, _radius, angle, end),
+    final pos = _polar(
+      pieCenter,
+      _radius * config.textPosition,
+      angle + sweep / 2,
+    );
+    final geometry = config.donutHole == 0
+        ? PathGeometry([
+            MoveTo(pieCenter),
+            LineTo(_polar(pieCenter, _radius, angle)),
+            ..._arc(pieCenter, _radius, angle, end),
             const ClosePath(),
-          ]),
-          fill: Fill(color.withOpacity(_pieOpacity)),
-          stroke: Stroke(color: strokeColor, width: 2),
-        ),
-        SceneText(
-          text: pct,
-          bounds: Rect.fromCenter(pos, size.width, size.height),
-          style: sectionStyle,
-          color: sectionTextColor,
-        ),
-      ],
-    ));
+          ])
+        : PathGeometry([
+            MoveTo(_polar(pieCenter, _radius, angle)),
+            ..._arc(pieCenter, _radius, angle, end),
+            LineTo(_polar(pieCenter, _radius * config.donutHole, end)),
+            ..._arc(pieCenter, _radius * config.donutHole, end, angle),
+            const ClosePath(),
+          ]);
+    nodes.add(
+      SceneGroup(
+        id: 'slice_$i',
+        semanticLabel: slice.label,
+        children: [
+          SceneShape(
+            geometry: geometry,
+            fill: Fill(color.withOpacity(_pieOpacity)),
+            stroke: Stroke(color: strokeColor, width: 2),
+          ),
+          SceneText(
+            text: pct,
+            bounds: Rect.fromCenter(pos, size.width, size.height),
+            style: sectionStyle,
+            color: sectionTextColor,
+          ),
+        ],
+      ),
+    );
     angle = end;
   }
 
-  // Legend, to the right of the pie (upstream legendPosition 'right').
-  // Horizontal offset from center is 12 * LEGEND_RECT_SIZE; vertical is
-  // index*legendHeight − (legendHeight*n)/2, legendHeight = rect + spacing.
-  final legendHeight = _legendRectSize + _legendSpacing;
-  final legendX = center.x + 12 * _legendRectSize;
-  final legendOffset = legendHeight * chart.slices.length / 2;
+  // Legend placement mirrors upstream pieRenderer. `top` and `left` also
+  // translate the pie itself to make space; the title remains at its original
+  // center like upstream.
+  final legendOffset = totalLegendHeight / 2;
+  final legendX = switch (config.legendPosition) {
+    'center' || 'top' || 'bottom' =>
+      center.x - longestLegendWidth / 2 - (_legendRectSize + _legendSpacing),
+    'left' => center.x - _radius - (_legendRectSize + _legendSpacing),
+    _ => center.x + 12 * _legendRectSize,
+  };
   for (var i = 0; i < chart.slices.length; i++) {
     final slice = chart.slices[i];
     final text = chart.showData
         ? '${slice.label} [${_fmt(slice.value)}]'
         : slice.label;
-    final size = measurer.measure(text, legendStyle);
-    final legendY = center.y + i * legendHeight - legendOffset;
+    final size = legendStyleSizes[i];
+    final legendY = switch (config.legendPosition) {
+      'top' => center.y + i * legendHeight - _radius,
+      'bottom' => center.y + i * legendHeight + _radius + legendHeight,
+      _ => center.y + i * legendHeight - legendOffset,
+    };
     final color = palette[i % palette.length];
     nodes.add(SceneGroup(id: 'legend_$i', role: SceneGroupRole.internal, children: [
       SceneShape(
@@ -166,6 +243,22 @@ RenderScene layoutPieChart(
       color: titleTextColor,
     ));
     top = titleY - size.height / 2;
+  }
+
+  // Keep the established default bounds calculation unchanged. Other legend
+  // positions use actual scene bounds because `top` and `left` move the pie.
+  if (config.legendPosition != 'right') {
+    final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 120, 80);
+    final dx = _diagramPadding - bounds.left;
+    final dy = _diagramPadding - bounds.top;
+    return RenderScene(
+      size: Size(
+        bounds.width + 2 * _diagramPadding,
+        bounds.height + 2 * _diagramPadding,
+      ),
+      background: theme.background,
+      nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
+    );
   }
 
   // Bounding box: pie + ring, legend, and title.
@@ -214,8 +307,12 @@ Point _polar(Point c, double r, double a) =>
 List<PathCommand> _arc(Point c, double r, double a0, double a1) {
   final cmds = <PathCommand>[];
   var start = a0;
-  while (start < a1 - 1e-9) {
-    final end = math.min(start + math.pi / 2, a1);
+  final direction = a1 >= a0 ? 1.0 : -1.0;
+  bool hasMore() => direction > 0 ? start < a1 - 1e-9 : start > a1 + 1e-9;
+  while (hasMore()) {
+    final end = direction > 0
+        ? math.min(start + math.pi / 2, a1)
+        : math.max(start - math.pi / 2, a1);
     final sweep = end - start;
     final k = 4 / 3 * math.tan(sweep / 4) * r;
     final p0 = _polar(c, r, start);

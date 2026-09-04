@@ -44,6 +44,21 @@ double nonNegativeDouble(
   return fallback;
 }
 
+/// Reads [key] as a finite, non-negative double, or returns null when the
+/// value is absent or invalid. Use this when a caller must distinguish an
+/// explicit diagram override from an inherited layout-engine default.
+double? nonNegativeDoubleOrNull(
+  Map<String, Object?> values,
+  String key,
+) {
+  final value = values[key];
+  if (value is num) {
+    final resolved = value.toDouble();
+    if (resolved.isFinite && resolved >= 0) return resolved;
+  }
+  return null;
+}
+
 /// Reads [key] as a finite double inside `[min, max]` (inclusive), else
 /// [fallback].
 double clampedDouble(
@@ -68,6 +83,12 @@ double clampedDouble(
 bool boolValue(Map<String, Object?> values, String key, bool fallback) {
   final value = values[key];
   return value is bool ? value : fallback;
+}
+
+/// Reads [key] as a bool, or returns null when it is absent or invalid.
+bool? boolValueOrNull(Map<String, Object?> values, String key) {
+  final value = values[key];
+  return value is bool ? value : null;
 }
 
 /// Reads [key] as a string, else [fallback].

@@ -5,6 +5,8 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -13,26 +15,84 @@ import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 import 'sequence_model.dart';
 
-/// Upstream sequence config defaults (config.schema.yaml).
-const double _diagramMarginX = 50;
-const double _diagramMarginY = 10;
-const double _actorMargin = 50;
-const double _actorMinWidth = 150;
-const double _actorHeight = 65;
-const double _boxMargin = 10;
-const double _boxTextMargin = 5;
-const double _noteMargin = 10;
-const double _messageMargin = 35;
-const double _activationWidth = 10;
 const double _blockLabelHeight = 24;
-const double _wrapPadding = 10;
+
+/// Layout values resolved from `config.sequence`.
+class SequenceConfig {
+  const SequenceConfig({
+    this.activationWidth = 10,
+    this.diagramMarginX = 50,
+    this.diagramMarginY = 10,
+    this.actorMargin = 50,
+    this.actorWidth = 150,
+    this.actorHeight = 65,
+    this.boxMargin = 10,
+    this.boxTextMargin = 5,
+    this.noteMargin = 10,
+    this.messageMargin = 35,
+    this.messageAlign = 'center',
+    this.noteAlign = 'center',
+    this.mirrorActors = true,
+    this.showSequenceNumbers = false,
+    this.wrap = false,
+    this.wrapPadding = 10,
+  });
+
+  final double activationWidth;
+  final double diagramMarginX;
+  final double diagramMarginY;
+  final double actorMargin;
+  final double actorWidth;
+  final double actorHeight;
+  final double boxMargin;
+  final double boxTextMargin;
+  final double noteMargin;
+  final double messageMargin;
+  final String messageAlign;
+  final String noteAlign;
+  final bool mirrorActors;
+  final bool showSequenceNumbers;
+  final bool wrap;
+  final double wrapPadding;
+
+  factory SequenceConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'sequence');
+    return SequenceConfig(
+      activationWidth: nonNegativeDouble(values, 'activationWidth', 10),
+      diagramMarginX: nonNegativeDouble(values, 'diagramMarginX', 50),
+      diagramMarginY: nonNegativeDouble(values, 'diagramMarginY', 10),
+      actorMargin: nonNegativeDouble(values, 'actorMargin', 50),
+      actorWidth: positiveDouble(values, 'width', 150),
+      actorHeight: positiveDouble(values, 'height', 65),
+      boxMargin: nonNegativeDouble(values, 'boxMargin', 10),
+      boxTextMargin: nonNegativeDouble(values, 'boxTextMargin', 5),
+      noteMargin: nonNegativeDouble(values, 'noteMargin', 10),
+      messageMargin: nonNegativeDouble(values, 'messageMargin', 35),
+      messageAlign: enumValue(values, 'messageAlign', const {
+        'left',
+        'center',
+        'right',
+      }, 'center'),
+      noteAlign: enumValue(values, 'noteAlign', const {
+        'left',
+        'center',
+        'right',
+      }, 'center'),
+      mirrorActors: boolValue(values, 'mirrorActors', true),
+      showSequenceNumbers: boolValue(values, 'showSequenceNumbers', false),
+      wrap: boolValue(values, 'wrap', false),
+      wrapPadding: nonNegativeDouble(values, 'wrapPadding', 10),
+    );
+  }
+}
 
 RenderScene layoutSequence(
   SequenceDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  SequenceConfig config = const SequenceConfig(),
 }) {
-  return _SequenceLayout(diagram, measurer, theme).run();
+  return _SequenceLayout(diagram, measurer, theme, config).run();
 }
 
 class _Column {
@@ -69,7 +129,7 @@ class _ResolvedText {
 }
 
 class _SequenceLayout {
-  _SequenceLayout(this.diagram, this.measurer, this.theme)
+  _SequenceLayout(this.diagram, this.measurer, this.theme, this.config)
     : baseStyle = TextStyleSpec(
         fontFamily: theme.fontFamily,
         fontSize: theme.fontSize,
@@ -78,7 +138,20 @@ class _SequenceLayout {
   final SequenceDiagram diagram;
   final TextMeasurer measurer;
   final MermaidTheme theme;
+  final SequenceConfig config;
   final TextStyleSpec baseStyle;
+
+  double get _diagramMarginX => config.diagramMarginX;
+  double get _diagramMarginY => config.diagramMarginY;
+  double get _actorMargin => config.actorMargin;
+  double get _actorMinWidth => config.actorWidth;
+  double get _actorHeight => config.actorHeight;
+  double get _boxMargin => config.boxMargin;
+  double get _boxTextMargin => config.boxTextMargin;
+  double get _noteMargin => config.noteMargin;
+  double get _messageMargin => config.messageMargin;
+  double get _activationWidth => config.activationWidth;
+  double get _wrapPadding => config.wrapPadding;
 
   final columns = <String, _Column>{};
   final order = <String>[];
@@ -108,7 +181,7 @@ class _SequenceLayout {
     // a destroyed participant's lifeline ends.
     final createTop = <String, double>{};
     final destroyY = <String, double>{};
-    var autonumber = false;
+    var sourceAutonumber = false;
     var autoValue = 0;
     var autoStep = 1;
 
@@ -121,15 +194,16 @@ class _SequenceLayout {
     for (final event in diagram.events) {
       switch (event) {
         case SeqAutonumber():
-          autonumber = event.on;
+          sourceAutonumber = event.on;
           if (event.on) {
             autoStep = event.step ?? 1;
             autoValue = event.start != null ? event.start! - autoStep : 0;
           }
 
         case SeqMessage():
-          autoValue += autonumber ? autoStep : 0;
-          final number = autonumber ? autoValue : null;
+          final showNumber = sourceAutonumber || config.showSequenceNumbers;
+          autoValue += showNumber ? autoStep : 0;
+          final number = showNumber ? autoValue : null;
           if (event.from == event.to) {
             _selfMessage(event, number, includeInFrames);
           } else {
@@ -282,9 +356,9 @@ class _SequenceLayout {
       _actorBox(col, createTop[id] ?? 0);
       // mirrorActors: repeat at the bottom, unless the participant was
       // destroyed before the end.
-      if (destroyY[id] == null) {
+      if (destroyY[id] == null && config.mirrorActors) {
         _actorBox(col, bottomBoxTop, isBottom: true);
-      } else {
+      } else if (destroyY[id] != null) {
         // ✗ marker where the lifeline ends.
         final d = 6.0;
         final yy = destroyY[id]!;
@@ -377,9 +451,15 @@ class _SequenceLayout {
 
     for (final event in diagram.events) {
       switch (event) {
-        case SeqMessage(:final from, :final to, :final text, :final wrap):
+        case SeqMessage(
+          :final from,
+          :final to,
+          :final text,
+          :final wrap,
+          :final wrapSpecified,
+        ):
           if (text.isEmpty) break;
-          final resolved = wrap
+          final resolved = _wraps(wrap, wrapSpecified)
               ? _resolveWrappedText(text, _actorMinWidth - 2 * _wrapPadding)
               : _ResolvedText(text, measurer.measure(text, baseStyle));
           final w = resolved.size.width + 2 * _wrapPadding;
@@ -401,8 +481,9 @@ class _SequenceLayout {
           :final target2,
           :final text,
           :final wrap,
+          :final wrapSpecified,
         ):
-          final resolved = wrap
+          final resolved = _wraps(wrap, wrapSpecified)
               ? _resolveWrappedText(text, _actorMinWidth - 2 * _wrapPadding)
               : _ResolvedText(text, measurer.measure(text, baseStyle));
           final w = resolved.size.width + 2 * _wrapPadding;
@@ -544,7 +625,7 @@ class _SequenceLayout {
   ) {
     final fromCol = columns[msg.from]!;
     final toCol = columns[msg.to]!;
-    final text = msg.wrap && msg.text.isNotEmpty
+    final text = _wraps(msg.wrap, msg.wrapSpecified) && msg.text.isNotEmpty
         ? _resolveWrappedText(
             msg.text,
             math.max(
@@ -580,7 +661,12 @@ class _SequenceLayout {
         SceneText(
           text: text.text,
           bounds: Rect.fromLTWH(
-            (x1 + x2) / 2 - textSize.width / 2,
+            _alignedLeft(
+              math.min(x1, x2),
+              math.max(x1, x2),
+              textSize.width,
+              config.messageAlign,
+            ),
             y - textSize.height - 4,
             textSize.width,
             textSize.height,
@@ -628,7 +714,7 @@ class _SequenceLayout {
     void Function(double, double) include,
   ) {
     final col = columns[msg.from]!;
-    final text = msg.wrap && msg.text.isNotEmpty
+    final text = _wraps(msg.wrap, msg.wrapSpecified) && msg.text.isNotEmpty
         ? _resolveWrappedText(msg.text, _actorMinWidth - 2 * _wrapPadding)
         : _ResolvedText(
             msg.text,
@@ -753,12 +839,27 @@ class _SequenceLayout {
     ];
   }
 
+  double _alignedLeft(
+    double left,
+    double right,
+    double textWidth,
+    String alignment, {
+    double inset = 4,
+  }) => switch (alignment) {
+    'left' => left + inset,
+    'right' => right - inset - textWidth,
+    _ => (left + right - textWidth) / 2,
+  };
+
+  bool _wraps(bool wrap, bool specified) => specified ? wrap : config.wrap;
+
   void _note(SeqNote note, void Function(double, double) include) {
-    final text = note.wrap
+    final wraps = _wraps(note.wrap, note.wrapSpecified);
+    final text = wraps
         ? _resolveWrappedText(note.text, _actorMinWidth - 2 * _wrapPadding)
         : _ResolvedText(note.text, measurer.measure(note.text, baseStyle));
     final textSize = text.size;
-    final w = note.wrap ? _actorMinWidth : textSize.width + 2 * _noteMargin;
+    final w = wraps ? _actorMinWidth : textSize.width + 2 * _noteMargin;
     final h = textSize.height + 2 * _noteMargin;
     final col = columns[note.target]!;
     double left;
@@ -795,13 +896,24 @@ class _SequenceLayout {
           SceneText(
             text: text.text,
             bounds: Rect.fromLTWH(
-              left + (width - textSize.width) / 2,
+              _alignedLeft(
+                left,
+                left + width,
+                textSize.width,
+                config.noteAlign,
+                inset: _noteMargin,
+              ),
               y + _noteMargin,
               textSize.width,
               textSize.height,
             ),
             style: baseStyle,
             color: theme.noteTextColor,
+            align: switch (config.noteAlign) {
+              'left' => TextAlignH.left,
+              'right' => TextAlignH.right,
+              _ => TextAlignH.center,
+            },
           ),
         ],
       ),

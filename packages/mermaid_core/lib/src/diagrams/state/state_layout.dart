@@ -8,6 +8,8 @@ import 'dart:math' as math;
 import 'package:elk/elk.dart' as elk;
 
 import '../../color.dart';
+import '../../config_values.dart';
+import '../../directives.dart';
 import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -20,11 +22,35 @@ import '../flowchart/elk_adapter.dart';
 import '../flowchart/flow_model.dart' show FlowDirection;
 import 'state_model.dart';
 
-const double _padding = 8;
 const double _diagramPadding = 8;
-const double _nodeSpacing = 50;
-const double _rankSpacing = 50;
 const double _clusterPadding = 10;
+
+/// Layout values resolved from `config.state`.
+class StateConfig {
+  const StateConfig({
+    this.padding = 8,
+    double? nodeSpacing,
+    double? rankSpacing,
+  })  : nodeSpacing = nodeSpacing ?? 50,
+        rankSpacing = rankSpacing ?? 50,
+        _nodeSpacingOverride = nodeSpacing,
+        _rankSpacingOverride = rankSpacing;
+
+  final double padding;
+  final double nodeSpacing;
+  final double rankSpacing;
+  final double? _nodeSpacingOverride;
+  final double? _rankSpacingOverride;
+
+  factory StateConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'state');
+    return StateConfig(
+      padding: nonNegativeDouble(values, 'padding', 8),
+      nodeSpacing: nonNegativeDoubleOrNull(values, 'nodeSpacing'),
+      rankSpacing: nonNegativeDoubleOrNull(values, 'rankSpacing'),
+    );
+  }
+}
 
 RenderScene layoutStateDiagram(
   StateDiagram diagram, {
@@ -32,8 +58,9 @@ RenderScene layoutStateDiagram(
   required MermaidTheme theme,
   String engine = 'auto',
   elk.ElkLayoutOptions? elkOptions,
+  StateConfig config = const StateConfig(),
 }) {
-  return _StateLayout(diagram, measurer, theme, engine,
+  return _StateLayout(diagram, measurer, theme, engine, config,
           elkOptions ?? const elk.ElkLayoutOptions())
       .run();
 }
@@ -51,7 +78,7 @@ class _Placed {
 }
 
 class _StateLayout {
-  _StateLayout(this.diagram, this.measurer, this.theme, this.engine,
+  _StateLayout(this.diagram, this.measurer, this.theme, this.engine, this.config,
       this.elkOptions)
       : baseStyle = TextStyleSpec(
           fontFamily: theme.fontFamily,
@@ -62,8 +89,13 @@ class _StateLayout {
   final TextMeasurer measurer;
   final MermaidTheme theme;
   final String engine;
+  final StateConfig config;
   final elk.ElkLayoutOptions elkOptions;
   final TextStyleSpec baseStyle;
+
+  double get _padding => config.padding;
+  double get _nodeSpacing => config.nodeSpacing;
+  double get _rankSpacing => config.rankSpacing;
 
   bool get hasNestedComposite => diagram.states.values.any((state) {
         if (state.kind != StateKind.composite || state.parent == null) {
@@ -179,8 +211,14 @@ class _StateLayout {
     dagre.DagreResult? result;
     ElkLayoutResult? elkResult;
     if (useElk) {
+      final effectiveElkOptions = elkOptions.copyWith(
+        spacingNodeNode:
+            elkOptions.spacingNodeNode ?? config._nodeSpacingOverride,
+        spacingNodeNodeBetweenLayers: elkOptions.spacingNodeNodeBetweenLayers ??
+            config._rankSpacingOverride,
+      );
       elkResult = layoutWithElk(g,
-          direction: diagram.direction, options: elkOptions);
+          direction: diagram.direction, options: effectiveElkOptions);
       for (final p in [...placed.values, ...noteBoxes.values]) {
         final c = elkResult.center(p.node.id);
         if (c != null) p.center = c;

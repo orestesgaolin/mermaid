@@ -101,6 +101,7 @@ class SeqMessage extends SeqEvent {
     required this.arrow,
     this.text = '',
     this.wrap = false,
+    this.wrapSpecified = false,
   });
 
   final String from;
@@ -110,6 +111,9 @@ class SeqMessage extends SeqEvent {
 
   /// Whether a leading `wrap:` directive requested word wrapping.
   final bool wrap;
+
+  /// Whether the source explicitly used `wrap:` or `nowrap:`.
+  final bool wrapSpecified;
 }
 
 /// Activation bar start/end on a participant's lifeline.
@@ -142,6 +146,7 @@ class SeqNote extends SeqEvent {
     this.target2,
     required this.text,
     this.wrap = false,
+    this.wrapSpecified = false,
   });
 
   final NotePlacement placement;
@@ -153,6 +158,9 @@ class SeqNote extends SeqEvent {
 
   /// Whether a leading `wrap:` directive requested word wrapping.
   final bool wrap;
+
+  /// Whether the source explicitly used `wrap:` or `nowrap:`.
+  final bool wrapSpecified;
 }
 
 enum SeqBlockKind { loop, alt, opt, par, critical, breakBlock, rect }

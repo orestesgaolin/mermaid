@@ -6,6 +6,8 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
+import '../../directives.dart';
 import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -17,12 +19,32 @@ import '../../vendor/dagre/dart_dagre.dart' as dagre;
 import '../flowchart/flow_model.dart' show FlowDirection;
 import 'class_model.dart';
 
-const double _padding = 12;
 const double _memberGap = 4;
 const double _diagramPadding = 8;
-const double _nodeSpacing = 50;
-const double _rankSpacing = 50;
 const double _markerSize = 14;
+
+/// Layout values resolved from `config.class`.
+class ClassConfig {
+  const ClassConfig({
+    this.padding = 12,
+    this.nodeSpacing = 50,
+    this.rankSpacing = 50,
+  });
+
+  final double padding;
+  final double nodeSpacing;
+  final double rankSpacing;
+
+  factory ClassConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'class');
+    return ClassConfig(
+      // The unified class-box renderer uses 12 px by default in this port.
+      padding: nonNegativeDouble(values, 'padding', 12),
+      nodeSpacing: nonNegativeDouble(values, 'nodeSpacing', 50),
+      rankSpacing: nonNegativeDouble(values, 'rankSpacing', 50),
+    );
+  }
+}
 
 /// Upstream `styles.js` forces `g.classGroup text { font-size: 10px }`,
 /// overriding the theme font size for every class box, member and title.
@@ -35,8 +57,9 @@ RenderScene layoutClassDiagram(
   ClassDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  ClassConfig config = const ClassConfig(),
 }) {
-  return _ClassLayout(diagram, measurer, theme).run();
+  return _ClassLayout(diagram, measurer, theme, config).run();
 }
 
 class _Box {
@@ -67,7 +90,7 @@ class _BoxLine {
 }
 
 class _ClassLayout {
-  _ClassLayout(this.diagram, this.measurer, this.theme)
+  _ClassLayout(this.diagram, this.measurer, this.theme, this.config)
       : baseStyle = TextStyleSpec(
           fontFamily: theme.fontFamily,
           fontSize: _classFontSize,
@@ -76,7 +99,12 @@ class _ClassLayout {
   final ClassDiagram diagram;
   final TextMeasurer measurer;
   final MermaidTheme theme;
+  final ClassConfig config;
   final TextStyleSpec baseStyle;
+
+  double get _padding => config.padding;
+  double get _nodeSpacing => config.nodeSpacing;
+  double get _rankSpacing => config.rankSpacing;
 
   final boxes = <String, _Box>{};
 

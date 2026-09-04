@@ -77,19 +77,25 @@ class Mermaid {
             measurer: measurer,
             theme: theme,
             engine: resolveLayout(source),
-            elkOptions: resolveElkConfig(source));
+            elkOptions: resolveElkConfig(source),
+            config: FlowchartConfig.fromSource(source));
       case DiagramType.sequence:
         return layoutSequence(parseSequence(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer,
+            theme: theme,
+            config: SequenceConfig.fromSource(source));
       case DiagramType.classDiagram:
         return layoutClassDiagram(parseClassDiagram(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer,
+            theme: theme,
+            config: ClassConfig.fromSource(source));
       case DiagramType.stateDiagram:
         return layoutStateDiagram(parseStateDiagram(source),
             measurer: measurer,
             theme: theme,
             engine: resolveLayout(source, defaultLayout: 'auto'),
-            elkOptions: resolveElkConfig(source));
+            elkOptions: resolveElkConfig(source),
+            config: StateConfig.fromSource(source));
       case DiagramType.er:
         return layoutErDiagram(parseErDiagram(source),
             measurer: measurer,
@@ -97,10 +103,14 @@ class Mermaid {
             config: ErConfig.fromSource(source));
       case DiagramType.pie:
         return layoutPieChart(parsePieChart(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer,
+            theme: theme,
+            config: PieConfig.fromSource(source));
       case DiagramType.gantt:
         return layoutGanttChart(parseGanttChart(source),
-            measurer: measurer, theme: theme);
+            measurer: measurer,
+            theme: theme,
+            config: GanttConfig.fromSource(source));
       case DiagramType.quadrant:
         return layoutQuadrantChart(parseQuadrantChart(source),
             measurer: measurer,
@@ -125,8 +135,9 @@ class Mermaid {
         return layoutC4Diagram(parseC4Diagram(source),
             measurer: measurer, theme: theme);
       case DiagramType.gitGraph:
-        return layoutGitGraph(parseGitGraph(source),
-            measurer: measurer, theme: theme);
+        final config = GitGraphConfig.fromSource(source);
+        return layoutGitGraph(parseGitGraph(source, config: config),
+            measurer: measurer, theme: theme, config: config);
       case DiagramType.sankey:
         return layoutSankey(parseSankey(source),
             measurer: measurer,
