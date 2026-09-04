@@ -77,6 +77,15 @@ $ dart run bin/mermaid.dart diagram.mmd -o diagram.svg
 Release setup and the tag workflow are documented in
 [`RELEASING.md`](RELEASING.md).
 
+## Contributing
+
+The preferred way to propose a change is to open an issue with the Mermaid
+source, the mermaid.js reference render, and the current output, and let the
+maintainers implement it. Pull requests are welcome as well, whether the code
+is written by a person or generated with an AI tool, as long as the issue or
+pull request captures the context and evidence described in
+[`CONTRIBUTING.md`](CONTRIBUTING.md).
+
 ## License
 
 MIT. The project contains code derived from mermaid.js (MIT) and dart_dagre

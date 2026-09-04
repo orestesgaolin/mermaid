@@ -7,6 +7,25 @@
 See the [live comparison demo](https://roszkowski.dev/mermaid/) for
 side-by-side output from this implementation and mermaid.js.
 
+## Examples
+
+Every diagram below is painted natively by `MermaidDiagram` from the render
+scene that `mermaid_core` produces. The sources are in the repository's
+`apps/demo/test/screenshots_test.dart`.
+
+| | |
+| --- | --- |
+| ![Flowchart with decisions and labelled edges](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/flowchart.png) | ![Sequence diagram with activations, notes, and alt blocks](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/sequence.png) |
+| Flowchart with decisions and labelled edges | Sequence diagram with activations, notes, and alt blocks |
+| ![Class diagram with relationships and visibility markers](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/class.png) | ![State machine with choice nodes and transitions](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/state.png) |
+| Class diagram with relationships and visibility markers | State machine with choice nodes and transitions |
+| ![Git graph with branches, merges, and tags](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/git.png) | ![Pie chart computed from labelled values](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/pie.png) |
+| Git graph with branches, merges, and tags | Pie chart computed from labelled values |
+| ![XY chart with bar and line series](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/xychart.png) | ![Mindmap radiating from a central root](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/mindmap.png) |
+| XY chart with bar and line series | Mindmap radiating from a central root |
+| ![Sankey diagram with proportional ribbons](https://raw.githubusercontent.com/orestesgaolin/mermaid/main/packages/mermaid_flutter/doc/screenshots/sankey.png) |  |
+| Sankey diagram with proportional ribbons |  |
+
 ## Basic use
 
 ```dart
