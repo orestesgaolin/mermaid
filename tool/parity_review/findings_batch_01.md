@@ -51,7 +51,10 @@ No unresolved differences remain from the first two visual feedback passes.
 - `curated-railroad`: Mermaid.js does not render the source, so the diagram
   geometry still cannot be judged as parity against this reference case.
 
-## Deferred to the next session
+## Resolved after this batch
 
-- Sankey needs a dedicated visual pass; do not treat its current capture as
-  accepted parity.
+- Sankey: the dedicated visual pass has landed. Filled ribbon bands were
+  replaced with gradient strokes plus multiply compositing, and small flows
+  now keep a 2px visible floor. See the 2026-09-02 entries in
+  `parity/sankey.md`; the diagram is marked full-parity in `parity/TRACKER.md`.
+  The captures in this batch predate those fixes.

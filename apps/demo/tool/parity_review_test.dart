@@ -1,11 +1,22 @@
 /// Builds the image corpus used by the local Mermaid parity review.
 ///
+/// This is a generator, not a test: it lives outside `apps/demo/test/` so a
+/// plain `flutter test` does not spend ~5 s writing a ~9 MB corpus. The
+/// `_test.dart` suffix is kept so the Flutter test runner can host it.
+///
 /// Run from the workspace root:
 ///
-///   fvm flutter test apps/demo/test/parity_review_test.dart -r expanded
+///   fvm flutter test apps/demo/tool/parity_review_test.dart -r expanded
+///   fvm dart run tool/parity_review/build_report.dart
 ///
-/// Output is written to build/parity_review. Flutter PNGs use the same
-/// FlutterTextMeasurer and ScenePainter pipeline as the package itself.
+/// Output is written to `build/parity_review` (gitignored). Flutter PNGs use
+/// the same FlutterTextMeasurer and ScenePainter pipeline as the package
+/// itself. The corpus itself is shared with the cheap render smoke test in
+/// `apps/demo/test/render_corpus_smoke_test.dart`.
+///
+/// macOS only: the review compares against Mermaid.js rasterized with system
+/// fonts, so the run fails fast if those fonts are missing rather than
+/// rasterizing with Flutter's solid-block Ahem test glyphs.
 library;
 
 import 'dart:convert';
@@ -17,98 +28,58 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
-import 'package:mermaid_samples/mermaid_samples.dart';
 
-const _curatedIds = <String>[
-  'subgraphs',
-  'math',
-  'block',
-  'architecture',
-  'kanban',
-  'cynefin',
-  'ishikawa',
-  'eventmodeling',
-  'railroad',
-  'radar',
-  'treemap',
-  'venn',
-  'wardley',
-  'handdrawn',
-];
+import '../test/support/parity_corpus.dart';
+import '../test/support/workspace.dart';
 
-// The largest checked-in upstream fixture for each covered diagram family.
-// Together with the curated cases above this gives a broad, deliberately
-// complex first batch without asking a reviewer to inspect all 220 cases.
-const _fixturePaths = <String>[
-  'packages/mermaid_core/test/fixtures/upstream_c4/05.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_class/11.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_er/03.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_flowcharts/07.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_gantt/08.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_git/33.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_journey/01.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_mindmap/01.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_packet/03.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_pie/01.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_quadrant/02.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_requirement/02.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_sankey/03.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_sequence/01.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_state/05.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_timeline/03.mmd',
-  'packages/mermaid_core/test/fixtures/upstream_xychart/18.mmd',
-];
+/// Mermaid.js version used for the reference renders.
+///
+/// Keep in sync with the same constant in
+/// `tool/parity_review/build_report.dart` (different package, so the literal
+/// cannot be shared) — the capture page and the report must compare against
+/// one and the same upstream build.
+const _mermaidJsVersion = '11.17.2';
 
-class _ParityCase {
-  const _ParityCase({
-    required this.id,
-    required this.title,
-    required this.family,
-    required this.origin,
-    required this.source,
-  });
-
-  final String id;
-  final String title;
-  final String family;
-  final String origin;
-  final String source;
-}
+/// System fonts the review corpus needs, keyed by the family the renderer
+/// asks for. Without these the PNGs are rasterized with Ahem test glyphs and
+/// the whole corpus is useless for a visual comparison.
+const _requiredFonts = <String, String>{
+  'trebuchet ms': '/System/Library/Fonts/Supplemental/Trebuchet MS.ttf',
+  'Arial Unicode MS': '/System/Library/Fonts/Supplemental/Arial Unicode.ttf',
+  'monospace': '/System/Library/Fonts/SFNSMono.ttf',
+};
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   setUpAll(() async {
-    const path = '/System/Library/Fonts/Supplemental/Trebuchet MS.ttf';
-    if (File(path).existsSync()) {
-      final bytes = File(path).readAsBytesSync();
-      final loader = FontLoader('trebuchet ms')
-        ..addFont(Future.value(ByteData.view(bytes.buffer)));
-      await loader.load();
+    final missing = _requiredFonts.entries
+        .where((entry) => !File(entry.value).existsSync())
+        .toList();
+    if (missing.isNotEmpty) {
+      throw StateError(
+        'Cannot build the parity review corpus: the following system fonts '
+        'are missing, so every PNG would be rasterized with Flutter\'s Ahem '
+        'test glyphs:\n'
+        '${missing.map((e) => '  - ${e.key}: ${e.value}').join('\n')}\n'
+        'This generator is macOS only. Run it on macOS, or point '
+        '_requiredFonts at equivalent local font files.',
+      );
     }
-    const symbolsPath =
-        '/System/Library/Fonts/Supplemental/Arial Unicode.ttf';
-    if (File(symbolsPath).existsSync()) {
-      final bytes = File(symbolsPath).readAsBytesSync();
-      final loader = FontLoader('Arial Unicode MS')
-        ..addFont(Future.value(ByteData.view(bytes.buffer)));
-      await loader.load();
-    }
-    const monoPath = '/System/Library/Fonts/SFNSMono.ttf';
-    if (File(monoPath).existsSync()) {
-      final bytes = File(monoPath).readAsBytesSync();
-      final loader = FontLoader('monospace')
+    for (final entry in _requiredFonts.entries) {
+      final bytes = File(entry.value).readAsBytesSync();
+      final loader = FontLoader(entry.key)
         ..addFont(Future.value(ByteData.view(bytes.buffer)));
       await loader.load();
     }
   });
 
-  test('builds the first parity review batch', () async {
-    final root = _workspaceRoot();
+  test('builds the parity review batch', () async {
+    final root = workspaceRoot();
     final output = Directory('${root.path}/build/parity_review');
     final assets = Directory('${output.path}/assets')
       ..createSync(recursive: true);
-    final cases = _loadCases(root);
+    final cases = loadParityCases(root);
     final manifest = <Map<String, Object?>>[];
 
     for (final entry in cases) {
@@ -161,7 +132,6 @@ void main() {
       '${output.path}/capture.html',
     ).writeAsStringSync(_capturePage(manifest));
 
-    expect(manifest, hasLength(31));
     expect(
       manifest.where((entry) => entry.containsKey('flutterError')),
       isEmpty,
@@ -169,61 +139,6 @@ void main() {
     expect(manifest.where((entry) => entry.containsKey('coreError')), isEmpty);
   });
 }
-
-Directory _workspaceRoot() {
-  var current = Directory.current.absolute;
-  while (true) {
-    if (Directory('${current.path}/packages/mermaid_core').existsSync() &&
-        Directory('${current.path}/apps/demo').existsSync()) {
-      return current;
-    }
-    final parent = current.parent;
-    if (parent.path == current.path) {
-      throw StateError('Could not locate the Mermaid workspace root.');
-    }
-    current = parent;
-  }
-}
-
-List<_ParityCase> _loadCases(Directory root) {
-  final result = <_ParityCase>[];
-  for (final id in _curatedIds) {
-    final sample = samples.singleWhere((sample) => sample.id == id);
-    result.add(
-      _ParityCase(
-        id: 'curated-$id',
-        title: sample.name,
-        family: id,
-        origin: 'packages/mermaid_samples:$id',
-        source: sample.source.trim(),
-      ),
-    );
-  }
-  for (final path in _fixturePaths) {
-    final file = File('${root.path}/$path');
-    final directory = file.parent.path.split('/').last;
-    final family = directory.replaceFirst('upstream_', '');
-    final fixture = file.uri.pathSegments.last.replaceFirst('.mmd', '');
-    result.add(
-      _ParityCase(
-        id: 'upstream-$family-$fixture',
-        title: '${_titleCase(family)} fixture $fixture',
-        family: family,
-        origin: path,
-        source: file.readAsStringSync().trim(),
-      ),
-    );
-  }
-  return result;
-}
-
-String _titleCase(String value) => value
-    .split(RegExp(r'[_-]'))
-    .map(
-      (part) =>
-          part.isEmpty ? part : '${part[0].toUpperCase()}${part.substring(1)}',
-    )
-    .join(' ');
 
 Future<(int, int)> _paintFlutterPng(core.RenderScene scene, File output) async {
   const padding = 24.0;
@@ -274,7 +189,7 @@ String _capturePage(List<Map<String, Object?>> manifest) {
 <p id="status">Starting…</p>
 <main id="cases"></main>
 <script type="module">
-import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@$_mermaidJsVersion/dist/mermaid.esm.min.mjs';
 mermaid.initialize({ startOnLoad: false, theme: 'default' });
 const cases = $cases;
 const main = document.querySelector('#cases');

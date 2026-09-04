@@ -1,7 +1,7 @@
 /// Builds a self-contained HTML parity report from the captured image corpus.
 ///
-/// Run from the workspace root after parity_review_test.dart and the
-/// Mermaid.js reference capture have completed:
+/// Run from the workspace root after apps/demo/tool/parity_review_test.dart
+/// and the Mermaid.js reference capture have completed:
 ///
 ///   fvm dart run tool/parity_review/build_report.dart
 library;
@@ -9,13 +9,22 @@ library;
 import 'dart:convert';
 import 'dart:io';
 
+/// Mermaid.js version used for the live reference renders.
+///
+/// Keep in sync with the same constant in
+/// `apps/demo/tool/parity_review_test.dart` (different package, so the literal
+/// cannot be shared) — the capture page and this report must compare against
+/// one and the same upstream build.
+const _mermaidJsVersion = '11.17.2';
+
 void main() {
   final root = _workspaceRoot();
   final reviewDir = Directory('${root.path}/build/parity_review');
   final manifestFile = File('${reviewDir.path}/manifest.json');
   if (!manifestFile.existsSync()) {
     stderr.writeln(
-      'Missing ${manifestFile.path}. Run parity_review_test.dart first.',
+      'Missing ${manifestFile.path}. Run '
+      'apps/demo/tool/parity_review_test.dart first.',
     );
     exitCode = 1;
     return;
@@ -52,9 +61,9 @@ void main() {
   </header>
   <div class="comparison">
     ${_panel('Mermaid.js', 'Reference', _mermaidReference(reviewDir, entry))}
-    ${_panel('Flutter', 'Review target', _assetOrError(reviewDir, entry, 'flutterPath', 'flutterError', null), primary: true)}
+    ${_panel('Flutter', 'Review target', _assetOrError(reviewDir, entry, 'flutterPath', 'flutterError'), primary: true)}
     <div class="core-slot">
-      ${_panel('mermaid_core SVG', 'Diagnostic', _assetOrError(reviewDir, entry, 'corePath', 'coreError', null))}
+      ${_panel('mermaid_core SVG', 'Diagnostic', _assetOrError(reviewDir, entry, 'corePath', 'coreError'))}
     </div>
   </div>
   <details class="source">
@@ -383,7 +392,7 @@ const liveReferences = $liveReferenceJson;
 const targets = [...document.querySelectorAll('.mermaid-live')];
 if (targets.length) {
   try {
-    const module = await import('https://cdn.jsdelivr.net/npm/mermaid@11.17.2/dist/mermaid.esm.min.mjs');
+    const module = await import('https://cdn.jsdelivr.net/npm/mermaid@$_mermaidJsVersion/dist/mermaid.esm.min.mjs');
     const mermaid = module.default;
     mermaid.initialize({ startOnLoad: false, theme: 'default' });
     for (let index = 0; index < targets.length; index++) {
@@ -435,11 +444,8 @@ String _assetOrError(
   Map<String, dynamic> entry,
   String pathKey,
   String errorKey,
-  String? fallbackName,
 ) {
-  final relative =
-      (entry[pathKey] as String?) ??
-      (fallbackName == null ? null : 'assets/$fallbackName');
+  final relative = entry[pathKey] as String?;
   if (relative != null) {
     final file = File('${reviewDir.path}/$relative');
     if (file.existsSync()) {
@@ -452,19 +458,38 @@ String _assetOrError(
   return '<pre class="render-error">${_text(error)}</pre>';
 }
 
+/// The `name:` of the root `pubspec.yaml` of this workspace.
+const _workspacePubspecName = '_mermaid_dart_workspace';
+
+/// Walks up from [Directory.current] until it finds the directory whose
+/// `pubspec.yaml` declares `name: _mermaid_dart_workspace`.
+///
+/// Kept identical to `workspaceRoot()` in
+/// `apps/demo/test/support/workspace.dart` (a different package, so the code
+/// cannot be shared).
 Directory _workspaceRoot() {
-  var current = Directory.current.absolute;
+  final start = Directory.current.absolute;
+  var current = start;
   while (true) {
-    if (Directory('${current.path}/packages/mermaid_core').existsSync() &&
-        Directory('${current.path}/apps/demo').existsSync()) {
-      return current;
-    }
+    if (_isWorkspaceRoot(current)) return current;
     final parent = current.parent;
     if (parent.path == current.path) {
-      throw StateError('Could not locate the Mermaid workspace root.');
+      throw StateError(
+        'Could not locate the Mermaid workspace root: no ancestor of '
+        '"${start.path}" has a pubspec.yaml declaring '
+        '"name: $_workspacePubspecName".',
+      );
     }
     current = parent;
   }
+}
+
+bool _isWorkspaceRoot(Directory directory) {
+  final pubspec = File('${directory.path}/pubspec.yaml');
+  if (!pubspec.existsSync()) return false;
+  return pubspec.readAsLinesSync().any(
+    (line) => line.trimRight() == 'name: $_workspacePubspecName',
+  );
 }
 
 const _html = HtmlEscape(HtmlEscapeMode.element);
