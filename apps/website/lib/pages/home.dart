@@ -34,7 +34,7 @@ class Home extends StatelessComponent {
         p(classes: 'subtitle', [
           .text(
             'A pure-Dart port of mermaid.js with native Flutter '
-            'rendering — same source, side by side with the original.',
+            'rendering.',
           ),
         ]),
       ]),
@@ -54,22 +54,18 @@ class Home extends StatelessComponent {
           ),
           strong([.text('render scene')]),
           .text(
-            ', then paints that scene natively — no JavaScript, no '
-            'WebView, no SVG round-trip. This page renders each sample two '
-            'ways: the original ',
+            ', then paints that scene natively - no JavaScript, no '
+            'WebView, no SVG round-trip. This page renders samples side by side: the original ',
           ),
           strong([.text('mermaid.js')]),
           .text(' in your browser (left) and '),
           strong([.text('mermaid dart')]),
-          .text(
-            ' inside an embedded Flutter web view (right), so any '
-            'difference is obvious at a glance.',
-          ),
+          .text(' inside an embedded Flutter island.'),
         ]),
         p([
           .text('The TeX math labels in diagrams are rendered with '),
           strong([.text('katex')]),
-          .text(' — the same pure-Dart port of '),
+          .text(' - a Dart port of '),
           a(
             [.text('KaTeX')],
             href: 'https://katex.org',
@@ -77,7 +73,7 @@ class Home extends StatelessComponent {
             attributes: const {'rel': 'noopener noreferrer'},
           ),
           .text(
-            ' that powers its own three-way renderer comparison. mermaid '
+            ' that brings its own three-way renderer comparison. mermaid '
             'dart reuses that backend-agnostic box tree to lay out math '
             'natively in Flutter.',
           ),
@@ -88,9 +84,9 @@ class Home extends StatelessComponent {
           .text(' option is powered by '),
           strong([.text('elk')]),
           .text(
-            ' — a standalone, pure-Dart port of the Eclipse Layout '
+            ' - a standalone, Dart port of the Eclipse Layout '
             'Kernel\'s layered algorithm (orthogonal edges, clusters, no '
-            'elkjs, no JavaScript). It is reusable on its own for any graph '
+            'elkjs, no JavaScript). It\'s mostly an approximation. It is reusable on its own for any graph '
             'layout, such as package dependency visualizations. Explore it '
             'on the ',
           ),
@@ -113,7 +109,9 @@ class Home extends StatelessComponent {
           p([
             .text('Add '),
             a(
-              [code([.text('mermaid_flutter')])],
+              [
+                code([.text('mermaid_flutter')]),
+              ],
               href: 'https://pub.dev/packages/mermaid_flutter',
               target: .blank,
               attributes: const {'rel': 'noopener noreferrer'},
