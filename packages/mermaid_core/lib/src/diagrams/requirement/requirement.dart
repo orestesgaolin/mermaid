@@ -24,16 +24,27 @@ class RequirementDiagram {
     required this.nodes,
     required this.relations,
     this.title,
+    this.classDefs = const {},
   });
 
   /// Requirements and elements, keyed by id, first-mention order.
   final Map<String, ReqNode> nodes;
   final List<ReqRelation> relations;
   final String? title;
+  final Map<String, Map<String, String>> classDefs;
 }
 
 class ReqNode {
-  const ReqNode({required this.id, required this.kind, this.fields = const []});
+  const ReqNode({
+    required this.id,
+    required this.kind,
+    this.fields = const [],
+    this.classes = const [],
+    this.styles = const {},
+    this.link,
+    this.tooltip,
+    this.callback,
+  });
 
   final String id;
 
@@ -42,6 +53,31 @@ class ReqNode {
 
   /// (label, value) rows like (`id`, `1.1`), (`text`, ...), (`risk`, High).
   final List<(String, String)> fields;
+  final List<String> classes;
+  final Map<String, String> styles;
+  final String? link;
+  final String? tooltip;
+
+  /// JavaScript callback name retained for Dart consumers; never executed.
+  /// Widget consumers dispatch by [id] from `MermaidDiagram.onNodeTap`.
+  final String? callback;
+
+  ReqNode copyWith({
+    List<String>? classes,
+    Map<String, String>? styles,
+    String? link,
+    String? tooltip,
+    String? callback,
+  }) => ReqNode(
+    id: id,
+    kind: kind,
+    fields: fields,
+    classes: classes ?? this.classes,
+    styles: styles ?? this.styles,
+    link: link ?? this.link,
+    tooltip: tooltip ?? this.tooltip,
+    callback: callback ?? this.callback,
+  );
 }
 
 class ReqRelation {
@@ -170,9 +206,10 @@ RequirementDiagram parseRequirementDiagram(String source) {
   final text = stripMetadata(source);
   final nodes = <String, ReqNode>{};
   final relations = <ReqRelation>[];
+  final classDefs = <String, Map<String, String>>{};
   String? title = frontTitle;
   var seenHeader = false;
-  (String, String, List<(String, String)>)? open; // kind, id, fields
+  (String, String, List<(String, String)>, List<String>)? open;
 
   final lines = text.split('\n');
   for (var i = 0; i < lines.length; i++) {
@@ -193,7 +230,12 @@ RequirementDiagram parseRequirementDiagram(String source) {
 
     if (open != null) {
       if (line == '}') {
-        nodes[open.$2] = ReqNode(id: open.$2, kind: open.$1, fields: open.$3);
+        nodes[open.$2] = ReqNode(
+          id: open.$2,
+          kind: open.$1,
+          fields: open.$3,
+          classes: open.$4,
+        );
         open = null;
         continue;
       }
@@ -219,7 +261,13 @@ RequirementDiagram parseRequirementDiagram(String source) {
     Match? m;
     m = RegExp(r'^(\w+)\s+(.+?)\s*\{$').firstMatch(line);
     if (m != null && _kinds.contains(m.group(1))) {
-      open = (m.group(1)!, m.group(2)!, []);
+      final decorated = m.group(2)!.split(':::');
+      open = (
+        m.group(1)!,
+        decorated.first.trim(),
+        [],
+        decorated.skip(1).where((value) => value.isNotEmpty).toList(),
+      );
       continue;
     }
     // a - label -> b   |   a <- label - b  (names may contain spaces)
@@ -251,14 +299,87 @@ RequirementDiagram parseRequirementDiagram(String source) {
     if (RegExp(r'^(acc(Title|Descr)\s*[:{]|direction\s)').hasMatch(line)) {
       continue;
     }
-    // Tolerate styling/interaction directives. Full styling (classDef/class/
-    // style -> per-node cssStyles + colorIndex cycling) is not yet applied —
-    // upstream's default theme has no `borderColorArray`, so the common case
-    // (no explicit styles) is unaffected. We skip these rather than throw so
-    // valid diagrams still render.
-    if (RegExp(
-      r'^(classDef|class|style|click|callback|link)\b',
-    ).hasMatch(line)) {
+    m = RegExp(r'^classDef\s+([^\s]+)\s+(.+?);?$').firstMatch(line);
+    if (m != null) {
+      final styles = _parseStyles(m.group(2)!);
+      for (final name in m.group(1)!.split(',')) {
+        classDefs[name.trim()] = styles;
+      }
+      continue;
+    }
+    m = RegExp(r'^class\s+([^\s]+)\s+([^\s]+)\s*;?$').firstMatch(line);
+    if (m != null) {
+      for (final id in m.group(1)!.split(',')) {
+        final node = nodes[id.trim()];
+        if (node != null) {
+          nodes[id.trim()] = node.copyWith(
+            classes: [...node.classes, ...m.group(2)!.split(',')],
+          );
+        }
+      }
+      continue;
+    }
+    m = RegExp(r'^style\s+([^\s]+)\s+(.+?);?$').firstMatch(line);
+    if (m != null) {
+      final node = nodes[m.group(1)!];
+      if (node != null) {
+        nodes[node.id] = node.copyWith(
+          styles: {...node.styles, ..._parseStyles(m.group(2)!)},
+        );
+      }
+      continue;
+    }
+    m = RegExp(r'^(\S+):::(\S+)\s*;?$').firstMatch(line);
+    if (m != null) {
+      final node = nodes[m.group(1)!];
+      if (node != null) {
+        nodes[node.id] = node.copyWith(
+          classes: [...node.classes, ...m.group(2)!.split(',')],
+        );
+      }
+      continue;
+    }
+    m = RegExp(
+      r'^(link|callback)\s+(\S+)\s+"([^"]*)"(?:\s+"([^"]*)")?',
+    ).firstMatch(line);
+    if (m != null) {
+      final node = nodes[m.group(2)!];
+      if (node != null) {
+        nodes[node.id] = m.group(1) == 'link'
+            ? node.copyWith(link: m.group(3), tooltip: m.group(4))
+            : node.copyWith(callback: m.group(3), tooltip: m.group(4));
+      }
+      continue;
+    }
+    m = RegExp(r'^click\s+(\S+)\s+(.+)$').firstMatch(line);
+    if (m != null) {
+      final node = nodes[m.group(1)!];
+      var action = m.group(2)!.trim();
+      if (node != null) {
+        if (action.startsWith('href ')) {
+          action = action.substring(5).trim();
+          final value = RegExp(
+            r'^"([^"]*)"(?:\s+"([^"]*)")?',
+          ).firstMatch(action);
+          if (value != null) {
+            nodes[node.id] = node.copyWith(
+              link: value.group(1),
+              tooltip: value.group(2),
+            );
+          }
+        } else {
+          action = action.replaceFirst(RegExp(r'^call\s+'), '');
+          final value = RegExp(
+            r'^(\w+)(?:\([^)]*\))?(?:\s+"([^"]*)")?',
+          ).firstMatch(action);
+          if (value != null) {
+            nodes[node.id] = node.copyWith(
+              callback: value.group(1),
+              tooltip: value.group(2),
+            );
+          }
+        }
+      }
       continue;
     }
     throw MermaidParseException('unrecognized statement "$line"', line: i + 1);
@@ -266,12 +387,65 @@ RequirementDiagram parseRequirementDiagram(String source) {
   if (!seenHeader) {
     throw const MermaidParseException('empty requirement diagram source');
   }
-  return RequirementDiagram(nodes: nodes, relations: relations, title: title);
+  return RequirementDiagram(
+    nodes: nodes,
+    relations: relations,
+    title: title,
+    classDefs: classDefs,
+  );
 }
 
 void _ensure(Map<String, ReqNode> nodes, String id) {
   nodes.putIfAbsent(id, () => ReqNode(id: id, kind: 'element'));
 }
+
+Map<String, String> _parseStyles(String source) {
+  final styles = <String, String>{};
+  var depth = 0;
+  final part = StringBuffer();
+  void add() {
+    final value = part.toString().trim().replaceFirst(RegExp(r';$'), '');
+    part.clear();
+    final colon = value.indexOf(':');
+    if (colon > 0) {
+      styles[value.substring(0, colon).trim()] = value
+          .substring(colon + 1)
+          .trim();
+    }
+  }
+
+  for (final codeUnit in source.codeUnits) {
+    final character = String.fromCharCode(codeUnit);
+    if (character == '(') depth++;
+    if (character == ')') depth--;
+    if (character == ',' && depth == 0) {
+      add();
+    } else {
+      part.write(character);
+    }
+  }
+  add();
+  return styles;
+}
+
+Map<String, String> _nodeStyles(RequirementDiagram diagram, ReqNode node) {
+  final styles = <String, String>{};
+  styles.addAll(diagram.classDefs['default'] ?? const {});
+  for (final name in node.classes) {
+    styles.addAll(diagram.classDefs[name] ?? const {});
+  }
+  styles.addAll(node.styles);
+  return styles;
+}
+
+Color? _styleColor(String? value) =>
+    value == null ? null : Color.tryParse(value);
+
+double? _styleWidth(String? value) => value == null
+    ? null
+    : double.tryParse(
+        RegExp(r'[-+]?\d*\.?\d+').firstMatch(value)?.group(0) ?? '',
+      );
 
 RenderScene layoutRequirementDiagram(
   RequirementDiagram diagram, {
@@ -289,12 +463,16 @@ RenderScene layoutRequirementDiagram(
     fontFamily: theme.fontFamily,
     fontSize: config.fontSize ?? theme.fontSize,
   );
-  final titleStyle = baseStyle.copyWith(fontWeight: 700);
 
   // Measure boxes: «Type» line, bold name, gap, divider, prefixed field rows.
   // The bool flag marks the row after which a gap is inserted (the name row).
   final boxes = <String, (Size, List<(String, TextStyleSpec, Size, bool)>)>{};
   for (final n in diagram.nodes.values) {
+    final styles = _nodeStyles(diagram, n);
+    final nodeStyle = styles['font-weight']?.toLowerCase() == 'bold'
+        ? baseStyle.copyWith(fontWeight: 700)
+        : baseStyle;
+    final nodeTitleStyle = nodeStyle.copyWith(fontWeight: 700);
     final lines = <(String, TextStyleSpec, Size, bool)>[];
     void add(String text, TextStyleSpec style, {bool gapAfter = false}) {
       lines.add((
@@ -306,13 +484,13 @@ RenderScene layoutRequirementDiagram(
     }
 
     final display = _kindDisplay[n.kind] ?? n.kind;
-    add('«$display»', baseStyle.copyWith(italic: true));
-    add(n.id, titleStyle, gapAfter: true);
+    add('«$display»', nodeStyle.copyWith(italic: true));
+    add(n.id, nodeTitleStyle, gapAfter: true);
     for (final (k, v) in n.fields) {
       if (v.isEmpty) continue;
       final value = _displayFieldValue(k, v);
       final prefix = _fieldPrefix[k];
-      add(prefix != null ? '$prefix: $value' : '$k: $value', baseStyle);
+      add(prefix != null ? '$prefix: $value' : '$k: $value', nodeStyle);
     }
     var w = 0.0, h = boxPadding;
     for (final (_, _, s, gapAfter) in lines) {
@@ -640,17 +818,29 @@ RenderScene layoutRequirementDiagram(
   diagram.nodes.forEach((id, n) {
     final (size, lines) = boxes[id]!;
     final rect = Rect.fromCenter(centers[id]!, size.width, size.height);
+    final styles = _nodeStyles(diagram, n);
+    final fillColor =
+        _styleColor(styles['fill']) ??
+        config.rectFill ??
+        theme.requirementBackground;
+    final strokeColor =
+        _styleColor(styles['stroke']) ??
+        config.rectBorderColor ??
+        theme.requirementBorderColor;
+    final textColor =
+        _styleColor(styles['color']) ??
+        config.textColor ??
+        theme.requirementTextColor;
+    final strokeWidth =
+        _styleWidth(styles['stroke-width']) ?? config.rectBorderSize;
     // Upstream draws square corners (no rx/ry), `requirementBackground`
     // (=primaryColor) for both requirements and elements, and a border in
     // `requirementBorderColor` width `requirementBorderSize` (1).
     final children = <SceneNode>[
       SceneShape(
         geometry: RectGeometry(rect),
-        fill: Fill(config.rectFill ?? theme.requirementBackground),
-        stroke: Stroke(
-          color: config.rectBorderColor ?? theme.requirementBorderColor,
-          width: config.rectBorderSize,
-        ),
+        fill: Fill(fillColor),
+        stroke: Stroke(color: strokeColor, width: strokeWidth),
       ),
     ];
     var y = rect.top + boxPadding / 2;
@@ -666,7 +856,7 @@ RenderScene layoutRequirementDiagram(
               ? Rect.fromLTWH(rect.center.x - s.width / 2, y, s.width, s.height)
               : Rect.fromLTWH(rect.left + boxPadding / 2, y, s.width, s.height),
           style: style,
-          color: config.textColor ?? theme.requirementTextColor,
+          color: textColor,
           align: li < 2 ? TextAlignH.center : TextAlignH.left,
         ),
       );
@@ -680,17 +870,22 @@ RenderScene layoutRequirementDiagram(
                 MoveTo(Point(rect.left, y - 2)),
                 LineTo(Point(rect.right, y - 2)),
               ]),
-              stroke: Stroke(
-                color: config.rectBorderColor ?? theme.requirementBorderColor,
-                width: config.rectBorderSize,
-              ),
+              stroke: Stroke(color: strokeColor, width: strokeWidth),
             ),
           );
         }
         y += gap;
       }
     }
-    nodes.add(SceneGroup(id: id, semanticLabel: n.id, children: children));
+    nodes.add(
+      SceneGroup(
+        id: id,
+        semanticLabel: n.id,
+        link: n.link,
+        tooltip: n.tooltip,
+        children: children,
+      ),
+    );
   });
 
   var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);
