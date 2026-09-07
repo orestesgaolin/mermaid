@@ -1,7 +1,16 @@
 # Mermaid → Dart port: plan & handoff
 
 A Flutter-first Dart port of [mermaid-js](https://github.com/mermaid-js/mermaid).
-**Read this before touching the code.** Updated: 2026-06-14 (28 diagram types — full upstream type parity; Tier-2 fidelity fixes + Tier-3 top-5 done; SVG backend; docs-style comparison website).
+**Current handoff: 2026-09-08.** Native Flutter and SVG output are implemented for
+28 registered diagram types. Type coverage is not a claim of identical layout
+or pixels. Read [current support](parity/TRACKER.md), the
+[compatibility contract](parity/COMPATIBILITY.md), and the configuration matrices
+linked there before using the dated implementation notes below.
+
+CI and release preparation share `bash tool/check.sh`. Validation logs distinguish
+local structural/interaction checks from reference render comparisons. GitHub
+issues track remaining work; historical test counts below describe their dated
+runs, not the current checkout.
 
 ## 2026-06-14 parity push (Tier 2 + Tier 3 top 5, all done)
 - Tier 2: class static-member underline (SceneText.underline); flowchart v11
@@ -19,9 +28,9 @@ A Flutter-first Dart port of [mermaid-js](https://github.com/mermaid-js/mermaid)
 ## Goal & priorities
 
 Render mermaid diagram source natively in Flutter (CustomPainter), with SVG
-output as a nice-to-have later. Diagram types are ported in order of
-real-world usage: **flowchart (done) → sequence → class → state → ER → gantt
-→ pie → the long tail**.
+output from the same portable scene. All 28 registered types are implemented;
+current work concerns specific configuration, styling, layout, and interaction
+gaps rather than adding those diagram types.
 
 ## Architecture (fixed — do not re-litigate)
 
@@ -248,8 +257,8 @@ y-labels horizontal), class note placement, state self-loop label overlap.
   into a shared edges util (3 copies now). Also: the flowchart-local
   `_translateNode` drifted from `scene_utils.translateSceneNode` (re-synced
   to carry link/tooltip/underline/rotation; should be unified).
-- [ ] SVG backend in mermaid_core (scene → SVG string; enables golden
-  diffs against upstream).
+- [x] SVG backend in mermaid_core (`renderSceneToSvg`, scene → SVG string);
+  verified by SVG/export tests. Reference rendering remains a separate check.
 - [x] **CLI** (`bin/mermaid.dart`, executable `mermaid_dart`): reads file or
   stdin, writes SVG (native) or PNG (pipes the SVG through rsvg-convert/
   resvg/ImageMagick on PATH), `--theme`, `-o`, `-f`.
@@ -318,21 +327,18 @@ it alongside the theme.
   - Remaining gaps: inline mixed text+math in one label (only whole-`$$`
     labels), big-operator limits (`\sum_{i=1}^n` stacks over/under),
     `KaTeX_Size`/AMS glyphs (delimiters are drawn as paths instead).
-- [x] **Alternate layout engines** (`layout: elk | tidy-tree`) — DONE for
-  flowcharts (`diagrams/flowchart/layout_engines.dart`, selected by
-  `resolveLayout`). **tidy-tree**: Reingold–Tilford-style tidy tree over a
-  BFS spanning forest (parents centered over children), straight edges;
-  falls back to dagre when subgraphs are present. **elk**: keeps the layered
-  dagre placement but routes edges orthogonally (Manhattan, linear segments)
-  — the characteristic ELK look; `flowchart-elk` keyword also selects it.
-  Not a port of elkjs/cose-bilkent (no Dart port exists) — these are
-  pure-Dart alternatives. Gaps vs real ELK: placement isn't elk's exact
-  layered algorithm (reuses dagre's), no port-side routing; cose-bilkent
-  isn't offered (mindmap already has its own radial layout).
-- [ ] **Architecture layout tuning** (v11.15.0: `{group}` placement, edge
-  direction hints L/R/T/B, junctions). *Blocked on prerequisite.* These
-  knobs belong to the **architecture** diagram, which isn't ported yet.
-  Two steps: port architecture (`diagrams/architecture/`), then its tuning.
+- [x] **Alternate flowchart layout engines** (`layout: elk | tidy-tree`).
+  `packages/elk` supplies the native layered ELK implementation; it no longer
+  substitutes Dagre placement under the ELK name. See the current
+  [ELK implementation status](packages/elk/lib/src/layered/PORTING.md).
+  Tidy-tree uses a spanning forest and falls back to Dagre for subgraphs.
+  Flowchart-specific clipping, markers, labels and routing adjustments remain
+  intentional parts of the scene renderer; engine support does not remove them.
+- [x] **Architecture syntax and layout tuning**: services, nested groups,
+  junctions, edge-side hints and row/column alignment are implemented in
+  `diagrams/architecture/architecture.dart`. Placement is a deterministic grid;
+  exact fcose solver behavior is outside the current
+  [compatibility contract](parity/COMPATIBILITY.md).
 
 ## 2026-06-14 fidelity pass on the new diagram types (vs mermaid.js)
 After visual side-by-side comparison on the website, the new types were

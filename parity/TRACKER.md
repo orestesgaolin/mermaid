@@ -1,75 +1,62 @@
-# Mermaid parity tracker
+# Mermaid support and parity tracker
 
-Per-diagram parity vs upstream mermaid.js. Pipeline: **analyze → implement → theme-wire → verify**. Each diagram has a detailed doc at `parity/<type>.md`.
+Current support, 2026-09-08. All 28 registered diagram types produce portable
+scenes and support Flutter/SVG output. This is type coverage, not full layout
+or pixel parity with Mermaid.js.
 
-**Parity:** 🟢 full · 🟡 minor-gaps · 🔴 major-gaps   ·   **Stage:** ✅ render-verified (default + dark themes)
+## Current contracts
 
-## Configuration update (2026-09-07)
+- [Common diagram configuration](common-config-support.md)
+- [C4, ER and XY configuration](c4-er-xy-config-support.md)
+- [Additional diagram and quadrant configuration](additional-config-support.md)
+- [Solver and grammar compatibility](COMPATIBILITY.md)
+- [ELK implementation and remaining limitations](../packages/elk/lib/src/layered/PORTING.md)
 
-Active configuration is now resolved for all 28 diagram types through both
-frontmatter and init directives. The detailed current contracts supersede the
-older per-row configuration residuals below:
+Active scene configuration resolves through init directives and frontmatter.
+Browser container behavior, upstream-inactive fields and approximate solvers
+are separate from supported scene configuration. Per-node directives are a
+separate parser/style feature.
 
-- [Common diagrams](common-config-support.md)
-- [C4, ER and XY](c4-er-xy-config-support.md)
-- [Additional diagrams and quadrant](additional-config-support.md)
+## Changes in the current maintenance pass
 
-Browser-only sizing, options unused by the active upstream renderer, and
-unsupported solver/grammar features are explicitly separated in those notes.
-Per-node style directives are distinct from diagram config: Kanban and
-requirement follow-ups are [#56](https://github.com/orestesgaolin/mermaid/issues/56)
-and [#57](https://github.com/orestesgaolin/mermaid/issues/57). Layout/grammar
-compatibility is tracked in [#61](https://github.com/orestesgaolin/mermaid/issues/61).
+| Ticket | Behavior | Evidence |
+| --- | --- | --- |
+| #44 | Active per-diagram configuration | `additional_config_keys_test.dart`, `common_diagram_config_test.dart`, `c4_er_xy_config_test.dart`, quadrant and diagram-specific suites |
+| #45 | Push/PR and release checks share `tool/check.sh` | Actionlint plus local execution; a local pass does not establish a GitHub run |
+| #46 | ER horizontal cell padding defaults to 20 | `er_pie_gantt_test.dart`; retained Mermaid.js reference render |
+| #47 | CSS colors including HSL/HSLA | `color_test.dart` |
+| #48 | `MermaidView.onSceneChanged` | `mermaid_view_test.dart` |
+| #49 | Shared scene, geometry, widget, PNG and evidence test helpers | Existing core and Flutter integration suites |
+| #50 | Deep ELK edge endpoints and retained labels | `elk_hierarchy_test.dart`; elkjs reference fixture |
+| #51 | Four-side ELK ports and surrounding spacing | `elk_ports_test.dart`; four direction reference fixtures |
+| #52 | ELK edge/node/port labels | `elk_labels_test.dart`; [label contract](../packages/elk/LABELS.md) |
+| #53 | Weighted successor constraints, shared-port hyperedge branches and junction output | `issue53_hyperedge_routing_test.dart`; retained elkjs comparison |
+| #54 | Four-side self-loops, content sizing and BK edge straightening | `issue54_selfloop_routing_test.dart` |
+| #55 | Registered Kanban icons, defined missing-icon fallback | `kanban_icon_test.dart`, `kanban_icon_render_test.dart` |
+| #56 | Kanban styles, links and tooltips | Core and Flutter directive integration tests |
+| #57 | Requirement styles, links and callback metadata | Core and Flutter directive integration tests |
+| #58 | Git right-to-left chronology and annotations | `issue58_git_rl_test.dart`; retained LR/RL render pair |
+| #59 | Adjacent class notes with zero-length rank constraint | `issue59_class_note_adjacency_test.dart`; TB/LR renders |
+| #61 | Explicit solver/grammar contract | [Compatibility contract](COMPATIBILITY.md) |
 
-## Status: 28 🟢 / 0 🟡 / 0 🔴 across 28 types
+Local commits and validation evidence establish implementation status; issue
+closure and remote CI are separate repository operations.
 
-Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/0**. Gate: `dart analyze` clean · 412 tests · 184/184 corpus. All 28 rendered (default + dark) and checked for structural fidelity.
+## Evidence boundaries
 
-> **What 🟢 means here:** the diagram matches mermaid.js's default-theme render (shapes, palette, spacing, layout) AND now recolors correctly under dark/forest/neutral (diagrams read `MermaidTheme` palette fields instead of inlining constants). Residuals listed below are non-default-theme niche config or documented cosmetic approximations — not default-render gaps. Caveat: verification is structural render-diff + exact upstream constants, not a live pixel-diff against the mermaid.js CDN.
+`tool/check.sh` runs analysis, ELK/core/Flutter/app tests and package publication
+dry runs. Parser/geometry tests, PNG integration tests and inspected render
+samples establish different properties. None alone establishes exact pixel
+parity across all inputs, browsers, fonts and Mermaid.js versions.
 
-| Diagram | Engine(s) | Parity | Stage | Doc | Residual (non-blocking) |
-|---|---|:--:|:--:|---|---|
-| **flowchart** | dagre, elk, tidy-tree | 🟢 | ✅ | [flowchart.md](flowchart.md) | default render matches; adapts across themes |
-| **sequence** | — | 🟢 | ✅ | [sequence.md](sequence.md) | box-grouping title text + arrowhead color + sequence-number circle stay on generic theme fields (no dedicat… |
-| **classDiagram** | — | 🟢 | ✅ | [classDiagram.md](classDiagram.md) | note attach edge uses minLen 1 instead of upstream minLen 0 (pushes notes one rank away); gated on a fix to… |
-| **stateDiagram** | — | 🟢 | ✅ | [stateDiagram.md](stateDiagram.md) | Self-loop edge routing is bespoke (hand-routed cubic) rather than dagre-routed — geometry-only, not a defau… |
-| **er** | — | 🟢 | ✅ | [er.md](er.md) | classDef/class/style color-theme data-color-id indexing skipped (default-theme only; niche styling directiv… |
-| **pie** | — | 🟢 | ✅ | [pie.md](pie.md) | static config supported; hover highlighting requires pointer state |
-| **gantt** | — | 🟢 | ✅ | [gantt.md](gantt.md) | container-responsive plot width: intrinsic render uses fixed 1050px plot (no container offsetWidth availabl… |
-| **quadrant** | — | 🟢 | ✅ | [quadrant.md](quadrant.md) | default render matches; adapts across themes |
-| **journey** | — | 🟢 | ✅ | [journey.md](journey.md) | 4ex title size approximated as 2*taskFontSize (font ex-metrics not resolved) |
-| **timeline** | — | 🟢 | ✅ | [timeline.md](timeline.md) | timeline LR/TD direction is parsed but not honored (upstream renders columnar regardless of direction) |
-| **xychart** | — | 🟢 | ✅ | [xychart.md](xychart.md) | config supported; d3 tick-formatting parity remains an approximation |
-| **mindmap** | radial (default), elk, tidy-tree | 🟢 | ✅ | [mindmap.md](mindmap.md) | default layout is a deterministic radial tree vs upstream cose-bilkent force simulation (intentional); `layout: elk`/`tidy-tree` now relayout as a left-to-right tidy tree (P10) |
-| **requirement** | — | 🟢 | ✅ | [requirement.md](requirement.md) | classDef/class/style per-node cssStyles + colorIndex color-cycling still deferred (parser/IR feature, not a… |
-| **c4** | — | 🟢 | ✅ | [c4.md](c4.md) | person is a vector rendition of upstream raster avatar; rels straight not curved (cosmetic) |
-| **gitGraph** | — | 🟢 | ✅ | [gitGraph.md](gitGraph.md) | config supported; RL mirroring remains #58 |
-| **sankey** | — | 🟢 | ✅ | [sankey.md](sankey.md) | outlined-label text stroke is approximated with a background copy |
-| **packet** | — | 🟢 | ✅ | [packet.md](packet.md) | default render matches; adapts across themes |
-| **block** | — | 🟢 | ✅ | [block.md](block.md) | marker geometry (circle/cross) approximated vs upstream insertMarkers SVG markers |
-| **radar** | — | 🟢 | ✅ | [radar.md](radar.md) | header keyword: bare `radar` accepted as a lenient alias to `radar-beta` (non-visual, preserves existing te… |
-| **treemap** | — | 🟢 | ✅ | [treemap.md](treemap.md) | active renderer config supported; full D3 format dialect remains an approximation |
-| **kanban** | — | 🟢 | ✅ | [kanban.md](kanban.md) | icons (item @{icon}) parsed but not drawn: needs an icon/glyph primitive in the shared scene IR |
-| **architecture** | — | 🟢 | ✅ | [architecture.md](architecture.md) | iconText (('text')) form: upstream renders white text over a transparent 'blank' icon (invisible on default… |
-| **cynefin** | — | 🟢 | ✅ | [cynefin.md](cynefin.md) | per-domain background fills (complexBg/complicatedBg/chaoticBg/clearBg/confusionBg) and cliffColor live in … |
-| **venn** | — | 🟢 | ✅ | [venn.md](venn.md) | area-proportional packing for >=3 sets is a relaxation heuristic, not venn.js' exact MDS solver |
-| **ishikawa** | — | 🟢 | ✅ | [ishikawa.md](ishikawa.md) | TextMeasurer-based bbox/spine-extent approximation vs live getBBox() (non-color, non-DOM limitation) |
-| **wardley** | — | 🟢 | ✅ | [wardley.md](wardley.md) | axisTextColor/componentLabelColor/annotationTextColor inlined as #222: upstream derives these from primaryT… |
-| **eventModeling** | — | 🟢 | ✅ | [eventModeling.md](eventModeling.md) | Dark-theme entity fills (emUiFill/emProcessorFill/emReadModelFill/emCommandFill/emEventFill + strokes) and … |
-| **railroad** | — | 🟢 | ✅ | [railroad.md](railroad.md) | specialFill #F0E0FF / specialStroke #8800CC left inlined: upstream derives from tertiaryColor/tertiaryBorde… |
+Flowchart-specific edge clipping, arrow shortening, label placement, cluster
+translation and paint-only restyling are intentional renderer behavior. Do not
+replace them solely to match a general layout engine's raw coordinates.
 
-## Known residuals (do NOT affect default-theme parity)
+## Historical investigations
 
-Grouped by what would be needed to close them — all are niche config, custom-theme edge cases, or documented approximations:
-
-- **Configuration and styles**: active diagram configuration is described in the current support matrices above. Requirement/Kanban per-node style directives remain separate parser/style features (#56, #57).
-- **Shared-IR primitives** (disproportionate for the payoff): C4 raster person avatar (async image decode in sync painter) → vector rendition used · railroad true ArcTo quarter-circles → cubic-bezier approximation.
-- **Layout subsystems**: architecture force-directed fcose → deterministic grid+align approximation · mindmap cose-bilkent → deterministic radial (intentional) · classDiagram note adjacency needs zero-length-edge support in vendored dagre.
-- **Custom-theme color sources without a theme variable upstream**: gantt task/section/crit palette, xychart handled via new field, C4 per-kind colors (config.schema constants) — default renders are exact.
-
-## Pipeline status
-
-1. ✅ **Analyze** — 28 docs, 349 discrepancies logged.
-2. ✅ **Implement** — 333 fixes; 0 major remained.
-3. ✅ **Theme-wire** — `MermaidTheme` expanded with cScale/pie/git/sequence/journey/quadrant/venn/er/requirement/xychart palettes; diagrams switched from inlined constants to theme reads (default identical, dark/forest/neutral now adapt).
-4. ✅ **Verify** — rendered all 28 in default + dark; structural fidelity confirmed.
+The 28 diagram notes in this directory retain the detailed investigations and
+implementation history. Their old “full-parity” labels and counts apply only
+to that pass and its fixtures. The
+[archived June parity table](history/2026-06-parity-pass.md) records those claims
+separately; current contracts and regression evidence above take precedence.
