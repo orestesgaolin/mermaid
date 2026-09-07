@@ -25,7 +25,7 @@ import '../../theme/theme.dart';
 
 enum GitCommitType { normal, reverse, highlight }
 
-enum GitDirection { leftRight, topBottom, bottomTop }
+enum GitDirection { leftRight, rightLeft, topBottom, bottomTop }
 
 /// Typed parser and layout values from `config.gitGraph`.
 class GitGraphConfig {
@@ -202,6 +202,7 @@ GitGraph parseGitGraph(String source, {GitGraphConfig? config}) {
       final dir = m.group(1)?.toUpperCase();
       if (dir == 'TB') direction = GitDirection.topBottom;
       if (dir == 'BT') direction = GitDirection.bottomTop;
+      if (dir == 'RL') direction = GitDirection.rightLeft;
       seenHeader = true;
       final trailing = m.group(2)!.trim();
       if (trailing.isEmpty) continue;
@@ -348,7 +349,10 @@ RenderScene layoutGitGraph(
       : 50.0;
   const commitLabelSize = 10.0;
   const tagLabelSize = 10.0;
-  final lr = graph.direction == GitDirection.leftRight;
+  final horizontal =
+      graph.direction == GitDirection.leftRight ||
+      graph.direction == GitDirection.rightLeft;
+  final rl = graph.direction == GitDirection.rightLeft;
   final tb =
       graph.direction == GitDirection.topBottom ||
       graph.direction == GitDirection.bottomTop;
@@ -422,13 +426,13 @@ RenderScene layoutGitGraph(
   final timeSpanMax = maxPos + commitStep;
 
   // For BT the time axis is reversed (origin at the bottom).
-  double timeToCoord(double t) => bt ? (timeSpanMax - t) : t;
+  double timeToCoord(double t) => bt || rl ? (timeSpanMax - t) : t;
 
   Point centerOf(GitCommit c) {
     final t = timeToCoord(timeOf[c.id]!);
     final lane = laneCoord(c.branch);
     // LR: commits sit 2px above the spine (upstream `branchY - 2`).
-    return lr ? Point(t, lane - 2) : Point(lane, t);
+    return horizontal ? Point(t, lane - 2) : Point(lane, t);
   }
 
   final centers = {for (final c in graph.commits) c.id: centerOf(c)};
@@ -449,8 +453,8 @@ RenderScene layoutGitGraph(
       final end = timeToCoord(timeSpanMax);
       final lo = math.min(start, end);
       final hi = math.max(start, end);
-      final p1 = lr ? Point(lo, spine - 2) : Point(spine, lo);
-      final p2 = lr ? Point(hi, spine - 2) : Point(spine, hi);
+      final p1 = horizontal ? Point(lo, spine - 2) : Point(spine, lo);
+      final p2 = horizontal ? Point(hi, spine - 2) : Point(spine, hi);
       nodes.add(
         SceneShape(
           geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
@@ -480,7 +484,7 @@ RenderScene layoutGitGraph(
         sourceBranch: branchOf[pid]!,
         destBranch: c.branch,
         isMergeSecond: isMergeSecond,
-        lr: lr,
+        lr: horizontal,
         branchColor: branchColor,
       );
       nodes.add(
@@ -488,7 +492,8 @@ RenderScene layoutGitGraph(
           from: from,
           to: to,
           color: color,
-          lr: lr,
+          lr: horizontal,
+          rl: rl,
           bt: bt,
           isMergeSecond: isMergeSecond,
           sourceMatchesFirstParent: parent != null && pi == 0,
@@ -603,7 +608,7 @@ RenderScene layoutGitGraph(
         config.showCommitLabel && !c.isCherryPick && (c.customId || !c.isMerge);
     if (showLabel) {
       final size = measurer.measure(c.id, commitLabelStyle, maxWidth: 200);
-      final lblCenter = lr
+      final lblCenter = horizontal
           ? Point(center.x, center.y + commitR + 9 + size.height / 2)
           : Point(center.x - commitR - 8 - size.width / 2, center.y);
       const py = 2.0;
@@ -612,13 +617,13 @@ RenderScene layoutGitGraph(
         size.width + 2 * py,
         size.height + 2 * py,
       );
-      final rotateLabel = lr
+      final rotateLabel = horizontal
           ? config.rotateCommitLabel
           : config._rotateCommitLabelOverride == true;
       children.add(
         SceneShape(
           geometry: rotateLabel
-              ? PolygonGeometry(_rotatedRectPoints(labelBounds, -45))
+              ? PolygonGeometry(_rotatedRectPoints(labelBounds, rl ? 45 : -45))
               : RectGeometry(labelBounds),
           fill: Fill(theme.commitLabelBackground.withOpacity(0.5)),
         ),
@@ -629,7 +634,7 @@ RenderScene layoutGitGraph(
           bounds: Rect.fromCenter(lblCenter, size.width, size.height),
           style: commitLabelStyle,
           color: theme.commitLabelColor,
-          rotation: rotateLabel ? -45 : 0,
+          rotation: rotateLabel ? (rl ? 45 : -45) : 0,
         ),
       );
     }
@@ -643,7 +648,7 @@ RenderScene layoutGitGraph(
         final w = size.width;
         final h = size.height;
         const px = 4.0, py = 2.0;
-        if (lr) {
+        if (horizontal) {
           // Flag body center sits above the commit; the notch points down-left
           // toward the spine.
           final cy = center.y - 19.2 - tagOffset;
@@ -653,22 +658,37 @@ RenderScene layoutGitGraph(
           // body uses `posWithOffset`, which is our `cx`. The tip therefore
           // sticks out one LAYOUT_OFFSET to the left of the body edge:
           //   notch = cx - w/2 - 12, hole = cx - w/2 - 8, body = cx - w/2 - 4.
-          final tagOrigin = cx - layoutOffset;
-          final notchX = tagOrigin - w / 2 - px / 2;
-          final holeX = tagOrigin - w / 2 + px / 2;
+          final tagOrigin = cx + (rl ? layoutOffset : -layoutOffset);
+          final notchX = rl
+              ? tagOrigin + w / 2 + px / 2
+              : tagOrigin - w / 2 - px / 2;
+          final holeX = rl
+              ? tagOrigin + w / 2 - px / 2
+              : tagOrigin - w / 2 + px / 2;
           final bodyLeft = cx - w / 2 - px;
           final bodyRight = cx + w / 2 + px;
           final h2 = h / 2;
           children.add(
             SceneShape(
-              geometry: PolygonGeometry([
-                Point(notchX, cy + py),
-                Point(notchX, cy - py),
-                Point(bodyLeft, cy - h2 - py),
-                Point(bodyRight, cy - h2 - py),
-                Point(bodyRight, cy + h2 + py),
-                Point(bodyLeft, cy + h2 + py),
-              ]),
+              geometry: PolygonGeometry(
+                rl
+                    ? [
+                        Point(notchX, cy + py),
+                        Point(notchX, cy - py),
+                        Point(bodyRight, cy - h2 - py),
+                        Point(bodyLeft, cy - h2 - py),
+                        Point(bodyLeft, cy + h2 + py),
+                        Point(bodyRight, cy + h2 + py),
+                      ]
+                    : [
+                        Point(notchX, cy + py),
+                        Point(notchX, cy - py),
+                        Point(bodyLeft, cy - h2 - py),
+                        Point(bodyRight, cy - h2 - py),
+                        Point(bodyRight, cy + h2 + py),
+                        Point(bodyLeft, cy + h2 + py),
+                      ],
+              ),
               fill: Fill(theme.tagLabelBackground),
               stroke: Stroke(color: theme.tagLabelBorder, width: 1),
             ),
@@ -740,9 +760,12 @@ RenderScene layoutGitGraph(
       final size = measurer.measure(b, branchLabelStyle, maxWidth: 200);
       final spine = laneCoord(b);
       final Point center;
-      if (lr) {
+      if (horizontal) {
         // Left of the spine origin (x=0). bbox.width + ~14 to the left.
-        center = Point(-(size.width / 2 + 11), spine - 2);
+        center = Point(
+          rl ? timeSpanMax + size.width / 2 + 11 : -(size.width / 2 + 11),
+          spine - 2,
+        );
       } else {
         center = Point(spine, timeToCoord(tb ? 0 : defaultPos) - 4);
       }
@@ -849,6 +872,7 @@ SceneShape _arrow({
   required Point to,
   required Color color,
   required bool lr,
+  required bool rl,
   required bool bt,
   required bool isMergeSecond,
   required bool sourceMatchesFirstParent,
@@ -856,6 +880,7 @@ SceneShape _arrow({
   const radius = 20.0;
   final p1 = from;
   final p2 = to;
+  final timeDirection = rl ? -1.0 : 1.0;
   // Each path is: line to the arc start, a quarter-circle arc bending around a
   // corner, then a line to the destination. Picks which leg runs along the
   // time axis vs the lane axis exactly as upstream does per direction/merge.
@@ -866,7 +891,7 @@ SceneShape _arrow({
     } else if (p1.y < p2.y) {
       if (isMergeSecond) {
         // Travel along source lane, arc down into destination lane.
-        final arcStart = Point(p2.x - radius, p1.y);
+        final arcStart = Point(p2.x - radius * timeDirection, p1.y);
         final corner = Point(p2.x, p1.y);
         final arcEnd = Point(p2.x, p1.y + radius);
         commands = [
@@ -879,7 +904,7 @@ SceneShape _arrow({
         // Branch point: drop within source column, arc right into dest lane.
         final arcStart = Point(p1.x, p2.y - radius);
         final corner = Point(p1.x, p2.y);
-        final arcEnd = Point(p1.x + radius, p2.y);
+        final arcEnd = Point(p1.x + radius * timeDirection, p2.y);
         commands = [
           MoveTo(p1),
           LineTo(arcStart),
@@ -890,7 +915,7 @@ SceneShape _arrow({
     } else {
       // Source below destination (upward arrow / merge fold-in).
       if (isMergeSecond) {
-        final arcStart = Point(p2.x - radius, p1.y);
+        final arcStart = Point(p2.x - radius * timeDirection, p1.y);
         final corner = Point(p2.x, p1.y);
         final arcEnd = Point(p2.x, p1.y - radius);
         commands = [
@@ -902,7 +927,7 @@ SceneShape _arrow({
       } else {
         final arcStart = Point(p1.x, p2.y + radius);
         final corner = Point(p1.x, p2.y);
-        final arcEnd = Point(p1.x + radius, p2.y);
+        final arcEnd = Point(p1.x + radius * timeDirection, p2.y);
         commands = [
           MoveTo(p1),
           LineTo(arcStart),
