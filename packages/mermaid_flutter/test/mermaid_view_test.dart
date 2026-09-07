@@ -22,6 +22,103 @@ Matrix4 _transform(WidgetTester tester) {
 }
 
 void main() {
+  testWidgets('scene callback observes updated controller scene state', (
+    tester,
+  ) async {
+    final controller = MermaidViewController();
+    addTearDown(controller.dispose);
+    Future<bool>? focusResult;
+    await tester.pumpWidget(
+      _host(
+        MermaidView(
+          source: 'graph LR\nA-->B',
+          controller: controller,
+          onSceneChanged: (_) {
+            focusResult = controller.focusNode('B', animate: false);
+          },
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(focusResult, isNotNull);
+    expect(await focusResult!, isTrue);
+    final scene = core.Mermaid(
+      measurer: const FlutterTextMeasurer(),
+    ).render('graph LR\nA-->B');
+    final center = scene.boundsOfNode('B')!.center;
+    expect(
+      MatrixUtils.transformPoint(
+        controller.transformation,
+        Offset(center.x, center.y),
+      ),
+      const Offset(300, 200),
+    );
+  });
+
+  testWidgets('reports base scene changes but not paint-only updates', (
+    tester,
+  ) async {
+    final scenes = <core.RenderScene>[];
+    var source = 'graph TD\nA-->B';
+    var overrides = const <String, core.FlowNodePaintOverride>{};
+    late StateSetter update;
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: StatefulBuilder(
+            builder: (context, setState) {
+              update = setState;
+              return SizedBox(
+                width: 600,
+                height: 400,
+                child: MermaidView(
+                  source: source,
+                  onSceneChanged: scenes.add,
+                  nodePaintOverrides: overrides,
+                ),
+              );
+            },
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+    expect(scenes, hasLength(1));
+    expect(scenes.single.boundsOfNode('A'), isNotNull);
+
+    update(() => source = 'graph TD\nA-->B-->C');
+    await tester.pumpAndSettle();
+    expect(scenes, hasLength(2));
+    expect(scenes.last.boundsOfNode('C'), isNotNull);
+
+    update(() {
+      overrides = const {
+        'A': core.FlowNodePaintOverride(fill: core.Color(0xffff0000)),
+      };
+    });
+    await tester.pumpAndSettle();
+    expect(scenes, hasLength(2));
+
+    update(() {});
+    await tester.pumpAndSettle();
+    expect(scenes, hasLength(2));
+  });
+
+  testWidgets('fullscreen copy forwards scene changes', (tester) async {
+    final scenes = <core.RenderScene>[];
+    await tester.pumpWidget(
+      _host(MermaidView(source: 'graph TD\nA-->B', onSceneChanged: scenes.add)),
+    );
+    await tester.pumpAndSettle();
+    expect(scenes, hasLength(1));
+
+    await tester.tap(find.byIcon(Icons.open_in_full));
+    await tester.pumpAndSettle();
+    expect(scenes, hasLength(2));
+    expect(scenes.every((scene) => scene.boundsOfNode('B') != null), isTrue);
+  });
+
   testWidgets('controller focuses a real node at the viewport center', (
     tester,
   ) async {

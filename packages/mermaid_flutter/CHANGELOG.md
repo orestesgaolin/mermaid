@@ -1,3 +1,8 @@
+## Unreleased
+
+- Expose `MermaidView.onSceneChanged`, including fullscreen views, while retaining
+  the existing geometry-only notification behavior for paint overrides.
+
 ## 0.2.1
 
 - Add rendered diagram examples to the README.

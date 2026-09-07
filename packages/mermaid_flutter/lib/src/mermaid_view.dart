@@ -124,6 +124,7 @@ class MermaidView extends StatefulWidget {
     this.nodeTooltipBuilder,
     this.semanticNodes = false,
     this.onEdgeTap,
+    this.onSceneChanged,
     this.nodePaintOverrides = const {},
     this.linkPaintOverrides = const {},
     this.minScale = 0.2,
@@ -172,6 +173,9 @@ class MermaidView extends StatefulWidget {
 
   /// See [MermaidDiagram.onEdgeTap].
   final void Function(String fromId, String toId, int linkIndex)? onEdgeTap;
+
+  /// See [MermaidDiagram.onSceneChanged].
+  final ValueChanged<core.RenderScene>? onSceneChanged;
 
   /// See [MermaidDiagram.nodePaintOverrides].
   final Map<String, core.FlowNodePaintOverride> nodePaintOverrides;
@@ -223,6 +227,7 @@ class MermaidView extends StatefulWidget {
     nodeTooltipBuilder: nodeTooltipBuilder,
     semanticNodes: semanticNodes,
     onEdgeTap: onEdgeTap,
+    onSceneChanged: onSceneChanged,
     nodePaintOverrides: nodePaintOverrides,
     linkPaintOverrides: linkPaintOverrides,
     minScale: minScale,
@@ -308,6 +313,7 @@ class _MermaidViewState extends State<MermaidView>
 
   void _handleSceneChanged(core.RenderScene scene) {
     _nodeBounds = scene.nodeBounds;
+    widget.onSceneChanged?.call(scene);
   }
 
   void _cancelExternalCommand() {
