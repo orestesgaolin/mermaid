@@ -22,8 +22,8 @@ import 'er_model.dart';
 // per column, with text inset by half of it on each side) and `TEXT_PADDING`
 // (= `config.er.entityPadding`, the vertical space added once per row, which
 // [ErConfig.entityPadding] resolves). Only the vertical one is configurable
-// here; the horizontal one keeps erBox's own fallback.
-const double _cellPadX = 10;
+// here; the horizontal one uses the effective upstream schema default.
+const double _cellPadX = 20;
 const double _diagramPadding = 8;
 const double _markerLen = 18;
 

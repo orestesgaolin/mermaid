@@ -135,7 +135,7 @@ void main() {
           .whereType<SceneText>()
           .singleWhere((text) => text.text == 'PK');
 
-      expect(outerRect.right - key.bounds.right, closeTo(5, 0.001));
+      expect(outerRect.right - key.bounds.right, closeTo(10, 0.001));
     });
     test('entity labels and attribute rows use Mermaid vertical spacing', () {
       final scene = layoutErDiagram(

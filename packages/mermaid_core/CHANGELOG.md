@@ -1,5 +1,6 @@
 ## Unreleased
 
+- Use the effective upstream ER cell padding default of 20.
 - Parse CSS named colors, HSL/HSLA, percentage RGB and alpha forms, with finite
   numeric validation and channel clamping.
 
