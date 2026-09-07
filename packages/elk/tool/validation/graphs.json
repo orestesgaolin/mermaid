@@ -169,5 +169,34 @@
         { "id": "e13", "sources": ["n2"], "targets": ["n10"] }
       ]
     }
+  },
+  {
+    "name": "deep cross hierarchy (RIGHT)",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "RIGHT", "elk.hierarchyHandling": "INCLUDE_CHILDREN" },
+      "children": [
+        { "id": "outside", "width": 80, "height": 40 },
+        {
+          "id": "outer",
+          "children": [
+            {
+              "id": "inner",
+              "children": [
+                { "id": "leaf", "width": 80, "height": 40 }
+              ]
+            }
+          ]
+        }
+      ],
+      "edges": [
+        {
+          "id": "deep",
+          "sources": ["outside"],
+          "targets": ["leaf"],
+          "labels": [{ "text": "deep label", "width": 64, "height": 16 }]
+        }
+      ]
+    }
   }
 ]

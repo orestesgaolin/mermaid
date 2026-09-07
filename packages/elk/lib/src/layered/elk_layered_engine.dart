@@ -293,16 +293,15 @@ class _Engine {
   /// [extractRoot] concatenates them into one [ElkPositionedEdge].
   final Map<String, List<LEdge>> _crossSegments = {};
 
-  /// Labels carried by a split cross-hierarchy edge (attached to the original
-  /// edge, emitted once after stitching).
-  final Map<String, List<LLabel>> _crossLabels = {};
-
   /// Segment [LEdge]s that belong to a split cross-hierarchy edge — so
   /// [_collectEdges] knows to accumulate rather than emit them.
   final Set<LEdge> _crossSegmentEdges = {};
 
   /// Accumulated root-absolute polyline for each cross-hierarchy segment.
   final Map<LEdge, List<ElkPoint>> _crossSegmentPoints = {};
+
+  /// Positioned labels carried by cross-hierarchy segments.
+  final Map<LEdge, List<ElkPositionedLabel>> _crossSegmentLabels = {};
 
   /// Deferred links: after a nested graph is laid out, copy each external-port
   /// dummy's resolved border position onto the cluster's external [LPort].
@@ -512,18 +511,7 @@ class _Engine {
       final tp = _endpointPort(rn, tChildElk, e.target, false, tgtSegs,
           backward: backward);
 
-      if (sp == null || tp == null) {
-        // Endpoint is deeper than one level inside a cluster — not yet ported.
-        // Fall back to routing to the cluster boundary (no inner segment).
-        final fsp = _resolveOrCreatePort(ln, e.source, PortSide.east);
-        final ftp = _resolveOrCreatePort(rn, e.target, PortSide.west);
-        final le = LEdge()..identifier = e.id;
-        le.source = fsp;
-        le.target = ftp;
-        _attachLabels(le, e);
-        edgeMap[e.id] = le;
-        continue;
-      }
+      if (sp == null || tp == null) continue;
 
       final le = LEdge()..identifier = e.id;
       le.source = sp;
@@ -538,14 +526,12 @@ class _Engine {
         // full source→target chain for stitching, and mark every segment so the
         // extractor accumulates rather than emits it.
         edgeMap['__seg${_segCounter++}'] = le;
+        _attachLabels(le, e);
         _crossSegmentEdges.add(le);
         for (final s in [...srcSegs, ...tgtSegs]) {
           _crossSegmentEdges.add(s);
         }
         _crossSegments[e.id] = [...srcSegs, le, ...tgtSegs];
-        final holder = LEdge();
-        _attachLabels(holder, e);
-        _crossLabels[e.id] = holder.labels;
       }
     }
 
@@ -622,14 +608,9 @@ class _Engine {
   ///
   /// - If the endpoint *is* that child (its node id or one of its own declared
   ///   ports), returns the port directly — no split.
-  /// - If the endpoint lies exactly one level inside a compound child, splits
-  ///   the edge: mints an external port on the cluster (EAST for a source /
-  ///   output, WEST for a target / input) and an external-port dummy inside the
-  ///   nested graph (constrained to the last/first layer so it sits on the
-  ///   border), connects the real inner node to the dummy, appends that inner
-  ///   segment to [segs], and returns the cluster's external port.
-  /// - If the endpoint is deeper than one level, returns null (caller falls back
-  ///   to boundary routing — faithful multi-level splitting is a TODO).
+  /// - If the endpoint lies inside a compound child, recursively resolves the
+  ///   next descendant and creates one segment and one external-port pair per
+  ///   crossed hierarchy level.
   LPort? _endpointPort(LNode childLn, ElkNode childElk, String endpoint,
       bool isSource, List<LEdge> segs, {bool backward = false}) {
     // Which border the cross-hierarchy edge attaches to. For a forward edge a
@@ -651,20 +632,16 @@ class _Engine {
     final nested = childLn.nestedGraph;
     if (nested == null) return null;
 
-    // Find the inner LNode if the endpoint is a direct child (node or port) of
-    // the cluster's nested graph (one-level crossing).
-    LNode? innerLn;
-    for (final c in childElk.children) {
-      if (c.id == endpoint) {
-        innerLn = nodesByGraph[nested]![c.id];
-        break;
-      }
-      if (c.ports.any((p) => p.id == endpoint)) {
-        innerLn = _graphPortNode[nested]![endpoint];
-        break;
-      }
-    }
-    if (innerLn == null) return null; // deeper than one level → fallback
+    final innerId = _resolveDirectChild(nodesByGraph[nested]!,
+        _graphPortNode[nested]!, childElk.children, endpoint);
+    if (innerId == null) return null;
+    final innerLn = nodesByGraph[nested]![innerId]!;
+    final innerElk = childElk.children.firstWhere((n) => n.id == innerId);
+    final childSegs = <LEdge>[];
+    final innerPort = _endpointPort(
+        innerLn, innerElk, endpoint, isSource, childSegs,
+        backward: backward);
+    if (innerPort == null) return null;
 
     // External port on the cluster + external-port dummy inside the nested graph.
     final p = LPort(childLn)..side = clusterSide;
@@ -687,8 +664,6 @@ class _Engine {
     _portLinks.add(_PortLink(p, d, !useFirst));
 
     // Inner segment connecting the real node to the boundary dummy.
-    final innerPort = _resolveOrCreatePort(
-        innerLn, endpoint, isSource ? PortSide.east : PortSide.west);
     final seg = LEdge();
     if (isSource) {
       seg.source = innerPort;
@@ -698,7 +673,11 @@ class _Engine {
       seg.target = innerPort;
     }
     edgesByGraph[nested]!['__seg${_segCounter++}'] = seg;
-    segs.add(seg);
+    if (isSource) {
+      segs..addAll(childSegs)..add(seg);
+    } else {
+      segs..add(seg)..addAll(childSegs);
+    }
     return p;
   }
 
@@ -1206,13 +1185,6 @@ class _Engine {
         for (final b in le.bendPoints.points) at(b.x, b.y),
         at(tgt.absoluteAnchor.x, tgt.absoluteAnchor.y),
       ];
-      // Cross-hierarchy segment: accumulate its polyline for later stitching
-      // rather than emitting it as a standalone edge.
-      if (_crossSegmentEdges.contains(le)) {
-        _crossSegmentPoints[le] = pts;
-        continue;
-      }
-      // Edge labels (positioned by LabelDummyRemover into le.labels).
       final labels = <ElkPositionedLabel>[
         for (final ll in le.labels)
           () {
@@ -1226,6 +1198,13 @@ class _Engine {
             );
           }(),
       ];
+      // Cross-hierarchy segment: accumulate its polyline for later stitching
+      // rather than emitting it as a standalone edge.
+      if (_crossSegmentEdges.contains(le)) {
+        _crossSegmentPoints[le] = pts;
+        if (labels.isNotEmpty) _crossSegmentLabels[le] = labels;
+        continue;
+      }
       _edges.add(ElkPositionedEdge(
         id: entry.key,
         sections: [
@@ -1246,6 +1225,7 @@ class _Engine {
   void _stitchCrossEdges() {
     for (final entry in _crossSegments.entries) {
       final pts = <ElkPoint>[];
+      final labels = <ElkPositionedLabel>[];
       for (final seg in entry.value) {
         final segPts = _crossSegmentPoints[seg];
         if (segPts == null) continue;
@@ -1257,6 +1237,7 @@ class _Engine {
           }
           pts.add(p);
         }
+        labels.addAll(_crossSegmentLabels[seg] ?? const []);
       }
       if (pts.length < 2) continue;
       _edges.add(ElkPositionedEdge(
@@ -1268,8 +1249,7 @@ class _Engine {
             bendPoints: pts.sublist(1, pts.length - 1),
           ),
         ],
-        // TODO(elk-faithful): position labels on split cross-hierarchy edges.
-        labels: const [],
+        labels: labels,
       ));
     }
   }

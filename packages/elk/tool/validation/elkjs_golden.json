@@ -988,5 +988,45 @@
         }
       ]
     ]
+  },
+  "deep cross hierarchy (RIGHT)": {
+    "nodes": {
+      "outside": {
+        "x": 12,
+        "y": 36,
+        "width": 80,
+        "height": 40
+      },
+      "outer": {
+        "x": 201,
+        "y": 12,
+        "width": 133,
+        "height": 88
+      },
+      "inner": {
+        "x": 218,
+        "y": 24,
+        "width": 104,
+        "height": 64
+      },
+      "leaf": {
+        "x": 230,
+        "y": 36,
+        "width": 80,
+        "height": 40
+      }
+    },
+    "edges": [
+      [
+        {
+          "x": 92,
+          "y": 56
+        },
+        {
+          "x": 230,
+          "y": 56
+        }
+      ]
+    ]
   }
 }

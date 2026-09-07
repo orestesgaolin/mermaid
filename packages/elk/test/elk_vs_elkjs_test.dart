@@ -24,12 +24,24 @@ class _R {
 }
 
 void main() {
-  final graphsFile = File('tool/validation/graphs.json');
-  final goldenFile = File('tool/validation/elkjs_golden.json');
+  final packageRoot = [
+    Directory.current,
+    Directory('${Directory.current.path}/packages/elk'),
+    File.fromUri(Platform.script).parent.parent,
+  ].firstWhere(
+      (dir) => File('${dir.path}/tool/validation/graphs.json').existsSync(),
+      orElse: () => Directory.current);
+  final graphsFile = File('${packageRoot.path}/tool/validation/graphs.json');
+  final goldenFile = File('${packageRoot.path}/tool/validation/elkjs_golden.json');
 
   group('elk vs elkjs 0.9.3 (structural parity)', () {
     if (!graphsFile.existsSync() || !goldenFile.existsSync()) {
-      test('golden present', () {}, skip: 'run tool/validation/run_elkjs.mjs');
+      test('validation fixtures are available', () {
+        expect(graphsFile.existsSync(), isTrue,
+            reason: 'missing ${graphsFile.path}');
+        expect(goldenFile.existsSync(), isTrue,
+            reason: 'run tool/validation/run_elkjs.mjs');
+      });
       return;
     }
     final cases = (jsonDecode(graphsFile.readAsStringSync()) as List)
@@ -72,7 +84,8 @@ void main() {
             reason: 'flow-axis (layer) order must match elkjs');
 
         // 2. Our layout has no node overlaps.
-        expect(_overlaps(ours.values.toList()), 0, reason: 'no overlaps');
+        expect(_overlaps([for (final id in ids) ours[id]!]), 0,
+            reason: 'no leaf overlaps');
 
         // 3. No more edge crossings than elkjs (it produces crossing-free
         //    layouts on these graphs; so must we). This counts geometric

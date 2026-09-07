@@ -80,5 +80,71 @@ void main() {
       expect(c1.x, greaterThanOrEqualTo(-0.5));
       expect(c1.y, greaterThanOrEqualTo(-0.5));
     });
+
+    test('deep target reaches leaf and retains positioned label', () {
+      final res = const ElkLayered().layout(ElkGraph(
+        children: [
+          ElkNode(id: 'outside', width: 80, height: 40),
+          ElkNode(id: 'outer', children: [
+            ElkNode(id: 'inner', children: [
+              ElkNode(id: 'leaf', width: 80, height: 40),
+            ]),
+          ]),
+        ],
+        edges: [
+          ElkEdge(id: 'deep', sources: ['outside'], targets: ['leaf'], labels: [
+            ElkLabel(text: 'deep label', width: 64, height: 16),
+          ]),
+        ],
+      ));
+
+      final edge = res.edges.singleWhere((e) => e.id == 'deep');
+      expect(_onBoundary(edge.sections.single.endPoint, res.nodesById['leaf']!),
+          isTrue,
+          reason: 'the target must reach leaf, not an enclosing cluster');
+      final label = edge.labels.single;
+      expect((label.text, label.width, label.height), ('deep label', 64, 16));
+      expect(label.x.isFinite && label.y.isFinite, isTrue);
+      expect(label.x, inInclusiveRange(0, res.width - label.width));
+      expect(label.y, inInclusiveRange(0, res.height - label.height));
+    });
+
+    test('deep source starts at leaf through every cluster level', () {
+      final res = const ElkLayered().layout(ElkGraph(
+        children: [
+          ElkNode(id: 'outer', children: [
+            ElkNode(id: 'inner', children: [
+              ElkNode(id: 'leaf', width: 80, height: 40),
+            ]),
+          ]),
+          ElkNode(id: 'outside', width: 80, height: 40),
+        ],
+        edges: [
+          ElkEdge(id: 'deep', sources: ['leaf'], targets: ['outside']),
+        ],
+      ));
+
+      final edge = res.edges.singleWhere((e) => e.id == 'deep');
+      expect(_onBoundary(edge.sections.single.startPoint, res.nodesById['leaf']!),
+          isTrue,
+          reason: 'the source must start at leaf, not an enclosing cluster');
+      expect(edge.sections.single.points.length, greaterThanOrEqualTo(4),
+          reason: 'the stitched route must cross both cluster boundaries');
+    });
   });
+}
+
+bool _onBoundary(ElkPoint point, ElkPositionedNode node) {
+  const tolerance = 0.75;
+  final onVertical =
+      ((point.x - node.x).abs() <= tolerance ||
+          (point.x - (node.x + node.width)).abs() <= tolerance) &&
+      point.y >= node.y - tolerance &&
+      point.y <= node.y + node.height + tolerance;
+  final onHorizontal =
+      ((point.y - node.y).abs() <= tolerance ||
+          (point.y - (node.y + node.height)).abs() <= tolerance) &&
+      point.x >= node.x - tolerance &&
+      point.x <= node.x + node.width + tolerance;
+  return onVertical || onHorizontal;
 }
