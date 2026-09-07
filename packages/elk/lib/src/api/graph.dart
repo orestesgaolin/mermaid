@@ -114,6 +114,10 @@ class ElkNode {
     this.labels = const [],
     this.ports = const [],
     this.layoutOptions,
+    this.fixedSize = true,
+    this.sizeForLabels = false,
+    this.sizeForPorts = false,
+    this.preserveMinimumSize = true,
     this.labelPlacement,
     this.inLayerSuccessors = const [],
     this.barycenterAssociates = const [],
@@ -147,6 +151,10 @@ class ElkNode {
           for (final p in m['ports'] as List)
             if (p is Map) ElkPort.fromJson(p.cast<String, dynamic>()),
       ],
+      fixedSize: !_sizeConstraints(m).$1 && !_sizeConstraints(m).$2,
+      sizeForLabels: _sizeConstraints(m).$1,
+      sizeForPorts: _sizeConstraints(m).$2,
+      preserveMinimumSize: _sizeConstraints(m).$3,
     );
   }
 
@@ -164,6 +172,15 @@ class ElkNode {
 
   /// Per-node option overrides (e.g. a subgraph with its own [ElkDirection]).
   final ElkLayoutOptions? layoutOptions;
+  /// Keeps the declared width and height unchanged. Set false to enable
+  /// content-derived sizing; [sizeForLabels] and [sizeForPorts] select inputs.
+  final bool fixedSize;
+  /// Includes node-label bounds when computing a non-fixed node's size.
+  final bool sizeForLabels;
+  /// Includes each side's port group when computing a non-fixed node's size.
+  final bool sizeForPorts;
+  /// Treats the declared width and height as minima during content sizing.
+  final bool preserveMinimumSize;
   final ElkNodeLabelPlacement? labelPlacement;
 
   /// Node IDs that must follow this node in the same layer. This is a Dart API
@@ -175,6 +192,17 @@ class ElkNode {
   final List<String> barycenterAssociates;
 
   bool get isCompound => children.isNotEmpty;
+}
+
+(bool, bool, bool) _sizeConstraints(Map<String, dynamic> node) {
+  final value =
+      '${((node['layoutOptions'] as Map?) ?? const {})['elk.nodeSize.constraints'] ?? ''}'
+          .toUpperCase();
+  return (
+    value.contains('NODE_LABELS'),
+    value.contains('PORTS'),
+    value.contains('MINIMUM_SIZE'),
+  );
 }
 
 /// A directed edge from each id in [sources] to each id in [targets]. For

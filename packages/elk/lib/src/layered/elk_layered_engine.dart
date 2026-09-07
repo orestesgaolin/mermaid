@@ -35,8 +35,7 @@ import '../api/result.dart';
 import 'intermediate_constraints.dart';
 import 'intermediate_edges.dart';
 import 'intermediate_labels.dart';
-import 'intermediate_ports.dart'
-    hide portConstraints, PortConstraints;
+import 'intermediate_ports.dart' hide portConstraints, PortConstraints;
 // Alias the intermediate_ports symbols we DO need under different names so that
 // we can still call setProperty with the PortSideProcessor-compatible type.
 // We achieve this by importing again with a prefix just for the constraint type.
@@ -84,8 +83,9 @@ ElkResult layeredLayout(ElkGraph graph) {
   final unsupported = unsupportedElkFeature(graph);
   if (unsupported != null) {
     throw UnsupportedError(
-        'elk: $unsupported is not yet implemented in the faithful ELK '
-        'port (no dagre fallback by design). See lib/src/layered/PORTING.md.');
+      'elk: $unsupported is not yet implemented in the faithful ELK '
+      'port (no dagre fallback by design). See lib/src/layered/PORTING.md.',
+    );
   }
   final expansion = HyperedgeExpansion(graph);
   graph = expansion.graph;
@@ -129,7 +129,10 @@ ElkResult layeredLayout(ElkGraph graph) {
 ///          output-SOUTH → internal-WEST
 ///          output-NORTH → internal-EAST
 PortSide _outputSideToInternal(
-    ElkPortSide side, bool transpose, ElkDirection dir) {
+  ElkPortSide side,
+  bool transpose,
+  ElkDirection dir,
+) {
   if (transpose) {
     // DOWN and UP both swap X↔Y axes. UP additionally mirrors output Y, so
     // output NORTH/SOUTH map to the opposite internal flow-axis sides.
@@ -179,7 +182,9 @@ class _MarkFixedSideConstraints implements ILayoutProcessor {
     for (final ln in fixedSideNodes) {
       if (ln.graph == graph) {
         ln.setProperty(
-            _ports.portConstraints, _ports.PortConstraints.fixedSide);
+          _ports.portConstraints,
+          _ports.PortConstraints.fixedSide,
+        );
       }
     }
   }
@@ -206,9 +211,6 @@ class _Engine {
   final ElkLayoutOptions options;
   final bool transpose;
   final ElkDirection dir;
-
-  /// Original (untransposed) sizes of normal nodes, keyed by their [LNode].
-  final Map<LNode, (double, double)> origSize = {};
 
   /// Running model (declaration) order index assigned to each built [LNode].
   int _modelOrderCounter = 0;
@@ -277,26 +279,38 @@ class _Engine {
     // baseValue-derived spacing (matching mermaid-layout-elk) gives breathing
     // room. The BK placer reads the node/layer props; the orthogonal router
     // reads the edge props.
-    lg.setProperty(const Property<double>('bk.spacing.nodeNode'),
-        options.resolvedNodeNode);
-    lg.setProperty(const Property<double>('bk.spacing.layer'),
-        options.resolvedNodeNodeBetweenLayers);
+    lg.setProperty(
+      const Property<double>('bk.spacing.nodeNode'),
+      options.resolvedNodeNode,
+    );
+    lg.setProperty(
+      const Property<double>('bk.spacing.layer'),
+      options.resolvedNodeNodeBetweenLayers,
+    );
     // Spacing between adjacent long-edge dummy chains during Brandes–Köpf
     // placement. ELK derives this from baseValue (≈ baseValue·0.5); leaving it
     // at the raw default (10) packs parallel long edges into a tight bundle that
     // reads as one thick line. Match the router's edge spacing.
-    lg.setProperty(const Property<double>('bk.spacing.edgeEdge'),
-        options.resolvedEdgeNode);
+    lg.setProperty(
+      const Property<double>('bk.spacing.edgeEdge'),
+      options.resolvedEdgeNode,
+    );
     // Spacing between a pass-by edge (long-edge dummy) and a real/compound node
     // in the same layer. The raw default (10) lets an edge run flush against a
     // cluster border (the "hug"); derive it from the base value like the rest so
     // pass-by edges keep clearance from cluster sides.
-    lg.setProperty(const Property<double>('bk.spacing.nodeEdge'),
-        options.resolvedEdgeNode);
-    lg.setProperty(const Property<double>('p5.spacing.edgeEdge'),
-        options.resolvedEdgeNode);
-    lg.setProperty(const Property<double>('p5.spacing.edgeNode'),
-        options.resolvedEdgeNode);
+    lg.setProperty(
+      const Property<double>('bk.spacing.nodeEdge'),
+      options.resolvedEdgeNode,
+    );
+    lg.setProperty(
+      const Property<double>('p5.spacing.edgeEdge'),
+      options.resolvedEdgeNode,
+    );
+    lg.setProperty(
+      const Property<double>('p5.spacing.edgeNode'),
+      options.resolvedEdgeNode,
+    );
     // Model order: the crossing minimizer reads these to keep nodes in input
     // declaration order (ELK's considerModelOrder / forceNodeModelOrder).
     if (options.considerModelOrder != ElkConsiderModelOrder.none ||
@@ -317,8 +331,10 @@ class _Engine {
     for (final e in edges) {
       ElkNode? owner;
       for (final n in nodes) {
-        if (n.children.isEmpty) continue; // leaves can't own (self-loops stay here)
-        if (_endpointInSubtree(n, e.source) && _endpointInSubtree(n, e.target)) {
+        if (n.children.isEmpty)
+          continue; // leaves can't own (self-loops stay here)
+        if (_endpointInSubtree(n, e.source) &&
+            _endpointInSubtree(n, e.target)) {
           owner = n;
           break;
         }
@@ -330,10 +346,22 @@ class _Engine {
       }
     }
 
-    lg.setProperty(spacingPortsSurroundingTop, options.spacingPortsSurroundingTop);
-    lg.setProperty(spacingPortsSurroundingBottom, options.spacingPortsSurroundingBottom);
+    lg.setProperty(
+      spacingPortsSurroundingTop,
+      options.spacingPortsSurroundingTop,
+    );
+    lg.setProperty(
+      spacingPortsSurroundingBottom,
+      options.spacingPortsSurroundingBottom,
+    );
+    lg.setProperty(selfLoopNodeSpacing, options.spacingEdgeNode ?? 10);
+    lg.setProperty(selfLoopEdgeSpacing, options.spacingEdgeEdge);
+    lg.setProperty(bkImproveStraightness, options.improveStraightness);
     lg.setProperty(labelTranspose, transpose);
-    lg.setProperty(labelMirror, dir == ElkDirection.left || dir == ElkDirection.up);
+    lg.setProperty(
+      labelMirror,
+      dir == ElkDirection.left || dir == ElkDirection.up,
+    );
     lg.setProperty(nodeLabelSpacing, options.spacingNodeLabel);
     lg.setProperty(labelStackSpacing, options.spacingLabelLabel);
     lg.setProperty(edgeLabelSpacing, options.spacingEdgeLabel);
@@ -350,13 +378,27 @@ class _Engine {
       final ln = LNode(lg)..identifier = n.id;
       ln.setProperty(modelOrder, _modelOrderCounter++);
       byId[n.id] = ln;
-      ln.setProperty(nodeLabelPlacement, n.labelPlacement ?? (n.isCompound ? ElkNodeLabelPlacement.topCenter : ElkNodeLabelPlacement.topLeft));
-      for (final label in n.labels) { ln.labels.add(_makeLabel(label)); }
+      ln.setProperty(nodeSizeFixed, n.fixedSize);
+      ln.setProperty(nodeSizeForLabels, n.sizeForLabels);
+      ln.setProperty(nodeSizeForPorts, n.sizeForPorts);
+      ln.setProperty(preserveNodeMinimumSize, n.preserveMinimumSize);
+      ln.setProperty(
+        nodeLabelPlacement,
+        n.labelPlacement ??
+            (n.isCompound
+                ? ElkNodeLabelPlacement.topCenter
+                : ElkNodeLabelPlacement.topLeft),
+      );
+      for (final label in n.labels) {
+        ln.labels.add(_makeLabel(label));
+      }
       if (n.isCompound) {
         // Recurse: nested graph holds this node's own declared edges plus the
         // edges routed down to it by LCA assignment above.
-        ln.nestedGraph =
-            buildGraph(n.children, [...n.edges, ...?perChild[n.id]]);
+        ln.nestedGraph = buildGraph(n.children, [
+          ...n.edges,
+          ...?perChild[n.id],
+        ]);
         // Size is computed bottom-up after the nested layout; placeholder now.
         ln.size.x = 0;
         ln.size.y = 0;
@@ -368,10 +410,11 @@ class _Engine {
           for (final l in n.labels) {
             h += l.height + options.spacingLabelLabel;
           }
-          if (h > 0) _compoundBand[ln] = h - options.spacingLabelLabel + _labelBandMargin;
+          if (h > 0)
+            _compoundBand[ln] =
+                h - options.spacingLabelLabel + _labelBandMargin;
         }
       } else {
-        origSize[ln] = (n.width, n.height);
         // Internal RIGHT space: transpose swaps width/height.
         ln.size.x = transpose ? n.height : n.width;
         ln.size.y = transpose ? n.width : n.height;
@@ -395,7 +438,9 @@ class _Engine {
           // Port size in internal space (transposed like the node).
           lp.size.x = transpose ? ep.height : ep.width;
           lp.size.y = transpose ? ep.width : ep.height;
-          for (final label in ep.labels) { lp.labels.add(_makeLabel(label)); }
+          for (final label in ep.labels) {
+            lp.labels.add(_makeLabel(label));
+          }
           ln.ports.add(lp);
         }
 
@@ -451,13 +496,31 @@ class _Engine {
       }
       if (sn == tn) {
         final node = byId[sn];
-        if (node != null && e.source == e.target) {
+        if (node != null &&
+            (e.source == e.target ||
+                (portNodeById[e.source] == node &&
+                    portNodeById[e.target] == node))) {
           // A true self-loop: both ports on the same node (the self-loop
           // processors detach, route, and reattach it).
-          final sp = LPort(node)..side = PortSide.north;
-          node.ports.add(sp);
-          final tp = LPort(node)..side = PortSide.north;
-          node.ports.add(tp);
+          final sp =
+              declaredPortsById[node]?[e.source] ??
+              (LPort(node)
+                ..side = _outputSideToInternal(
+                  ElkPortSide.north,
+                  transpose,
+                  dir,
+                ));
+          if (!node.ports.contains(sp)) node.ports.add(sp);
+          final tp =
+              declaredPortsById[node]?[e.target] ??
+              (LPort(node)
+                ..side = _outputSideToInternal(
+                  ElkPortSide.north,
+                  transpose,
+                  dir,
+                ));
+          if (!node.ports.contains(tp)) node.ports.add(tp);
+          _nodesWithFixedSides.add(node);
           final le = LEdge()..identifier = e.id;
           le.source = sp;
           le.target = tp;
@@ -484,10 +547,22 @@ class _Engine {
       // segment will travel "up" the flow, so both ends attach to the border
       // facing the other endpoint.
       final backward = (childRank[tn] ?? 0) < (childRank[sn] ?? 0);
-      final sp = _endpointPort(ln, sChildElk, e.source, true, srcSegs,
-          backward: backward);
-      final tp = _endpointPort(rn, tChildElk, e.target, false, tgtSegs,
-          backward: backward);
+      final sp = _endpointPort(
+        ln,
+        sChildElk,
+        e.source,
+        true,
+        srcSegs,
+        backward: backward,
+      );
+      final tp = _endpointPort(
+        rn,
+        tChildElk,
+        e.target,
+        false,
+        tgtSegs,
+        backward: backward,
+      );
 
       if (sp == null || tp == null) continue;
 
@@ -533,9 +608,12 @@ class _Engine {
   /// border a cross-hierarchy edge should attach to. This mirrors the gross
   /// source→sink ordering the network-simplex layerer will produce, computed
   /// cheaply before any LEdges exist.
-  Map<String, int> _coarseChildRanks(List<ElkNode> nodes,
-      Map<String, LNode> byId, Map<String, LNode> portNodeById,
-      List<ElkEdge> ownedHere) {
+  Map<String, int> _coarseChildRanks(
+    List<ElkNode> nodes,
+    Map<String, LNode> byId,
+    Map<String, LNode> portNodeById,
+    List<ElkEdge> ownedHere,
+  ) {
     final adj = {for (final n in nodes) n.id: <String>{}};
     for (final e in ownedHere) {
       final s = _resolveDirectChild(byId, portNodeById, nodes, e.source);
@@ -560,6 +638,7 @@ class _Engine {
       onStack.remove(u);
       return height[u] = best;
     }
+
     for (final n in nodes) {
       visit(n.id);
     }
@@ -574,7 +653,10 @@ class _Engine {
   /// Declared ports are reused across multiple edges (a single port may carry
   /// several edges). Auto-created ports are added to the node's port list.
   LPort _resolveOrCreatePort(
-      LNode node, String endpoint, PortSide defaultSide) {
+    LNode node,
+    String endpoint,
+    PortSide defaultSide,
+  ) {
     final portMap = declaredPortsById[node];
     if (portMap != null) {
       final existing = portMap[endpoint];
@@ -598,8 +680,14 @@ class _Engine {
   /// - If the endpoint lies inside a compound child, recursively resolves the
   ///   next descendant and creates one segment and one external-port pair per
   ///   crossed hierarchy level.
-  LPort? _endpointPort(LNode childLn, ElkNode childElk, String endpoint,
-      bool isSource, List<LEdge> segs, {bool backward = false}) {
+  LPort? _endpointPort(
+    LNode childLn,
+    ElkNode childElk,
+    String endpoint,
+    bool isSource,
+    List<LEdge> segs, {
+    bool backward = false,
+  }) {
     // Which border the cross-hierarchy edge attaches to. For a forward edge a
     // source exits the DOWNSTREAM side (last layer / EAST) and a target enters
     // the UPSTREAM side (first layer / WEST). For a back-edge (the far endpoint's
@@ -619,15 +707,24 @@ class _Engine {
     final nested = childLn.nestedGraph;
     if (nested == null) return null;
 
-    final innerId = _resolveDirectChild(nodesByGraph[nested]!,
-        _graphPortNode[nested]!, childElk.children, endpoint);
+    final innerId = _resolveDirectChild(
+      nodesByGraph[nested]!,
+      _graphPortNode[nested]!,
+      childElk.children,
+      endpoint,
+    );
     if (innerId == null) return null;
     final innerLn = nodesByGraph[nested]![innerId]!;
     final innerElk = childElk.children.firstWhere((n) => n.id == innerId);
     final childSegs = <LEdge>[];
     final innerPort = _endpointPort(
-        innerLn, innerElk, endpoint, isSource, childSegs,
-        backward: backward);
+      innerLn,
+      innerElk,
+      endpoint,
+      isSource,
+      childSegs,
+      backward: backward,
+    );
     if (innerPort == null) return null;
 
     // External port on the cluster + external-port dummy inside the nested graph.
@@ -637,8 +734,10 @@ class _Engine {
     _nodesWithFixedSides.add(childLn);
 
     final d = LNode(nested)..type = NodeType.externalPort;
-    d.setProperty(layerConstraint,
-        useFirst ? LayerConstraint.firstSeparate : LayerConstraint.lastSeparate);
+    d.setProperty(
+      layerConstraint,
+      useFirst ? LayerConstraint.firstSeparate : LayerConstraint.lastSeparate,
+    );
     // The dummy's own port faces inward (toward the cluster's content), i.e. the
     // side opposite the border it sits on.
     final dPort = LPort(d)..side = useFirst ? PortSide.east : PortSide.west;
@@ -661,9 +760,13 @@ class _Engine {
     }
     edgesByGraph[nested]!['__seg${_segCounter++}'] = seg;
     if (isSource) {
-      segs..addAll(childSegs)..add(seg);
+      segs
+        ..addAll(childSegs)
+        ..add(seg);
     } else {
-      segs..add(seg)..addAll(childSegs);
+      segs
+        ..add(seg)
+        ..addAll(childSegs);
     }
     return p;
   }
@@ -689,10 +792,11 @@ class _Engine {
   /// level entirely. [nodes] is this level's input node list (for descent).
   /// [portNodeById] maps declared port ids to their owning nodes at this level.
   String? _resolveDirectChild(
-      Map<String, LNode> byId,
-      Map<String, LNode> portNodeById,
-      List<ElkNode> nodes,
-      String endpoint) {
+    Map<String, LNode> byId,
+    Map<String, LNode> portNodeById,
+    List<ElkNode> nodes,
+    String endpoint,
+  ) {
     // Direct hit on a node id.
     if (byId.containsKey(endpoint)) return endpoint;
     // Direct hit on a declared port at this level.
@@ -735,54 +839,54 @@ class _Engine {
   /// order-based — they need no node sizes — so they can run on every graph in
   /// the hierarchy before any placement happens.
   List<ILayoutProcessor> _preCrossminProcessors() => [
-        // self-loops detached before everything else
-        SelfLoopPreProcessor(),
-        // before P1
-        EdgeAndLayerConstraintEdgeReverser(),
-        // P1
-        GreedyCycleBreaker(),
-        // before P2
-        LayerConstraintPreprocessor(),
-        LabelDummyInserter(),
-        // P2
-        NetworkSimplexLayerer(),
-        // before P3 (enum order: long-edge split, port side, inverted, port sort)
-        LayerConstraintPostprocessor(),
-        LongEdgeSplitter(),
-        // Set portConstraints = FIXED_SIDE (using intermediate_ports type) for
-        // nodes with declared sides, just before PortSideProcessor reads it.
-        // This must run AFTER EdgeAndLayerConstraintEdgeReverser (which reads the
-        // property using intermediate_constraints' type — safely unset until here).
-        _MarkFixedSideConstraints(_nodesWithFixedSides),
-        PortSideProcessor(),
-        InvertedPortProcessor(),
-        PortListSorter(),
-      ];
+    // self-loops detached before everything else
+    SelfLoopPreProcessor(),
+    // before P1
+    EdgeAndLayerConstraintEdgeReverser(),
+    // P1
+    GreedyCycleBreaker(),
+    // before P2
+    LayerConstraintPreprocessor(),
+    LabelDummyInserter(),
+    // P2
+    NetworkSimplexLayerer(),
+    // before P3 (enum order: long-edge split, port side, inverted, port sort)
+    LayerConstraintPostprocessor(),
+    LongEdgeSplitter(),
+    // Set portConstraints = FIXED_SIDE (using intermediate_ports type) for
+    // nodes with declared sides, just before PortSideProcessor reads it.
+    // This must run AFTER EdgeAndLayerConstraintEdgeReverser (which reads the
+    // property using intermediate_constraints' type — safely unset until here).
+    _MarkFixedSideConstraints(_nodesWithFixedSides),
+    PortSideProcessor(),
+    InvertedPortProcessor(),
+    PortListSorter(),
+  ];
 
   /// Processors that run *after* crossing minimization (margins, sizing,
   /// placement, routing). Placement needs each compound child's size, so this
   /// segment runs bottom-up.
   List<ILayoutProcessor> _postCrossminProcessors() => [
-        // before P4
-        LabelAndNodeSizeProcessor(),
-        InnermostNodeMarginCalculator(),
+    // before P4
+    LabelAndNodeSizeProcessor(),
+    InnermostNodeMarginCalculator(),
 
-        InLayerConstraintProcessor(),
-        HyperedgeDummyMerger(),
-        // P4
-        BKNodePlacer(),
-        // before P5
-        LayerSizeAndGraphHeightCalculator(),
-        // P5
-        OrthogonalRoutingGenerator(),
-        // after P5: route self-loops, extract label positions, then rejoin
-        // long-edge/label dummies and restore reversed edges.
-        SelfLoopRouter(),
-        SelfLoopPostProcessor(),
-        LabelDummyRemover(),
-        LongEdgeJoiner(),
-        ReversedEdgeRestorer(),
-      ];
+    InLayerConstraintProcessor(),
+    HyperedgeDummyMerger(),
+    // P4
+    BKNodePlacer(),
+    // before P5
+    LayerSizeAndGraphHeightCalculator(),
+    // P5
+    OrthogonalRoutingGenerator(),
+    // after P5: route self-loops, extract label positions, then rejoin
+    // long-edge/label dummies and restore reversed edges.
+    SelfLoopRouter(),
+    SelfLoopPostProcessor(),
+    LabelDummyRemover(),
+    LongEdgeJoiner(),
+    ReversedEdgeRestorer(),
+  ];
 
   void _runProcessors(List<ILayoutProcessor> ps, LGraph lg) {
     for (final p in ps) {
@@ -870,16 +974,25 @@ class _Engine {
     ]) {
       final ng = cn.nestedGraph;
       if (ng == null) continue;
-      final links = [for (final l in _portLinks) if (l.dummy.graph == ng) l];
+      final links = [
+        for (final l in _portLinks)
+          if (l.dummy.graph == ng) l,
+      ];
       if (links.isEmpty) continue;
       int dummyIndex(LNode d) => d.layer?.nodes.indexOf(d) ?? 0;
       int sideRank(LPort p) => p.side == PortSide.west ? 0 : 1;
-      final sorted = [...links]..sort((a, b) {
+      final sorted = [...links]
+        ..sort((a, b) {
           final s = sideRank(a.port).compareTo(sideRank(b.port));
-          return s != 0 ? s : dummyIndex(a.dummy).compareTo(dummyIndex(b.dummy));
+          return s != 0
+              ? s
+              : dummyIndex(a.dummy).compareTo(dummyIndex(b.dummy));
         });
       final crossPorts = {for (final l in links) l.port};
-      final others = [for (final p in cn.ports) if (!crossPorts.contains(p)) p];
+      final others = [
+        for (final p in cn.ports)
+          if (!crossPorts.contains(p)) p,
+      ];
       cn.ports
         ..clear()
         ..addAll([...others, for (final l in sorted) l.port]);
@@ -956,21 +1069,36 @@ class _Engine {
     final surroundingBottom = graph.getProperty(spacingPortsSurroundingBottom);
     if (surroundingTop > 0 || surroundingBottom > 0) {
       for (final layer in graph.layers) {
-        for (final node in layer.nodes.where((n) => n.type == NodeType.externalPort)) {
-          yield (node.position.x, node.position.y - surroundingTop,
-              node.size.x, node.size.y + surroundingTop + surroundingBottom);
+        for (final node in layer.nodes.where(
+          (n) => n.type == NodeType.externalPort,
+        )) {
+          yield (
+            node.position.x,
+            node.position.y - surroundingTop,
+            node.size.x,
+            node.size.y + surroundingTop + surroundingBottom,
+          );
         }
       }
     }
     for (final node in _placedNodes(graph)) {
       yield (node.position.x, node.position.y, node.size.x, node.size.y);
       for (final label in node.labels) {
-        yield (node.position.x + label.position.x, node.position.y + label.position.y, label.size.x, label.size.y);
+        yield (
+          node.position.x + label.position.x,
+          node.position.y + label.position.y,
+          label.size.x,
+          label.size.y,
+        );
       }
       for (final port in node.ports) {
         for (final label in port.labels) {
-          yield (node.position.x + port.position.x + label.position.x,
-              node.position.y + port.position.y + label.position.y, label.size.x, label.size.y);
+          yield (
+            node.position.x + port.position.x + label.position.x,
+            node.position.y + port.position.y + label.position.y,
+            label.size.x,
+            label.size.y,
+          );
         }
       }
     }
@@ -987,10 +1115,10 @@ class _Engine {
     final (minX, minY) = _internalOrigin(lg);
     var maxX = minX, maxY = minY;
     for (final (x, y, w, h) in rects) {
-      if (x+w > maxX) maxX = x+w;
-      if (y+h > maxY) maxY = y+h;
+      if (x + w > maxX) maxX = x + w;
+      if (y + h > maxY) maxY = y + h;
     }
-    return (maxX-minX, maxY-minY);
+    return (maxX - minX, maxY - minY);
   }
 
   /// The placed (layered) nodes of [lg], i.e. the original input nodes that the
@@ -999,7 +1127,7 @@ class _Engine {
     final byId = nodesByGraph[lg]!;
     return [
       for (final ln in byId.values)
-        if (ln.layer != null) ln
+        if (ln.layer != null) ln,
     ];
   }
 
@@ -1068,7 +1196,8 @@ class _Engine {
   ) {
     final nested = ln.nestedGraph;
     if (nested == null) {
-      final (w, h) = origSize[ln]!;
+      final w = transpose ? ln.size.y : ln.size.x;
+      final h = transpose ? ln.size.x : ln.size.y;
       final tl = parentOut(ln.position.x, ln.position.y);
       var x = tl.x, y = tl.y;
       // Mirror maps the top-left corner to the right/bottom; re-anchor.
@@ -1079,8 +1208,14 @@ class _Engine {
       final ports = _extractDeclaredPorts(ln, x, y, w, h, parentOut);
 
       return ElkPositionedNode(
-          id: ln.identifier!, x: x, y: y, width: w, height: h, ports: ports,
-          labels: _nodeLabels(ln, w, h));
+        id: ln.identifier!,
+        x: x,
+        y: y,
+        width: w,
+        height: h,
+        ports: ports,
+        labels: _nodeLabels(ln, w, h),
+      );
     }
 
     // Compound node: its own size in output space.
@@ -1136,25 +1271,41 @@ class _Engine {
     );
   }
 
-  List<ElkPositionedLabel> _nodeLabels(LNode node, double width, double height,
-      {bool compound = false}) {
-    final total = node.labels.fold(0.0, (v, l) => v + (transpose ? l.size.x : l.size.y)) +
-        (node.labels.length > 1 ? (node.labels.length - 1) * options.spacingLabelLabel : 0);
+  List<ElkPositionedLabel> _nodeLabels(
+    LNode node,
+    double width,
+    double height, {
+    bool compound = false,
+  }) {
+    final total =
+        node.labels.fold(0.0, (v, l) => v + (transpose ? l.size.x : l.size.y)) +
+        (node.labels.length > 1
+            ? (node.labels.length - 1) * options.spacingLabelLabel
+            : 0);
     final placement = node.getProperty(nodeLabelPlacement);
     var y = switch (placement) {
       ElkNodeLabelPlacement.topLeft => 0.0,
       ElkNodeLabelPlacement.topCenter => options.spacingNodeLabel,
-      ElkNodeLabelPlacement.center => (height-total)/2,
-      ElkNodeLabelPlacement.bottomCenter => height-total-options.spacingNodeLabel,
+      ElkNodeLabelPlacement.center => (height - total) / 2,
+      ElkNodeLabelPlacement.bottomCenter =>
+        height - total - options.spacingNodeLabel,
     };
-    return [for (final label in node.labels) (() {
-      final w = transpose ? label.size.y : label.size.x;
-      final h = transpose ? label.size.x : label.size.y;
-      final result = ElkPositionedLabel(text: label.text, x: placement == ElkNodeLabelPlacement.topLeft ? 0 : (width - w) / 2,
-          y: y, width: w, height: h);
-      y += h + options.spacingLabelLabel;
-      return result;
-    })()];
+    return [
+      for (final label in node.labels)
+        (() {
+          final w = transpose ? label.size.y : label.size.x;
+          final h = transpose ? label.size.x : label.size.y;
+          final result = ElkPositionedLabel(
+            text: label.text,
+            x: placement == ElkNodeLabelPlacement.topLeft ? 0 : (width - w) / 2,
+            y: y,
+            width: w,
+            height: h,
+          );
+          y += h + options.spacingLabelLabel;
+          return result;
+        })(),
+    ];
   }
 
   /// Extracts the declared [LPort]s of [ln] as [ElkPositionedPort]s, with
@@ -1179,7 +1330,10 @@ class _Engine {
       final lp = entry.value;
       // The port's absolute internal anchor (node-position + port-position + anchor).
       // Map through the same transform as the node's positions.
-      final outputPt = parentOut(ln.position.x + lp.position.x, ln.position.y + lp.position.y);
+      final outputPt = parentOut(
+        ln.position.x + lp.position.x,
+        ln.position.y + lp.position.y,
+      );
       var px = outputPt.x, py = outputPt.y;
       // Output-space port size (un-transpose).
       final pw = transpose ? lp.size.y : lp.size.x;
@@ -1190,22 +1344,33 @@ class _Engine {
       // Convert to node-relative.
       final relX = px - nodeX;
       final relY = py - nodeY;
-      result.add(ElkPositionedPort(
-        id: entry.key,
-        x: relX,
-        y: relY,
-        width: pw,
-        height: ph,
-        labels: [for (final label in lp.labels) (() {
-          final pos = parentOut(ln.position.x + lp.position.x + label.position.x,
-              ln.position.y + lp.position.y + label.position.y);
-          final w = transpose ? label.size.y : label.size.x;
-          final h = transpose ? label.size.x : label.size.y;
-          return ElkPositionedLabel(text: label.text,
-            x: pos.x - px - (dir == ElkDirection.left ? w : 0),
-            y: pos.y - py - (dir == ElkDirection.up ? h : 0), width: w, height: h);
-        })()],
-      ));
+      result.add(
+        ElkPositionedPort(
+          id: entry.key,
+          x: relX,
+          y: relY,
+          width: pw,
+          height: ph,
+          labels: [
+            for (final label in lp.labels)
+              (() {
+                final pos = parentOut(
+                  ln.position.x + lp.position.x + label.position.x,
+                  ln.position.y + lp.position.y + label.position.y,
+                );
+                final w = transpose ? label.size.y : label.size.x;
+                final h = transpose ? label.size.x : label.size.y;
+                return ElkPositionedLabel(
+                  text: label.text,
+                  x: pos.x - px - (dir == ElkDirection.left ? w : 0),
+                  y: pos.y - py - (dir == ElkDirection.up ? h : 0),
+                  width: w,
+                  height: h,
+                );
+              })(),
+          ],
+        ),
+      );
     }
     return result;
   }
@@ -1241,8 +1406,16 @@ class _Engine {
             final p = at(ll.position.x, ll.position.y);
             return ElkPositionedLabel(
               text: ll.text,
-              x: p.x - (dir == ElkDirection.left ? (transpose ? ll.size.y : ll.size.x) : 0),
-              y: p.y - (dir == ElkDirection.up ? (transpose ? ll.size.x : ll.size.y) : 0),
+              x:
+                  p.x -
+                  (dir == ElkDirection.left
+                      ? (transpose ? ll.size.y : ll.size.x)
+                      : 0),
+              y:
+                  p.y -
+                  (dir == ElkDirection.up
+                      ? (transpose ? ll.size.x : ll.size.y)
+                      : 0),
               width: transpose ? ll.size.y : ll.size.x,
               height: transpose ? ll.size.x : ll.size.y,
             );
@@ -1250,25 +1423,31 @@ class _Engine {
       ];
       // Cross-hierarchy segment: accumulate its polyline for later stitching
       // rather than emitting it as a standalone edge.
-      final junctions = [for (final point in le.getProperty(junctionPoints)?.points ?? <KVector>[]) at(point.x, point.y)];
+      final junctions = [
+        for (final point
+            in le.getProperty(junctionPoints)?.points ?? <KVector>[])
+          at(point.x, point.y),
+      ];
       if (_crossSegmentEdges.contains(le)) {
         _crossSegmentJunctions[le] = junctions;
         _crossSegmentPoints[le] = pts;
         if (labels.isNotEmpty) _crossSegmentLabels[le] = labels;
         continue;
       }
-      _edges.add(ElkPositionedEdge(
-        id: entry.key,
-        sections: [
-          ElkEdgeSection(
-            startPoint: pts.first,
-            endPoint: pts.last,
-            bendPoints: pts.sublist(1, pts.length - 1),
-          ),
-        ],
-        labels: labels,
-        junctionPoints: junctions,
-      ));
+      _edges.add(
+        ElkPositionedEdge(
+          id: entry.key,
+          sections: [
+            ElkEdgeSection(
+              startPoint: pts.first,
+              endPoint: pts.last,
+              bendPoints: pts.sublist(1, pts.length - 1),
+            ),
+          ],
+          labels: labels,
+          junctionPoints: junctions,
+        ),
+      );
     }
   }
 
@@ -1295,18 +1474,20 @@ class _Engine {
         junctions.addAll(_crossSegmentJunctions[seg] ?? const []);
       }
       if (pts.length < 2) continue;
-      _edges.add(ElkPositionedEdge(
-        id: entry.key,
-        sections: [
-          ElkEdgeSection(
-            startPoint: pts.first,
-            endPoint: pts.last,
-            bendPoints: pts.sublist(1, pts.length - 1),
-          ),
-        ],
-        labels: labels,
-        junctionPoints: uniquePoints(junctions),
-      ));
+      _edges.add(
+        ElkPositionedEdge(
+          id: entry.key,
+          sections: [
+            ElkEdgeSection(
+              startPoint: pts.first,
+              endPoint: pts.last,
+              bendPoints: pts.sublist(1, pts.length - 1),
+            ),
+          ],
+          labels: labels,
+          junctionPoints: uniquePoints(junctions),
+        ),
+      );
     }
   }
 }

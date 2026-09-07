@@ -11,8 +11,8 @@
 ///     `intermediate/loops/routing/OrthogonalSelfLoopRouter.java`)
 ///   `intermediate/SelfLoopPostProcessor.java`
 ///
-/// Scope: common case — self-loops on `NodeType.normal` nodes, orthogonal
-/// routing, one or more self-loops stacked on one side. The full hyper-loop
+/// Supports one-side, adjacent-side, and opposing-side orthogonal self-loops
+/// on `NodeType.normal` nodes, with independent spacing on each side. The full hyper-loop
 /// label machinery (`SelfHyperLoopLabels`, `LabelPlacer`) is deferred.
 ///
 /// ## Self-loop port side
@@ -39,15 +39,21 @@ import 'property.dart';
 /// Property id: `'selfLoopHolder'`
 const _selfLoopHolder = Property<SelfLoopHolder?>('selfLoopHolder');
 
+const selfLoopNodeSpacing = Property<double>('selfLoopNodeSpacing', 10.0);
+const selfLoopEdgeSpacing = Property<double>('selfLoopEdgeSpacing', 10.0);
+
 // ---------------------------------------------------------------------------
 // Internal data model  (mirrors SelfLoopHolder / SelfLoopEdge / SelfLoopPort)
 // ---------------------------------------------------------------------------
 
 /// Holds all self-loop state for a single [LNode].
 class SelfLoopHolder {
-  SelfLoopHolder(this.node);
+  SelfLoopHolder(this.node)
+      : originalMargin = LInsets(node.margin.top, node.margin.right,
+            node.margin.bottom, node.margin.left);
 
   final LNode node;
+  final LInsets originalMargin;
 
   /// All self-loop edges on this node, in original port-list order.
   final List<_SelfLoopEdge> edges = [];
@@ -75,6 +81,8 @@ class _SelfLoopEdge {
 
   /// Depth within the side's stack (0 = closest to the node).
   int routingSlot = 0;
+  int sourceSlot = 0;
+  int targetSlot = 0;
 }
 
 // ---------------------------------------------------------------------------
@@ -125,6 +133,27 @@ class SelfLoopPreProcessor implements ILayoutProcessor {
     final holder = SelfLoopHolder(node);
     holder.edges.addAll(selfLoopEdges);
     node.setProperty(_selfLoopHolder, holder);
+    final counts = <PortSide, int>{};
+    for (final loop in selfLoopEdges) {
+      final source = loop.sourcePort.side == PortSide.undefined
+          ? PortSide.north
+          : loop.sourcePort.side;
+      final target = loop.targetPort.side == PortSide.undefined
+          ? source
+          : loop.targetPort.side;
+      counts[source] = (counts[source] ?? 0) + 1;
+      if (target != source) counts[target] = (counts[target] ?? 0) + 1;
+    }
+    final nodeGap = node.graph.getProperty(selfLoopNodeSpacing);
+    final edgeGap = node.graph.getProperty(selfLoopEdgeSpacing);
+    double extra(PortSide side) => (counts[side] ?? 0) == 0
+        ? 0
+        : nodeGap + ((counts[side] ?? 1) - 1) * edgeGap;
+    node.margin.top += extra(PortSide.north);
+    node.margin.right += extra(PortSide.east);
+    node.margin.bottom += extra(PortSide.south);
+    node.margin.left += extra(PortSide.west);
+
 
     // Detach edges from the port graph so the pipeline doesn't see them.
     for (final sle in selfLoopEdges) {
@@ -133,6 +162,7 @@ class SelfLoopPreProcessor implements ILayoutProcessor {
     }
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // Stage 2: SelfLoopRouter
@@ -160,10 +190,8 @@ class SelfLoopPreProcessor implements ILayoutProcessor {
 /// Mirrors `SelfLoopRouter.java` / `OrthogonalSelfLoopRouter.java`.
 class SelfLoopRouter implements ILayoutProcessor {
   /// Gap from the node border (or margin) to the innermost routing slot.
-  static const double _nodeSLDistance = 10.0;
 
   /// Centre-to-centre spacing between consecutive routing slots.
-  static const double _edgeEdgeDistance = 10.0;
 
   @override
   void process(LGraph graph) {
@@ -186,12 +214,27 @@ class SelfLoopRouter implements ILayoutProcessor {
     // Simple strategy: all loops on NORTH, stacked outward.
     // A future improvement can distribute across sides using the port's side
     // and the `SELF_LOOP_DISTRIBUTION` option.
-    int northSlot = 0;
+    final slots = <PortSide, int>{};
     for (final sle in holder.edges) {
-      sle.routingSide = PortSide.north;
-      sle.routingSlot = northSlot++;
+      final sourceSide = sle.sourcePort.side;
+      final targetSide = sle.targetPort.side;
+      sle.routingSide = sourceSide == PortSide.undefined
+          ? PortSide.north
+          : sourceSide;
+      sle.sourceSlot = slots[sle.routingSide] ?? 0;
+      slots[sle.routingSide] = sle.sourceSlot + 1;
+      final resolvedTarget = targetSide == PortSide.undefined
+          ? sle.routingSide
+          : targetSide;
+      if (resolvedTarget == sle.routingSide) {
+        sle.targetSlot = sle.sourceSlot;
+      } else {
+        sle.targetSlot = slots[resolvedTarget] ?? 0;
+        slots[resolvedTarget] = sle.targetSlot + 1;
+      }
+      sle.routingSlot = sle.sourceSlot;
     }
-    holder.routingSlotCount[PortSide.north] = northSlot;
+    holder.routingSlotCount.addAll(slots);
 
     // --- 2. Compute routing slot positions -----------------------------------
     // NORTH: routing lines sit *above* the node (negative y in node-relative
@@ -199,31 +242,30 @@ class SelfLoopRouter implements ILayoutProcessor {
     // slot moves further upward by edgeEdgeDistance.
     //
     // The position is the y coordinate of the horizontal run of the loop.
-    final marginTop = node.margin.top;
-    final marginEast = node.margin.right;
-    final marginSouth = node.margin.bottom;
-    final marginWest = node.margin.left;
+    final marginTop = holder.originalMargin.top;
+    final marginEast = holder.originalMargin.right;
+    final marginSouth = holder.originalMargin.bottom;
+    final marginWest = holder.originalMargin.left;
 
     // Pre-compute slot y/x positions for all four sides (mirrors
     // OrthogonalSelfLoopRouter.computeRoutingSlotPositions).
     // Only NORTH is used by the default strategy, but all four are computed
     // for completeness and future multi-side support.
+    final nodeDistance = node.graph.getProperty(selfLoopNodeSpacing);
+    final edgeDistance = node.graph.getProperty(selfLoopEdgeSpacing);
     Map<PortSide, double Function(int slot)> slotPos = {
       // NORTH: grows negative (upward)
       PortSide.north: (slot) =>
-          -(marginTop + _nodeSLDistance + slot * _edgeEdgeDistance),
+          -(marginTop + nodeDistance + slot * edgeDistance),
       // EAST: grows positive (rightward)
       PortSide.east: (slot) =>
-          node.size.x + marginEast + _nodeSLDistance + slot * _edgeEdgeDistance,
+          node.size.x + marginEast + nodeDistance + slot * edgeDistance,
       // SOUTH: grows positive (downward)
       PortSide.south: (slot) =>
-          node.size.y +
-          marginSouth +
-          _nodeSLDistance +
-          slot * _edgeEdgeDistance,
+          node.size.y + marginSouth + nodeDistance + slot * edgeDistance,
       // WEST: grows negative (leftward)
       PortSide.west: (slot) =>
-          -(marginWest + _nodeSLDistance + slot * _edgeEdgeDistance),
+          -(marginWest + nodeDistance + slot * edgeDistance),
     };
 
     // --- 3. Compute bend points for each self-loop --------------------------
@@ -266,6 +308,49 @@ class SelfLoopRouter implements ILayoutProcessor {
     final tpAnchorX = sle.targetPort.position.x + sle.targetPort.anchor.x;
     final tpAnchorY = sle.targetPort.position.y + sle.targetPort.anchor.y;
 
+    final targetSide = sle.targetPort.side == PortSide.undefined
+        ? side
+        : sle.targetPort.side;
+    if (targetSide != side) {
+      final sourceRoute = slotPos[side]!(sle.sourceSlot);
+      final targetRoute = slotPos[targetSide]!(sle.targetSlot);
+      KVector outward(PortSide portSide, double route, double x, double y) =>
+          switch (portSide) {
+            PortSide.north || PortSide.south => KVector(x, route),
+            PortSide.east || PortSide.west => KVector(route, y),
+            PortSide.undefined => KVector(x, route),
+          };
+      final sourceOut = outward(side, sourceRoute, spAnchorX, spAnchorY);
+      final targetOut = outward(targetSide, targetRoute, tpAnchorX, tpAnchorY);
+      sle.lEdge.bendPoints.add(sourceOut);
+      final opposite =
+          (side == PortSide.north && targetSide == PortSide.south) ||
+          (side == PortSide.south && targetSide == PortSide.north) ||
+          (side == PortSide.east && targetSide == PortSide.west) ||
+          (side == PortSide.west && targetSide == PortSide.east);
+      if (opposite) {
+        if (side == PortSide.north || side == PortSide.south) {
+          final around = slotPos[PortSide.east]!(0);
+          sle.lEdge.bendPoints
+            ..add(KVector(around, sourceRoute))
+            ..add(KVector(around, targetRoute));
+        } else {
+          final around = slotPos[PortSide.north]!(0);
+          sle.lEdge.bendPoints
+            ..add(KVector(sourceRoute, around))
+            ..add(KVector(targetRoute, around));
+        }
+      } else {
+        sle.lEdge.bendPoints.add(
+          side == PortSide.north || side == PortSide.south
+              ? KVector(targetOut.x, sourceOut.y)
+              : KVector(sourceOut.x, targetOut.y),
+        );
+      }
+      sle.lEdge.bendPoints.add(targetOut);
+      return;
+    }
+
     // For a one-sided loop the bend points are:
     //   NORTH/SOUTH: horizontal run at routeCoord, vertical stubs at each port.
     //   EAST/WEST:   vertical run at routeCoord, horizontal stubs at each port.
@@ -287,14 +372,13 @@ class SelfLoopRouter implements ILayoutProcessor {
       case PortSide.undefined:
         // Fallback: route on NORTH.
         final y =
-            -(node.margin.top + _nodeSLDistance + sle.routingSlot * _edgeEdgeDistance);
+            -(node.margin.top +
+                node.graph.getProperty(selfLoopNodeSpacing) +
+                sle.routingSlot * node.graph.getProperty(selfLoopEdgeSpacing));
         sle.lEdge.bendPoints.add(KVector(spAnchorX, y));
         sle.lEdge.bendPoints.add(KVector(tpAnchorX, y));
     }
 
-    // TODO(elk-faithful): multi-side routing (TWO_SIDES_CORNER,
-    //   TWO_SIDES_OPPOSING, THREE_SIDES, FOUR_SIDES) — add corner bend points
-    //   when source and target ports are on different sides.
   }
 }
 

@@ -64,6 +64,8 @@ class ElkLayoutOptions {
     this.spacingNodeNode,
     this.spacingEdgeNode,
     this.spacingNodeNodeBetweenLayers,
+    this.spacingEdgeEdge = 10,
+    this.improveStraightness = false,
   });
 
   final String algorithm;
@@ -91,6 +93,10 @@ class ElkLayoutOptions {
   final double? spacingNodeNode;
   final double? spacingEdgeNode;
   final double? spacingNodeNodeBetweenLayers;
+  final double spacingEdgeEdge;
+  /// Enables ELK's BK threshold strategy, which trades compactness for more
+  /// straight edge segments.
+  final bool improveStraightness;
 
   /// Spacing between adjacent nodes in the same layer.
   double get resolvedNodeNode => spacingNodeNode ?? spacingBaseValue;
@@ -156,6 +162,11 @@ class ElkLayoutOptions {
       spacingNodeNode: asNum(m['spacing.nodeNode']),
       spacingEdgeNode: asNum(m['spacing.edgeNode']),
       spacingNodeNodeBetweenLayers: asNum(m['spacing.nodeNodeBetweenLayers']),
+      spacingEdgeEdge:
+          asNum(m['elk.spacing.edgeEdge'] ?? m['spacing.edgeEdge']) ?? 10,
+      improveStraightness:
+          '${m['elk.layered.nodePlacement.bk.edgeStraightening']}'.toUpperCase() ==
+              'IMPROVE_STRAIGHTNESS',
     );
   }
 
@@ -179,6 +190,8 @@ class ElkLayoutOptions {
     double? spacingNodeNode,
     double? spacingEdgeNode,
     double? spacingNodeNodeBetweenLayers,
+    double? spacingEdgeEdge,
+    bool? improveStraightness,
   }) {
     return ElkLayoutOptions(
       algorithm: algorithm ?? this.algorithm,
@@ -203,6 +216,8 @@ class ElkLayoutOptions {
       spacingEdgeNode: spacingEdgeNode ?? this.spacingEdgeNode,
       spacingNodeNodeBetweenLayers:
           spacingNodeNodeBetweenLayers ?? this.spacingNodeNodeBetweenLayers,
+      spacingEdgeEdge: spacingEdgeEdge ?? this.spacingEdgeEdge,
+      improveStraightness: improveStraightness ?? this.improveStraightness,
     );
   }
 }

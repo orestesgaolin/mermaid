@@ -9,12 +9,13 @@
 ///   - [HyperedgeDummyMerger]           — merges adjacent long-edge dummy nodes
 ///     that share the same hyperedge (same source/target port).
 ///
-/// Scope: fixed node sizes and free or explicit-side ports. Branches for other
-/// configs are stubbed with
-/// `// TODO(elk-faithful): ...`.
+/// Supports fixed dimensions or content-derived sizes and free or
+/// explicit-side ports. See PORTING.md for the remaining option limits.
 library;
 
-import 'attached_labels.dart' show placePortLabels;
+import 'attached_labels.dart'
+    show labelTranspose, nodeLabelSpacing, placePortLabels;
+import 'intermediate_labels.dart' show labelStackSpacing;
 import 'lgraph.dart';
 import 'phase.dart';
 import 'property.dart';
@@ -53,6 +54,10 @@ const portRatioOrPosition = Property<double>('portRatioOrPosition', 0.0);
 /// Spacing between adjacent ports on the same node side (ELK
 /// `SPACING_PORT_PORT`).  Default matches ELK's default of 10.
 const spacingPortPort = Property<double>('spacingPortPort', 10.0);
+const nodeSizeFixed = Property<bool>('nodeSizeFixed', true);
+const nodeSizeForLabels = Property<bool>('nodeSizeForLabels', false);
+const nodeSizeForPorts = Property<bool>('nodeSizeForPorts', false);
+const preserveNodeMinimumSize = Property<bool>('preserveNodeMinimumSize', true);
 
 /// Extra clearance before and after the external-port dummies on a graph's
 /// first and last layer. Mirrors `CoreOptions.SPACING_PORTS_SURROUNDING`.
@@ -130,9 +135,8 @@ class InnermostNodeMarginCalculator implements ILayoutProcessor {
         bbRight = _max(bbRight, lx + label.size.x);
         bbBottom = _max(bbBottom, ly + label.size.y);
       }
-      // TODO(elk-faithful): head/tail edge labels are excluded here to match
-      // `excludeEdgeHeadTailLabels()`.  Add them when edge-label support is
-      // needed.
+      // Head/tail edge labels are placed after route restoration; final
+      // graph bounds include their resulting extents.
     }
 
     // Convert the absolute bounding box back to per-side margins (clamped to 0
@@ -156,8 +160,8 @@ class InnermostNodeMarginCalculator implements ILayoutProcessor {
 /// Faithful port of `intermediate/LabelAndNodeSizeProcessor.java`, which
 /// delegates to `NodeLabelAndSizeCalculator.calculateLabelAndNodeSizes`.
 ///
-/// Scope: fixed node sizes and free port placement. Ports are distributed
-/// evenly (CENTER alignment) along all four borders.
+/// Fixed sizes remain unchanged. Non-fixed sizes grow from selected label and
+/// port constraints before ports are distributed along all four borders.
 /// The x-coordinate of east ports is set to [LNode.size].x; west ports to
 /// `-port.size.x` (i.e. outside the left edge), matching ELK's
 /// `calculateVerticalPortXCoordinate` with no border offset.
@@ -175,10 +179,49 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
   }
 
   void _processNode(LNode node, LGraph graph) {
-    // TODO(elk-faithful): for non-fixed-size nodes ELK resizes the node to
-    // fit its ports and labels.  We only handle the default: fixed size.
-
     final portPortSpacing = graph.getProperty(spacingPortPort);
+    if (!node.getProperty(nodeSizeFixed)) {
+      final explicitSources = node.getProperty(nodeSizeForLabels) ||
+          node.getProperty(nodeSizeForPorts);
+      final growLabels = node.getProperty(nodeSizeForLabels) || !explicitSources;
+      final growPorts = node.getProperty(nodeSizeForPorts) || !explicitSources;
+      double extent(PortSide side, bool horizontal) {
+        final ports = node.ports.where((port) => port.side == side).toList();
+        if (ports.isEmpty) return 0;
+        final sizes = ports.map((port) => horizontal ? port.size.x : port.size.y);
+        return sizes.reduce((a, b) => a + b) +
+            (ports.length - 1) * portPortSpacing;
+      }
+      final horizontal = _max(extent(PortSide.north, true),
+          extent(PortSide.south, true));
+      final vertical = _max(extent(PortSide.east, false),
+          extent(PortSide.west, false));
+      final transposeLabels = graph.getProperty(labelTranspose);
+      final stackGap = graph.getProperty(labelStackSpacing);
+      final nodeGap = graph.getProperty(nodeLabelSpacing) * 2;
+      final labelWidth = transposeLabels
+          ? node.labels.fold<double>(0, (value, label) => value + label.size.x) +
+              _max(0, node.labels.length - 1) * stackGap + nodeGap
+          : node.labels.fold<double>(0,
+                  (value, label) => _max(value, label.size.x)) +
+              nodeGap;
+      final labelHeight = transposeLabels
+          ? node.labels.fold<double>(0,
+                  (value, label) => _max(value, label.size.y)) +
+              nodeGap
+          : node.labels.fold<double>(0, (value, label) => value + label.size.y) +
+              _max(0, node.labels.length - 1) * stackGap + nodeGap;
+      final contentWidth = _max(
+          growPorts ? horizontal : 0, growLabels ? labelWidth : 0);
+      final contentHeight = _max(
+          growPorts ? vertical : 0, growLabels ? labelHeight : 0);
+      node.size.x = node.getProperty(preserveNodeMinimumSize)
+          ? _max(node.size.x, contentWidth)
+          : contentWidth;
+      node.size.y = node.getProperty(preserveNodeMinimumSize)
+          ? _max(node.size.y, contentHeight)
+          : contentHeight;
+    }
 
     // Place E and W ports (vertical free placement = CENTER alignment).
     _placeVerticalFreePorts(

@@ -18,10 +18,8 @@
 /// Deviations from Java:
 ///   - Guava / EMF replaced with plain Dart collections.
 ///   - Spacings read from [BKProps] property constants defined below.
-///   - [ThresholdStrategy]: only [_NullThresholdStrategy] is wired (default
-///     `fixedAlignment = NONE` with no IMPROVE_STRAIGHTNESS option).
-///     [_SimpleThresholdStrategy] is included but NOT activated by default.
-///   - Self-loop / north-south-port / big-node niche paths omitted (see TODOs).
+///   - [ThresholdStrategy] selects classic compaction or the upstream simple
+///     edge-straightening strategy from layout options.
 ///   - No RNG — deterministic.
 library;
 
@@ -52,8 +50,11 @@ const bkEdgeEdgeSpacing = Property<double>('bk.spacing.edgeEdge', 10.0);
 const bkLayerSpacing = Property<double>('bk.spacing.layer', 20.0);
 
 /// Fixed-alignment option.  Default: [_FixedAlignment.none] (balance all four).
-const bkFixedAlignment =
-    Property<_FixedAlignment>('bk.fixedAlignment', _FixedAlignment.none);
+const bkFixedAlignment = Property<_FixedAlignment>(
+  'bk.fixedAlignment',
+  _FixedAlignment.none,
+);
+const bkImproveStraightness = Property<bool>('bk.improveStraightness', false);
 
 // ---------------------------------------------------------------------------
 // Enums
@@ -107,29 +108,69 @@ class BKNodePlacer implements ILayoutProcessor {
     const bool favorStraightEdges = true; // orthogonal edge routing
     final bool produceBalanced =
         (fixedAlign == _FixedAlignment.none && !favorStraightEdges) ||
-            fixedAlign == _FixedAlignment.balanced;
+        fixedAlign == _FixedAlignment.balanced;
 
     final layouts = <_BKAlignedLayout>[];
     _BKAlignedLayout? rightDown, rightUp, leftDown, leftUp;
 
     switch (fixedAlign) {
       case _FixedAlignment.leftDown:
-        leftDown = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.down, _HDirection.left);
+        leftDown = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.down,
+          _HDirection.left,
+        );
         layouts.add(leftDown);
       case _FixedAlignment.leftUp:
-        leftUp = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.up, _HDirection.left);
+        leftUp = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.up,
+          _HDirection.left,
+        );
         layouts.add(leftUp);
       case _FixedAlignment.rightDown:
-        rightDown = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.down, _HDirection.right);
+        rightDown = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.down,
+          _HDirection.right,
+        );
         layouts.add(rightDown);
       case _FixedAlignment.rightUp:
-        rightUp = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.up, _HDirection.right);
+        rightUp = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.up,
+          _HDirection.right,
+        );
         layouts.add(rightUp);
       default:
-        rightDown = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.down, _HDirection.right);
-        rightUp = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.up, _HDirection.right);
-        leftDown = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.down, _HDirection.left);
-        leftUp = _BKAlignedLayout(graph, ni.nodeCount, _VDirection.up, _HDirection.left);
+        rightDown = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.down,
+          _HDirection.right,
+        );
+        rightUp = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.up,
+          _HDirection.right,
+        );
+        leftDown = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.down,
+          _HDirection.left,
+        );
+        leftUp = _BKAlignedLayout(
+          graph,
+          ni.nodeCount,
+          _VDirection.up,
+          _HDirection.left,
+        );
         layouts.addAll([rightDown, rightUp, leftDown, leftUp]);
     }
 
@@ -191,11 +232,17 @@ class BKNodePlacer implements ILayoutProcessor {
   static const int _minLayersForConflicts = 3;
 
   void _markConflicts(
-      LGraph graph, _NeighborhoodInformation ni, Set<LEdge> markedEdges) {
+    LGraph graph,
+    _NeighborhoodInformation ni,
+    Set<LEdge> markedEdges,
+  ) {
     final layers = graph.layers;
     if (layers.length < _minLayersForConflicts) return;
 
-    final layerSize = List<int>.generate(layers.length, (i) => layers[i].nodes.length);
+    final layerSize = List<int>.generate(
+      layers.length,
+      (i) => layers[i].nodes.length,
+    );
 
     // iterate from layer index 1 (need layer i-1 and i+1)
     for (int i = 1; i < layers.length - 1; i++) {
@@ -238,7 +285,11 @@ class BKNodePlacer implements ILayoutProcessor {
   /// True when [node] in [layer1] is connected to a LONG_EDGE dummy in [layer2]
   /// via an incoming edge (i.e. it is part of an inner segment).
   bool _incidentToInnerSegment(
-      LNode node, int layer1, int layer2, _NeighborhoodInformation ni) {
+    LNode node,
+    int layer1,
+    int layer2,
+    _NeighborhoodInformation ni,
+  ) {
     if (node.type != NodeType.longEdge) return false;
     for (final edge in node.incomingEdges) {
       final srcNode = edge.source?.node;
@@ -257,7 +308,10 @@ class BKNodePlacer implements ILayoutProcessor {
   // -------------------------------------------------------------------------
 
   _BKAlignedLayout _createBalancedLayout(
-      LGraph graph, List<_BKAlignedLayout> layouts, int nodeCount) {
+    LGraph graph,
+    List<_BKAlignedLayout> layouts,
+    int nodeCount,
+  ) {
     final n = layouts.length;
     final balanced = _BKAlignedLayout(graph, nodeCount, null, null);
     final width = List<double>.filled(n, 0);
@@ -291,7 +345,10 @@ class BKNodePlacer implements ILayoutProcessor {
     for (final layer in graph.layers) {
       for (final node in layer.nodes) {
         for (int i = 0; i < n; i++) {
-          ys[i] = layouts[i].y[node.id]! + layouts[i].innerShift[node.id]! + shift[i];
+          ys[i] =
+              layouts[i].y[node.id]! +
+              layouts[i].innerShift[node.id]! +
+              shift[i];
         }
         ys.sort();
         balanced.y[node.id] = (ys[(n ~/ 2) - 1] + ys[n ~/ 2]) / 2.0;
@@ -399,7 +456,9 @@ class _NeighborhoodInformation {
   }
 
   static void _determineLeftNeighbors(
-      _NeighborhoodInformation ni, LGraph graph) {
+    _NeighborhoodInformation ni,
+    LGraph graph,
+  ) {
     for (final layer in graph.layers) {
       for (final node in layer.nodes) {
         int maxPrio = 0;
@@ -417,14 +476,18 @@ class _NeighborhoodInformation {
             result.add(_NodeEdgePair(srcNode, edge));
           }
         }
-        result.sort((a, b) => ni.nodeIndex[a.node.id] - ni.nodeIndex[b.node.id]);
+        result.sort(
+          (a, b) => ni.nodeIndex[a.node.id] - ni.nodeIndex[b.node.id],
+        );
         ni.leftNeighbors[node.id] = result;
       }
     }
   }
 
   static void _determineRightNeighbors(
-      _NeighborhoodInformation ni, LGraph graph) {
+    _NeighborhoodInformation ni,
+    LGraph graph,
+  ) {
     for (final layer in graph.layers) {
       for (final node in layer.nodes) {
         int maxPrio = 0;
@@ -442,7 +505,9 @@ class _NeighborhoodInformation {
             result.add(_NodeEdgePair(tgtNode, edge));
           }
         }
-        result.sort((a, b) => ni.nodeIndex[a.node.id] - ni.nodeIndex[b.node.id]);
+        result.sort(
+          (a, b) => ni.nodeIndex[a.node.id] - ni.nodeIndex[b.node.id],
+        );
         ni.rightNeighbors[node.id] = result;
       }
     }
@@ -455,7 +520,10 @@ class _NeighborhoodInformation {
 
 class _BKProps {
   /// Edge straightness priority — mirrors ELK `PRIORITY_STRAIGHTNESS`.
-  static const priorityStraightness = Property<int>('bk.priority.straightness', 0);
+  static const priorityStraightness = Property<int>(
+    'bk.priority.straightness',
+    0,
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -537,11 +605,13 @@ class _BKAlignedLayout {
 
   /// y delta between [src] port and [tgt] port (for block-shift calculations).
   double calculateDelta(LPort src, LPort tgt) {
-    final srcPos = y[src.node.id]! +
+    final srcPos =
+        y[src.node.id]! +
         innerShift[src.node.id]! +
         src.position.y +
         src.anchor.y;
-    final tgtPos = y[tgt.node.id]! +
+    final tgtPos =
+        y[tgt.node.id]! +
         innerShift[tgt.node.id]! +
         tgt.position.y +
         tgt.anchor.y;
@@ -566,7 +636,11 @@ class _BKAlignedLayout {
   }
 
   /// Maximum space the block can move upward without overlapping (UP direction).
-  double checkSpaceAbove(LNode blockRoot, double delta, _NeighborhoodInformation ni) {
+  double checkSpaceAbove(
+    LNode blockRoot,
+    double delta,
+    _NeighborhoodInformation ni,
+  ) {
     double available = delta;
     LNode current = blockRoot;
     do {
@@ -583,7 +657,11 @@ class _BKAlignedLayout {
   }
 
   /// Maximum space the block can move downward without overlapping (DOWN direction).
-  double checkSpaceBelow(LNode blockRoot, double delta, _NeighborhoodInformation ni) {
+  double checkSpaceBelow(
+    LNode blockRoot,
+    double delta,
+    _NeighborhoodInformation ni,
+  ) {
     double available = delta;
     LNode current = blockRoot;
     do {
@@ -674,7 +752,7 @@ class _BKAligner {
                 bal.align[vik.id] = bal.root[vik.id];
                 bal.od[bal.root[vik.id]!.id] =
                     bal.od[bal.root[vik.id]!.id] &&
-                        vik.type == NodeType.longEdge;
+                    vik.type == NodeType.longEdge;
                 r = _ni.nodeIndex[um.node.id];
               }
             }
@@ -690,7 +768,7 @@ class _BKAligner {
                 bal.align[vik.id] = bal.root[vik.id];
                 bal.od[bal.root[vik.id]!.id] =
                     bal.od[bal.root[vik.id]!.id] &&
-                        vik.type == NodeType.longEdge;
+                    vik.type == NodeType.longEdge;
                 r = _ni.nodeIndex[um.node.id];
               }
             }
@@ -722,17 +800,21 @@ class _BKAligner {
         } else {
           double portPosDiff;
           if (bal.hdir == _HDirection.left) {
-            portPosDiff = (edge.target!.position.y + edge.target!.anchor.y) -
+            portPosDiff =
+                (edge.target!.position.y + edge.target!.anchor.y) -
                 (edge.source!.position.y + edge.source!.anchor.y);
           } else {
-            portPosDiff = (edge.source!.position.y + edge.source!.anchor.y) -
+            portPosDiff =
+                (edge.source!.position.y + edge.source!.anchor.y) -
                 (edge.target!.position.y + edge.target!.anchor.y);
           }
           final nextInnerShift = bal.innerShift[current.id]! + portPosDiff;
           bal.innerShift[next.id] = nextInnerShift;
           spaceAbove = math.max(spaceAbove, next.margin.top - nextInnerShift);
           spaceBelow = math.max(
-              spaceBelow, nextInnerShift + next.size.y + next.margin.bottom);
+            spaceBelow,
+            nextInnerShift + next.size.y + next.margin.bottom,
+          );
         }
         current = next;
       }
@@ -800,7 +882,9 @@ class _BKCompactor {
     }
 
     // Init threshold strategy (NullThreshold = default, no IMPROVE_STRAIGHTNESS).
-    final thresh = _NullThresholdStrategy();
+    final thresh = _graph.getProperty(bkImproveStraightness)
+        ? _SimpleThresholdStrategy()
+        : _NullThresholdStrategy();
     thresh.init(bal, _ni);
 
     // Initial block placement.
@@ -829,8 +913,7 @@ class _BKCompactor {
           if (sinkShift != null) {
             if ((bal.vdir == _VDirection.up &&
                     sinkShift > double.negativeInfinity) ||
-                (bal.vdir == _VDirection.down &&
-                    sinkShift < double.infinity)) {
+                (bal.vdir == _VDirection.down && sinkShift < double.infinity)) {
               bal.y[v.id] = bal.y[v.id]! + sinkShift;
             }
           }
@@ -845,7 +928,11 @@ class _BKCompactor {
   // Block placement
   // -------------------------------------------------------------------------
 
-  void _placeBlock(LNode root, _BKAlignedLayout bal, _ThresholdStrategy thresh) {
+  void _placeBlock(
+    LNode root,
+    _BKAlignedLayout bal,
+    _ThresholdStrategy thresh,
+  ) {
     if (bal.y[root.id] != null) return; // already placed
 
     bool isInitial = true;
@@ -861,7 +948,8 @@ class _BKCompactor {
       final layerNodes = currentNode.layer!.nodes;
       final layerSize = layerNodes.length;
 
-      final needsNeighborCheck = (bal.vdir == _VDirection.down && currentIdx > 0) ||
+      final needsNeighborCheck =
+          (bal.vdir == _VDirection.down && currentIdx > 0) ||
           (bal.vdir == _VDirection.up && currentIdx < layerSize - 1);
 
       if (needsNeighborCheck) {
@@ -887,7 +975,8 @@ class _BKCompactor {
           // Same class — place relative to neighbor.
           double newPos;
           if (bal.vdir == _VDirection.up) {
-            newPos = bal.y[neighborRoot.id]! +
+            newPos =
+                bal.y[neighborRoot.id]! +
                 bal.innerShift[neighbor.id]! -
                 neighbor.margin.top -
                 spacing -
@@ -900,11 +989,14 @@ class _BKCompactor {
               bal.y[root.id] = math.min(newPos, threshVal);
             } else {
               bal.y[root.id] = math.min(
-                  bal.y[root.id]!, math.min(newPos, threshVal));
+                bal.y[root.id]!,
+                math.min(newPos, threshVal),
+              );
             }
           } else {
             // DOWN
-            newPos = bal.y[neighborRoot.id]! +
+            newPos =
+                bal.y[neighborRoot.id]! +
                 bal.innerShift[neighbor.id]! +
                 neighbor.size.y +
                 neighbor.margin.bottom +
@@ -917,18 +1009,23 @@ class _BKCompactor {
               bal.y[root.id] = math.max(newPos, threshVal);
             } else {
               bal.y[root.id] = math.max(
-                  bal.y[root.id]!, math.max(newPos, threshVal));
+                bal.y[root.id]!,
+                math.max(newPos, threshVal),
+              );
             }
           }
         } else {
           // Different classes — record required separation in class graph.
           final nodeSpacing = _graph.getProperty(bkNodeNodeSpacing);
           final sinkNode = _getOrCreateClassNode(bal.sink[root.id]!, bal);
-          final neighborSink =
-              _getOrCreateClassNode(bal.sink[neighborRoot.id]!, bal);
+          final neighborSink = _getOrCreateClassNode(
+            bal.sink[neighborRoot.id]!,
+            bal,
+          );
 
           if (bal.vdir == _VDirection.up) {
-            final requiredSpace = bal.y[root.id]! +
+            final requiredSpace =
+                bal.y[root.id]! +
                 bal.innerShift[currentNode.id]! +
                 currentNode.size.y +
                 currentNode.margin.bottom +
@@ -938,7 +1035,8 @@ class _BKCompactor {
                     neighbor.margin.top);
             sinkNode.addEdge(neighborSink, requiredSpace);
           } else {
-            final requiredSpace = bal.y[root.id]! +
+            final requiredSpace =
+                bal.y[root.id]! +
                 bal.innerShift[currentNode.id]! -
                 currentNode.margin.top -
                 bal.y[neighborRoot.id]! -
@@ -977,11 +1075,15 @@ class _BKCompactor {
         if (edge.target.classShift == null) {
           edge.target.classShift = cn.classShift! + edge.separation;
         } else if (bal.vdir == _VDirection.down) {
-          edge.target.classShift =
-              math.min(edge.target.classShift!, cn.classShift! + edge.separation);
+          edge.target.classShift = math.min(
+            edge.target.classShift!,
+            cn.classShift! + edge.separation,
+          );
         } else {
-          edge.target.classShift =
-              math.max(edge.target.classShift!, cn.classShift! + edge.separation);
+          edge.target.classShift = math.max(
+            edge.target.classShift!,
+            cn.classShift! + edge.separation,
+          );
         }
 
         edge.target.indegree--;
@@ -1042,7 +1144,11 @@ abstract class _ThresholdStrategy {
 
   void finishBlock(LNode n) {}
 
-  double calculateThreshold(double oldThresh, LNode blockRoot, LNode currentNode);
+  double calculateThreshold(
+    double oldThresh,
+    LNode blockRoot,
+    LNode currentNode,
+  );
 
   void postProcess();
 }
@@ -1051,7 +1157,11 @@ abstract class _ThresholdStrategy {
 /// Mirrors `NullThresholdStrategy`.
 class _NullThresholdStrategy extends _ThresholdStrategy {
   @override
-  double calculateThreshold(double oldThresh, LNode blockRoot, LNode currentNode) {
+  double calculateThreshold(
+    double oldThresh,
+    LNode blockRoot,
+    LNode currentNode,
+  ) {
     return bal.vdir == _VDirection.up
         ? double.infinity
         : double.negativeInfinity;
@@ -1063,13 +1173,149 @@ class _NullThresholdStrategy extends _ThresholdStrategy {
   }
 }
 
-// TODO(elk-faithful): Port SimpleThresholdStrategy (IMPROVE_STRAIGHTNESS option).
+class _Postprocessable {
+  _Postprocessable(this.free, this.isRoot);
+  final LNode free;
+  final bool isRoot;
+  bool hasEdges = false;
+  LEdge? edge;
+}
+
+/// BK threshold bounds and deferred block shifts from ELK ThresholdStrategy.
+class _SimpleThresholdStrategy extends _ThresholdStrategy {
+  final Set<LNode> _finished = {};
+  final List<_Postprocessable> _queue = [];
+
+  @override
+  void init(_BKAlignedLayout theBal, _NeighborhoodInformation theNi) {
+    super.init(theBal, theNi);
+    _finished.clear();
+    _queue.clear();
+  }
+
+  @override
+  void finishBlock(LNode n) => _finished.add(n);
+
+  @override
+  double calculateThreshold(
+    double oldThresh,
+    LNode blockRoot,
+    LNode currentNode,
+  ) {
+    final isRoot = identical(blockRoot, currentNode);
+    final isLast = identical(bal.align[currentNode.id], blockRoot);
+    if (!isRoot && !isLast) return oldThresh;
+    var threshold = oldThresh;
+    if (isRoot) threshold = _getBound(blockRoot, true);
+    if (threshold.isInfinite && isLast) {
+      threshold = _getBound(currentNode, false);
+    }
+    return threshold;
+  }
+
+  _Postprocessable _pickEdge(_Postprocessable candidate) {
+    final edges = candidate.isRoot
+        ? (bal.hdir == _HDirection.right
+              ? candidate.free.incomingEdges
+              : candidate.free.outgoingEdges)
+        : (bal.hdir == _HDirection.left
+              ? candidate.free.incomingEdges
+              : candidate.free.outgoingEdges);
+    var hasEdges = false;
+    for (final edge in edges) {
+      final onlyDummies = bal.od[bal.root[candidate.free.id]!.id];
+      if (!onlyDummies && edge.isInLayerEdge) continue;
+      // The free block would move. The fixed block may already be straightened.
+      if (bal.su[bal.root[candidate.free.id]!.id]) continue;
+      hasEdges = true;
+      final other = edge.source!.node == candidate.free
+          ? edge.target!.node
+          : edge.source!.node;
+      if (_finished.contains(bal.root[other.id])) {
+        candidate.hasEdges = true;
+        candidate.edge = edge;
+        return candidate;
+      }
+    }
+    candidate.hasEdges = hasEdges;
+    candidate.edge = null;
+    return candidate;
+  }
+
+  double _getBound(LNode node, bool isRoot) {
+    final invalid = bal.vdir == _VDirection.up
+        ? double.infinity
+        : double.negativeInfinity;
+    final candidate = _pickEdge(_Postprocessable(node, isRoot));
+    final edge = candidate.edge;
+    if (edge == null) {
+      if (candidate.hasEdges) _queue.add(candidate);
+      return invalid;
+    }
+    final rootPort = isRoot
+        ? (bal.hdir == _HDirection.right ? edge.target! : edge.source!)
+        : (bal.hdir == _HDirection.left ? edge.target! : edge.source!);
+    final otherPort = identical(rootPort, edge.source)
+        ? edge.target!
+        : edge.source!;
+    final threshold =
+        bal.y[bal.root[otherPort.node.id]!.id]! +
+        bal.innerShift[otherPort.node.id]! +
+        otherPort.position.y +
+        otherPort.anchor.y -
+        bal.innerShift[rootPort.node.id]! -
+        rootPort.position.y -
+        rootPort.anchor.y;
+    bal.su[bal.root[edge.source!.node.id]!.id] = true;
+    bal.su[bal.root[edge.target!.node.id]!.id] = true;
+    return threshold;
+  }
+
+  @override
+  void postProcess() {
+    final retry = <_Postprocessable>[];
+    for (final candidate in _queue) {
+      _pickEdge(candidate);
+      final edge = candidate.edge;
+      if (edge == null) continue;
+      final onlyDummies = bal.od[bal.root[candidate.free.id]!.id];
+      if (!onlyDummies && edge.isInLayerEdge) continue;
+      if (!_process(candidate)) retry.add(candidate);
+    }
+    for (final candidate in retry.reversed) {
+      _process(candidate);
+    }
+  }
+
+  bool _process(_Postprocessable candidate) {
+    final edge = candidate.edge!;
+    final fix = edge.source!.node == candidate.free
+        ? edge.target!
+        : edge.source!;
+    final block = edge.source!.node == candidate.free
+        ? edge.source!
+        : edge.target!;
+    final delta = bal.calculateDelta(fix, block);
+    if (delta > 0 && delta.isFinite) {
+      final available = bal.checkSpaceAbove(block.node, delta, ni);
+      bal.shiftBlock(block.node, -available);
+      return available > 0;
+    } else if (delta < 0 && delta.isFinite) {
+      final available = bal.checkSpaceBelow(block.node, -delta, ni);
+      bal.shiftBlock(block.node, available);
+      return available > 0;
+    }
+    return false;
+  }
+}
 // North/south ports need no separate BK branch: like current upstream
 // BKAligner, verticalAlignment is neighbor-based and insideBlockShift reads
 // position.y + anchor.y from every edge endpoint. The sizing processor must
 // therefore place N/S ports before BK runs, which its four-side path now does.
-// TODO(elk-faithful): Big-node handling.
-// TODO(elk-faithful): Self-loop spacing in verticalSpacing.
+// Large nodes use their actual extents throughout block compaction. Self-loop
+// clearance is represented in node margins by SelfLoopPreProcessor.
+// ELK's optional BigNodesSplitter, which divides one node across several
+// layers, is outside this engine's current public model.
 
 // ---------------------------------------------------------------------------
 // Spacing helper (package-private)
