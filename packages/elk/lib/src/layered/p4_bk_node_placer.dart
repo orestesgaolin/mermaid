@@ -1064,7 +1064,10 @@ class _NullThresholdStrategy extends _ThresholdStrategy {
 }
 
 // TODO(elk-faithful): Port SimpleThresholdStrategy (IMPROVE_STRAIGHTNESS option).
-// TODO(elk-faithful): North/south port handling in verticalAlignment / insideBlockShift.
+// North/south ports need no separate BK branch: like current upstream
+// BKAligner, verticalAlignment is neighbor-based and insideBlockShift reads
+// position.y + anchor.y from every edge endpoint. The sizing processor must
+// therefore place N/S ports before BK runs, which its four-side path now does.
 // TODO(elk-faithful): Big-node handling.
 // TODO(elk-faithful): Self-loop spacing in verticalSpacing.
 

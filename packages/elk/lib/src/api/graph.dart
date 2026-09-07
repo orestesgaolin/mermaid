@@ -35,7 +35,8 @@ class ElkPort {
 
   factory ElkPort.fromJson(Map<String, dynamic> m) {
     ElkPortSide? side;
-    final s = (m['layoutOptions'] as Map?)?['port.side'] ?? m['side'];
+    final s = (m['layoutOptions'] as Map?)?['elk.port.side'] ??
+        (m['layoutOptions'] as Map?)?['port.side'] ?? m['side'];
     if (s != null) {
       side = switch ('$s'.toUpperCase()) {
         'NORTH' => ElkPortSide.north,

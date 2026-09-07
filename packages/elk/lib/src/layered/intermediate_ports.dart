@@ -155,7 +155,8 @@ class PortSideProcessor implements ILayoutProcessor {
 void _setPortSide(LPort port) {
   final dummy = port.getProperty(portDummy);
   if (dummy != null) {
-    // TODO(elk-faithful): hierarchical / external-port handling
+    // Hierarchical ports inherit the boundary side represented by their
+    // external-port dummy, matching upstream PortSideProcessor.
     port.side = dummy.getProperty(extPortSide);
   } else if (port.netFlow < 0) {
     // More outgoing than incoming edges → output port → EAST (right side in

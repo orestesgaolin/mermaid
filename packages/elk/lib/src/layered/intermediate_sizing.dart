@@ -2,16 +2,15 @@
 ///
 ///   - [InnermostNodeMarginCalculator]  — computes each node's [LNode.margin]
 ///     from the extents of its ports (and labels, when present).
-///   - [LabelAndNodeSizeProcessor]      — for the default config (fixed node
-///     sizes, free ports, no edge labels, no hierarchy) this positions ports
-///     evenly along the E/W borders and leaves node sizes alone.
+///   - [LabelAndNodeSizeProcessor]      — positions ports evenly along all four
+///     node borders and leaves fixed node sizes alone.
 ///   - [LayerSizeAndGraphHeightCalculator] — computes [Layer.size] for every
 ///     layer and sets [LGraph.size].y / [LGraph.offset].y.
 ///   - [HyperedgeDummyMerger]           — merges adjacent long-edge dummy nodes
 ///     that share the same hyperedge (same source/target port).
 ///
-/// Scope: default config only — fixed node sizes, free E/W ports, no labels,
-/// no hierarchy. Branches for other configs are stubbed with
+/// Scope: fixed node sizes and free or explicit-side ports. Branches for other
+/// configs are stubbed with
 /// `// TODO(elk-faithful): ...`.
 library;
 
@@ -53,6 +52,13 @@ const portRatioOrPosition = Property<double>('portRatioOrPosition', 0.0);
 /// Spacing between adjacent ports on the same node side (ELK
 /// `SPACING_PORT_PORT`).  Default matches ELK's default of 10.
 const spacingPortPort = Property<double>('spacingPortPort', 10.0);
+
+/// Extra clearance before and after the external-port dummies on a graph's
+/// first and last layer. Mirrors `CoreOptions.SPACING_PORTS_SURROUNDING`.
+const spacingPortsSurroundingTop =
+    Property<double>('spacingPortsSurrounding.top', 0.0);
+const spacingPortsSurroundingBottom =
+    Property<double>('spacingPortsSurrounding.bottom', 0.0);
 
 // ---------------------------------------------------------------------------
 // 1.  InnermostNodeMarginCalculator
@@ -149,8 +155,8 @@ class InnermostNodeMarginCalculator implements ILayoutProcessor {
 /// Faithful port of `intermediate/LabelAndNodeSizeProcessor.java`, which
 /// delegates to `NodeLabelAndSizeCalculator.calculateLabelAndNodeSizes`.
 ///
-/// Scope: default config — fixed node sizes, free E/W ports, no labels.
-/// Ports are distributed evenly (CENTER alignment) along the E/W borders.
+/// Scope: fixed node sizes and free port placement. Ports are distributed
+/// evenly (CENTER alignment) along all four borders.
 /// The x-coordinate of east ports is set to [LNode.size].x; west ports to
 /// `-port.size.x` (i.e. outside the left edge), matching ELK's
 /// `calculateVerticalPortXCoordinate` with no border offset.
@@ -162,9 +168,6 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
         if (node.type == NodeType.normal) {
           _processNode(node, graph);
         }
-        // TODO(elk-faithful): external-port dummies need label placement via
-        // `placeExternalPortDummyLabels`; skip for now (no external ports in
-        // default config).
       }
     }
   }
@@ -180,10 +183,36 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
         node, PortSide.east, portPortSpacing);
     _placeVerticalFreePorts(
         node, PortSide.west, portPortSpacing);
-
-    // TODO(elk-faithful): place N/S ports (horizontal free placement).
+    _placeHorizontalFreePorts(
+        node, PortSide.north, portPortSpacing);
+    _placeHorizontalFreePorts(
+        node, PortSide.south, portPortSpacing);
     // TODO(elk-faithful): place node labels.
-    // TODO(elk-faithful): place port labels.
+  }
+
+  /// Horizontal counterpart of [_placeVerticalFreePorts]. North and south
+  /// ports are ordered left-to-right and centred as a group on the node.
+  void _placeHorizontalFreePorts(
+      LNode node, PortSide side, double portPortSpacing) {
+    final ports = node.ports
+        .where((p) => p.side == side && !p.getProperty(crossHierarchyFixedPort))
+        .toList();
+    if (ports.isEmpty) return;
+
+    double totalWidth = 0;
+    for (final port in ports) {
+      totalWidth += port.size.x;
+    }
+    totalWidth += (ports.length - 1) * portPortSpacing;
+
+    var currentX = (node.size.x - totalWidth) / 2;
+    for (final port in ports) {
+      port.position.x = currentX;
+      port.position.y = side == PortSide.north ? -port.size.y : node.size.y;
+      port.anchor.x = port.size.x / 2;
+      port.anchor.y = side == PortSide.north ? port.size.y : 0;
+      currentX += port.size.x + portPortSpacing;
+    }
   }
 
   /// Mirrors `PortPlacementCalculator.placeVerticalFreePorts` for the CENTER
@@ -315,16 +344,14 @@ class LayerSizeAndGraphHeightCalculator implements ILayoutProcessor {
       final firstNode = layer.nodes.first;
       var top = firstNode.position.y - firstNode.margin.top;
       if (firstNode.type == NodeType.externalPort) {
-        // TODO(elk-faithful): subtract graph.getProperty(spacingPortsSurrounding).top
-        // for external port dummies.
+        top -= graph.getProperty(spacingPortsSurroundingTop);
       }
 
       final lastNode = layer.nodes.last;
       var bottom =
           lastNode.position.y + lastNode.size.y + lastNode.margin.bottom;
       if (lastNode.type == NodeType.externalPort) {
-        // TODO(elk-faithful): add graph.getProperty(spacingPortsSurrounding).bottom
-        // for external port dummies.
+        bottom += graph.getProperty(spacingPortsSurroundingBottom);
       }
 
       layer.size.y = bottom - top;

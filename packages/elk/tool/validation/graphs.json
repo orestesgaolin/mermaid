@@ -198,5 +198,73 @@
         }
       ]
     }
+  },
+  {
+    "name": "four-side ports right",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "RIGHT" },
+      "children": [
+        { "id": "a", "width": 100, "height": 80, "ports": [
+          { "id": "an", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "NORTH" } },
+          { "id": "ae", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "EAST" } },
+          { "id": "as", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "SOUTH" } },
+          { "id": "aw", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "WEST" } }
+        ] },
+        { "id": "b", "width": 80, "height": 40 }
+      ],
+      "edges": [{ "id": "pe", "sources": ["ae"], "targets": ["b"] }]
+    }
+  },
+  {
+    "name": "four-side ports left",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "LEFT" },
+      "children": [
+        { "id": "a", "width": 100, "height": 80, "ports": [
+          { "id": "an", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "NORTH" } },
+          { "id": "ae", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "EAST" } },
+          { "id": "as", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "SOUTH" } },
+          { "id": "aw", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "WEST" } }
+        ] },
+        { "id": "b", "width": 80, "height": 40 }
+      ],
+      "edges": [{ "id": "pe", "sources": ["aw"], "targets": ["b"] }]
+    }
+  },
+  {
+    "name": "four-side ports down",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "DOWN" },
+      "children": [
+        { "id": "a", "width": 100, "height": 80, "ports": [
+          { "id": "an", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "NORTH" } },
+          { "id": "ae", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "EAST" } },
+          { "id": "as", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "SOUTH" } },
+          { "id": "aw", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "WEST" } }
+        ] },
+        { "id": "b", "width": 80, "height": 40 }
+      ],
+      "edges": [{ "id": "pe", "sources": ["as"], "targets": ["b"] }]
+    }
+  },
+  {
+    "name": "four-side ports up",
+    "graph": {
+      "id": "root",
+      "layoutOptions": { "elk.algorithm": "layered", "elk.direction": "UP" },
+      "children": [
+        { "id": "a", "width": 100, "height": 80, "ports": [
+          { "id": "an", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "NORTH" } },
+          { "id": "ae", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "EAST" } },
+          { "id": "as", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "SOUTH" } },
+          { "id": "aw", "width": 10, "height": 8, "layoutOptions": { "elk.port.side": "WEST" } }
+        ] },
+        { "id": "b", "width": 80, "height": 40 }
+      ],
+      "edges": [{ "id": "pe", "sources": ["an"], "targets": ["b"] }]
+    }
   }
 ]

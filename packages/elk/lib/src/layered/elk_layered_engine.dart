@@ -181,59 +181,6 @@ class _MarkFixedSideConstraints implements ILayoutProcessor {
   }
 }
 
-/// A lightweight pipeline processor injected just after [LabelAndNodeSizeProcessor].
-///
-/// [LabelAndNodeSizeProcessor] only places EAST and WEST ports (vertical free
-/// placement). Ports on NORTH/SOUTH sides in internal space — which arise when
-/// the output direction transposes the axes (DOWN/UP flow) and the caller
-/// declares an explicit side that maps to NORTH or SOUTH internally — need
-/// their positions set here.
-///
-/// For NORTH ports: port.position.y = -port.size.y (above the node top edge).
-/// For SOUTH ports: port.position.y = node.size.y (below the node bottom edge).
-/// Ports are centred horizontally (x = (node.size.x - port.size.x) / 2).
-/// Anchor: the edge connects at the horizontal centre of the port face
-/// adjacent to the node border.
-class _PlaceNorthSouthPorts implements ILayoutProcessor {
-  _PlaceNorthSouthPorts(this.declaredPortsById);
-  final Map<LNode, Map<String, LPort>> declaredPortsById;
-
-  @override
-  void process(LGraph graph) {
-    for (final layer in graph.layers) {
-      for (final node in layer.nodes) {
-        _processNode(node);
-      }
-    }
-  }
-
-  void _processNode(LNode node) {
-    // Only declared ports need this treatment; auto-created ports are always
-    // EAST or WEST and handled by LabelAndNodeSizeProcessor.
-    final portMap = declaredPortsById[node];
-    if (portMap == null) return;
-
-    for (final lp in portMap.values) {
-      if (lp.side == PortSide.north) {
-        // Above the node's top edge.
-        lp.position.x = (node.size.x - lp.size.x) / 2;
-        lp.position.y = -lp.size.y;
-        // Anchor: bottom-centre of the port (where the edge attaches).
-        lp.anchor.x = lp.size.x / 2;
-        lp.anchor.y = lp.size.y;
-      } else if (lp.side == PortSide.south) {
-        // Below the node's bottom edge.
-        lp.position.x = (node.size.x - lp.size.x) / 2;
-        lp.position.y = node.size.y;
-        // Anchor: top-centre of the port (where the edge attaches).
-        lp.anchor.x = lp.size.x / 2;
-        lp.anchor.y = 0;
-      }
-      // EAST and WEST are already handled by LabelAndNodeSizeProcessor.
-    }
-  }
-}
-
 /// Links a cluster's external [LPort] to the external-port dummy inside its
 /// nested graph. After the nested graph is laid out, the dummy's resolved
 /// cross-axis position is copied onto the port so the parent routes the outer
@@ -378,6 +325,8 @@ class _Engine {
       }
     }
 
+    lg.setProperty(spacingPortsSurroundingTop, options.spacingPortsSurroundingTop);
+    lg.setProperty(spacingPortsSurroundingBottom, options.spacingPortsSurroundingBottom);
     final byId = <String, LNode>{};
     nodesByGraph[lg] = byId;
     _graphElkNodes[lg] = nodes;
@@ -774,9 +723,7 @@ class _Engine {
         // before P4
         InnermostNodeMarginCalculator(),
         LabelAndNodeSizeProcessor(),
-        // Place NORTH/SOUTH ports (transposed-axis cases) that
-        // LabelAndNodeSizeProcessor doesn't handle.
-        _PlaceNorthSouthPorts(declaredPortsById),
+
         InLayerConstraintProcessor(),
         HyperedgeDummyMerger(),
         // P4
@@ -960,19 +907,32 @@ class _Engine {
 
   /// Internal-space (RIGHT) bounding-box width/height of a laid-out graph,
   /// measured over its placed normal nodes (the same set the extractor uses).
-  (double, double) _internalBounds(LGraph lg) {
-    final placed = _placedNodes(lg);
-    if (placed.isEmpty) return (0, 0);
-    var minX = double.infinity, minY = double.infinity;
-    var maxX = -double.infinity, maxY = -double.infinity;
-    for (final ln in placed) {
-      if (ln.position.x < minX) minX = ln.position.x;
-      if (ln.position.y < minY) minY = ln.position.y;
-      final r = ln.position.x + ln.size.x, b = ln.position.y + ln.size.y;
-      if (r > maxX) maxX = r;
-      if (b > maxY) maxY = b;
+  Iterable<(double, double, double, double)> _contentRects(LGraph graph) sync* {
+    final surroundingTop = graph.getProperty(spacingPortsSurroundingTop);
+    final surroundingBottom = graph.getProperty(spacingPortsSurroundingBottom);
+    if (surroundingTop > 0 || surroundingBottom > 0) {
+      for (final layer in graph.layers) {
+        for (final node in layer.nodes.where((n) => n.type == NodeType.externalPort)) {
+          yield (node.position.x, node.position.y - surroundingTop,
+              node.size.x, node.size.y + surroundingTop + surroundingBottom);
+        }
+      }
     }
-    return (maxX - minX, maxY - minY);
+    for (final node in _placedNodes(graph)) {
+      yield (node.position.x, node.position.y, node.size.x, node.size.y);
+    }
+  }
+
+  (double, double) _internalBounds(LGraph lg) {
+    final rects = _contentRects(lg).toList();
+    if (rects.isEmpty) return (0, 0);
+    final (minX, minY) = _internalOrigin(lg);
+    var maxX = minX, maxY = minY;
+    for (final (x, y, w, h) in rects) {
+      if (x+w > maxX) maxX = x+w;
+      if (y+h > maxY) maxY = y+h;
+    }
+    return (maxX-minX, maxY-minY);
   }
 
   /// The placed (layered) nodes of [lg], i.e. the original input nodes that the
@@ -988,12 +948,12 @@ class _Engine {
   /// Internal-space top-left origin of a laid-out graph (the min corner over
   /// its placed nodes; BK centering can push this negative).
   (double, double) _internalOrigin(LGraph lg) {
-    final placed = _placedNodes(lg);
-    if (placed.isEmpty) return (0, 0);
+    final rects = _contentRects(lg).toList();
+    if (rects.isEmpty) return (0, 0);
     var minX = double.infinity, minY = double.infinity;
-    for (final ln in placed) {
-      if (ln.position.x < minX) minX = ln.position.x;
-      if (ln.position.y < minY) minY = ln.position.y;
+    for (final (x, y, _, _) in rects) {
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
     }
     return (minX, minY);
   }
@@ -1137,9 +1097,8 @@ class _Engine {
     for (final entry in portMap.entries) {
       final lp = entry.value;
       // The port's absolute internal anchor (node-position + port-position + anchor).
-      final absAnchor = lp.absoluteAnchor;
       // Map through the same transform as the node's positions.
-      final outputPt = parentOut(absAnchor.x, absAnchor.y);
+      final outputPt = parentOut(ln.position.x + lp.position.x, ln.position.y + lp.position.y);
       var px = outputPt.x, py = outputPt.y;
       // Output-space port size (un-transpose).
       final pw = transpose ? lp.size.y : lp.size.x;

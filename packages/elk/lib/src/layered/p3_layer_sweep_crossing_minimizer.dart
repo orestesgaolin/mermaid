@@ -819,8 +819,17 @@ class _PortDistributor {
       double sum = 0;
 
       if (isNS) {
-        // TODO(elk-faithful): north/south port dummy handling omitted.
-        continue;
+        // North/south ports do not have a separate dummy in this port. Use the
+        // connected node's current within-layer position as their barycenter,
+        // which preserves the ordering decision made by ELK's dummy path.
+        for (final edge in port.outgoingEdges) {
+          final connected = edge.target;
+          if (connected != null) sum += _positionOf(connected.node);
+        }
+        for (final edge in port.incomingEdges) {
+          final connected = edge.source;
+          if (connected != null) sum += _positionOf(connected.node);
+        }
       } else {
         bool isInLayer = false;
         for (final edge in port.outgoingEdges) {
@@ -964,7 +973,9 @@ class _AllCrossingsCounter {
     // Detect north/south-port dummy layers for later use.
     for (var l = 0; l < initialOrder.length; l++) {
       for (final node in initialOrder[l]) {
-        if (node.type == NodeType.northSouthPort) {
+        if (node.type == NodeType.northSouthPort ||
+            node.ports.any((p) =>
+                p.side == PortSide.north || p.side == PortSide.south)) {
           _hasNorthSouthPorts[l] = true;
         }
       }
@@ -997,9 +1008,43 @@ class _AllCrossingsCounter {
       total += _crossingCounter()
           .countCrossingsBetweenLayers(order[layerIndex], order[layerIndex + 1]);
     }
-    // TODO(elk-faithful): north/south port crossing counting omitted.
-    // if (_hasNorthSouthPorts[layerIndex]) { ... }
+    if (_hasNorthSouthPorts[layerIndex]) {
+      total += _countNorthSouthPortCrossings(order[layerIndex]);
+    }
     return total;
+  }
+
+  /// Counts inversions between the order of north/south ports on a node and
+  /// the within-layer order of their opposite endpoints. ELK normally models
+  /// these with north/south dummy nodes; this direct form is equivalent for
+  /// the explicit-side ports represented by this implementation.
+  int _countNorthSouthPortCrossings(List<LNode> layer) {
+    var crossings = 0;
+    for (final node in layer) {
+      for (final side in [PortSide.north, PortSide.south]) {
+        final ends = <(int, int)>[];
+        var portOrder = 0;
+        for (final port in node.ports.where((p) => p.side == side)) {
+          for (final edge in port.connectedEdges) {
+            final opposite = identical(edge.source, port)
+                ? edge.target?.node
+                : edge.source?.node;
+            if (opposite != null) ends.add((portOrder, opposite.index));
+          }
+          portOrder++;
+        }
+        for (var i = 0; i < ends.length; i++) {
+          for (var j = i + 1; j < ends.length; j++) {
+            if ((ends[i].$1 - ends[j].$1) *
+                    (ends[i].$2 - ends[j].$2) <
+                0) {
+              crossings++;
+            }
+          }
+        }
+      }
+    }
+    return crossings;
   }
 
   _CrossingsCounter _crossingCounter() => _CrossingsCounter(_portPositions);

@@ -101,5 +101,111 @@ void main() {
       final start = res.edges.single.sections.first.startPoint;
       expect(start.y, closeTo(n.y, 0.6));
     });
+
+    for (final direction in ElkDirection.values) {
+      test('all explicit sides stay on their border for $direction', () {
+        final res = const ElkLayered().layout(ElkGraph(
+          layoutOptions: ElkLayoutOptions(direction: direction),
+          children: [
+            ElkNode(id: 'n', width: 100, height: 80, ports: [
+              ElkPort(id: 'north', width: 10, height: 8, side: .north),
+              ElkPort(id: 'east', width: 10, height: 8, side: .east),
+              ElkPort(id: 'south', width: 10, height: 8, side: .south),
+              ElkPort(id: 'west', width: 10, height: 8, side: .west),
+            ]),
+          ],
+        ));
+
+        final n = res.nodesById['n']!;
+        final ports = {for (final p in n.ports) p.id: p};
+        expect(ports['north']!.y + ports['north']!.height, closeTo(0, 0.5));
+        expect(ports['east']!.x, closeTo(n.width, 0.5));
+        expect(ports['south']!.y, closeTo(n.height, 0.5));
+        expect(ports['west']!.x + ports['west']!.width, closeTo(0, 0.5));
+      });
+    }
+
+    test('multiple north and south ports are spaced and route independently', () {
+      final res = const ElkLayered().layout(ElkGraph(
+        layoutOptions: ElkLayoutOptions(direction: .right),
+        children: [
+          ElkNode(id: 'top1', width: 40, height: 30),
+          ElkNode(id: 'top2', width: 40, height: 30),
+          ElkNode(id: 'hub', width: 120, height: 80, ports: [
+            ElkPort(id: 'n1', width: 10, height: 8, side: .north),
+            ElkPort(id: 'n2', width: 10, height: 8, side: .north),
+            ElkPort(id: 's1', width: 10, height: 8, side: .south),
+            ElkPort(id: 's2', width: 10, height: 8, side: .south),
+          ]),
+          ElkNode(id: 'bottom1', width: 40, height: 30),
+          ElkNode(id: 'bottom2', width: 40, height: 30),
+        ],
+        edges: [
+          ElkEdge(id: 'n1e', sources: ['n1'], targets: ['top1']),
+          ElkEdge(id: 'n2e', sources: ['n2'], targets: ['top2']),
+          ElkEdge(id: 's1e', sources: ['s1'], targets: ['bottom1']),
+          ElkEdge(id: 's2e', sources: ['s2'], targets: ['bottom2']),
+        ],
+      ));
+
+      final hub = res.nodesById['hub']!;
+      final ports = {for (final p in hub.ports) p.id: p};
+      for (final ids in [('n1', 'n2'), ('s1', 's2')]) {
+        expect((ports[ids.$1]!.x - ports[ids.$2]!.x).abs(),
+            greaterThanOrEqualTo(20),
+            reason: '${ids.$1}/${ids.$2} need port width plus spacing');
+      }
+      expect(ports['n1']!.y + ports['n1']!.height, closeTo(0, 0.5));
+      expect(ports['n2']!.y + ports['n2']!.height, closeTo(0, 0.5));
+      expect(ports['s1']!.y, closeTo(hub.height, 0.5));
+      expect(ports['s2']!.y, closeTo(hub.height, 0.5));
+
+      for (final pair in [
+        ('n1', 'n2', 'top1', 'top2'),
+        ('s1', 's2', 'bottom1', 'bottom2'),
+      ]) {
+        final portOrder = ports[pair.$1]!.x.compareTo(ports[pair.$2]!.x);
+        final nodeOrder = res.nodesById[pair.$3]!.y
+            .compareTo(res.nodesById[pair.$4]!.y);
+        expect(portOrder, nodeOrder,
+            reason: '${pair.$1}/${pair.$2} must follow connected node order');
+      }
+
+      final anchors = <String, ElkPoint>{
+        for (final edge in res.edges)
+          edge.id: edge.sections.single.startPoint,
+      };
+      expect(anchors['n1e']!.x, isNot(closeTo(anchors['n2e']!.x, 0.5)));
+      expect(anchors['s1e']!.x, isNot(closeTo(anchors['s2e']!.x, 0.5)));
+    });
+
+    test('external-port surrounding spacing expands nested layout bounds', () {
+      ElkResult layout(double surrounding) => const ElkLayered().layout(ElkGraph(
+            layoutOptions: ElkLayoutOptions(
+              direction: .right,
+              spacingPortsSurroundingTop: surrounding,
+              spacingPortsSurroundingBottom: surrounding,
+            ),
+            children: [
+              ElkNode(id: 'outside', width: 60, height: 30),
+              ElkNode(id: 'outer', children: [
+                ElkNode(id: 'leaf', width: 60, height: 30),
+              ]),
+            ],
+            edges: [
+              ElkEdge(id: 'cross', sources: ['outside'], targets: ['leaf']),
+            ],
+          ));
+
+      final compact = layout(0);
+      final spaced = layout(24);
+      expect(spaced.nodesById['outer']!.height,
+          greaterThan(compact.nodesById['outer']!.height));
+      expect(spaced.height, greaterThan(compact.height));
+      final edge = spaced.edges.singleWhere((e) => e.id == 'cross');
+      expect(edge.sections.single.endPoint.x,
+          closeTo(spaced.nodesById['leaf']!.x, 0.75),
+          reason: 'fixed external port must still join the leaf route');
+    });
   });
 }
