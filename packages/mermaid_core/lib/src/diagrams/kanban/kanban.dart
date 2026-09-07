@@ -9,6 +9,7 @@ import '../../config_values.dart';
 import '../../detect.dart';
 import '../../directives.dart';
 import '../../geometry.dart';
+import '../../icons/icon_registry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
 import '../../parse_error.dart';
@@ -252,6 +253,8 @@ void _applyBlock(KanbanTask task, String body) {
 const _labelPadX = 10.0;
 // Default minimum label height upstream seeds `maxLabelHeight` with.
 const _minLabelHeight = 25.0;
+const _iconSize = 20.0;
+const _iconGap = 5.0;
 
 /// Section fill color for section index `s`. Upstream `styles.ts:genSections`
 /// paints `.section-${i-1} rect` with `adjuster(cScale[i], 10)` where in light
@@ -354,6 +357,7 @@ RenderScene layoutKanban(
   required MermaidTheme theme,
   KanbanConfig config = const KanbanConfig(),
 }) {
+  ensureBuiltinIconPacks();
   final width = config.sectionWidth;
   final padding = config.padding;
   final cardW = width - 1.5 * padding;
@@ -392,7 +396,17 @@ RenderScene layoutKanban(
     final cardLayout = <_CardLayout>[];
     var y = labelTop; // top of the section box content (== upstream `top`)
     for (final task in col.cards) {
-      final titleSz = measurer.measure(task.title, baseStyle, maxWidth: cardW);
+      final hasIcon = task.icon != null && lookupIcon(task.icon!) != null;
+      final titleInset = hasIcon ? _iconSize + _iconGap : 0.0;
+      final measuredTitle = measurer.measure(
+        task.title,
+        baseStyle,
+        maxWidth: math.max(0, cardW - titleInset),
+      );
+      final titleSz = Size(
+        measuredTitle.width + titleInset,
+        math.max(measuredTitle.height, hasIcon ? _iconSize : 0),
+      );
       final ticketSz = (task.ticket != null && task.ticket!.isNotEmpty)
           ? measurer.measure(task.ticket!, baseStyle, maxWidth: cardW)
           : null;
@@ -415,6 +429,7 @@ RenderScene layoutKanban(
           y,
           totalHeight,
           metadataGap,
+          hasIcon,
         ),
       );
       // Advance cursor: upstream `y = item.y + bbox.height/2 + padding/2`,
@@ -482,13 +497,29 @@ RenderScene layoutKanban(
       // Title (left-aligned, `padding - totalWidth/2` from center ⇒ left
       // inset of `labelPadX`). Sits in the upper band of the card.
       final titleY = cardRect.top + padding;
+      if (card.hasIcon) {
+        nodes.addAll(
+          renderIcon(
+            card.task.icon!,
+            Rect.fromLTWH(
+              cardRect.left + _labelPadX,
+              titleY + (card.titleSize.height - _iconSize) / 2,
+              _iconSize,
+              _iconSize,
+            ),
+            theme.textColor,
+          ),
+        );
+      }
       nodes.add(
         SceneText(
           text: card.task.title,
           bounds: Rect.fromLTWH(
-            cardRect.left + _labelPadX,
+            cardRect.left +
+                _labelPadX +
+                (card.hasIcon ? _iconSize + _iconGap : 0),
             titleY,
-            cardW - 2 * _labelPadX,
+            cardW - 2 * _labelPadX - (card.hasIcon ? _iconSize + _iconGap : 0),
             card.titleSize.height,
           ),
           style: baseStyle,
@@ -570,6 +601,7 @@ class _CardLayout {
     this.y,
     this.totalHeight,
     this.metadataGap,
+    this.hasIcon,
   );
   final KanbanTask task;
   final Size titleSize;
@@ -578,4 +610,5 @@ class _CardLayout {
   final double y;
   final double totalHeight;
   final double metadataGap;
+  final bool hasIcon;
 }
