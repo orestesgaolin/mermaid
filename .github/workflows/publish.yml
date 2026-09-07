@@ -40,25 +40,8 @@ jobs:
       - name: Check tag commit is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
-      - name: Resolve dependencies
-        run: flutter pub get
-
-      - name: Analyze
-        run: dart analyze packages/mermaid_core packages/mermaid_flutter
-
-      - name: Test mermaid_core
-        run: dart test packages/mermaid_core
-
-      - name: Test mermaid_flutter
-        run: flutter test packages/mermaid_flutter
-
-      - name: Check mermaid_core package
-        working-directory: packages/mermaid_core
-        run: dart pub publish --dry-run
-
-      - name: Check mermaid_flutter package
-        working-directory: packages/mermaid_flutter
-        run: flutter pub publish --dry-run
+      - name: Analyze, test, and check packages
+        run: bash tool/check.sh
 
       - name: Generate release notes
         shell: bash

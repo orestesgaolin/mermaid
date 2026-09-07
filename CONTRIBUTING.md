@@ -81,12 +81,15 @@ The repository is a pub workspace. Use the Flutter version pinned in
 which is how the release workflow runs it:
 
 ```console
-$ flutter pub get
-$ dart analyze --fatal-infos
-$ dart test packages/mermaid_core
-$ flutter test packages/mermaid_flutter
-$ flutter test apps/demo
+$ bash tool/check.sh
 ```
+
+This is the shared CI/release command. It resolves dependencies, analyzes the
+workspace, tests ELK, core, Flutter, demo and website, then checks both package
+archives with `pub publish --dry-run`. Ordinary pushes to `main` and pull
+requests run it and retain the validation log. Formatting remains scoped to
+changed files until the repository has one consistent formatter baseline.
+
 
 Tests that read files must resolve paths against their package, not the
 current directory. `packages/mermaid_core/test/support/fixtures.dart` shows

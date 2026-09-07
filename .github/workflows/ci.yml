@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: 3.44.9
+          channel: stable
+          cache: true
+      - name: Analyze, test, and check packages
+        shell: bash
+        run: |
+          set -o pipefail
+          mkdir -p build/ci-evidence
+          bash tool/check.sh 2>&1 | tee build/ci-evidence/check.log
+      - name: Retain validation log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: validation-log
+          path: build/ci-evidence/check.log
+          if-no-files-found: ignore
