@@ -1,8 +1,13 @@
 ## Unreleased
 
-- Use the effective upstream ER cell padding default of 20.
+- Honor active per-diagram layout and style configuration through init directives
+  and frontmatter, including nested flow collections. See the configuration
+  support notes in `parity/` for backend and upstream limitations.
+- Use the effective upstream ER cell padding default of 20 and allow overrides.
 - Parse CSS named colors, HSL/HSLA, percentage RGB and alpha forms, with finite
   numeric validation and channel clamping.
+- Honor Kanban ticket URLs and all radar margins. Keep Cynefin boundary
+  randomness within 32-bit arithmetic on the Dart VM.
 
 ## 0.2.1
 

@@ -6,7 +6,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -41,6 +43,83 @@ class JourneyTask {
   /// 1 (bad) .. 5 (great).
   final int score;
   final List<String> actors;
+}
+
+/// Values used by the active journey renderer from `config.journey`.
+///
+/// The upstream schema also carries several sequence-diagram compatibility
+/// fields. They are intentionally absent because journeyRenderer does not read
+/// them. Nullable color and font fields preserve the theme-derived behavior
+/// unless the source explicitly overrides them.
+class JourneyConfig {
+  const JourneyConfig({
+    this.diagramMarginX = 50,
+    this.diagramMarginY = 10,
+    this.leftMargin = 150,
+    this.maxLabelWidth = 360,
+    this.boxTextMargin = 5,
+    this.width = 150,
+    this.height = 65,
+    this.taskMargin = 50,
+    this.taskFontSize = 14,
+    this.taskFontFamily,
+    this.actorColours = _actorFills,
+    this.sectionFills,
+    this.sectionColours,
+    this.titleColor,
+    this.titleFontFamily,
+    this.titleFontSize,
+  });
+
+  final double diagramMarginX;
+  final double diagramMarginY;
+  final double leftMargin;
+  final double maxLabelWidth;
+  final double boxTextMargin;
+  final double width;
+  final double height;
+  final double taskMargin;
+  final double taskFontSize;
+  final String? taskFontFamily;
+  final List<Color> actorColours;
+  final List<Color>? sectionFills;
+  final List<Color>? sectionColours;
+  final Color? titleColor;
+  final String? titleFontFamily;
+
+  /// Logical pixel size. `null` keeps the established `4ex` approximation.
+  final double? titleFontSize;
+
+  factory JourneyConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'journey');
+    final taskFontSize = _fontSize(values['taskFontSize'], 14);
+    return JourneyConfig(
+      diagramMarginX: nonNegativeDouble(values, 'diagramMarginX', 50),
+      diagramMarginY: nonNegativeDouble(values, 'diagramMarginY', 10),
+      leftMargin: nonNegativeDouble(values, 'leftMargin', 150),
+      maxLabelWidth: positiveDouble(values, 'maxLabelWidth', 360),
+      boxTextMargin: nonNegativeDouble(values, 'boxTextMargin', 5),
+      width: nonNegativeDouble(values, 'width', 150),
+      // Keep the port's established 65px default. The current upstream schema
+      // says 50px, but changing the fallback would alter default output.
+      height: nonNegativeDouble(values, 'height', 65),
+      taskMargin: nonNegativeDouble(values, 'taskMargin', 50),
+      taskFontSize: taskFontSize,
+      taskFontFamily: _optionalString(values, 'taskFontFamily'),
+      actorColours: _colorList(values['actorColours'], _actorFills),
+      sectionFills: _optionalColorList(values['sectionFills']),
+      sectionColours: _optionalColorList(values['sectionColours']),
+      titleColor: _optionalColor(values, 'titleColor'),
+      titleFontFamily: _optionalString(values, 'titleFontFamily'),
+      titleFontSize: values.containsKey('titleFontSize')
+          ? _fontSize(
+              values['titleFontSize'],
+              taskFontSize * 2,
+              exBase: taskFontSize,
+            )
+          : null,
+    );
+  }
 }
 
 JourneyDiagram parseJourney(String source) {
@@ -100,14 +179,15 @@ JourneyDiagram parseJourney(String source) {
       final actors = colon2 < 0
           ? const <String>[]
           : rest
-              .substring(colon2 + 1)
-              .split(',')
-              .map((a) => a.trim())
-              .where((a) => a.isNotEmpty)
-              .toList();
+                .substring(colon2 + 1)
+                .split(',')
+                .map((a) => a.trim())
+                .where((a) => a.isNotEmpty)
+                .toList();
       if (sections.isEmpty) sections.add(('', []));
-      sections.last.$2.add(JourneyTask(
-          name: name, score: score.clamp(1, 5), actors: actors));
+      sections.last.$2.add(
+        JourneyTask(name: name, score: score.clamp(1, 5), actors: actors),
+      );
       continue;
     }
     throw MermaidParseException('unrecognized statement "$line"', line: i + 1);
@@ -144,26 +224,19 @@ const _actorFills = [
   Color(0xffFFFFE0),
 ];
 
-// Upstream journey layout constants (config.schema.yaml journey defaults).
-const _diagramMarginX = 50.0;
-const _diagramMarginY = 10.0;
-const _leftMargin = 150.0;
-const _boxWidth = 150.0;
-const _boxHeight = 65.0;
-const _taskMargin = 50.0;
-const _taskFontSize = 14.0;
-const _maxLabelWidth = 360.0;
-
 RenderScene layoutJourney(
   JourneyDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  JourneyConfig config = const JourneyConfig(),
 }) {
   // Upstream uses a fixed pixel layout sourced from getConfig().journey.
   // taskFontFamily is '"Open Sans", sans-serif'; we keep the theme family
   // for measurement consistency but pin the size to the upstream default.
   final baseStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: _taskFontSize);
+    fontFamily: config.taskFontFamily ?? theme.fontFamily,
+    fontSize: config.taskFontSize,
+  );
   final nodes = <SceneNode>[];
 
   // Actor colour assignment follows the alphabetically sorted actor set
@@ -176,8 +249,11 @@ RenderScene layoutJourney(
   }
   final actorNames = actorSet.toList()..sort();
   final actorColor = <String, Color>{};
+  final actorPalette = config.actorColours.isEmpty
+      ? _actorFills
+      : config.actorColours;
   for (var p = 0; p < actorNames.length; p++) {
-    actorColor[actorNames[p]] = _actorFills[p % _actorFills.length];
+    actorColor[actorNames[p]] = actorPalette[p % actorPalette.length];
   }
 
   // Actor legend on the LEFT column. Circle cx:20, label x:40.
@@ -190,36 +266,50 @@ RenderScene layoutJourney(
   var maxLegendWidth = 0.0;
   var yPos = 60.0;
   for (final actor in actorNames) {
-    final lines = _wrapLegendLabel(actor, baseStyle, measurer, _maxLabelWidth);
-    nodes.add(SceneShape(
-      geometry: CircleGeometry(Point(20, yPos), 7),
-      fill: Fill(actorColor[actor]!),
-      stroke: Stroke(color: const Color(0xff000000), width: 1),
-    ));
+    final lines = _wrapLegendLabel(
+      actor,
+      baseStyle,
+      measurer,
+      config.maxLabelWidth,
+    );
+    nodes.add(
+      SceneShape(
+        geometry: CircleGeometry(Point(20, yPos), 7),
+        fill: Fill(actorColor[actor]!),
+        stroke: Stroke(color: const Color(0xff000000), width: 1),
+      ),
+    );
     for (var li = 0; li < lines.length; li++) {
       final size = measurer.measure(lines[li], baseStyle);
       final ly = yPos + 7 + li * 20;
-      nodes.add(SceneText(
-        text: lines[li],
-        bounds: Rect.fromLTWH(40, ly - size.height, size.width, size.height),
-        style: baseStyle,
-        color: legendLabelColor,
-        align: TextAlignH.left,
-      ));
+      nodes.add(
+        SceneText(
+          text: lines[li],
+          bounds: Rect.fromLTWH(
+            40 + config.boxTextMargin * 2,
+            ly - size.height,
+            size.width,
+            size.height,
+          ),
+          style: baseStyle,
+          color: legendLabelColor,
+          align: TextAlignH.left,
+        ),
+      );
       // Upstream: expand maxWidth when a line is wider than the running max.
       if (size.width > maxLegendWidth &&
-          size.width > _leftMargin - size.width) {
+          size.width > config.leftMargin - size.width) {
         maxLegendWidth = size.width;
       }
     }
     yPos += math.max(20, lines.length * 20);
   }
-  final leftMargin = _leftMargin + maxLegendWidth;
+  final leftMargin = config.leftMargin + maxLegendWidth;
 
   // Faces hang at cy = 300 + (5-score)*30 (range 300..420); drop lines run
   // from the task box top (y=140) down to maxHeight = 300 + 5*30 = 450.
   const sectionY = 50.0;
-  final taskY = _boxHeight * 2 + _diagramMarginY; // 140
+  final taskY = config.height * 2 + config.diagramMarginY;
   const faceBaseY = 300.0;
   const maxHeight = 300.0 + 5 * 30.0; // 450
 
@@ -233,74 +323,96 @@ RenderScene layoutJourney(
   // the theme's light `fillType` palette instead, so the band label follows
   // the diagram's title colour and the task labels the body text colour —
   // both readable on that palette in every bundled theme.
-  final sectionTitleColor = theme.titleColor;
-  final textColor = theme.textColor;
   for (final section in diagram.sections) {
     final count = section.tasks.length;
     // n = sectionNumber % sectionFills.length; use the matching fillType for
     // the section and task boxes.
     final n = sectionIndex % _sectionFillCount;
-    final fill = theme.fillType[n];
-    final sectionX = globalIndex * _taskMargin + globalIndex * _boxWidth +
+    final fill = config.sectionFills == null
+        ? theme.fillType[n]
+        : config.sectionFills![sectionIndex % config.sectionFills!.length];
+    final configuredTextColor = config.sectionColours == null
+        ? null
+        : config.sectionColours![sectionIndex % config.sectionColours!.length];
+    final sectionTitleColor = configuredTextColor ?? theme.titleColor;
+    final textColor = configuredTextColor ?? theme.textColor;
+    final sectionX =
+        globalIndex * config.taskMargin +
+        globalIndex * config.width +
         leftMargin;
     if (section.name.isNotEmpty) {
       final sectionWidth =
-          _boxWidth * count + _diagramMarginX * (count - 1);
+          config.width * count + config.diagramMarginX * (count - 1);
       final size = measurer.measure(section.name, baseStyle);
-      nodes.add(SceneGroup(
-        id: 'section_$sectionIndex',
-        role: SceneGroupRole.cluster,
-        children: [
-        SceneShape(
-          geometry: RectGeometry(
-              Rect.fromLTWH(sectionX, sectionY, sectionWidth, _boxHeight),
-              rx: 3,
-              ry: 3),
-          fill: Fill(fill),
+      nodes.add(
+        SceneGroup(
+          id: 'section_$sectionIndex',
+          role: SceneGroupRole.cluster,
+          children: [
+            SceneShape(
+              geometry: RectGeometry(
+                Rect.fromLTWH(sectionX, sectionY, sectionWidth, config.height),
+                rx: 3,
+                ry: 3,
+              ),
+              fill: Fill(fill),
+            ),
+            SceneText(
+              text: section.name,
+              bounds: Rect.fromLTWH(
+                sectionX + sectionWidth / 2 - size.width / 2,
+                sectionY + config.height / 2 - size.height / 2,
+                size.width,
+                size.height,
+              ),
+              style: baseStyle,
+              color: sectionTitleColor,
+            ),
+          ],
         ),
-        SceneText(
-          text: section.name,
-          bounds: Rect.fromLTWH(
-              sectionX + sectionWidth / 2 - size.width / 2,
-              sectionY + _boxHeight / 2 - size.height / 2,
-              size.width,
-              size.height),
-          style: baseStyle,
-          color: sectionTitleColor,
-        ),
-        ],
-      ));
+      );
     }
     for (final t in section.tasks) {
-      final taskX = globalIndex * _taskMargin + globalIndex * _boxWidth +
+      final taskX =
+          globalIndex * config.taskMargin +
+          globalIndex * config.width +
           leftMargin;
-      final cx = taskX + _boxWidth / 2;
+      final cx = taskX + config.width / 2;
       final faceY = faceBaseY + (5 - t.score) * 30.0;
-      final nameSize =
-          measurer.measure(t.name, baseStyle, maxWidth: _boxWidth);
+      final nameSize = measurer.measure(
+        t.name,
+        baseStyle,
+        maxWidth: config.width,
+      );
       final children = <SceneNode>[
         // Drop line from task box top edge down to the descender baseline.
         // Upstream draws this as a <line> with stroke "#666", but the CSS
         // `line { stroke: textColor }` rule overrides the presentation
         // attribute, so the rendered colour is theme.textColor.
         SceneShape(
-          geometry: PathGeometry(
-              [MoveTo(Point(cx, taskY)), LineTo(Point(cx, maxHeight))]),
+          geometry: PathGeometry([
+            MoveTo(Point(cx, taskY)),
+            LineTo(Point(cx, maxHeight)),
+          ]),
           stroke: Stroke(color: theme.textColor, width: 1, dash: const [4, 2]),
         ),
         ..._face(Point(cx, faceY), t.score),
         SceneShape(
           geometry: RectGeometry(
-              Rect.fromLTWH(taskX, taskY, _boxWidth, _boxHeight),
-              rx: 3,
-              ry: 3),
+            Rect.fromLTWH(taskX, taskY, config.width, config.height),
+            rx: 3,
+            ry: 3,
+          ),
           fill: Fill(fill),
         ),
         SceneText(
           text: t.name,
-          bounds: Rect.fromLTWH(cx - nameSize.width / 2,
-              taskY + _boxHeight / 2 - nameSize.height / 2, nameSize.width,
-              nameSize.height),
+          bounds: Rect.fromLTWH(
+            cx - nameSize.width / 2,
+            taskY + config.height / 2 - nameSize.height / 2,
+            nameSize.width,
+            nameSize.height,
+          ),
           style: baseStyle,
           color: textColor,
         ),
@@ -309,16 +421,23 @@ RenderScene layoutJourney(
       // r7, stroke black.
       var dotX = taskX + 14.0;
       for (final a in t.actors) {
-        children.add(SceneShape(
-          geometry: CircleGeometry(Point(dotX, taskY), 7),
-          fill: Fill(actorColor[a]!),
-          stroke: Stroke(color: const Color(0xff000000), width: 1),
-        ));
+        children.add(
+          SceneShape(
+            geometry: CircleGeometry(Point(dotX, taskY), 7),
+            fill: Fill(actorColor[a]!),
+            stroke: Stroke(color: const Color(0xff000000), width: 1),
+          ),
+        );
         dotX += 10;
       }
-      nodes.add(SceneGroup(
-          id: 'task_${t.name}', semanticLabel: t.name, children: children));
-      lastX = taskX + _boxWidth + _taskMargin;
+      nodes.add(
+        SceneGroup(
+          id: 'task_${t.name}',
+          semanticLabel: t.name,
+          children: children,
+        ),
+      );
+      lastX = taskX + config.width + config.taskMargin;
       globalIndex++;
     }
     sectionIndex++;
@@ -331,25 +450,30 @@ RenderScene layoutJourney(
   // marker path (`M 0,0 V 4 L6,2 Z`) carries no fill/class, so it renders
   // with the SVG default fill of black.
   if (globalIndex > 0) {
-    const activityY = _boxHeight * 4; // 260
-    final lineEnd = lastX - _taskMargin + _diagramMarginX; // ~ stopx
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(leftMargin, activityY)),
-        LineTo(Point(lineEnd, activityY)),
-      ]),
-      stroke: Stroke(color: theme.textColor, width: 4),
-    ));
+    final activityY = config.height * 4;
+    final lineEnd =
+        lastX - config.taskMargin + config.diagramMarginX; // ~ stopx
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(leftMargin, activityY)),
+          LineTo(Point(lineEnd, activityY)),
+        ]),
+        stroke: Stroke(color: theme.textColor, width: 4),
+      ),
+    );
     // Arrowhead: marker path 'M 0,0 V 4 L6,2 Z' anchored at the line tip.
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(lineEnd, activityY - 4)),
-        LineTo(Point(lineEnd, activityY + 4)),
-        LineTo(Point(lineEnd + 8, activityY)),
-        ClosePath(),
-      ]),
-      fill: Fill(const Color(0xff000000)),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(lineEnd, activityY - 4)),
+          LineTo(Point(lineEnd, activityY + 4)),
+          LineTo(Point(lineEnd + 8, activityY)),
+          ClosePath(),
+        ]),
+        fill: Fill(const Color(0xff000000)),
+      ),
+    );
   }
 
   // Title: top-left at x = leftMargin, y = 25, bold, titleFontSize '4ex'.
@@ -357,25 +481,32 @@ RenderScene layoutJourney(
   final title = diagram.title;
   if (title != null && title.isNotEmpty) {
     final style = TextStyleSpec(
-        fontFamily: theme.fontFamily,
-        fontSize: _taskFontSize * 2,
-        fontWeight: 700);
+      fontFamily: config.titleFontFamily ?? theme.fontFamily,
+      fontSize: config.titleFontSize ?? config.taskFontSize * 2,
+      fontWeight: 700,
+    );
     final size = measurer.measure(title, style);
-    nodes.add(SceneText(
-      text: title,
-      bounds: Rect.fromLTWH(leftMargin, 25 - size.height, size.width,
-          size.height),
-      style: style,
-      color: theme.titleColor,
-      align: TextAlignH.left,
-    ));
+    nodes.add(
+      SceneText(
+        text: title,
+        bounds: Rect.fromLTWH(
+          leftMargin,
+          25 - size.height,
+          size.width,
+          size.height,
+        ),
+        style: style,
+        color: config.titleColor ?? theme.titleColor,
+        align: TextAlignH.left,
+      ),
+    );
   }
 
   var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);
   // Upstream viewBox starts at y = -25 to leave room for the title row.
   bounds = bounds.union(const Rect.fromLTWH(0, -25, 1, 1));
 
-  const pad = _diagramMarginY;
+  final pad = config.diagramMarginY;
   final dx = pad - bounds.left;
   final dy = pad - bounds.top;
   return RenderScene(
@@ -385,10 +516,56 @@ RenderScene layoutJourney(
   );
 }
 
+String? _optionalString(Map<String, Object?> values, String key) {
+  final value = values[key];
+  return value is String && value.isNotEmpty ? value : null;
+}
+
+Color? _optionalColor(Map<String, Object?> values, String key) {
+  final value = values[key];
+  return value is String && value.isNotEmpty ? Color.tryParse(value) : null;
+}
+
+List<Color> _colorList(Object? value, List<Color> fallback) {
+  if (value is! List || value.isEmpty) return fallback;
+  final colors = <Color>[];
+  for (final item in value) {
+    final color = item is String ? Color.tryParse(item) : null;
+    if (color == null) return fallback;
+    colors.add(color);
+  }
+  return List.unmodifiable(colors);
+}
+
+List<Color>? _optionalColorList(Object? value) {
+  if (value == null) return null;
+  final colors = _colorList(value, const []);
+  return colors.isEmpty ? null : colors;
+}
+
+double _fontSize(Object? value, double fallback, {double? exBase}) {
+  if (value is num) {
+    final size = value.toDouble();
+    return size.isFinite && size > 0 ? size : fallback;
+  }
+  if (value is! String) return fallback;
+  final normalized = value.trim().toLowerCase();
+  if (normalized.endsWith('ex') && exBase != null) {
+    final ex = double.tryParse(normalized.substring(0, normalized.length - 2));
+    if (ex != null && ex.isFinite && ex > 0) return ex * exBase / 2;
+  }
+  final pixels = double.tryParse(normalized.replaceFirst(RegExp(r'px$'), ''));
+  return pixels != null && pixels.isFinite && pixels > 0 ? pixels : fallback;
+}
+
 /// Knuth-plass-ish legend label wrapping at [maxWidth] with hyphenation of
 /// over-long words (matches drawActorLegend).
 List<String> _wrapLegendLabel(
-    String text, TextStyleSpec style, TextMeasurer measurer, double maxWidth) {
+  String text,
+  TextStyleSpec style,
+  TextMeasurer measurer,
+  double maxWidth,
+) {
   if (measurer.measure(text, style).width <= maxWidth) return [text];
   final lines = <String>[];
   var current = '';
@@ -430,8 +607,11 @@ List<SceneNode> _face(Point c, int score) {
     mouth = SceneShape(
       geometry: PathGeometry([
         MoveTo(Point(c.x - r / 2, c.y + 2)),
-        CubicTo(Point(c.x - r / 4, c.y + 2 + r / 2),
-            Point(c.x + r / 4, c.y + 2 + r / 2), Point(c.x + r / 2, c.y + 2)),
+        CubicTo(
+          Point(c.x - r / 4, c.y + 2 + r / 2),
+          Point(c.x + r / 4, c.y + 2 + r / 2),
+          Point(c.x + r / 2, c.y + 2),
+        ),
       ]),
       stroke: Stroke(color: eyeColor, width: r / 2 - r / 2.2),
     );
@@ -440,8 +620,11 @@ List<SceneNode> _face(Point c, int score) {
     mouth = SceneShape(
       geometry: PathGeometry([
         MoveTo(Point(c.x - r / 2, c.y + 7)),
-        CubicTo(Point(c.x - r / 4, c.y + 7 - r / 2),
-            Point(c.x + r / 4, c.y + 7 - r / 2), Point(c.x + r / 2, c.y + 7)),
+        CubicTo(
+          Point(c.x - r / 4, c.y + 7 - r / 2),
+          Point(c.x + r / 4, c.y + 7 - r / 2),
+          Point(c.x + r / 2, c.y + 7),
+        ),
       ]),
       stroke: Stroke(color: eyeColor, width: r / 2 - r / 2.2),
     );
@@ -462,11 +645,13 @@ List<SceneNode> _face(Point c, int score) {
       stroke: Stroke(color: const Color(0xff999999), width: 2),
     ),
     SceneShape(
-        geometry: CircleGeometry(Point(c.x - r / 3, c.y - r / 3), 1.5),
-        fill: Fill(eyeColor)),
+      geometry: CircleGeometry(Point(c.x - r / 3, c.y - r / 3), 1.5),
+      fill: Fill(eyeColor),
+    ),
     SceneShape(
-        geometry: CircleGeometry(Point(c.x + r / 3, c.y - r / 3), 1.5),
-        fill: Fill(eyeColor)),
+      geometry: CircleGeometry(Point(c.x + r / 3, c.y - r / 3), 1.5),
+      fill: Fill(eyeColor),
+    ),
     mouth,
   ];
 }

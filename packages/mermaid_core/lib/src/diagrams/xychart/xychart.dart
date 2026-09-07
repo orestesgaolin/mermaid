@@ -18,13 +18,24 @@ import '../../theme/theme.dart';
 
 class XyAxisConfig {
   const XyAxisConfig({
-    this.labelFontSize = 14, this.labelPadding = 5,
-    this.titleFontSize = 16, this.titlePadding = 5,
-    this.tickLength = 5, this.tickWidth = 2, this.axisLineWidth = 2,
+    this.showLabel = true,
+    this.showTitle = true,
+    this.showTick = true,
+    this.showAxisLine = true,
+    this.labelFontSize = 14,
+    this.labelPadding = 5,
+    this.titleFontSize = 16,
+    this.titlePadding = 5,
+    this.tickLength = 5,
+    this.tickWidth = 2,
+    this.axisLineWidth = 2,
+    this.labelRotation = 0,
   });
 
+  final bool showLabel, showTitle, showTick, showAxisLine;
   final double labelFontSize, labelPadding, titleFontSize, titlePadding;
   final double tickLength, tickWidth, axisLineWidth;
+  final double labelRotation;
 
   /// Reads one `xyChart.xAxis` / `xyChart.yAxis` object, applying the bounds
   /// from upstream's `XYChartAxisConfig` schema: font sizes and line metrics
@@ -36,6 +47,10 @@ class XyAxisConfig {
         for (final entry in value.entries) '${entry.key}': entry.value,
     };
     return XyAxisConfig(
+      showLabel: boolValue(map, 'showLabel', true),
+      showTitle: boolValue(map, 'showTitle', true),
+      showTick: boolValue(map, 'showTick', true),
+      showAxisLine: boolValue(map, 'showAxisLine', true),
       labelFontSize: positiveDouble(map, 'labelFontSize', 14),
       labelPadding: nonNegativeDouble(map, 'labelPadding', 5),
       titleFontSize: positiveDouble(map, 'titleFontSize', 16),
@@ -43,22 +58,29 @@ class XyAxisConfig {
       tickLength: positiveDouble(map, 'tickLength', 5),
       tickWidth: positiveDouble(map, 'tickWidth', 2),
       axisLineWidth: positiveDouble(map, 'axisLineWidth', 2),
+      labelRotation: clampedDouble(map, 'labelRotation', 0, min: -90, max: 90),
     );
   }
 }
 
 class XyChartConfig {
   const XyChartConfig({
-    this.width = 700, this.height = 500,
-    this.titleFontSize = 20, this.titlePadding = 10,
-    this.plotReservedSpacePercent = 50, this.horizontal = false,
-    this.showDataLabel = false, this.showDataLabelOutsideBar = false,
-    this.xAxis = const XyAxisConfig(), this.yAxis = const XyAxisConfig(),
+    this.width = 700,
+    this.height = 500,
+    this.titleFontSize = 20,
+    this.titlePadding = 10,
+    this.plotReservedSpacePercent = 50,
+    this.horizontal = false,
+    this.showTitle = true,
+    this.showDataLabel = false,
+    this.showDataLabelOutsideBar = false,
+    this.xAxis = const XyAxisConfig(),
+    this.yAxis = const XyAxisConfig(),
   });
 
   final double width, height, titleFontSize, titlePadding;
   final double plotReservedSpacePercent;
-  final bool horizontal, showDataLabel, showDataLabelOutsideBar;
+  final bool horizontal, showTitle, showDataLabel, showDataLabelOutsideBar;
   final XyAxisConfig xAxis, yAxis;
 
   /// Reads `config.xyChart`, applying upstream's `XYChartConfig` schema
@@ -75,13 +97,17 @@ class XyChartConfig {
       titleFontSize: positiveDouble(map, 'titleFontSize', 20),
       titlePadding: nonNegativeDouble(map, 'titlePadding', 10),
       plotReservedSpacePercent: clampedDouble(
-          map, 'plotReservedSpacePercent', 50,
-          min: 30, max: 100),
-      horizontal: stringValue(map, 'chartOrientation', 'vertical') ==
-          'horizontal',
+        map,
+        'plotReservedSpacePercent',
+        50,
+        min: 30,
+        max: 100,
+      ),
+      horizontal:
+          stringValue(map, 'chartOrientation', 'vertical') == 'horizontal',
+      showTitle: boolValue(map, 'showTitle', true),
       showDataLabel: boolValue(map, 'showDataLabel', false),
-      showDataLabelOutsideBar:
-          boolValue(map, 'showDataLabelOutsideBar', false),
+      showDataLabelOutsideBar: boolValue(map, 'showDataLabelOutsideBar', false),
       xAxis: XyAxisConfig.fromMap(map['xAxis']),
       yAxis: XyAxisConfig.fromMap(map['yAxis']),
     );
@@ -91,14 +117,18 @@ class XyChartConfig {
   /// the `xychart-beta horizontal` header into the resolved config so that
   /// orientation has a single source of truth.
   XyChartConfig withHorizontal(bool value) => XyChartConfig(
-        width: width, height: height,
-        titleFontSize: titleFontSize, titlePadding: titlePadding,
-        plotReservedSpacePercent: plotReservedSpacePercent,
-        horizontal: value,
-        showDataLabel: showDataLabel,
-        showDataLabelOutsideBar: showDataLabelOutsideBar,
-        xAxis: xAxis, yAxis: yAxis,
-      );
+    width: width,
+    height: height,
+    titleFontSize: titleFontSize,
+    titlePadding: titlePadding,
+    plotReservedSpacePercent: plotReservedSpacePercent,
+    horizontal: value,
+    showTitle: showTitle,
+    showDataLabel: showDataLabel,
+    showDataLabelOutsideBar: showDataLabelOutsideBar,
+    xAxis: xAxis,
+    yAxis: yAxis,
+  );
 }
 
 class XyChart {
@@ -193,8 +223,10 @@ XyChart parseXyChart(String source) {
         labels.add('');
       }
       final numText = p.replaceAll(RegExp(r'"[^"]*"'), '').trim();
-      values.add(double.tryParse(numText) ??
-          (throw MermaidParseException('invalid number "$p"', line: line)));
+      values.add(
+        double.tryParse(numText) ??
+            (throw MermaidParseException('invalid number "$p"', line: line)),
+      );
     }
     return (values, hasLabel ? labels : null);
   }
@@ -206,10 +238,14 @@ XyChart parseXyChart(String source) {
     if (comment >= 0) line = line.substring(0, comment).trim();
     if (line.isEmpty) continue;
     if (!seenHeader) {
-      final m = RegExp(r'^xychart(-beta)?(\s+horizontal)?\s*$').firstMatch(line);
+      final m = RegExp(
+        r'^xychart(-beta)?(\s+horizontal)?\s*$',
+      ).firstMatch(line);
       if (m == null) {
-        throw MermaidParseException('expected "xychart-beta" header',
-            line: i + 1);
+        throw MermaidParseException(
+          'expected "xychart-beta" header',
+          line: i + 1,
+        );
       }
       if (m.group(2) != null) config = config.withHorizontal(true);
       seenHeader = true;
@@ -222,25 +258,25 @@ XyChart parseXyChart(String source) {
       continue;
     }
     // x-axis ["title"] [cat, cat, ...]  |  x-axis ["title"] a --> b
-    m = RegExp(r'^x-axis\s+(?:("([^"]*)"|[^\[\d][^\[]*?)\s+)?\[(.*)\]\s*$')
-        .firstMatch(line);
+    m = RegExp(
+      r'^x-axis\s+(?:("([^"]*)"|[^\[\d][^\[]*?)\s+)?\[(.*)\]\s*$',
+    ).firstMatch(line);
     if (m != null) {
       if (m.group(1) != null) xTitle = unquote(m.group(1)!);
-      categories =
-          m.group(3)!.split(',').map((c) => unquote(c)).toList();
+      categories = m.group(3)!.split(',').map((c) => unquote(c)).toList();
       continue;
     }
     m = RegExp(
-            r'^x-axis\s+(?:("([^"]*)"|\S+)\s+)?([\d.+-]+)\s*-->\s*([\d.+-]+)\s*$')
-        .firstMatch(line);
+      r'^x-axis\s+(?:("([^"]*)"|\S+)\s+)?([\d.+-]+)\s*-->\s*([\d.+-]+)\s*$',
+    ).firstMatch(line);
     if (m != null) {
       if (m.group(1) != null) xTitle = unquote(m.group(1)!);
       xRange = (double.parse(m.group(3)!), double.parse(m.group(4)!));
       continue;
     }
     m = RegExp(
-            r'^y-axis\s+(?:("([^"]*)"|\S+(?:\s+\S+)*?)\s+)?([\d.+-]+)\s*-->\s*([\d.+-]+)\s*$')
-        .firstMatch(line);
+      r'^y-axis\s+(?:("([^"]*)"|\S+(?:\s+\S+)*?)\s+)?([\d.+-]+)\s*-->\s*([\d.+-]+)\s*$',
+    ).firstMatch(line);
     if (m != null) {
       if (m.group(1) != null) yTitle = unquote(m.group(1)!);
       yRange = (double.parse(m.group(3)!), double.parse(m.group(4)!));
@@ -251,18 +287,21 @@ XyChart parseXyChart(String source) {
       yTitle = unquote(m.group(1)!);
       continue;
     }
-    m = RegExp(r'^(bar|line)\s+(?:("([^"]*)")\s+)?\[(.*)\]\s*$')
-        .firstMatch(line);
+    m = RegExp(
+      r'^(bar|line)\s+(?:("([^"]*)")\s+)?\[(.*)\]\s*$',
+    ).firstMatch(line);
     if (m != null) {
       final kind = m.group(1) == 'bar' ? XySeriesKind.bar : XySeriesKind.line;
       final (values, pointLabels) = dataPoints(m.group(4)!, i + 1);
-      series.add(XySeries(
-        kind: kind,
-        label: m.group(3),
-        values: values,
-        // Per-point labels are a line-plot feature upstream (`linePlot.ts`).
-        pointLabels: kind == XySeriesKind.line ? pointLabels : null,
-      ));
+      series.add(
+        XySeries(
+          kind: kind,
+          label: m.group(3),
+          values: values,
+          // Per-point labels are a line-plot feature upstream (`linePlot.ts`).
+          pointLabels: kind == XySeriesKind.line ? pointLabels : null,
+        ),
+      );
       continue;
     }
     if (RegExp(r'^acc(Title|Descr)\s*[:{]').hasMatch(line)) continue;
@@ -331,10 +370,10 @@ double _tickIncrement(double start, double stop, int count) {
   final factor = error >= e10
       ? 10
       : error >= e5
-          ? 5
-          : error >= e2
-              ? 2
-              : 1;
+      ? 5
+      : error >= e2
+      ? 2
+      : 1;
   if (power >= 0) {
     return (factor * math.pow(10, power)).toDouble();
   }
@@ -354,12 +393,12 @@ String _formatTick(double v) {
 /// modelled on upstream `BaseAxis`/`BandAxis`/`LinearAxis`.
 class _Axis {
   _Axis.band(this.categories, this.title, this.config)
-      : isBand = true,
-        domainMin = 0,
-        domainMax = 0;
+    : isBand = true,
+      domainMin = 0,
+      domainMax = 0;
   _Axis.linear(this.domainMin, this.domainMax, this.title, this.config)
-      : isBand = false,
-        categories = const [];
+    : isBand = false,
+      categories = const [];
 
   final bool isBand;
   final List<String> categories;
@@ -454,23 +493,31 @@ class _Axis {
 
   void _calcHorizontal(Size avail, TextMeasurer m, String ff) {
     var availableHeight = avail.height;
-    if (availableHeight > config.axisLineWidth) {
+    if (config.showAxisLine && availableHeight > config.axisLineWidth) {
       availableHeight -= config.axisLineWidth;
       showAxisLine = true;
     }
-    final labelDim = _maxDim(tickLabels(), config.labelFontSize, m, ff);
-    final maxPadding = _maxOuterPaddingPercentForLabel * avail.width;
-    outerPadding = math.min(labelDim.width / 2, maxPadding);
-    final heightRequired = labelDim.height + config.labelPadding * 2;
-    if (heightRequired <= availableHeight) {
-      availableHeight -= heightRequired;
-      showLabel = true;
+    if (config.showLabel) {
+      final labelDim = _maxDim(tickLabels(), config.labelFontSize, m, ff);
+      final maxPadding = _maxOuterPaddingPercentForLabel * avail.width;
+      outerPadding = math.min(labelDim.width / 2, maxPadding);
+      final radians = config.labelRotation * math.pi / 180;
+      final rotatedHeight = math.max(
+        labelDim.height,
+        math.sin(radians).abs() * labelDim.width +
+            math.cos(radians).abs() * labelDim.height,
+      );
+      final heightRequired = rotatedHeight + config.labelPadding * 2;
+      if (heightRequired <= availableHeight) {
+        availableHeight -= heightRequired;
+        showLabel = true;
+      }
     }
-    if (availableHeight >= config.tickLength) {
+    if (config.showTick && availableHeight >= config.tickLength) {
       showTick = true;
       availableHeight -= config.tickLength;
     }
-    if (title.isNotEmpty) {
+    if (config.showTitle && title.isNotEmpty) {
       final td = _maxDim([title], config.titleFontSize, m, ff);
       final req = td.height + config.titlePadding * 2;
       titleTextHeight = td.height;
@@ -485,23 +532,25 @@ class _Axis {
 
   void _calcVertical(Size avail, TextMeasurer m, String ff) {
     var availableWidth = avail.width;
-    if (availableWidth > config.axisLineWidth) {
+    if (config.showAxisLine && availableWidth > config.axisLineWidth) {
       availableWidth -= config.axisLineWidth;
       showAxisLine = true;
     }
-    final labelDim = _maxDim(tickLabels(), config.labelFontSize, m, ff);
-    final maxPadding = _maxOuterPaddingPercentForLabel * avail.height;
-    outerPadding = math.min(labelDim.height / 2, maxPadding);
-    final widthRequired = labelDim.width + config.labelPadding * 2;
-    if (widthRequired <= availableWidth) {
-      availableWidth -= widthRequired;
-      showLabel = true;
+    if (config.showLabel) {
+      final labelDim = _maxDim(tickLabels(), config.labelFontSize, m, ff);
+      final maxPadding = _maxOuterPaddingPercentForLabel * avail.height;
+      outerPadding = math.min(labelDim.height / 2, maxPadding);
+      final widthRequired = labelDim.width + config.labelPadding * 2;
+      if (widthRequired <= availableWidth) {
+        availableWidth -= widthRequired;
+        showLabel = true;
+      }
     }
-    if (availableWidth >= config.tickLength) {
+    if (config.showTick && availableWidth >= config.tickLength) {
       showTick = true;
       availableWidth -= config.tickLength;
     }
-    if (title.isNotEmpty) {
+    if (config.showTitle && title.isNotEmpty) {
       final td = _maxDim([title], config.titleFontSize, m, ff);
       final req = td.height + config.titlePadding * 2;
       titleTextHeight = td.height;
@@ -516,7 +565,8 @@ class _Axis {
 
   void recalculateOuterPaddingToDrawBar() {
     if (_barWidthToTickWidthRatio * tickDistance > outerPadding * 2) {
-      outerPadding = (_barWidthToTickWidthRatio * tickDistance / 2).floorToDouble();
+      outerPadding = (_barWidthToTickWidthRatio * tickDistance / 2)
+          .floorToDouble();
     }
   }
 }
@@ -574,20 +624,26 @@ RenderScene layoutXyChart(
       ? chart.categories
       : [
           for (var i = 0; i < pointCount; i++)
-            _formatTick((chart.xRange?.$1 ?? 1) +
-                i *
-                    ((chart.xRange == null || pointCount <= 1)
-                        ? 1
-                        : (chart.xRange!.$2 - chart.xRange!.$1) /
-                            (pointCount - 1))),
+            _formatTick(
+              (chart.xRange?.$1 ?? 1) +
+                  i *
+                      ((chart.xRange == null || pointCount <= 1)
+                          ? 1
+                          : (chart.xRange!.$2 - chart.xRange!.$1) /
+                                (pointCount - 1)),
+            ),
         ];
 
   // Build the two axes. Vertical (default): x = band, y = linear. Horizontal
   // swaps which axis is band vs linear, but the band axis is always 'xAxis'.
   final xAxis = chart.categories.isNotEmpty || chart.xRange == null
       ? _Axis.band(catLabels, chart.xAxisTitle ?? '', config.xAxis)
-      : _Axis.linear(chart.xRange!.$1, chart.xRange!.$2,
-          chart.xAxisTitle ?? '', config.xAxis);
+      : _Axis.linear(
+          chart.xRange!.$1,
+          chart.xRange!.$2,
+          chart.xAxisTitle ?? '',
+          config.xAxis,
+        );
   final yAxis = _Axis.linear(minV, maxV, chart.yAxisTitle ?? '', config.yAxis);
 
   final hasBar = chart.series.any((s) => s.kind == XySeriesKind.bar);
@@ -598,18 +654,23 @@ RenderScene layoutXyChart(
   var plotX = 0.0;
   var plotY = 0.0;
   var titleYEnd = 0.0;
-  var chartW = (canvasW * config.plotReservedSpacePercent / 100).floorToDouble();
-  var chartH = (canvasH * config.plotReservedSpacePercent / 100).floorToDouble();
+  var chartW = (canvasW * config.plotReservedSpacePercent / 100)
+      .floorToDouble();
+  var chartH = (canvasH * config.plotReservedSpacePercent / 100)
+      .floorToDouble();
   // plot.calculateSpace reserves chartW/chartH.
   availW -= chartW;
   availH -= chartH;
 
   // Title space.
   var titleH = 0.0;
-  final hasTitle = chart.title != null && chart.title!.isNotEmpty;
+  final hasTitle =
+      config.showTitle && chart.title != null && chart.title!.isNotEmpty;
   if (hasTitle) {
-    final td = measurer.measure(chart.title!,
-        TextStyleSpec(fontFamily: ff, fontSize: config.titleFontSize));
+    final td = measurer.measure(
+      chart.title!,
+      TextStyleSpec(fontFamily: ff, fontSize: config.titleFontSize),
+    );
     titleH = td.height + 2 * config.titlePadding;
   }
 
@@ -704,14 +765,24 @@ RenderScene layoutXyChart(
           rect = Rect.fromLTWH(plot.left, cp - half, vp - plot.left, barWidth);
         } else {
           // value runs along y; bar from value down to plot bottom.
-          rect = Rect.fromLTWH(
-              cp - half, vp, barWidth, plot.bottom - vp);
+          rect = Rect.fromLTWH(cp - half, vp, barWidth, plot.bottom - vp);
         }
         nodes.add(SceneShape(geometry: RectGeometry(rect), fill: Fill(color)));
       }
       if (chart.showDataLabel) {
-        _addDataLabels(nodes, s, pointCount, catScale, valScale, plot,
-            horizontal, barWidth, chart.showDataLabelOutsideBar, textColor, ff);
+        _addDataLabels(
+          nodes,
+          s,
+          pointCount,
+          catScale,
+          valScale,
+          plot,
+          horizontal,
+          barWidth,
+          chart.showDataLabelOutsideBar,
+          textColor,
+          ff,
+        );
       }
     } else {
       final pts = [
@@ -721,13 +792,15 @@ RenderScene layoutXyChart(
               : Point(catScale(i), valScale(s.values[i])),
       ];
       if (pts.length >= 2) {
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(pts.first),
-            for (final p in pts.skip(1)) LineTo(p),
-          ]),
-          stroke: Stroke(color: color, width: 2),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(pts.first),
+              for (final p in pts.skip(1)) LineTo(p),
+            ]),
+            stroke: Stroke(color: color, width: 2),
+          ),
+        );
       }
       // Per-point labels (`linePlot.ts` pointLabels), offset 10, fontSize 12.
       final labels = s.pointLabels;
@@ -740,20 +813,29 @@ RenderScene layoutXyChart(
           final size = measurer.measure(label, style);
           final Rect b;
           if (horizontal) {
-            b = Rect.fromLTWH(pts[i].x + labelOffset,
-                pts[i].y - size.height / 2, size.width, size.height);
+            b = Rect.fromLTWH(
+              pts[i].x + labelOffset,
+              pts[i].y - size.height / 2,
+              size.width,
+              size.height,
+            );
           } else {
-            b = Rect.fromLTWH(pts[i].x - size.width / 2,
-                pts[i].y - labelOffset - size.height / 2, size.width,
-                size.height);
+            b = Rect.fromLTWH(
+              pts[i].x - size.width / 2,
+              pts[i].y - labelOffset - size.height / 2,
+              size.width,
+              size.height,
+            );
           }
-          nodes.add(SceneText(
-            text: label,
-            bounds: b,
-            style: style,
-            color: color,
-            align: horizontal ? TextAlignH.left : TextAlignH.center,
-          ));
+          nodes.add(
+            SceneText(
+              text: label,
+              bounds: b,
+              style: style,
+              color: color,
+              align: horizontal ? TextAlignH.left : TextAlignH.center,
+            ),
+          );
         }
       }
     }
@@ -766,15 +848,24 @@ RenderScene layoutXyChart(
   // --- Chart title. ---
   if (hasTitle) {
     final style = TextStyleSpec(
-        fontFamily: ff, fontSize: config.titleFontSize, fontWeight: 700);
+      fontFamily: ff,
+      fontSize: config.titleFontSize,
+      fontWeight: 700,
+    );
     final size = measurer.measure(chart.title!, style);
-    nodes.add(SceneText(
-      text: chart.title!,
-      bounds: Rect.fromLTWH(canvasW / 2 - size.width / 2,
-          titleH / 2 - size.height / 2, size.width, size.height),
-      style: style,
-      color: theme.titleColor,
-    ));
+    nodes.add(
+      SceneText(
+        text: chart.title!,
+        bounds: Rect.fromLTWH(
+          canvasW / 2 - size.width / 2,
+          titleH / 2 - size.height / 2,
+          size.width,
+          size.height,
+        ),
+        style: style,
+        color: theme.titleColor,
+      ),
+    );
   }
 
   // Upstream draws an explicit background rect filling the 700x500 canvas
@@ -788,8 +879,13 @@ RenderScene layoutXyChart(
 }
 
 /// Draw an axis line, ticks, labels and title for [axis] (`baseAxis.ts`).
-void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
-    String ff, Color color) {
+void _drawAxis(
+  List<SceneNode> nodes,
+  _Axis axis,
+  TextMeasurer measurer,
+  String ff,
+  Color color,
+) {
   final labelFontSize = axis.config.labelFontSize;
   final labelPadding = axis.config.labelPadding;
   final titleFontSize = axis.config.titleFontSize;
@@ -797,6 +893,7 @@ void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
   final tickLength = axis.config.tickLength;
   final tickWidth = axis.config.tickWidth;
   final axisLineWidth = axis.config.axisLineWidth;
+  final labelRotation = axis.config.labelRotation;
   final labelStyle = TextStyleSpec(fontFamily: ff, fontSize: labelFontSize);
   final titleStyle = TextStyleSpec(fontFamily: ff, fontSize: titleFontSize);
 
@@ -812,16 +909,19 @@ void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
       // Span the plot extent (the scale range, which the ticks use), not the
       // axis band thickness — `boundingH` is the pre-reservation available
       // height, not the final plot height.
-      nodes.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(x, axis.rangeStart)),
-          LineTo(Point(x, axis.rangeEnd)),
-        ]),
-        stroke: Stroke(color: color, width: axisLineWidth),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(x, axis.rangeStart)),
+            LineTo(Point(x, axis.rangeEnd)),
+          ]),
+          stroke: Stroke(color: color, width: axisLineWidth),
+        ),
+      );
     }
     if (axis.showLabel) {
-      final lx = axis.boundingX +
+      final lx =
+          axis.boundingX +
           axis.boundingW -
           (axis.showLabel ? labelPadding : 0) -
           (axis.showTick ? tickLength : 0) -
@@ -830,158 +930,212 @@ void _drawAxis(List<SceneNode> nodes, _Axis axis, TextMeasurer measurer,
         final t = tickTexts[i];
         final size = measurer.measure(t, labelStyle);
         final y = scaleAt(i);
-        nodes.add(SceneText(
-          text: t,
-          bounds: Rect.fromLTWH(
-              lx - size.width, y - size.height / 2, size.width, size.height),
-          style: labelStyle,
-          color: color,
-          align: TextAlignH.right,
-        ));
+        nodes.add(
+          SceneText(
+            text: t,
+            bounds: Rect.fromLTWH(
+              lx - size.width,
+              y - size.height / 2,
+              size.width,
+              size.height,
+            ),
+            style: labelStyle,
+            color: color,
+            align: TextAlignH.right,
+          ),
+        );
       }
     }
     if (axis.showTick) {
       final x =
-          axis.boundingX + axis.boundingW - (axis.showAxisLine ? axisLineWidth : 0);
+          axis.boundingX +
+          axis.boundingW -
+          (axis.showAxisLine ? axisLineWidth : 0);
       for (var i = 0; i < tickN; i++) {
         final y = scaleAt(i);
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(x, y)),
-            LineTo(Point(x - tickLength, y)),
-          ]),
-          stroke: Stroke(color: color, width: tickWidth),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(x, y)),
+              LineTo(Point(x - tickLength, y)),
+            ]),
+            stroke: Stroke(color: color, width: tickWidth),
+          ),
+        );
       }
     }
     if (axis.showTitle && axis.title.isNotEmpty) {
       final size = measurer.measure(axis.title, titleStyle);
-      nodes.add(SceneText(
-        text: axis.title,
-        bounds: Rect.fromCenter(
-            Point(axis.boundingX + titlePadding + size.height / 2,
-                axis.rangeStart + (axis.rangeEnd - axis.rangeStart) / 2),
+      nodes.add(
+        SceneText(
+          text: axis.title,
+          bounds: Rect.fromCenter(
+            Point(
+              axis.boundingX + titlePadding + size.height / 2,
+              axis.rangeStart + (axis.rangeEnd - axis.rangeStart) / 2,
+            ),
             size.width,
-            size.height),
-        style: titleStyle,
-        color: color,
-        rotation: 270,
-      ));
+            size.height,
+          ),
+          style: titleStyle,
+          color: color,
+          rotation: 270,
+        ),
+      );
     }
   } else if (axis.position == 'bottom') {
     if (axis.showAxisLine) {
       final y = axis.boundingY + axisLineWidth / 2;
-      nodes.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(axis.rangeStart, y)),
-          LineTo(Point(axis.rangeEnd, y)),
-        ]),
-        stroke: Stroke(color: color, width: axisLineWidth),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(axis.rangeStart, y)),
+            LineTo(Point(axis.rangeEnd, y)),
+          ]),
+          stroke: Stroke(color: color, width: axisLineWidth),
+        ),
+      );
     }
     if (axis.showLabel) {
-      final y = axis.boundingY +
+      final y =
+          axis.boundingY +
           labelPadding +
           (axis.showTick ? tickLength : 0) +
           (axis.showAxisLine ? axisLineWidth : 0);
       for (var i = 0; i < tickN; i++) {
         final t = tickTexts[i];
         final size = measurer.measure(t, labelStyle);
-        final x = scaleAt(i);
-        nodes.add(SceneText(
-          text: t,
-          bounds: Rect.fromLTWH(x - size.width / 2, y, size.width, size.height),
-          style: labelStyle,
-          color: color,
-          align: TextAlignH.center,
-        ));
+        final radians = labelRotation * math.pi / 180;
+        final x = scaleAt(i) + math.sin(radians) * size.height / 2;
+        nodes.add(
+          SceneText(
+            text: t,
+            bounds: Rect.fromLTWH(
+              x - size.width / 2,
+              y + math.sin(radians).abs() * size.width / 2,
+              size.width,
+              size.height,
+            ),
+            style: labelStyle,
+            color: color,
+            align: TextAlignH.center,
+            rotation: labelRotation,
+          ),
+        );
       }
     }
     if (axis.showTick) {
       final y = axis.boundingY + (axis.showAxisLine ? axisLineWidth : 0);
       for (var i = 0; i < tickN; i++) {
         final x = scaleAt(i);
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(x, y)),
-            LineTo(Point(x, y + tickLength)),
-          ]),
-          stroke: Stroke(color: color, width: tickWidth),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(x, y)),
+              LineTo(Point(x, y + tickLength)),
+            ]),
+            stroke: Stroke(color: color, width: tickWidth),
+          ),
+        );
       }
     }
     if (axis.showTitle && axis.title.isNotEmpty) {
       final size = measurer.measure(axis.title, titleStyle);
       final cx = axis.rangeStart + (axis.rangeEnd - axis.rangeStart) / 2;
-      final ty = axis.boundingY +
-          axis.boundingH -
-          titlePadding -
-          axis.titleTextHeight;
-      nodes.add(SceneText(
-        text: axis.title,
-        bounds: Rect.fromLTWH(cx - size.width / 2, ty, size.width, size.height),
-        style: titleStyle,
-        color: color,
-        align: TextAlignH.center,
-      ));
+      final ty =
+          axis.boundingY + axis.boundingH - titlePadding - axis.titleTextHeight;
+      nodes.add(
+        SceneText(
+          text: axis.title,
+          bounds: Rect.fromLTWH(
+            cx - size.width / 2,
+            ty,
+            size.width,
+            size.height,
+          ),
+          style: titleStyle,
+          color: color,
+          align: TextAlignH.center,
+        ),
+      );
     }
   } else if (axis.position == 'top') {
     if (axis.showAxisLine) {
       final y = axis.boundingY + axis.boundingH - axisLineWidth / 2;
-      nodes.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(axis.rangeStart, y)),
-          LineTo(Point(axis.rangeEnd, y)),
-        ]),
-        stroke: Stroke(color: color, width: axisLineWidth),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(axis.rangeStart, y)),
+            LineTo(Point(axis.rangeEnd, y)),
+          ]),
+          stroke: Stroke(color: color, width: axisLineWidth),
+        ),
+      );
     }
     if (axis.showLabel) {
-      final y = axis.boundingY +
+      final y =
+          axis.boundingY +
           (axis.showTitle ? axis.titleTextHeight + titlePadding * 2 : 0) +
           labelPadding;
       for (var i = 0; i < tickN; i++) {
         final t = tickTexts[i];
         final size = measurer.measure(t, labelStyle);
         final x = scaleAt(i);
-        nodes.add(SceneText(
-          text: t,
-          bounds: Rect.fromLTWH(x - size.width / 2, y, size.width, size.height),
-          style: labelStyle,
-          color: color,
-          align: TextAlignH.center,
-        ));
+        nodes.add(
+          SceneText(
+            text: t,
+            bounds: Rect.fromLTWH(
+              x - size.width / 2,
+              y,
+              size.width,
+              size.height,
+            ),
+            style: labelStyle,
+            color: color,
+            align: TextAlignH.center,
+          ),
+        );
       }
     }
     if (axis.showTick) {
       for (var i = 0; i < tickN; i++) {
         final x = scaleAt(i);
-        final y1 = axis.boundingY +
+        final y1 =
+            axis.boundingY +
             axis.boundingH -
             (axis.showAxisLine ? axisLineWidth : 0);
-        final y2 = axis.boundingY +
+        final y2 =
+            axis.boundingY +
             axis.boundingH -
             tickLength -
             (axis.showAxisLine ? axisLineWidth : 0);
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(x, y1)),
-            LineTo(Point(x, y2)),
-          ]),
-          stroke: Stroke(color: color, width: tickWidth),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(x, y1)),
+              LineTo(Point(x, y2)),
+            ]),
+            stroke: Stroke(color: color, width: tickWidth),
+          ),
+        );
       }
     }
     if (axis.showTitle && axis.title.isNotEmpty) {
       final size = measurer.measure(axis.title, titleStyle);
-      nodes.add(SceneText(
-        text: axis.title,
-        bounds: Rect.fromLTWH(axis.boundingX + axis.boundingW / 2 - size.width / 2,
-            axis.boundingY + titlePadding, size.width, size.height),
-        style: titleStyle,
-        color: color,
-        align: TextAlignH.center,
-      ));
+      nodes.add(
+        SceneText(
+          text: axis.title,
+          bounds: Rect.fromLTWH(
+            axis.boundingX + axis.boundingW / 2 - size.width / 2,
+            axis.boundingY + titlePadding,
+            size.width,
+            size.height,
+          ),
+          style: titleStyle,
+          color: color,
+          align: TextAlignH.center,
+        ),
+      );
     }
   }
 }
@@ -1041,14 +1195,20 @@ void _addDataLabels(
       final r = it.$1;
       final tw = uniformFontSize * it.$2.length * charWidthFactor;
       final x = outside ? r.right + rightMargin : r.right - rightMargin - tw;
-      nodes.add(SceneText(
-        text: it.$2,
-        bounds: Rect.fromLTWH(
-            x, r.top + r.height / 2 - uniformFontSize / 2, tw, uniformFontSize),
-        style: style,
-        color: color,
-        align: outside ? TextAlignH.left : TextAlignH.right,
-      ));
+      nodes.add(
+        SceneText(
+          text: it.$2,
+          bounds: Rect.fromLTWH(
+            x,
+            r.top + r.height / 2 - uniformFontSize / 2,
+            tw,
+            uniformFontSize,
+          ),
+          style: style,
+          color: color,
+          align: outside ? TextAlignH.left : TextAlignH.right,
+        ),
+      );
     }
   } else {
     const yOffset = 10.0;
@@ -1074,14 +1234,15 @@ void _addDataLabels(
     for (final it in items) {
       final r = it.$1;
       final y = outside ? r.top - yOffset - uniformFontSize : r.top + yOffset;
-      nodes.add(SceneText(
-        text: it.$2,
-        bounds: Rect.fromLTWH(
-            r.left, y, r.width, uniformFontSize),
-        style: style,
-        color: color,
-        align: TextAlignH.center,
-      ));
+      nodes.add(
+        SceneText(
+          text: it.$2,
+          bounds: Rect.fromLTWH(r.left, y, r.width, uniformFontSize),
+          style: style,
+          color: color,
+          align: TextAlignH.center,
+        ),
+      );
     }
   }
 }

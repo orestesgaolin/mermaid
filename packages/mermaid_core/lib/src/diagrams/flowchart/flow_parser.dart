@@ -7,6 +7,7 @@
 library;
 
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../parse_error.dart';
 import 'flow_model.dart';
 
@@ -17,7 +18,9 @@ import 'flow_model.dart';
 FlowGraph parseFlowchart(String source) {
   final title = frontmatterTitle(source);
   final text = stripMetadata(source);
-  return _FlowParser(text, title).parse();
+  final inheritDir =
+      resolveDiagramConfig(source, 'flowchart')['inheritDir'] == true;
+  return _FlowParser(text, title, inheritDir).parse();
 }
 
 class _Statement {
@@ -53,10 +56,11 @@ class _EdgeSpec {
 }
 
 class _FlowParser {
-  _FlowParser(this.text, this.title);
+  _FlowParser(this.text, this.title, this.inheritDir);
 
   final String text;
   final String? title;
+  final bool inheritDir;
 
   final nodes = <String, FlowNode>{};
   final edges = <FlowEdge>[];
@@ -78,8 +82,9 @@ class _FlowParser {
       throw const MermaidParseException('empty flowchart source');
     }
     final header = statements.first;
-    final headerMatch =
-        RegExp(r'^(graph|flowchart-elk|flowchart)\b\s*(.*)$').firstMatch(header.text.trim());
+    final headerMatch = RegExp(
+      r'^(graph|flowchart-elk|flowchart)\b\s*(.*)$',
+    ).firstMatch(header.text.trim());
     if (headerMatch == null) {
       throw MermaidParseException(
         'expected "graph" or "flowchart" header, got "${header.text.trim()}"',
@@ -101,14 +106,14 @@ class _FlowParser {
     }
     final finalEdges =
         (_defaultLinkStyles.isEmpty && _defaultInterpolate == null)
-            ? edges
-            : [
-                for (final e in edges)
-                  e.copyWith(
-                    styles: {..._defaultLinkStyles, ...e.styles},
-                    interpolate: e.interpolate ?? _defaultInterpolate,
-                  ),
-              ];
+        ? edges
+        : [
+            for (final e in edges)
+              e.copyWith(
+                styles: {..._defaultLinkStyles, ...e.styles},
+                interpolate: e.interpolate ?? _defaultInterpolate,
+              ),
+          ];
     return FlowGraph(
       direction: direction,
       nodes: nodes,
@@ -243,7 +248,9 @@ class _FlowParser {
         'RL': FlowDirection.rl,
       };
       if (_openSubgraphs.isNotEmpty) {
-        _openSubgraphs.last.direction = dirs[dir.group(1)]!;
+        if (!inheritDir) {
+          _openSubgraphs.last.direction = dirs[dir.group(1)]!;
+        }
       } else {
         direction = dirs[dir.group(1)]!;
       }
@@ -279,8 +286,7 @@ class _FlowParser {
   void _openSubgraph(String header, int line) {
     String id;
     String titleText;
-    final bracket =
-        RegExp(r'^([^\s\[\]"]+)\s*\[(.*)\]\s*$').firstMatch(header);
+    final bracket = RegExp(r'^([^\s\[\]"]+)\s*\[(.*)\]\s*$').firstMatch(header);
     if (bracket != null) {
       id = bracket.group(1)!;
       titleText = _normalizeLabel(bracket.group(2)!);
@@ -297,8 +303,9 @@ class _FlowParser {
       id = 'subGraph${_anonSubgraphCount++}';
       titleText = _normalizeLabel(header);
     }
-    final parentIndex =
-        _openSubgraphs.isEmpty ? null : _openSubgraphs.last.listIndex;
+    final parentIndex = _openSubgraphs.isEmpty
+        ? null
+        : _openSubgraphs.last.listIndex;
     final open = _OpenSubgraph(id, titleText, parentIndex)
       ..listIndex = _builtSubgraphs.length;
     _builtSubgraphs.add(null);
@@ -358,8 +365,9 @@ class _FlowParser {
     }
     final id = m.group(1)!;
     final node = _ensureNode(id);
-    nodes[id] =
-        node.copyWith(styles: {...node.styles, ..._parseStyles(m.group(2)!)});
+    nodes[id] = node.copyWith(
+      styles: {...node.styles, ..._parseStyles(m.group(2)!)},
+    );
   }
 
   void _parseLinkStyle(String s, int line) {
@@ -375,7 +383,9 @@ class _FlowParser {
       curve = interp.group(1);
       styleText = styleText.substring(interp.end).trim();
     }
-    final styles = styleText.isEmpty ? <String, String>{} : _parseStyles(styleText);
+    final styles = styleText.isEmpty
+        ? <String, String>{}
+        : _parseStyles(styleText);
     final indexText = m.group(1)!.trim();
     // `linkStyle default` applies to every edge; per-index styles override
     // it (merged at the end of parse()).
@@ -392,8 +402,10 @@ class _FlowParser {
           line: line,
         );
       }
-      edges[i] = edges[i]
-          .copyWith(styles: {...edges[i].styles, ...styles}, interpolate: curve);
+      edges[i] = edges[i].copyWith(
+        styles: {...edges[i].styles, ...styles},
+        interpolate: curve,
+      );
     }
   }
 
@@ -466,15 +478,17 @@ class _FlowParser {
       final targets = _parseNodeGroup(scanner);
       for (final from in sources) {
         for (final to in targets) {
-          edges.add(FlowEdge(
-            from: from,
-            to: to,
-            label: edge.label,
-            stroke: edge.stroke,
-            headFrom: edge.headFrom,
-            headTo: edge.headTo,
-            minLen: edge.minLen,
-          ));
+          edges.add(
+            FlowEdge(
+              from: from,
+              to: to,
+              label: edge.label,
+              stroke: edge.stroke,
+              headFrom: edge.headFrom,
+              headTo: edge.headTo,
+              minLen: edge.minLen,
+            ),
+          );
         }
       }
       sources = targets;
@@ -510,8 +524,10 @@ class _FlowParser {
       if (sc.tryConsume(':::')) {
         final cls = sc.readNodeId();
         if (cls.isEmpty) {
-          throw MermaidParseException('expected class name after ":::"',
-              line: sc.line);
+          throw MermaidParseException(
+            'expected class name after ":::"',
+            line: sc.line,
+          );
         }
         final node = nodes[id]!;
         nodes[id] = node.copyWith(classes: [...node.classes, cls]);
@@ -552,15 +568,18 @@ class _FlowParser {
       sc.skipWs();
       if (sc.tryConsume('}')) break;
       if (sc.atEnd) {
-        throw MermaidParseException('unterminated "@{" attributes on "$id"',
-            line: sc.line);
+        throw MermaidParseException(
+          'unterminated "@{" attributes on "$id"',
+          line: sc.line,
+        );
       }
       final key = sc.readWhile(RegExp(r'[A-Za-z0-9_-]')).trim();
       sc.skipWs();
       if (!sc.tryConsume(':')) {
         throw MermaidParseException(
-            'expected ":" after "@{" attribute key "$key"',
-            line: sc.line);
+          'expected ":" after "@{" attribute key "$key"',
+          line: sc.line,
+        );
       }
       sc.skipWs();
       String value;
@@ -587,7 +606,10 @@ class _FlowParser {
     if (shapeName != null) {
       final shape = _v11Shapes[shapeName];
       if (shape == null && !_knownUnsupportedV11Shapes.contains(shapeName)) {
-        throw MermaidParseException('unknown shape "$shapeName"', line: sc.line);
+        throw MermaidParseException(
+          'unknown shape "$shapeName"',
+          line: sc.line,
+        );
       }
       // Unsupported-but-valid v11 shapes fall back to a plain rectangle.
       node = node.copyWith(shape: shape ?? FlowNodeShape.rect);
@@ -601,7 +623,9 @@ class _FlowParser {
     }
     if (icon != null) {
       node = node.copyWith(
-          icon: icon, shape: shapeName == null ? FlowNodeShape.rounded : null);
+        icon: icon,
+        shape: shapeName == null ? FlowNodeShape.rounded : null,
+      );
     }
     nodes[id] = node;
   }
@@ -749,9 +773,7 @@ class _FlowParser {
   /// Valid v11 shapes whose geometry we don't draw specially; they render as
   /// rectangles rather than failing the parse. (`icon` is handled by the icon
   /// feature; `image` has no image source support yet.)
-  static const _knownUnsupportedV11Shapes = <String>{
-    'icon', 'image',
-  };
+  static const _knownUnsupportedV11Shapes = <String>{'icon', 'image'};
 
   /// Bracket-delimited node shapes; openers are matched longest-first.
   (FlowNodeShape, String)? _tryParseShape(_Scanner sc) {
@@ -909,7 +931,11 @@ class _FlowParser {
   }
 
   _EdgeSpec _withStartHead(
-      _EdgeSpec end, String? startHead, String label, int line) {
+    _EdgeSpec end,
+    String? startHead,
+    String label,
+    int line,
+  ) {
     var headFrom = end.headFrom;
     if (startHead != null) {
       headFrom = switch (startHead) {
@@ -970,8 +996,7 @@ class _Scanner {
 
   bool get atEnd => pos >= text.length;
 
-  String rest(int n) =>
-      text.substring(pos, (pos + n).clamp(0, text.length));
+  String rest(int n) => text.substring(pos, (pos + n).clamp(0, text.length));
 
   void skipWs() {
     while (!atEnd && (text[pos] == ' ' || text[pos] == '\t')) {
@@ -1002,7 +1027,12 @@ class _Scanner {
     return text.substring(start, pos);
   }
 
-  static final _idChar = RegExp(r'[\p{L}\p{N}_!#$%&*+.?\\/' "'" r']', unicode: true);
+  static final _idChar = RegExp(
+    r'[\p{L}\p{N}_!#$%&*+.?\\/'
+    "'"
+    r']',
+    unicode: true,
+  );
 
   /// Mirrors upstream NODE_STRING: `-` only when not followed by `>`, `-` or
   /// `.` (so ids may contain dashes without eating links), `=` only when not

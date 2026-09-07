@@ -5,7 +5,10 @@ library;
 
 import 'dart:math' as math;
 
+import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../edge_geometry.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
@@ -30,11 +33,7 @@ class RequirementDiagram {
 }
 
 class ReqNode {
-  const ReqNode({
-    required this.id,
-    required this.kind,
-    this.fields = const [],
-  });
+  const ReqNode({required this.id, required this.kind, this.fields = const []});
 
   final String id;
 
@@ -46,7 +45,11 @@ class ReqNode {
 }
 
 class ReqRelation {
-  const ReqRelation({required this.from, required this.to, required this.label});
+  const ReqRelation({
+    required this.from,
+    required this.to,
+    required this.label,
+  });
 
   final String from;
   final String to;
@@ -62,6 +65,49 @@ const double _nodeSpacing = 50;
 /// How far apart two boxes' centres may sit vertically and still count as the
 /// same dagre rank.
 const double _rankTolerance = 25;
+
+class RequirementConfig {
+  const RequirementConfig({
+    this.rectFill,
+    this.textColor,
+    this.rectBorderSize = 1,
+    this.rectBorderColor,
+    this.rectMinWidth = 0,
+    this.rectMinHeight = 0,
+    this.fontSize,
+    this.rectPadding = 20,
+    this.lineHeight = 20,
+  });
+
+  final Color? rectFill, textColor, rectBorderColor;
+  final double rectBorderSize, rectMinWidth, rectMinHeight;
+  final double? fontSize;
+  final double rectPadding, lineHeight;
+
+  factory RequirementConfig.fromSource(String source) {
+    final v = resolveDiagramConfig(source, 'requirement');
+    Color? color(String key) => Color.tryParse(stringValue(v, key, ''));
+    final border = stringValue(v, 'rect_border_size', '1px');
+    final borderSize =
+        double.tryParse(
+          RegExp(r'[-+]?\d*\.?\d+').firstMatch(border)?.group(0) ?? '',
+        ) ??
+        1;
+    return RequirementConfig(
+      rectFill: color('rect_fill'),
+      textColor: color('text_color'),
+      rectBorderSize: borderSize > 0 ? borderSize : 1,
+      rectBorderColor: color('rect_border_color'),
+      rectMinWidth: nonNegativeDouble(v, 'rect_min_width', 0),
+      rectMinHeight: nonNegativeDouble(v, 'rect_min_height', 0),
+      fontSize: positiveDouble(v, 'fontSize', 0) == 0
+          ? null
+          : positiveDouble(v, 'fontSize', 14),
+      rectPadding: nonNegativeDouble(v, 'rect_padding', 20),
+      lineHeight: positiveDouble(v, 'line_height', 20),
+    );
+  }
+}
 
 const _kinds = {
   'requirement',
@@ -96,11 +142,7 @@ const _fieldPrefix = {
 };
 
 /// Risk keyword -> display value (`requirementDb.ts` `RiskLevel`).
-const _riskDisplay = {
-  'low': 'Low',
-  'medium': 'Medium',
-  'high': 'High',
-};
+const _riskDisplay = {'low': 'Low', 'medium': 'Medium', 'high': 'High'};
 
 /// Verify-method keyword -> display value (`requirementDb.ts` `VerifyType`).
 const _verifyDisplay = {
@@ -140,8 +182,10 @@ RequirementDiagram parseRequirementDiagram(String source) {
     if (line.isEmpty) continue;
     if (!seenHeader) {
       if (!RegExp(r'^requirementDiagram\b').hasMatch(line)) {
-        throw MermaidParseException('expected "requirementDiagram" header',
-            line: i + 1);
+        throw MermaidParseException(
+          'expected "requirementDiagram" header',
+          line: i + 1,
+        );
       }
       seenHeader = true;
       continue;
@@ -149,8 +193,7 @@ RequirementDiagram parseRequirementDiagram(String source) {
 
     if (open != null) {
       if (line == '}') {
-        nodes[open.$2] =
-            ReqNode(id: open.$2, kind: open.$1, fields: open.$3);
+        nodes[open.$2] = ReqNode(id: open.$2, kind: open.$1, fields: open.$3);
         open = null;
         continue;
       }
@@ -164,9 +207,7 @@ RequirementDiagram parseRequirementDiagram(String source) {
         };
         var value = m.group(2)!.trim();
         // Upstream string tokens strip surrounding double quotes.
-        if (value.length >= 2 &&
-            value.startsWith('"') &&
-            value.endsWith('"')) {
+        if (value.length >= 2 && value.startsWith('"') && value.endsWith('"')) {
           value = value.substring(1, value.length - 1);
         }
         open.$3.add((key, value));
@@ -182,19 +223,22 @@ RequirementDiagram parseRequirementDiagram(String source) {
       continue;
     }
     // a - label -> b   |   a <- label - b  (names may contain spaces)
-    const relWords = 'contains|copies|derives|satisfies|verifies|refines|traces';
+    const relWords =
+        'contains|copies|derives|satisfies|verifies|refines|traces';
     m = RegExp('^(.+?)\\s*-\\s*($relWords)\\s*->\\s*(.+?)\$').firstMatch(line);
     if (m != null) {
-      relations.add(ReqRelation(
-          from: m.group(1)!, to: m.group(3)!, label: m.group(2)!));
+      relations.add(
+        ReqRelation(from: m.group(1)!, to: m.group(3)!, label: m.group(2)!),
+      );
       _ensure(nodes, m.group(1)!);
       _ensure(nodes, m.group(3)!);
       continue;
     }
     m = RegExp('^(.+?)\\s*<-\\s*($relWords)\\s*-\\s*(.+?)\$').firstMatch(line);
     if (m != null) {
-      relations.add(ReqRelation(
-          from: m.group(3)!, to: m.group(1)!, label: m.group(2)!));
+      relations.add(
+        ReqRelation(from: m.group(3)!, to: m.group(1)!, label: m.group(2)!),
+      );
       _ensure(nodes, m.group(1)!);
       _ensure(nodes, m.group(3)!);
       continue;
@@ -212,8 +256,9 @@ RequirementDiagram parseRequirementDiagram(String source) {
     // upstream's default theme has no `borderColorArray`, so the common case
     // (no explicit styles) is unaffected. We skip these rather than throw so
     // valid diagrams still render.
-    if (RegExp(r'^(classDef|class|style|click|callback|link)\b')
-        .hasMatch(line)) {
+    if (RegExp(
+      r'^(classDef|class|style|click|callback|link)\b',
+    ).hasMatch(line)) {
       continue;
     }
     throw MermaidParseException('unrecognized statement "$line"', line: i + 1);
@@ -232,26 +277,32 @@ RenderScene layoutRequirementDiagram(
   RequirementDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  RequirementConfig config = const RequirementConfig(),
 }) {
   // Upstream `requirementRenderer` uses SVG padding of 8.
   const pad = 8.0;
   // Upstream node padding/gap (`requirementBox.ts`): padding 20, gap 20.
-  const boxPadding = 20.0;
-  const gap = 20.0;
+  final boxPadding = config.rectPadding;
+  final gap = config.lineHeight;
   // Upstream node text uses the full configured font size (no shrink).
   final baseStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: theme.fontSize);
+    fontFamily: theme.fontFamily,
+    fontSize: config.fontSize ?? theme.fontSize,
+  );
   final titleStyle = baseStyle.copyWith(fontWeight: 700);
 
   // Measure boxes: «Type» line, bold name, gap, divider, prefixed field rows.
   // The bool flag marks the row after which a gap is inserted (the name row).
-  final boxes =
-      <String, (Size, List<(String, TextStyleSpec, Size, bool)>)>{};
+  final boxes = <String, (Size, List<(String, TextStyleSpec, Size, bool)>)>{};
   for (final n in diagram.nodes.values) {
     final lines = <(String, TextStyleSpec, Size, bool)>[];
     void add(String text, TextStyleSpec style, {bool gapAfter = false}) {
-      lines.add(
-          (text, style, measurer.measure(text, style, maxWidth: 240), gapAfter));
+      lines.add((
+        text,
+        style,
+        measurer.measure(text, style, maxWidth: 240),
+        gapAfter,
+      ));
     }
 
     final display = _kindDisplay[n.kind] ?? n.kind;
@@ -269,7 +320,13 @@ RenderScene layoutRequirementDiagram(
       h += s.height + 4;
       if (gapAfter) h += gap;
     }
-    boxes[n.id] = (Size(w + boxPadding, h), lines);
+    boxes[n.id] = (
+      Size(
+        math.max(w + boxPadding, config.rectMinWidth),
+        math.max(h, config.rectMinHeight),
+      ),
+      lines,
+    );
   }
 
   final g = dagre.DagreGraph();
@@ -291,19 +348,26 @@ RenderScene layoutRequirementDiagram(
     final r = diagram.relations[i];
     final size = measurer.measure('«${r.label}»', baseStyle);
     labelSizes[i] = size;
-    g.addEdge(dagre.DagreEdge(r.from, r.to,
+    g.addEdge(
+      dagre.DagreEdge(
+        r.from,
+        r.to,
         id: 'e$i',
         minLen: 1,
         width: size.width,
         height: size.height,
-        labelPos: dagre.LabelPosition.center));
+        labelPos: dagre.LabelPosition.center,
+      ),
+    );
   }
   final result = dagre.layout(
-      g,
-      dagre.DagreConfig(
-          rankDir: dagre.RankDir.ttb,
-          nodeSep: _nodeSpacing,
-          rankSep: _nodeSpacing));
+    g,
+    dagre.DagreConfig(
+      rankDir: dagre.RankDir.ttb,
+      nodeSep: _nodeSpacing,
+      rankSep: _nodeSpacing,
+    ),
+  );
 
   final nodes = <SceneNode>[];
   final centers = <String, Point>{};
@@ -445,10 +509,16 @@ RenderScene layoutRequirementDiagram(
       );
     }
     if (pts.length < 2) pts = [centers[r.from]!, centers[r.to]!];
-    final fromRect =
-        Rect.fromCenter(centers[r.from]!, boxes[r.from]!.$1.width, boxes[r.from]!.$1.height);
-    final toRect =
-        Rect.fromCenter(centers[r.to]!, boxes[r.to]!.$1.width, boxes[r.to]!.$1.height);
+    final fromRect = Rect.fromCenter(
+      centers[r.from]!,
+      boxes[r.from]!.$1.width,
+      boxes[r.from]!.$1.height,
+    );
+    final toRect = Rect.fromCenter(
+      centers[r.to]!,
+      boxes[r.to]!.$1.width,
+      boxes[r.to]!.$1.height,
+    );
     pts[0] = intersectRect(fromRect, pts[1]);
     pts[pts.length - 1] = intersectRect(toRect, pts[pts.length - 2]);
     final isContains = r.label == 'contains';
@@ -465,36 +535,47 @@ RenderScene layoutRequirementDiagram(
       const markerRadius = 9.0;
       final start = _outsideMarkerCenter(fromRect, border, markerRadius);
       pts[0] = start;
-      final sdir = direction(pts[1], start); // points from line toward the source
+      final sdir = direction(
+        pts[1],
+        start,
+      ); // points from line toward the source
       // Marker center sits at the start point; the crosshair lines span the
       // circle. Reproduce circle (r=9) + two crossing lines.
       final perp = Point(-sdir.y, sdir.x);
-      children.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(pts.first),
-          for (final p in pts.skip(1)) LineTo(p),
-        ]),
-        stroke: Stroke(color: theme.relationColor, width: 1.3, dash: dash),
-      ));
-      children.add(SceneShape(
-        geometry: CircleGeometry(start, markerRadius),
-        stroke: Stroke(color: theme.relationColor, width: 1),
-      ));
+      children.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(pts.first),
+            for (final p in pts.skip(1)) LineTo(p),
+          ]),
+          stroke: Stroke(color: theme.relationColor, width: 1.3, dash: dash),
+        ),
+      );
+      children.add(
+        SceneShape(
+          geometry: CircleGeometry(start, markerRadius),
+          stroke: Stroke(color: theme.relationColor, width: 1),
+        ),
+      );
       // Crosshair: one line along the edge direction, one perpendicular.
-      children.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(start - sdir * markerRadius),
-          LineTo(start + sdir * markerRadius),
-        ]),
-        stroke: Stroke(color: theme.relationColor, width: 1),
-      ));
-      children.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(start - perp * markerRadius),
-          LineTo(start + perp * markerRadius),
-        ]),
-        stroke: Stroke(color: theme.relationColor, width: 1),
-      ));
+      children.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(start - sdir * markerRadius),
+            LineTo(start + sdir * markerRadius),
+          ]),
+          stroke: Stroke(color: theme.relationColor, width: 1),
+        ),
+      );
+      children.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(start - perp * markerRadius),
+            LineTo(start + perp * markerRadius),
+          ]),
+          stroke: Stroke(color: theme.relationColor, width: 1),
+        ),
+      );
     } else {
       // Non-contains: dashed line ending in an open `>` arrow (two strokes,
       // unfilled) — `markers.js:requirement_arrow`, `edgeMarker.ts` fill:false.
@@ -502,49 +583,58 @@ RenderScene layoutRequirementDiagram(
       final dir = direction(pts[pts.length - 2], tip);
       pts[pts.length - 1] = tip - dir * 10;
       final perp = Point(-dir.y, dir.x);
-      children.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(pts.first),
-          for (final p in pts.skip(1)) LineTo(p),
-        ]),
-        stroke: Stroke(color: theme.relationColor, width: 1.3, dash: dash),
-      ));
-      children.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(tip - dir * 11 + perp * 5),
-          LineTo(tip),
-          LineTo(tip - dir * 11 - perp * 5),
-        ]),
-        stroke: Stroke(color: theme.relationColor, width: 1.3),
-      ));
+      children.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(pts.first),
+            for (final p in pts.skip(1)) LineTo(p),
+          ]),
+          stroke: Stroke(color: theme.relationColor, width: 1.3, dash: dash),
+        ),
+      );
+      children.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(tip - dir * 11 + perp * 5),
+            LineTo(tip),
+            LineTo(tip - dir * 11 - perp * 5),
+          ]),
+          stroke: Stroke(color: theme.relationColor, width: 1.3),
+        ),
+      );
     }
-    nodes.add(SceneGroup(
-      id: 'rel_$i',
-      role: SceneGroupRole.edge,
-      semanticLabel: r.label,
-      children: children,
-    ));
+    nodes.add(
+      SceneGroup(
+        id: 'rel_$i',
+        role: SceneGroupRole.edge,
+        semanticLabel: r.label,
+        children: children,
+      ),
+    );
     final size = labelSizes[i]!;
     final mid = polylineMidpoint(pts);
     // Upstream label: `relationLabelColor` (=actorTextColor) on
     // `relationLabelBackground` (=labelBackground='rgba(232,232,232,0.8)').
-    nodes.add(SceneGroup(
-      id: 'rellabel_$i',
-      role: SceneGroupRole.edgeLabel,
-      children: [
-      SceneShape(
-        geometry: RectGeometry(
-            Rect.fromCenter(mid, size.width + 4, size.height + 2)),
-        fill: Fill(theme.relationLabelBackground),
+    nodes.add(
+      SceneGroup(
+        id: 'rellabel_$i',
+        role: SceneGroupRole.edgeLabel,
+        children: [
+          SceneShape(
+            geometry: RectGeometry(
+              Rect.fromCenter(mid, size.width + 4, size.height + 2),
+            ),
+            fill: Fill(theme.relationLabelBackground),
+          ),
+          SceneText(
+            text: '«${r.label}»',
+            bounds: Rect.fromCenter(mid, size.width, size.height),
+            style: baseStyle,
+            color: theme.relationLabelColor,
+          ),
+        ],
       ),
-      SceneText(
-        text: '«${r.label}»',
-        bounds: Rect.fromCenter(mid, size.width, size.height),
-        style: baseStyle,
-        color: theme.relationLabelColor,
-      ),
-      ],
-    ));
+    );
   }
 
   diagram.nodes.forEach((id, n) {
@@ -556,8 +646,11 @@ RenderScene layoutRequirementDiagram(
     final children = <SceneNode>[
       SceneShape(
         geometry: RectGeometry(rect),
-        fill: Fill(theme.requirementBackground),
-        stroke: Stroke(color: theme.requirementBorderColor, width: 1),
+        fill: Fill(config.rectFill ?? theme.requirementBackground),
+        stroke: Stroke(
+          color: config.rectBorderColor ?? theme.requirementBorderColor,
+          width: config.rectBorderSize,
+        ),
       ),
     ];
     var y = rect.top + boxPadding / 2;
@@ -566,26 +659,33 @@ RenderScene layoutRequirementDiagram(
     // also be valid, but mermaid left-aligns the prefixed body rows visually).
     for (var li = 0; li < lines.length; li++) {
       final (text, style, s, gapAfter) = lines[li];
-      children.add(SceneText(
-        text: text,
-        bounds: li < 2
-            ? Rect.fromLTWH(rect.center.x - s.width / 2, y, s.width, s.height)
-            : Rect.fromLTWH(rect.left + boxPadding / 2, y, s.width, s.height),
-        style: style,
-        color: theme.requirementTextColor,
-        align: li < 2 ? TextAlignH.center : TextAlignH.left,
-      ));
+      children.add(
+        SceneText(
+          text: text,
+          bounds: li < 2
+              ? Rect.fromLTWH(rect.center.x - s.width / 2, y, s.width, s.height)
+              : Rect.fromLTWH(rect.left + boxPadding / 2, y, s.width, s.height),
+          style: style,
+          color: config.textColor ?? theme.requirementTextColor,
+          align: li < 2 ? TextAlignH.center : TextAlignH.left,
+        ),
+      );
       y += s.height + 4;
       if (gapAfter) {
         // Divider line sits at the top of the gap when body rows follow.
         if (lines.length > 2) {
-          children.add(SceneShape(
-            geometry: PathGeometry([
-              MoveTo(Point(rect.left, y - 2)),
-              LineTo(Point(rect.right, y - 2)),
-            ]),
-            stroke: Stroke(color: theme.requirementBorderColor, width: 1),
-          ));
+          children.add(
+            SceneShape(
+              geometry: PathGeometry([
+                MoveTo(Point(rect.left, y - 2)),
+                LineTo(Point(rect.right, y - 2)),
+              ]),
+              stroke: Stroke(
+                color: config.rectBorderColor ?? theme.requirementBorderColor,
+                width: config.rectBorderSize,
+              ),
+            ),
+          );
         }
         y += gap;
       }
@@ -597,16 +697,21 @@ RenderScene layoutRequirementDiagram(
   final title = diagram.title;
   if (title != null && title.isNotEmpty) {
     final style = TextStyleSpec(
-        fontFamily: theme.fontFamily,
-        fontSize: theme.fontSize * 1.15,
-        fontWeight: 700);
+      fontFamily: theme.fontFamily,
+      fontSize: theme.fontSize * 1.15,
+      fontWeight: 700,
+    );
     final size = measurer.measure(title, style);
     final node = SceneText(
       text: title,
-      bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-          bounds.top - size.height - 25, size.width, size.height),
+      bounds: Rect.fromLTWH(
+        bounds.center.x - size.width / 2,
+        bounds.top - size.height - 25,
+        size.width,
+        size.height,
+      ),
       style: style,
-      color: theme.titleColor,
+      color: config.textColor ?? theme.titleColor,
     );
     nodes.add(node);
     bounds = bounds.union(node.bounds);
@@ -660,4 +765,3 @@ List<Point> _translateRoute(
       ),
   ];
 }
-

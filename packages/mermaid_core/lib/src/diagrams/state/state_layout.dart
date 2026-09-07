@@ -22,21 +22,30 @@ import '../flowchart/elk_adapter.dart';
 import '../flowchart/flow_model.dart' show FlowDirection;
 import 'state_model.dart';
 
-const double _diagramPadding = 8;
 const double _clusterPadding = 10;
 
 /// Layout values resolved from `config.state`.
 class StateConfig {
   const StateConfig({
     this.padding = 8,
+    this.noteMargin = 10,
+    this.forkWidth = 70,
+    this.forkHeight = 7,
+    this.radius = 5,
+    this.titleTopMargin = 25,
     double? nodeSpacing,
     double? rankSpacing,
-  })  : nodeSpacing = nodeSpacing ?? 50,
-        rankSpacing = rankSpacing ?? 50,
-        _nodeSpacingOverride = nodeSpacing,
-        _rankSpacingOverride = rankSpacing;
+  }) : nodeSpacing = nodeSpacing ?? 50,
+       rankSpacing = rankSpacing ?? 50,
+       _nodeSpacingOverride = nodeSpacing,
+       _rankSpacingOverride = rankSpacing;
 
   final double padding;
+  final double noteMargin;
+  final double forkWidth;
+  final double forkHeight;
+  final double radius;
+  final double titleTopMargin;
   final double nodeSpacing;
   final double rankSpacing;
   final double? _nodeSpacingOverride;
@@ -46,6 +55,11 @@ class StateConfig {
     final values = resolveDiagramConfig(source, 'state');
     return StateConfig(
       padding: nonNegativeDouble(values, 'padding', 8),
+      noteMargin: nonNegativeDouble(values, 'noteMargin', 10),
+      forkWidth: positiveDouble(values, 'forkWidth', 70),
+      forkHeight: positiveDouble(values, 'forkHeight', 7),
+      radius: nonNegativeDouble(values, 'radius', 5),
+      titleTopMargin: nonNegativeDouble(values, 'titleTopMargin', 25),
       nodeSpacing: nonNegativeDoubleOrNull(values, 'nodeSpacing'),
       rankSpacing: nonNegativeDoubleOrNull(values, 'rankSpacing'),
     );
@@ -60,9 +74,14 @@ RenderScene layoutStateDiagram(
   elk.ElkLayoutOptions? elkOptions,
   StateConfig config = const StateConfig(),
 }) {
-  return _StateLayout(diagram, measurer, theme, engine, config,
-          elkOptions ?? const elk.ElkLayoutOptions())
-      .run();
+  return _StateLayout(
+    diagram,
+    measurer,
+    theme,
+    engine,
+    config,
+    elkOptions ?? const elk.ElkLayoutOptions(),
+  ).run();
 }
 
 class _Placed {
@@ -78,12 +97,17 @@ class _Placed {
 }
 
 class _StateLayout {
-  _StateLayout(this.diagram, this.measurer, this.theme, this.engine, this.config,
-      this.elkOptions)
-      : baseStyle = TextStyleSpec(
-          fontFamily: theme.fontFamily,
-          fontSize: theme.fontSize,
-        );
+  _StateLayout(
+    this.diagram,
+    this.measurer,
+    this.theme,
+    this.engine,
+    this.config,
+    this.elkOptions,
+  ) : baseStyle = TextStyleSpec(
+        fontFamily: theme.fontFamily,
+        fontSize: theme.fontSize,
+      );
 
   final StateDiagram diagram;
   final TextMeasurer measurer;
@@ -98,11 +122,11 @@ class _StateLayout {
   double get _rankSpacing => config.rankSpacing;
 
   bool get hasNestedComposite => diagram.states.values.any((state) {
-        if (state.kind != StateKind.composite || state.parent == null) {
-          return false;
-        }
-        return diagram.states[state.parent]?.kind == StateKind.composite;
-      });
+    if (state.kind != StateKind.composite || state.parent == null) {
+      return false;
+    }
+    return diagram.states[state.parent]?.kind == StateKind.composite;
+  });
 
   // Dagre's compound layout flattens the ranks of nested clusters through the
   // representative leaf nodes used for cross-cluster transitions. That places
@@ -137,8 +161,8 @@ class _StateLayout {
       final size = measurer.measure(n.text, baseStyle, maxWidth: 200);
       noteBoxes[i] = _Placed(
         StateNode(id: '__note$i', label: n.text),
-        size.width + 2 * _padding,
-        size.height + 2 * _padding,
+        size.width + 2 * config.noteMargin,
+        size.height + 2 * config.noteMargin,
         size,
       );
     }
@@ -148,8 +172,14 @@ class _StateLayout {
     // cluster nodes after (mirrors flow_layout).
     final g = dagre.DagreGraph();
     for (final p in placed.values) {
-      g.addNode(dagre.DagreNode(p.node.id,
-          width: p.width, height: p.height, parent: p.node.parent));
+      g.addNode(
+        dagre.DagreNode(
+          p.node.id,
+          width: p.width,
+          height: p.height,
+          parent: p.node.parent,
+        ),
+      );
     }
     for (final s in diagram.states.values) {
       if (s.kind == StateKind.composite && !_isEmptyComposite(s)) {
@@ -189,15 +219,17 @@ class _StateLayout {
       // Self-transitions (including composite-to-itself) are routed manually
       // after layout, like flowchart self-loops.
       if (from == to) continue;
-      g.addEdge(dagre.DagreEdge(
-        from,
-        to,
-        id: 'e$i',
-        minLen: 1,
-        width: size?.width ?? 0,
-        height: size?.height ?? 0,
-        labelPos: dagre.LabelPosition.center,
-      ));
+      g.addEdge(
+        dagre.DagreEdge(
+          from,
+          to,
+          id: 'e$i',
+          minLen: 1,
+          width: size?.width ?? 0,
+          height: size?.height ?? 0,
+          labelPos: dagre.LabelPosition.center,
+        ),
+      );
     }
     for (var i = 0; i < diagram.notes.length; i++) {
       final target = diagram.notes[i].target;
@@ -214,11 +246,15 @@ class _StateLayout {
       final effectiveElkOptions = elkOptions.copyWith(
         spacingNodeNode:
             elkOptions.spacingNodeNode ?? config._nodeSpacingOverride,
-        spacingNodeNodeBetweenLayers: elkOptions.spacingNodeNodeBetweenLayers ??
+        spacingNodeNodeBetweenLayers:
+            elkOptions.spacingNodeNodeBetweenLayers ??
             config._rankSpacingOverride,
       );
-      elkResult = layoutWithElk(g,
-          direction: diagram.direction, options: effectiveElkOptions);
+      elkResult = layoutWithElk(
+        g,
+        direction: diagram.direction,
+        options: effectiveElkOptions,
+      );
       for (final p in [...placed.values, ...noteBoxes.values]) {
         final c = elkResult.center(p.node.id);
         if (c != null) p.center = c;
@@ -265,12 +301,16 @@ class _StateLayout {
       final state = diagram.states[id]!;
       final titleSize = measurer.measure(state.label, baseStyle);
       return Rect.fromLTRB(
-        math.min(pos.left,
-                pos.center.x - titleSize.width / 2 - _clusterPadding) -
+        math.min(
+              pos.left,
+              pos.center.x - titleSize.width / 2 - _clusterPadding,
+            ) -
             _clusterPadding,
         pos.top - _clusterPadding - titleSize.height - 6,
-        math.max(pos.right,
-                pos.center.x + titleSize.width / 2 + _clusterPadding) +
+        math.max(
+              pos.right,
+              pos.center.x + titleSize.width / 2 + _clusterPadding,
+            ) +
             _clusterPadding,
         pos.bottom + _clusterPadding,
       );
@@ -313,7 +353,9 @@ class _StateLayout {
           final targetRect = compositeBounds(targetId);
           if (targetRect == null) continue;
           final dx = math.max(
-              0.0, sourceRect.right + _nodeSpacing - targetRect.left);
+            0.0,
+            sourceRect.right + _nodeSpacing - targetRect.left,
+          );
           final dy = sourceRect.top + _rankSpacing - targetRect.top;
           translateDescendants(targetId, dx, dy);
         }
@@ -339,40 +381,47 @@ class _StateLayout {
       clusterRects[s.id] = rect;
       final titleY = rect.top + 4;
       final dividerY = titleY + titleSize.height + 4;
-      clusterNodes.add(SceneGroup(
-        id: s.id,
-        role: SceneGroupRole.cluster,
-        semanticLabel: s.label,
-        children: [
-        // Outer rect uses compositeTitleBackground (= mainBkg) so the title
-        // band is tinted; inner region below the divider uses the background.
-        SceneShape(
-          geometry: RectGeometry(rect, rx: 5, ry: 5),
-          fill: Fill(theme.mainBkg),
-          stroke: Stroke(color: theme.nodeBorder),
+      clusterNodes.add(
+        SceneGroup(
+          id: s.id,
+          role: SceneGroupRole.cluster,
+          semanticLabel: s.label,
+          children: [
+            // Outer rect uses compositeTitleBackground (= mainBkg) so the title
+            // band is tinted; inner region below the divider uses the background.
+            SceneShape(
+              geometry: RectGeometry(rect, rx: 5, ry: 5),
+              fill: Fill(theme.mainBkg),
+              stroke: Stroke(color: theme.nodeBorder),
+            ),
+            SceneShape(
+              geometry: RectGeometry(
+                Rect.fromLTRB(rect.left, dividerY, rect.right, rect.bottom),
+              ),
+              fill: Fill(_compositeBodyColor(s)),
+            ),
+            // Title band.
+            SceneText(
+              text: s.label,
+              bounds: Rect.fromLTWH(
+                rect.center.x - titleSize.width / 2,
+                titleY,
+                titleSize.width,
+                titleSize.height,
+              ),
+              style: baseStyle.copyWith(fontWeight: 700),
+              color: theme.textColor,
+            ),
+            SceneShape(
+              geometry: PathGeometry([
+                MoveTo(Point(rect.left, dividerY)),
+                LineTo(Point(rect.right, dividerY)),
+              ]),
+              stroke: Stroke(color: theme.nodeBorder),
+            ),
+          ],
         ),
-        SceneShape(
-          geometry: RectGeometry(
-              Rect.fromLTRB(rect.left, dividerY, rect.right, rect.bottom)),
-          fill: Fill(_compositeBodyColor(s)),
-        ),
-        // Title band.
-        SceneText(
-          text: s.label,
-          bounds: Rect.fromLTWH(rect.center.x - titleSize.width / 2, titleY,
-              titleSize.width, titleSize.height),
-          style: baseStyle.copyWith(fontWeight: 700),
-          color: theme.textColor,
-        ),
-        SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(rect.left, dividerY)),
-            LineTo(Point(rect.right, dividerY)),
-          ]),
-          stroke: Stroke(color: theme.nodeBorder),
-        ),
-        ],
-      ));
+      );
 
       // Concurrency regions: dashed dividers in the gaps between region groups.
       if (s.regions.length > 1) {
@@ -398,24 +447,34 @@ class _StateLayout {
           final yGap = b.top - a.bottom;
           if (xGap >= yGap) {
             final x = (a.right + b.left) / 2;
-            clusterNodes.add(SceneShape(
-              geometry: PathGeometry([
-                MoveTo(Point(x, titleY + titleSize.height + 4)),
-                LineTo(Point(x, rect.bottom)),
-              ]),
-              stroke: Stroke(
-                  color: theme.nodeBorder, width: 1, dash: const [4, 3]),
-            ));
+            clusterNodes.add(
+              SceneShape(
+                geometry: PathGeometry([
+                  MoveTo(Point(x, titleY + titleSize.height + 4)),
+                  LineTo(Point(x, rect.bottom)),
+                ]),
+                stroke: Stroke(
+                  color: theme.nodeBorder,
+                  width: 1,
+                  dash: const [4, 3],
+                ),
+              ),
+            );
           } else {
             final y = (a.bottom + b.top) / 2;
-            clusterNodes.add(SceneShape(
-              geometry: PathGeometry([
-                MoveTo(Point(rect.left, y)),
-                LineTo(Point(rect.right, y)),
-              ]),
-              stroke: Stroke(
-                  color: theme.nodeBorder, width: 1, dash: const [4, 3]),
-            ));
+            clusterNodes.add(
+              SceneShape(
+                geometry: PathGeometry([
+                  MoveTo(Point(rect.left, y)),
+                  LineTo(Point(rect.right, y)),
+                ]),
+                stroke: Stroke(
+                  color: theme.nodeBorder,
+                  width: 1,
+                  dash: const [4, 3],
+                ),
+              ),
+            );
           }
         }
       }
@@ -442,8 +501,10 @@ class _StateLayout {
         final endDir = direction(c2, end);
         final children = <SceneNode>[
           SceneShape(
-            geometry: PathGeometry(
-                [MoveTo(start), CubicTo(c1, c2, end - endDir * 8)]),
+            geometry: PathGeometry([
+              MoveTo(start),
+              CubicTo(c1, c2, end - endDir * 8),
+            ]),
             stroke: Stroke(color: theme.lineColor, width: 1),
           ),
           SceneShape(
@@ -458,27 +519,32 @@ class _StateLayout {
             SceneText(
               text: t.label!,
               bounds: Rect.fromLTWH(
-                  anchor.right + ext * 0.78 + 6,
-                  anchor.center.y - labelSize.height / 2,
-                  labelSize.width,
-                  labelSize.height),
+                anchor.right + ext * 0.78 + 6,
+                anchor.center.y - labelSize.height / 2,
+                labelSize.width,
+                labelSize.height,
+              ),
               style: baseStyle,
               color: theme.textColor,
               align: TextAlignH.left,
             ),
         ];
-        edgeNodes.add(SceneGroup(
+        edgeNodes.add(
+          SceneGroup(
             id: 'trans_${t.from}_${t.to}_$i',
             role: SceneGroupRole.edge,
             semanticLabel: t.label,
-            children: children));
+            children: children,
+          ),
+        );
         continue;
       }
 
       dagre.DagreEdge? dagreEdge;
       List<Point> points;
       if (useElk) {
-        points = elkResult!.edgePoints('e$i') ??
+        points =
+            elkResult!.edgePoints('e$i') ??
             [placed[fromId]!.center, placed[toId]!.center];
       } else {
         dagreEdge = result!.graph.findEdgeById('e$i')!;
@@ -500,11 +566,18 @@ class _StateLayout {
         ];
       }
       if (clusterTo != null) {
-        points = _dropInsideRect(points, clusterRects[clusterTo]!, fromEnd: true);
+        points = _dropInsideRect(
+          points,
+          clusterRects[clusterTo]!,
+          fromEnd: true,
+        );
       }
       if (clusterFrom != null) {
-        points =
-            _dropInsideRect(points, clusterRects[clusterFrom]!, fromEnd: false);
+        points = _dropInsideRect(
+          points,
+          clusterRects[clusterFrom]!,
+          fromEnd: false,
+        );
       }
       final sourceRect = clusterFrom != null
           ? clusterRects[clusterFrom]!
@@ -574,37 +647,45 @@ class _StateLayout {
       } else if (useElk && !directCompositeRoute) {
         points[0] = _clipRectPerp(sourceRect, points[0], points[1]);
         points[points.length - 1] = _clipRectPerp(
-            targetRect, points[points.length - 1], points[points.length - 2]);
+          targetRect,
+          points[points.length - 1],
+          points[points.length - 2],
+        );
       } else {
         points[0] = intersectRect(sourceRect, points[1]);
-        points[points.length - 1] =
-            intersectRect(targetRect, points[points.length - 2]);
+        points[points.length - 1] = intersectRect(
+          targetRect,
+          points[points.length - 2],
+        );
       }
 
       final endTip = points.last;
       final endDir = direction(points[points.length - 2], endTip);
       points[points.length - 1] = endTip - endDir * 8;
 
-      edgeNodes.add(SceneGroup(
-        id: 'trans_${t.from}_${t.to}_$i',
-        role: SceneGroupRole.edge,
-        semanticLabel: t.label,
-        children: [
-          SceneShape(
-            geometry:
-                PathGeometry(useElk ? _linearPath(points) : curveBasis(points)),
-            stroke: Stroke(color: theme.lineColor, width: 1),
-          ),
-          SceneShape(
-            geometry: PolygonGeometry([
-              endTip,
-              endTip - endDir * 10 + Point(-endDir.y, endDir.x) * 5,
-              endTip - endDir * 10 - Point(-endDir.y, endDir.x) * 5,
-            ]),
-            fill: Fill(theme.arrowheadColor),
-          ),
-        ],
-      ));
+      edgeNodes.add(
+        SceneGroup(
+          id: 'trans_${t.from}_${t.to}_$i',
+          role: SceneGroupRole.edge,
+          semanticLabel: t.label,
+          children: [
+            SceneShape(
+              geometry: PathGeometry(
+                useElk ? _linearPath(points) : curveBasis(points),
+              ),
+              stroke: Stroke(color: theme.lineColor, width: 1),
+            ),
+            SceneShape(
+              geometry: PolygonGeometry([
+                endTip,
+                endTip - endDir * 10 + Point(-endDir.y, endDir.x) * 5,
+                endTip - endDir * 10 - Point(-endDir.y, endDir.x) * 5,
+              ]),
+              fill: Fill(theme.arrowheadColor),
+            ),
+          ],
+        ),
+      );
 
       final labelSize = labelSizes[i];
       if (labelSize != null) {
@@ -616,29 +697,32 @@ class _StateLayout {
         final c = useElk
             ? polylineMidpoint(points)
             : (dagreEdge?.labelX != null && dagreEdge?.labelY != null
-                ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
-                : polylineMidpoint(points));
-        labelNodes.add(SceneGroup(
-          id: 'translabel_$i',
-          role: SceneGroupRole.edgeLabel,
-          children: [
-          SceneShape(
-            geometry: RectGeometry(
-                Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
-                rx: 2,
-                ry: 2),
-            // Opaque background (the theme colour already carries its alpha) so
-            // the edge line doesn't show through the label.
-            fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
+                  ? Point(dagreEdge!.labelX!, dagreEdge.labelY!)
+                  : polylineMidpoint(points));
+        labelNodes.add(
+          SceneGroup(
+            id: 'translabel_$i',
+            role: SceneGroupRole.edgeLabel,
+            children: [
+              SceneShape(
+                geometry: RectGeometry(
+                  Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
+                  rx: 2,
+                  ry: 2,
+                ),
+                // Opaque background (the theme colour already carries its alpha) so
+                // the edge line doesn't show through the label.
+                fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
+              ),
+              SceneText(
+                text: t.label!,
+                bounds: Rect.fromCenter(c, labelSize.width, labelSize.height),
+                style: baseStyle,
+                color: theme.textColor,
+              ),
+            ],
           ),
-          SceneText(
-            text: t.label!,
-            bounds: Rect.fromCenter(c, labelSize.width, labelSize.height),
-            style: baseStyle,
-            color: theme.textColor,
-          ),
-          ],
-        ));
+        );
       }
     }
 
@@ -647,31 +731,39 @@ class _StateLayout {
       final b = noteBoxes[i]!;
       final target = placed[diagram.notes[i].target];
       if (target != null) {
-        edgeNodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(intersectRect(b.rect, target.center)),
-            LineTo(intersectRect(target.rect, b.center)),
-          ]),
-          stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
-        ));
+        edgeNodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(intersectRect(b.rect, target.center)),
+              LineTo(intersectRect(target.rect, b.center)),
+            ]),
+            stroke: Stroke(
+              color: theme.lineColor,
+              width: 1,
+              dash: const [2, 2],
+            ),
+          ),
+        );
       }
-      stateNodes.add(SceneGroup(
-        id: '__note$i',
-        role: SceneGroupRole.annotation,
-        children: [
-        SceneShape(
-          geometry: RectGeometry(b.rect),
-          fill: Fill(theme.noteBkgColor),
-          stroke: Stroke(color: theme.noteBorderColor),
+      stateNodes.add(
+        SceneGroup(
+          id: '__note$i',
+          role: SceneGroupRole.annotation,
+          children: [
+            SceneShape(
+              geometry: RectGeometry(b.rect),
+              fill: Fill(theme.noteBkgColor),
+              stroke: Stroke(color: theme.noteBorderColor),
+            ),
+            SceneText(
+              text: diagram.notes[i].text,
+              bounds: b.rect.inflate(-_padding),
+              style: baseStyle,
+              color: theme.noteTextColor,
+            ),
+          ],
         ),
-        SceneText(
-          text: diagram.notes[i].text,
-          bounds: b.rect.inflate(-_padding),
-          style: baseStyle,
-          color: theme.noteTextColor,
-        ),
-        ],
-      ));
+      );
     }
 
     for (final p in placed.values) {
@@ -692,8 +784,12 @@ class _StateLayout {
       final size = measurer.measure(title, style);
       final node = SceneText(
         text: title,
-        bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-            bounds.top - size.height - 25, size.width, size.height),
+        bounds: Rect.fromLTWH(
+          bounds.center.x - size.width / 2,
+          bounds.top - size.height - config.titleTopMargin,
+          size.width,
+          size.height,
+        ),
         style: style,
         color: theme.titleColor,
       );
@@ -701,11 +797,14 @@ class _StateLayout {
       bounds = bounds.union(node.bounds);
     }
 
-    final dx = _diagramPadding - bounds.left;
-    final dy = _diagramPadding - bounds.top;
+    const diagramPadding = 8.0;
+    final dx = diagramPadding - bounds.left;
+    final dy = diagramPadding - bounds.top;
     return RenderScene(
-      size: Size(bounds.width + 2 * _diagramPadding,
-          bounds.height + 2 * _diagramPadding),
+      size: Size(
+        bounds.width + 2 * diagramPadding,
+        bounds.height + 2 * diagramPadding,
+      ),
       background: theme.background,
       nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
     );
@@ -769,14 +868,18 @@ class _StateLayout {
         return _Placed(s, 28, 28, Size.zero);
       case StateKind.fork || StateKind.join:
         return horizontal
-            ? _Placed(s, 10, 70, Size.zero)
-            : _Placed(s, 70, 10, Size.zero);
+            ? _Placed(s, config.forkHeight, config.forkWidth, Size.zero)
+            : _Placed(s, config.forkWidth, config.forkHeight, Size.zero);
       case StateKind.history || StateKind.historyDeep:
         return _Placed(s, 26, 26, Size.zero);
       case StateKind.normal || StateKind.composite:
         final size = measurer.measure(s.label, baseStyle, maxWidth: 200);
         return _Placed(
-            s, size.width + 2 * _padding, size.height + 2 * _padding, size);
+          s,
+          size.width + 2 * _padding,
+          size.height + 2 * _padding,
+          size,
+        );
     }
   }
 
@@ -799,10 +902,12 @@ class _StateLayout {
     final children = <SceneNode>[];
     switch (s.kind) {
       case StateKind.start:
-        children.add(SceneShape(
-          geometry: CircleGeometry(p.center, 7),
-          fill: Fill(theme.lineColor),
-        ));
+        children.add(
+          SceneShape(
+            geometry: CircleGeometry(p.center, 7),
+            fill: Fill(theme.lineColor),
+          ),
+        );
       case StateKind.end:
         children.addAll([
           SceneShape(
@@ -816,57 +921,72 @@ class _StateLayout {
           ),
         ]);
       case StateKind.choice:
-        children.add(SceneShape(
-          geometry: PolygonGeometry([
-            p.center + const Point(0, -14),
-            p.center + const Point(14, 0),
-            p.center + const Point(0, 14),
-            p.center + const Point(-14, 0),
-          ]),
-          fill: Fill(fill),
-          stroke: Stroke(color: stroke),
-        ));
+        children.add(
+          SceneShape(
+            geometry: PolygonGeometry([
+              p.center + const Point(0, -14),
+              p.center + const Point(14, 0),
+              p.center + const Point(0, 14),
+              p.center + const Point(-14, 0),
+            ]),
+            fill: Fill(fill),
+            stroke: Stroke(color: stroke),
+          ),
+        );
       case StateKind.fork || StateKind.join:
-        children.add(SceneShape(
-          geometry: RectGeometry(p.rect),
-          fill: Fill(theme.lineColor),
-          stroke: Stroke(color: theme.lineColor),
-        ));
+        children.add(
+          SceneShape(
+            geometry: RectGeometry(p.rect),
+            fill: Fill(theme.lineColor),
+            stroke: Stroke(color: theme.lineColor),
+          ),
+        );
       case StateKind.history || StateKind.historyDeep:
         // A circle with "H" (shallow) or "H*" (deep), like upstream.
-        children.add(SceneShape(
-          geometry: CircleGeometry(p.center, 13),
-          fill: Fill(fill),
-          stroke: Stroke(color: stroke),
-        ));
-        children.add(SceneText(
-          text: s.kind == StateKind.historyDeep ? 'H*' : 'H',
-          bounds: Rect.fromCenter(p.center, 26, 18),
-          style: baseStyle,
-          color: theme.textColor,
-        ));
+        children.add(
+          SceneShape(
+            geometry: CircleGeometry(p.center, 13),
+            fill: Fill(fill),
+            stroke: Stroke(color: stroke),
+          ),
+        );
+        children.add(
+          SceneText(
+            text: s.kind == StateKind.historyDeep ? 'H*' : 'H',
+            bounds: Rect.fromCenter(p.center, 26, 18),
+            style: baseStyle,
+            color: theme.textColor,
+          ),
+        );
       case StateKind.normal || StateKind.composite:
         children.addAll([
           SceneShape(
-            geometry: RectGeometry(p.rect, rx: 5, ry: 5),
+            geometry: RectGeometry(
+              p.rect,
+              rx: config.radius,
+              ry: config.radius,
+            ),
             fill: Fill(fill),
             stroke: Stroke(color: stroke),
           ),
           SceneText(
             text: s.label,
             bounds: Rect.fromCenter(
-                p.center, p.labelSize.width, p.labelSize.height),
+              p.center,
+              p.labelSize.width,
+              p.labelSize.height,
+            ),
             style: baseStyle.copyWith(fontWeight: 700),
             color: theme.textColor,
           ),
         ]);
     }
     return SceneGroup(
-        id: s.id,
-        semanticLabel: s.label.isEmpty ? null : s.label,
-        children: children);
+      id: s.id,
+      semanticLabel: s.label.isEmpty ? null : s.label,
+      children: children,
+    );
   }
-
 }
 
 // --- helpers (private ports, same shapes as class_layout) --------------------
@@ -896,8 +1016,11 @@ Point _clipRectPerp(Rect rect, Point end, Point next) {
   return Point(next.x < rect.center.x ? rect.left : rect.right, y);
 }
 
-List<Point> _dropInsideRect(List<Point> pts, Rect rect,
-    {required bool fromEnd}) {
+List<Point> _dropInsideRect(
+  List<Point> pts,
+  Rect rect, {
+  required bool fromEnd,
+}) {
   final list = List<Point>.from(pts);
   if (fromEnd) {
     while (list.length > 2 && rect.contains(list[list.length - 2])) {

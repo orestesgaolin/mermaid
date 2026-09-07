@@ -35,25 +35,45 @@ class GitGraphConfig {
     bool? rotateCommitLabel,
     this.parallelCommits = false,
     this.mainBranchName = 'main',
-  })  : rotateCommitLabel = rotateCommitLabel ?? true,
-        _rotateCommitLabelOverride = rotateCommitLabel;
+    this.diagramPadding = 16,
+    this.nodeLabelWidth = 75,
+    this.nodeLabelHeight = 100,
+    this.mainBranchOrder = 0,
+    this.titleTopMargin = 25,
+  }) : rotateCommitLabel = rotateCommitLabel ?? true,
+       _rotateCommitLabelOverride = rotateCommitLabel;
 
   final bool showBranches;
   final bool showCommitLabel;
   final bool rotateCommitLabel;
   final bool parallelCommits;
   final String mainBranchName;
+  final double diagramPadding;
+  final double nodeLabelWidth;
+  final double nodeLabelHeight;
+  final int mainBranchOrder;
+  final double titleTopMargin;
   final bool? _rotateCommitLabelOverride;
 
   factory GitGraphConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'gitGraph');
     final mainBranchName = stringValue(values, 'mainBranchName', 'main');
+    final nodeLabel = values['nodeLabel'] is Map
+        ? (values['nodeLabel'] as Map).map(
+            (key, value) => MapEntry('$key', value),
+          )
+        : const <String, Object?>{};
     return GitGraphConfig(
       showBranches: boolValue(values, 'showBranches', true),
       showCommitLabel: boolValue(values, 'showCommitLabel', true),
       rotateCommitLabel: boolValueOrNull(values, 'rotateCommitLabel'),
       parallelCommits: boolValue(values, 'parallelCommits', false),
       mainBranchName: mainBranchName.isEmpty ? 'main' : mainBranchName,
+      diagramPadding: nonNegativeDouble(values, 'diagramPadding', 16),
+      nodeLabelWidth: positiveDouble(nodeLabel, 'width', 75),
+      nodeLabelHeight: positiveDouble(nodeLabel, 'height', 100),
+      mainBranchOrder: nonNegativeDouble(values, 'mainBranchOrder', 0).round(),
+      titleTopMargin: nonNegativeDouble(values, 'titleTopMargin', 25),
     );
   }
 }
@@ -100,6 +120,7 @@ class GitGraph {
     required this.commits,
     required this.branchOrder,
     required this.direction,
+    this.title,
   });
 
   final List<GitCommit> commits;
@@ -107,10 +128,12 @@ class GitGraph {
   /// Branch names in declaration order (main first), adjusted for `order:`.
   final List<String> branchOrder;
   final GitDirection direction;
+  final String? title;
 }
 
 GitGraph parseGitGraph(String source, {GitGraphConfig? config}) {
   config ??= GitGraphConfig.fromSource(source);
+  final title = frontmatterTitle(source);
   final text = stripMetadata(source);
   final lines = text.split('\n');
   var direction = GitDirection.leftRight;
@@ -120,7 +143,9 @@ GitGraph parseGitGraph(String source, {GitGraphConfig? config}) {
   final mainBranchName = config.mainBranchName;
   final branchOrder = <String>[mainBranchName];
   final branchHead = <String, String?>{mainBranchName: null};
-  final branchOrderValue = <String, int>{mainBranchName: 0};
+  final branchOrderValue = <String, int>{
+    mainBranchName: config.mainBranchOrder,
+  };
   var current = mainBranchName;
   var seq = 0;
   var autoId = 0;
@@ -206,8 +231,9 @@ GitGraph parseGitGraph(String source, {GitGraphConfig? config}) {
 
       case 'branch':
         final name = unquote(
-            rest.split(RegExp(r'\s+order\s*:')).first,
-            singleQuotes: false);
+          rest.split(RegExp(r'\s+order\s*:')).first,
+          singleQuotes: false,
+        );
         if (name.isEmpty) {
           throw MermaidParseException('branch requires a name', line: i + 1);
         }
@@ -301,6 +327,7 @@ GitGraph parseGitGraph(String source, {GitGraphConfig? config}) {
     commits: commits,
     branchOrder: branchOrder,
     direction: direction,
+    title: title,
   );
 }
 
@@ -316,7 +343,9 @@ RenderScene layoutGitGraph(
   const defaultPos = 30.0; // TB/BT lane time-origin
   // LR lane gap: 50 + 40 (rotateCommitLabel defaults true). TB/BT lanes add
   // half the (rotated) commit-label width; we approximate with the same gap.
-  final laneGap = config.rotateCommitLabel ? 90.0 : 50.0;
+  final laneGap = config.rotateCommitLabel
+      ? math.max(50.0, config.nodeLabelWidth + 15)
+      : 50.0;
   const commitLabelSize = 10.0;
   const tagLabelSize = 10.0;
   final lr = graph.direction == GitDirection.leftRight;
@@ -738,8 +767,29 @@ RenderScene layoutGitGraph(
     }
   }
 
-  final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 120, 80);
-  const pad = 16.0;
+  var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 120, 80);
+  if (graph.title != null && graph.title!.isNotEmpty) {
+    final style = TextStyleSpec(
+      fontFamily: theme.fontFamily,
+      fontSize: 18,
+      fontWeight: 700,
+    );
+    final size = measurer.measure(graph.title!, style);
+    final title = SceneText(
+      text: graph.title!,
+      bounds: Rect.fromLTWH(
+        bounds.center.x - size.width / 2,
+        bounds.top - size.height - config.titleTopMargin,
+        size.width,
+        size.height,
+      ),
+      style: style,
+      color: theme.titleColor,
+    );
+    nodes.add(title);
+    bounds = bounds.union(title.bounds);
+  }
+  final pad = config.diagramPadding;
   final dx = pad - bounds.left;
   final dy = pad - bounds.top;
   return RenderScene(

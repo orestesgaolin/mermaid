@@ -10,6 +10,8 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
+import '../../directives.dart';
 import '../../edge_geometry.dart';
 import '../../detect.dart';
 import '../../geometry.dart';
@@ -39,7 +41,16 @@ class C4Diagram {
   final C4Subtype subtype;
 }
 
-enum C4Kind { person, personExt, system, systemExt, container, component, db, queue }
+enum C4Kind {
+  person,
+  personExt,
+  system,
+  systemExt,
+  container,
+  component,
+  db,
+  queue,
+}
 
 class C4Node {
   const C4Node({
@@ -49,6 +60,7 @@ class C4Node {
     this.description = '',
     this.technology = '',
     this.external = false,
+    this.styleKey,
     this.boundary,
     this.bgColor,
     this.fontColor,
@@ -64,6 +76,7 @@ class C4Node {
   /// True for any `*_Ext` element (incl. ext db/queue, which collapse into the
   /// [C4Kind.db]/[C4Kind.queue] kinds but keep their external gray coloring).
   final bool external;
+  final String? styleKey;
   final String? boundary;
 
   /// `UpdateElementStyle` overrides ($bgColor / $fontColor / $borderColor).
@@ -79,6 +92,7 @@ class C4Node {
         description: description,
         technology: technology,
         external: external,
+        styleKey: styleKey,
         boundary: boundary,
         bgColor: bgColor ?? this.bgColor,
         fontColor: fontColor ?? this.fontColor,
@@ -113,11 +127,7 @@ class C4Boundary {
   final Color? borderColor;
   final Color? fontColor;
 
-  C4Boundary copyWith({
-    Color? bgColor,
-    Color? borderColor,
-    Color? fontColor,
-  }) =>
+  C4Boundary copyWith({Color? bgColor, Color? borderColor, Color? fontColor}) =>
       C4Boundary(
         id: id,
         label: label,
@@ -166,17 +176,17 @@ class C4Rel {
     double? offsetX,
     double? offsetY,
   }) => C4Rel(
-        from: from,
-        to: to,
-        label: label,
-        technology: technology,
-        bidirectional: bidirectional,
-        backwards: backwards,
-        textColor: textColor ?? this.textColor,
-        lineColor: lineColor ?? this.lineColor,
-        offsetX: offsetX ?? this.offsetX,
-        offsetY: offsetY ?? this.offsetY,
-      );
+    from: from,
+    to: to,
+    label: label,
+    technology: technology,
+    bidirectional: bidirectional,
+    backwards: backwards,
+    textColor: textColor ?? this.textColor,
+    lineColor: lineColor ?? this.lineColor,
+    offsetX: offsetX ?? this.offsetX,
+    offsetY: offsetY ?? this.offsetY,
+  );
 }
 
 C4Diagram parseC4Diagram(String source) {
@@ -210,23 +220,22 @@ C4Diagram parseC4Diagram(String source) {
   }
 
   // C4 labels may embed `<br/>`; `'` is ordinary text here, never a quote.
-  String unquoteLabel(String a) => unquote(a, singleQuotes: false)
-      .replaceAll('<br/>', '\n')
-      .replaceAll('<br>', '\n');
+  String unquoteLabel(String a) => unquote(
+    a,
+    singleQuotes: false,
+  ).replaceAll('<br/>', '\n').replaceAll('<br>', '\n');
 
-  List<String> args(String s) =>
-      [for (final a in rawArgs(s)) unquoteLabel(a)];
+  List<String> args(String s) => [for (final a in rawArgs(s)) unquoteLabel(a)];
 
   // Positional args only: drops `$key=value` named args (e.g. $sprite, $tags,
   // $link, $type) so trailing/extra named args don't get mistaken for
   // label/desc/tech. Tested against the raw token so a quoted value such as
   // "$5 / item" is never dropped.
   final namedArg = RegExp(r'^\$\w+\s*=');
-  List<String> positional(String s) =>
-      [
-        for (final a in rawArgs(s))
-          if (!namedArg.hasMatch(a.trim())) unquoteLabel(a),
-      ];
+  List<String> positional(String s) => [
+    for (final a in rawArgs(s))
+      if (!namedArg.hasMatch(a.trim())) unquoteLabel(a),
+  ];
 
   final lines = text.split('\n');
   for (var i = 0; i < lines.length; i++) {
@@ -235,8 +244,9 @@ C4Diagram parseC4Diagram(String source) {
     if (comment >= 0) line = line.substring(0, comment).trim();
     if (line.isEmpty) continue;
     if (!seenHeader) {
-      final h = RegExp(r'^C4(Context|Container|Component|Dynamic|Deployment)\b')
-          .firstMatch(line);
+      final h = RegExp(
+        r'^C4(Context|Container|Component|Dynamic|Deployment)\b',
+      ).firstMatch(line);
       if (h == null) {
         throw MermaidParseException('expected a C4 header', line: i + 1);
       }
@@ -265,8 +275,8 @@ C4Diagram parseC4Diagram(String source) {
     }
     // Boundary(id, "label" [, "type"]) {
     m = RegExp(
-            r'^(Enterprise_Boundary|System_Boundary|Container_Boundary|Boundary|Deployment_Node|Node|Node_L|Node_R)\s*\((.*)\)\s*\{$')
-        .firstMatch(line);
+      r'^(Enterprise_Boundary|System_Boundary|Container_Boundary|Boundary|Deployment_Node|Node|Node_L|Node_R)\s*\((.*)\)\s*\{$',
+    ).firstMatch(line);
     if (m != null) {
       final fn = m.group(1)!;
       final a = positional(m.group(2)!);
@@ -279,15 +289,17 @@ C4Diagram parseC4Diagram(String source) {
         'Deployment_Node' || 'Node' || 'Node_L' || 'Node_R' => 'Node',
         _ => '',
       };
-      boundaries.add(C4Boundary(
-        id: id,
-        label: a.length > 1 ? a[1] : id,
-        type: a.length > 2 ? a[2] : defaultType,
-        description: a.length > 3 ? a[3] : '',
-        parent: boundaryStack.isEmpty ? null : boundaryStack.last,
-        // The keyword decides both: only node keywords default to 'Node'.
-        isNode: defaultType == 'Node',
-      ));
+      boundaries.add(
+        C4Boundary(
+          id: id,
+          label: a.length > 1 ? a[1] : id,
+          type: a.length > 2 ? a[2] : defaultType,
+          description: a.length > 3 ? a[3] : '',
+          parent: boundaryStack.isEmpty ? null : boundaryStack.last,
+          // The keyword decides both: only node keywords default to 'Node'.
+          isNode: defaultType == 'Node',
+        ),
+      );
       boundaryStack.add(id);
       continue;
     }
@@ -303,23 +315,39 @@ C4Diagram parseC4Diagram(String source) {
       C4Kind? kind = switch (fn) {
         'Person' => C4Kind.person,
         'Person_Ext' => C4Kind.personExt,
-        'System' || 'SystemDb' || 'SystemQueue' || 'System_Ext' ||
-        'SystemDb_Ext' || 'SystemQueue_Ext' =>
+        'System' ||
+        'SystemDb' ||
+        'SystemQueue' ||
+        'System_Ext' ||
+        'SystemDb_Ext' ||
+        'SystemQueue_Ext' =>
           fn.startsWith('SystemDb')
               ? C4Kind.db
               : (fn.startsWith('SystemQueue')
-                  ? C4Kind.queue
-                  : (isExt ? C4Kind.systemExt : C4Kind.system)),
-        'Container' || 'ContainerDb' || 'ContainerQueue' ||
-        'Container_Ext' || 'ContainerDb_Ext' || 'ContainerQueue_Ext' =>
+                    ? C4Kind.queue
+                    : (isExt ? C4Kind.systemExt : C4Kind.system)),
+        'Container' ||
+        'ContainerDb' ||
+        'ContainerQueue' ||
+        'Container_Ext' ||
+        'ContainerDb_Ext' ||
+        'ContainerQueue_Ext' =>
           fn.startsWith('ContainerDb')
               ? C4Kind.db
-              : (fn.startsWith('ContainerQueue') ? C4Kind.queue : C4Kind.container),
-        'Component' || 'ComponentDb' || 'ComponentQueue' ||
-        'Component_Ext' || 'ComponentDb_Ext' || 'ComponentQueue_Ext' =>
+              : (fn.startsWith('ContainerQueue')
+                    ? C4Kind.queue
+                    : C4Kind.container),
+        'Component' ||
+        'ComponentDb' ||
+        'ComponentQueue' ||
+        'Component_Ext' ||
+        'ComponentDb_Ext' ||
+        'ComponentQueue_Ext' =>
           fn.startsWith('ComponentDb')
               ? C4Kind.db
-              : (fn.startsWith('ComponentQueue') ? C4Kind.queue : C4Kind.component),
+              : (fn.startsWith('ComponentQueue')
+                    ? C4Kind.queue
+                    : C4Kind.component),
         _ => null,
       };
       if (kind != null) {
@@ -333,6 +361,7 @@ C4Diagram parseC4Diagram(String source) {
           kind: kind,
           label: p.length > 1 ? p[1] : p[0],
           external: isExt,
+          styleKey: _c4StyleKey(fn),
           technology: hasTechn && p.length > 2 ? p[2] : '',
           description: p.length > (hasTechn ? 3 : 2)
               ? p.last
@@ -342,19 +371,22 @@ C4Diagram parseC4Diagram(String source) {
         continue;
       }
       // Rel(from, to, "label" [, "technology"]) and directional variants.
-      if (RegExp(r'^(Bi)?Rel(_[UDLR]|_Up|_Down|_Left|_Right|_Back)?$')
-          .hasMatch(fn)) {
+      if (RegExp(
+        r'^(Bi)?Rel(_[UDLR]|_Up|_Down|_Left|_Right|_Back)?$',
+      ).hasMatch(fn)) {
         if (p.length < 2) {
           throw MermaidParseException('$fn needs two endpoints', line: i + 1);
         }
-        rels.add(C4Rel(
-          from: p[0],
-          to: p[1],
-          label: p.length > 2 ? p[2] : '',
-          technology: p.length > 3 ? p[3] : '',
-          bidirectional: fn.startsWith('BiRel'),
-          backwards: fn == 'Rel_Back',
-        ));
+        rels.add(
+          C4Rel(
+            from: p[0],
+            to: p[1],
+            label: p.length > 2 ? p[2] : '',
+            technology: p.length > 3 ? p[3] : '',
+            bidirectional: fn.startsWith('BiRel'),
+            backwards: fn == 'Rel_Back',
+          ),
+        );
         continue;
       }
       // UpdateElementStyle(id, $bgColor=, $fontColor=, $borderColor=).
@@ -413,11 +445,23 @@ C4Diagram parseC4Diagram(String source) {
     throw const MermaidParseException('empty C4 source');
   }
   return C4Diagram(
-      nodes: nodes,
-      boundaries: boundaries,
-      rels: rels,
-      title: title,
-      subtype: subtype);
+    nodes: nodes,
+    boundaries: boundaries,
+    rels: rels,
+    title: title,
+    subtype: subtype,
+  );
+}
+
+String _c4StyleKey(String functionName) {
+  final external = functionName.endsWith('_Ext');
+  final base = external
+      ? functionName.substring(0, functionName.length - 4)
+      : functionName;
+  final snake = base
+      .replaceAllMapped(RegExp(r'(?<=[a-z])(?=[A-Z])'), (_) => '_')
+      .toLowerCase();
+  return external ? 'external_$snake' : snake;
 }
 
 /// Parses `$key="value"` / `$key=value` style args into a map (key without
@@ -444,26 +488,25 @@ const _white = Color(0xffffffff);
 ({Color fill, Color border}) _kindColors(C4Node n) {
   if (n.external) {
     return switch (n.kind) {
-      C4Kind.personExt || C4Kind.person =>
-        (fill: Color(0xff686868), border: Color(0xff8a8a8a)),
-      C4Kind.systemExt || C4Kind.system || C4Kind.db || C4Kind.queue =>
-        (fill: Color(0xff999999), border: Color(0xff8a8a8a)),
-      C4Kind.container =>
-        (fill: Color(0xffb3b3b3), border: Color(0xffa6a6a6)),
-      C4Kind.component =>
-        (fill: Color(0xffcccccc), border: Color(0xffbfbfbf)),
+      C4Kind.personExt ||
+      C4Kind.person => (fill: Color(0xff686868), border: Color(0xff8a8a8a)),
+      C4Kind.systemExt ||
+      C4Kind.system ||
+      C4Kind.db ||
+      C4Kind.queue => (fill: Color(0xff999999), border: Color(0xff8a8a8a)),
+      C4Kind.container => (fill: Color(0xffb3b3b3), border: Color(0xffa6a6a6)),
+      C4Kind.component => (fill: Color(0xffcccccc), border: Color(0xffbfbfbf)),
     };
   }
   return switch (n.kind) {
     C4Kind.person => (fill: Color(0xff08427b), border: Color(0xff073b6f)),
     C4Kind.personExt => (fill: Color(0xff686868), border: Color(0xff8a8a8a)),
     C4Kind.systemExt => (fill: Color(0xff999999), border: Color(0xff8a8a8a)),
-    C4Kind.system || C4Kind.db || C4Kind.queue =>
-      (fill: Color(0xff1168bd), border: Color(0xff3c7fc0)),
-    C4Kind.container =>
-      (fill: Color(0xff438dd5), border: Color(0xff3c7fc0)),
-    C4Kind.component =>
-      (fill: Color(0xff85bbf0), border: Color(0xff78a8d8)),
+    C4Kind.system ||
+    C4Kind.db ||
+    C4Kind.queue => (fill: Color(0xff1168bd), border: Color(0xff3c7fc0)),
+    C4Kind.container => (fill: Color(0xff438dd5), border: Color(0xff3c7fc0)),
+    C4Kind.component => (fill: Color(0xff85bbf0), border: Color(0xff78a8d8)),
   };
 }
 
@@ -482,15 +525,98 @@ String _stereotype(C4Node n) {
   return '<<$base>>';
 }
 
-// Upstream c4 layout constants (config.schema.yaml `c4` block).
-const _confWidth = 216.0;
-const _confHeight = 60.0;
-const _shapePadding = 20.0;
-const _shapeMargin = 50.0;
-const _c4ShapeInRow = 4;
-const _c4BoundaryInRow = 2;
-const _diagramMarginX = 50.0;
-const _diagramMarginY = 10.0;
+/// Layout values consumed by Mermaid's C4 renderer.
+class C4Config {
+  const C4Config({
+    this.diagramMarginX = 50,
+    this.diagramMarginY = 10,
+    this.c4ShapeMargin = 50,
+    this.c4ShapePadding = 20,
+    this.width = 216,
+    this.height = 60,
+    this.c4ShapeInRow = 4,
+    this.nextLinePaddingX = 0,
+    this.c4BoundaryInRow = 2,
+    this.wrap = true,
+    this.wrapPadding = 10,
+    this.values = const {},
+  });
+
+  final double diagramMarginX, diagramMarginY;
+  final double c4ShapeMargin, c4ShapePadding;
+  final double width, height, nextLinePaddingX;
+  final int c4ShapeInRow, c4BoundaryInRow;
+  final bool wrap;
+  final double wrapPadding;
+  final Map<String, Object?> values;
+
+  factory C4Config.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'c4');
+    int rowCount(String key, int fallback) {
+      final value = values[key];
+      if (value is num &&
+          value.isFinite &&
+          value >= 0 &&
+          value == value.truncate()) {
+        return math.max(1, value.floor());
+      }
+      return fallback;
+    }
+
+    double signedValue(String key, double fallback) {
+      final value = values[key];
+      return value is num && value.isFinite ? value.toDouble() : fallback;
+    }
+
+    return C4Config(
+      diagramMarginX: nonNegativeDouble(values, 'diagramMarginX', 50),
+      diagramMarginY: nonNegativeDouble(values, 'diagramMarginY', 10),
+      c4ShapeMargin: nonNegativeDouble(values, 'c4ShapeMargin', 50),
+      c4ShapePadding: nonNegativeDouble(values, 'c4ShapePadding', 20),
+      width: nonNegativeDouble(values, 'width', 216),
+      height: nonNegativeDouble(values, 'height', 60),
+      c4ShapeInRow: rowCount('c4ShapeInRow', 4),
+      nextLinePaddingX: signedValue('nextLinePaddingX', 0),
+      c4BoundaryInRow: rowCount('c4BoundaryInRow', 2),
+      wrap: boolValue(values, 'wrap', true),
+      wrapPadding: nonNegativeDouble(values, 'wrapPadding', 10),
+      values: values,
+    );
+  }
+
+  TextStyleSpec font(String prefix, {required double defaultSize}) {
+    final rawSize = values['${prefix}FontSize'];
+    final parsedSize = switch (rawSize) {
+      num value when value.isFinite => value.toDouble(),
+      String value => double.tryParse(value),
+      _ => null,
+    };
+    final rawWeight = values['${prefix}FontWeight'];
+    final parsedWeight = switch (rawWeight) {
+      num value when value.isFinite => value.round(),
+      String value when value == 'bold' => 700,
+      String value when value == 'normal' => 400,
+      String value => int.tryParse(value),
+      _ => null,
+    };
+    return TextStyleSpec(
+      fontFamily: stringValue(
+        values,
+        '${prefix}FontFamily',
+        '"Open Sans", sans-serif',
+      ),
+      fontSize: parsedSize != null && parsedSize >= 0
+          ? parsedSize
+          : defaultSize,
+      fontWeight: parsedWeight ?? 400,
+    );
+  }
+
+  Color color(String key, Color fallback) {
+    final raw = values[key];
+    return raw is String ? Color.tryParse(raw) ?? fallback : fallback;
+  }
+}
 
 /// Gap between a boundary's border and everything it holds: its contents on
 /// all four sides and the header text drawn inside the top edge.
@@ -512,28 +638,31 @@ RenderScene layoutC4Diagram(
   C4Diagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  C4Config config = const C4Config(),
 }) {
   const pad = 12.0;
   // Stereotype line: fontSize-2, italic. Label: bold, fontSize+2. Techn line:
   // italic fontSize. Descr (personFont): normal fontSize.
-  final stereoStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: theme.fontSize - 2, italic: true);
-  final labelStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily,
-      fontSize: theme.fontSize + 2,
-      fontWeight: 700);
-  final technStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: theme.fontSize, italic: true);
-  final descStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
-  final relStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
+  TextStyleSpec derived(
+    TextStyleSpec base, {
+    double sizeDelta = 0,
+    int? weight,
+    bool italic = false,
+  }) => TextStyleSpec(
+    fontFamily: base.fontFamily,
+    fontSize: math.max(0, base.fontSize + sizeDelta),
+    fontWeight: weight ?? base.fontWeight,
+    italic: italic,
+  );
+  final relStyle = config.font('message', defaultSize: 12);
+  final technStyle = derived(relStyle, italic: true);
+  final boundaryBase = config.font('boundary', defaultSize: 14);
   final boundaryLabelStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily,
-      fontSize: theme.fontSize + 2,
-      fontWeight: 700);
-  final boundaryTypeStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
+    fontFamily: boundaryBase.fontFamily,
+    fontSize: boundaryBase.fontSize + 2,
+    fontWeight: 700,
+  );
+  final boundaryTypeStyle = boundaryBase;
 
   /// Space the header text needs inside the top of a boundary [width] wide.
   /// The description wraps to the same width the drawing pass uses, so a long
@@ -549,43 +678,59 @@ RenderScene layoutC4Diagram(
           measurer.measure('[${boundary.type}]', boundaryTypeStyle).height + 2;
     }
     if (boundary.description.isNotEmpty) {
-      height += measurer
-              .measure(boundary.description, boundaryTypeStyle,
-                  maxWidth: textWidth)
+      height +=
+          measurer
+              .measure(
+                boundary.description,
+                boundaryTypeStyle,
+                maxWidth: textWidth,
+              )
               .height +
           2;
     }
     return height + 8;
   }
 
-  final textLimit = _confWidth - _shapePadding * 2;
-
   // Measure each shape and compute its box (min 216x60, grows to content).
   final boxes = <String, _ShapeBox>{};
   for (final n in diagram.nodes.values) {
+    final nodeStyle = config.font(n.styleKey ?? 'person', defaultSize: 14);
+    final stereoStyle = derived(nodeStyle, sizeDelta: -2, italic: true);
+    final labelStyle = derived(nodeStyle, sizeDelta: 2, weight: 700);
+    final nodeTechnStyle = derived(nodeStyle, italic: true);
+    final textLimit = math.max(1.0, config.width - config.c4ShapePadding * 2);
+    final maxWidth = config.wrap ? textLimit : null;
     final stereo = measurer.measure(_stereotype(n), stereoStyle);
-    final label = measurer.measure(n.label, labelStyle, maxWidth: textLimit);
+    final label = measurer.measure(n.label, labelStyle, maxWidth: maxWidth);
     final techn = n.technology.isEmpty
         ? Size.zero
-        : measurer.measure('[${n.technology}]', technStyle,
-            maxWidth: textLimit);
+        : measurer.measure(
+            '[${n.technology}]',
+            nodeTechnStyle,
+            maxWidth: maxWidth,
+          );
     final desc = n.description.isEmpty
         ? Size.zero
-        : measurer.measure(n.description, descStyle, maxWidth: textLimit);
+        : measurer.measure(n.description, nodeStyle, maxWidth: maxWidth);
     final isPerson = n.kind == C4Kind.person || n.kind == C4Kind.personExt;
     final imageH = isPerson ? 48.0 : 0.0;
-    final contentW = [stereo.width, label.width, techn.width, desc.width]
-        .reduce(math.max);
-    final w = math.max(_confWidth, contentW + _shapePadding * 2);
-    final contentH = _shapePadding + // top padding above stereotype
+    final contentW = [
+      stereo.width,
+      label.width,
+      techn.width,
+      desc.width,
+    ].reduce(math.max);
+    final w = math.max(config.width, contentW + config.c4ShapePadding * 2);
+    final contentH =
+        config.c4ShapePadding + // top padding above stereotype
         stereo.height +
         imageH +
         8 +
         label.height +
         (techn.height > 0 ? techn.height + 5 : 0) +
         (desc.height > 0 ? desc.height + 20 : 0) +
-        _shapePadding;
-    final h = math.max(_confHeight, contentH);
+        config.c4ShapePadding;
+    final h = math.max(config.height, contentH);
     boxes[n.id] = _ShapeBox(Size(w, h), stereo, label, techn, desc);
   }
 
@@ -619,12 +764,12 @@ RenderScene layoutC4Diagram(
       final box = boxes[n.id]!;
       cnt += 1;
       var sx = (startx == stopx)
-          ? stopx + _shapeMargin
-          : stopx + _shapeMargin * 2;
-      var sy = starty + _shapeMargin * 2;
-      if (cnt > _c4ShapeInRow) {
-        sx = startx + _shapeMargin;
-        sy = stopy + _shapeMargin * 2;
+          ? stopx + config.c4ShapeMargin
+          : stopx + config.c4ShapeMargin * 2;
+      var sy = starty + config.c4ShapeMargin * 2;
+      if (cnt > config.c4ShapeInRow) {
+        sx = startx + config.c4ShapeMargin + config.nextLinePaddingX;
+        sy = stopy + config.c4ShapeMargin * 2;
         starty = stopy;
         cnt = 1;
       }
@@ -632,7 +777,12 @@ RenderScene layoutC4Diagram(
       final ey = sy + box.size.height;
       box.x = sx;
       box.y = sy;
-      placedRects[n.id] = Rect.fromLTWH(sx, sy, box.size.width, box.size.height);
+      placedRects[n.id] = Rect.fromLTWH(
+        sx,
+        sy,
+        box.size.width,
+        box.size.height,
+      );
       startx = math.min(startx, sx);
       starty = math.min(starty, sy);
       stopx = math.max(stopx, ex);
@@ -673,15 +823,17 @@ RenderScene layoutC4Diagram(
     final subs = childBoundaries[boundaryId] ?? const [];
     if (subs.isNotEmpty) {
       // Boundaries are laid out c4BoundaryInRow per row, below the shapes.
-      var rowStartY = (acc?.bottom ?? originY) +
-          (shapeRect != null ? _shapeMargin : 0);
-      var x = originX + _diagramMarginX;
+      var rowStartY =
+          (acc?.bottom ?? originY) +
+          (shapeRect != null ? config.c4ShapeMargin : 0);
+      var x = originX + config.diagramMarginX;
       var rowMaxBottom = rowStartY;
       for (var bi = 0; bi < subs.length; bi++) {
-        if (bi != 0 && bi % _c4BoundaryInRow == 0) {
+        if (bi != 0 && bi % config.c4BoundaryInRow == 0) {
           // New row of boundaries.
-          rowStartY = rowMaxBottom + _diagramMarginY + _shapeMargin;
-          x = originX + _diagramMarginX;
+          rowStartY =
+              rowMaxBottom + config.diagramMarginY + config.c4ShapeMargin;
+          x = originX + config.diagramMarginX;
           rowMaxBottom = rowStartY;
         }
         // A boundary is exactly as wide as its contents, and the header wraps
@@ -689,34 +841,42 @@ RenderScene layoutC4Diagram(
         // first, measure the header against the resulting width, then slide
         // the whole subtree down to make room for it.
         final packed = layoutContainer(
-            subs[bi].id, x + _boundaryPadding, rowStartY + _boundaryPadding);
+          subs[bi].id,
+          x + _boundaryPadding,
+          rowStartY + _boundaryPadding,
+        );
         final width = packed == null
-            ? _confWidth
+            ? config.width
             : packed.width + 2 * _boundaryPadding;
         final headerHeight = boundaryHeaderHeight(subs[bi], width);
         Rect rect;
         if (packed == null) {
-          rect = Rect.fromLTWH(x, rowStartY, _confWidth,
-              math.max(_confHeight, headerHeight + 2 * _boundaryPadding));
+          rect = Rect.fromLTWH(
+            x,
+            rowStartY,
+            config.width,
+            math.max(config.height, headerHeight + 2 * _boundaryPadding),
+          );
         } else {
           shiftBoundaryContents(subs[bi].id, headerHeight);
           final inner = packed.translate(0, headerHeight);
           rect = Rect.fromLTRB(
-              inner.left - _boundaryPadding,
-              inner.top - _boundaryPadding - headerHeight,
-              inner.right + _boundaryPadding,
-              inner.bottom + _boundaryPadding);
+            inner.left - _boundaryPadding,
+            inner.top - _boundaryPadding - headerHeight,
+            inner.right + _boundaryPadding,
+            inner.bottom + _boundaryPadding,
+          );
         }
         boundaryRects[subs[bi].id] = rect;
         include(rect);
-        x = rect.right + _diagramMarginX;
+        x = rect.right + config.diagramMarginX;
         rowMaxBottom = math.max(rowMaxBottom, rect.bottom);
       }
     }
     return acc;
   }
 
-  layoutContainer(null, _diagramMarginX, _diagramMarginY);
+  layoutContainer(null, config.diagramMarginX, config.diagramMarginY);
 
   // Resolve final centers from placed rects.
   final centers = <String, Point>{};
@@ -731,22 +891,21 @@ RenderScene layoutC4Diagram(
   final elementNodes = <SceneNode>[];
 
   // ---- Boundaries (outermost first so nested ones paint on top). ----
-  final orderedBoundaries = diagram.boundaries
-      .where((b) => boundaryRects.containsKey(b.id))
-      .toList()
-    ..sort((a, b) {
-      int depth(C4Boundary x) {
-        var d = 0;
-        var p = x.parent;
-        while (p != null) {
-          d++;
-          p = boundaryById[p]?.parent;
-        }
-        return d;
-      }
+  final orderedBoundaries =
+      diagram.boundaries.where((b) => boundaryRects.containsKey(b.id)).toList()
+        ..sort((a, b) {
+          int depth(C4Boundary x) {
+            var d = 0;
+            var p = x.parent;
+            while (p != null) {
+              d++;
+              p = boundaryById[p]?.parent;
+            }
+            return d;
+          }
 
-      return depth(a).compareTo(depth(b));
-    });
+          return depth(a).compareTo(depth(b));
+        });
   for (final b in orderedBoundaries) {
     final rect = boundaryRects[b.id]!;
     final borderColor = b.borderColor ?? const Color(0xff444444);
@@ -756,7 +915,9 @@ RenderScene layoutC4Diagram(
         geometry: RectGeometry(rect, rx: 2.5, ry: 2.5),
         fill: b.bgColor != null ? Fill(b.bgColor!) : null,
         stroke: Stroke(
-            color: borderColor, dash: b.isNode ? null : const [7, 7]),
+          color: borderColor,
+          dash: b.isNode ? null : const [7, 7],
+        ),
       ),
     ];
     // Label near the top of the cluster rect (upstream label.Y). An unnamed
@@ -764,43 +925,65 @@ RenderScene layoutC4Diagram(
     var ty = rect.top + 6;
     if (b.label.isNotEmpty) {
       final labelSize = measurer.measure(b.label, boundaryLabelStyle);
-      children.add(SceneText(
-        text: b.label,
-        bounds: Rect.fromLTWH(
-            rect.center.x - labelSize.width / 2, ty, labelSize.width,
-            labelSize.height),
-        style: boundaryLabelStyle,
-        color: fontColor,
-      ));
+      children.add(
+        SceneText(
+          text: b.label,
+          bounds: Rect.fromLTWH(
+            rect.center.x - labelSize.width / 2,
+            ty,
+            labelSize.width,
+            labelSize.height,
+          ),
+          style: boundaryLabelStyle,
+          color: fontColor,
+        ),
+      );
       ty += labelSize.height + 2;
     }
     if (b.type.isNotEmpty) {
       final s = measurer.measure('[${b.type}]', boundaryTypeStyle);
-      children.add(SceneText(
-        text: '[${b.type}]',
-        bounds: Rect.fromLTWH(
-            rect.center.x - s.width / 2, ty, s.width, s.height),
-        style: boundaryTypeStyle,
-        color: fontColor,
-      ));
+      children.add(
+        SceneText(
+          text: '[${b.type}]',
+          bounds: Rect.fromLTWH(
+            rect.center.x - s.width / 2,
+            ty,
+            s.width,
+            s.height,
+          ),
+          style: boundaryTypeStyle,
+          color: fontColor,
+        ),
+      );
       ty += s.height + 2;
     }
     if (b.description.isNotEmpty) {
-      final s = measurer.measure(b.description, boundaryTypeStyle,
-          maxWidth: rect.width - 2 * _boundaryPadding);
-      children.add(SceneText(
-        text: b.description,
-        bounds: Rect.fromLTWH(
-            rect.center.x - s.width / 2, ty, s.width, s.height),
-        style: boundaryTypeStyle,
-        color: fontColor,
-      ));
+      final s = measurer.measure(
+        b.description,
+        boundaryTypeStyle,
+        maxWidth: rect.width - 2 * _boundaryPadding,
+      );
+      children.add(
+        SceneText(
+          text: b.description,
+          bounds: Rect.fromLTWH(
+            rect.center.x - s.width / 2,
+            ty,
+            s.width,
+            s.height,
+          ),
+          style: boundaryTypeStyle,
+          color: fontColor,
+        ),
+      );
     }
-    clusterNodes.add(SceneGroup(
-      id: 'boundary_${b.id}',
-      role: SceneGroupRole.cluster,
-      children: children,
-    ));
+    clusterNodes.add(
+      SceneGroup(
+        id: 'boundary_${b.id}',
+        role: SceneGroupRole.cluster,
+        children: children,
+      ),
+    );
   }
 
   final boundaryHeaderRects = <Rect>[];
@@ -885,30 +1068,40 @@ RenderScene layoutC4Diagram(
     ];
     // End arrowhead unless Rel_Back.
     if (!r.backwards) {
-      children.add(SceneShape(
-        geometry: PolygonGeometry(
-            [tip, tip - dir * 10 + perp * 4.5, tip - dir * 10 - perp * 4.5]),
-        fill: Fill(lineCol),
-      ));
+      children.add(
+        SceneShape(
+          geometry: PolygonGeometry([
+            tip,
+            tip - dir * 10 + perp * 4.5,
+            tip - dir * 10 - perp * 4.5,
+          ]),
+          fill: Fill(lineCol),
+        ),
+      );
     }
     // Start arrowhead for BiRel / Rel_Back.
     if (r.bidirectional || r.backwards) {
       final sdir = direction(end, start);
       final sperp = Point(-sdir.y, sdir.x);
-      children.add(SceneShape(
-        geometry: PolygonGeometry([
-          start,
-          start - sdir * 10 + sperp * 4.5,
-          start - sdir * 10 - sperp * 4.5,
-        ]),
-        fill: Fill(lineCol),
-      ));
+      children.add(
+        SceneShape(
+          geometry: PolygonGeometry([
+            start,
+            start - sdir * 10 + sperp * 4.5,
+            start - sdir * 10 - sperp * 4.5,
+          ]),
+          fill: Fill(lineCol),
+        ),
+      );
     }
-    edgeNodes.add(SceneGroup(
+    edgeNodes.add(
+      SceneGroup(
         id: 'rel_${r.from}_${r.to}_$i',
         role: SceneGroupRole.edge,
         semanticLabel: r.label,
-        children: children));
+        children: children,
+      ),
+    );
 
     // Label at the midpoint (no background rect; C4Dynamic auto-numbers).
     final textColor = r.textColor ?? const Color(0xff444444);
@@ -922,8 +1115,7 @@ RenderScene layoutC4Diagram(
           : measurer.measure(labelText, relStyle, maxWidth: 150);
       final technologySize = r.technology.isEmpty
           ? Size.zero
-          : measurer.measure('[${r.technology}]', technStyle,
-              maxWidth: 150);
+          : measurer.measure('[${r.technology}]', technStyle, maxWidth: 150);
       final gap = labelText.isNotEmpty && r.technology.isNotEmpty ? 2.0 : 0.0;
       // `$offsetX`/`$offsetY` move the label's anchor. Fold them in once here
       // rather than adding them to every candidate below: the offset is
@@ -940,13 +1132,18 @@ RenderScene layoutC4Diagram(
           Rect.fromCenter(center, labelSize.width, labelSize.height),
         if (r.technology.isNotEmpty)
           Rect.fromCenter(
-              Point(center.x,
-                  labelText.isEmpty
-                      ? center.y
-                      : center.y + labelSize.height / 2 + gap +
-                          technologySize.height / 2),
-              technologySize.width,
-              technologySize.height),
+            Point(
+              center.x,
+              labelText.isEmpty
+                  ? center.y
+                  : center.y +
+                        labelSize.height / 2 +
+                        gap +
+                        technologySize.height / 2,
+            ),
+            technologySize.width,
+            technologySize.height,
+          ),
       ];
       final commonBoundary = commonBoundaryRect(r);
       final containingBoundary = commonBoundary == null
@@ -960,28 +1157,34 @@ RenderScene layoutC4Diagram(
       final primaryDirection = dir.x.abs() < 0.15
           ? const Point(1, 0)
           : dir.y.abs() < 0.15
-              ? const Point(0, -1)
-              : Point(-dir.y, dir.x);
+          ? const Point(0, -1)
+          : Point(-dir.y, dir.x);
       final directions = [primaryDirection, primaryDirection * -1];
       final candidates =
           <({Point mid, Rect bounds, double distance, int priority})>[];
       ({Point mid, Rect bounds, double distance, int priority})? fallback;
-      for (var directionIndex = 0;
-          directionIndex < directions.length;
-          directionIndex++) {
+      for (
+        var directionIndex = 0;
+        directionIndex < directions.length;
+        directionIndex++
+      ) {
         final direction = directions[directionIndex];
         final xProjection = math.min(
-            direction.x * -annotationWidth / 2,
-            direction.x * annotationWidth / 2);
+          direction.x * -annotationWidth / 2,
+          direction.x * annotationWidth / 2,
+        );
         final yProjection = math.min(
-            direction.y * annotationTopOffset,
-            direction.y * (annotationTopOffset + annotationHeight));
+          direction.y * annotationTopOffset,
+          direction.y * (annotationTopOffset + annotationHeight),
+        );
         final baseDistance = 4 - xProjection - yProjection;
         var found = false;
         for (var radius = 0; radius < 40 && !found; radius++) {
-          for (var normalPass = 0;
-              normalPass <= radius && !found;
-              normalPass++) {
+          for (
+            var normalPass = 0;
+            normalPass <= radius && !found;
+            normalPass++
+          ) {
             final slidePass = radius - normalPass;
             final slideOffsets = slidePass == 0
                 ? const [0.0]
@@ -991,13 +1194,14 @@ RenderScene layoutC4Diagram(
               final candidateMid =
                   mid + direction * normalDistance + dir * slideOffset;
               final candidateBounds = Rect.fromLTWH(
-                  candidateMid.x - annotationWidth / 2,
-                  candidateMid.y + annotationTopOffset,
-                  annotationWidth,
-                  annotationHeight);
+                candidateMid.x - annotationWidth / 2,
+                candidateMid.y + annotationTopOffset,
+                annotationWidth,
+                annotationHeight,
+              );
               final distance = math.sqrt(
-                  normalDistance * normalDistance +
-                      slideOffset * slideOffset);
+                normalDistance * normalDistance + slideOffset * slideOffset,
+              );
               fallback ??= (
                 mid: candidateMid,
                 bounds: candidateBounds,
@@ -1005,10 +1209,17 @@ RenderScene layoutC4Diagram(
                 priority: directionIndex,
               );
               final textBounds = textBoundsAt(candidateMid);
-              final crossesStroke = obstacleSegments.any((segment) =>
-                  textBounds.any((bounds) => _segmentIntersectsRect(
-                      segment.start, segment.end, bounds.inflate(3))));
-              final insideBoundary = containingBoundary == null ||
+              final crossesStroke = obstacleSegments.any(
+                (segment) => textBounds.any(
+                  (bounds) => _segmentIntersectsRect(
+                    segment.start,
+                    segment.end,
+                    bounds.inflate(3),
+                  ),
+                ),
+              );
+              final insideBoundary =
+                  containingBoundary == null ||
                   rectContainsRect(containingBoundary, candidateBounds);
               if (!crossesStroke &&
                   !overlapsObstruction(candidateBounds) &&
@@ -1036,26 +1247,36 @@ RenderScene layoutC4Diagram(
       relationAnnotationRects.add(annotationBounds.inflate(4));
 
       if (labelText.isNotEmpty) {
-        labelNodes.add(SceneText(
-          text: labelText,
-          bounds: Rect.fromCenter(mid, labelSize.width, labelSize.height),
-          style: relStyle,
-          color: textColor,
-        ));
+        labelNodes.add(
+          SceneText(
+            text: labelText,
+            bounds: Rect.fromCenter(mid, labelSize.width, labelSize.height),
+            style: relStyle,
+            color: textColor,
+          ),
+        );
       }
       if (r.technology.isNotEmpty) {
-        labelNodes.add(SceneText(
-          text: '[${r.technology}]',
-          bounds: Rect.fromCenter(
-              Point(mid.x,
-                  labelText.isEmpty
-                      ? mid.y
-                      : mid.y + labelSize.height / 2 + gap +
-                          technologySize.height / 2),
-              technologySize.width, technologySize.height),
-          style: technStyle,
-          color: textColor,
-        ));
+        labelNodes.add(
+          SceneText(
+            text: '[${r.technology}]',
+            bounds: Rect.fromCenter(
+              Point(
+                mid.x,
+                labelText.isEmpty
+                    ? mid.y
+                    : mid.y +
+                          labelSize.height / 2 +
+                          gap +
+                          technologySize.height / 2,
+              ),
+              technologySize.width,
+              technologySize.height,
+            ),
+            style: technStyle,
+            color: textColor,
+          ),
+        );
       }
     }
   }
@@ -1065,47 +1286,67 @@ RenderScene layoutC4Diagram(
     final box = boxes[id]!;
     final rect = placedRects[id]!;
     final colors = _kindColors(n);
-    final fill = n.bgColor ?? colors.fill;
-    final border = n.borderColor ?? colors.border;
+    final prefix = n.styleKey ?? 'person';
+    final fill = n.bgColor ?? config.color('${prefix}_bg_color', colors.fill);
+    final border =
+        n.borderColor ?? config.color('${prefix}_border_color', colors.border);
     final labelColor = n.fontColor ?? _white;
     final isPerson = n.kind == C4Kind.person || n.kind == C4Kind.personExt;
+    final nodeStyle = config.font(prefix, defaultSize: 14);
+    final stereoStyle = derived(nodeStyle, sizeDelta: -2, italic: true);
+    final labelStyle = derived(nodeStyle, sizeDelta: 2, weight: 700);
+    final nodeTechnStyle = derived(nodeStyle, italic: true);
 
     final children = <SceneNode>[];
     // Shape geometry: rect / cylinder (db) / queue (pill).
     switch (n.kind) {
       case C4Kind.db:
-        children.add(SceneShape(
-          geometry: _cylinderBodyPath(rect),
-          fill: Fill(fill),
-          stroke: Stroke(color: border, width: 0.5),
-        ));
-        children.add(SceneShape(
-          geometry: _cylinderTopSeamPath(rect),
-          stroke: Stroke(color: border, width: 0.5),
-        ));
+        children.add(
+          SceneShape(
+            geometry: _cylinderBodyPath(rect),
+            fill: Fill(fill),
+            stroke: Stroke(color: border, width: 0.5),
+          ),
+        );
+        children.add(
+          SceneShape(
+            geometry: _cylinderTopSeamPath(rect),
+            stroke: Stroke(color: border, width: 0.5),
+          ),
+        );
       case C4Kind.queue:
-        children.add(SceneShape(
-          geometry: _queuePath(rect),
-          fill: Fill(fill),
-          stroke: Stroke(color: border, width: 0.5),
-        ));
+        children.add(
+          SceneShape(
+            geometry: _queuePath(rect),
+            fill: Fill(fill),
+            stroke: Stroke(color: border, width: 0.5),
+          ),
+        );
       default:
-        children.add(SceneShape(
-          geometry: RectGeometry(rect, rx: 2.5, ry: 2.5),
-          fill: Fill(fill),
-          stroke: Stroke(color: border, width: 0.5),
-        ));
+        children.add(
+          SceneShape(
+            geometry: RectGeometry(rect, rx: 2.5, ry: 2.5),
+            fill: Fill(fill),
+            stroke: Stroke(color: border, width: 0.5),
+          ),
+        );
     }
 
     // Stacked text: stereotype, [avatar], label, techn, descr.
-    var y = rect.top + _shapePadding;
-    children.add(SceneText(
-      text: _stereotype(n),
-      bounds: Rect.fromLTWH(rect.center.x - box.stereo.width / 2, y,
-          box.stereo.width, box.stereo.height),
-      style: stereoStyle,
-      color: labelColor,
-    ));
+    var y = rect.top + config.c4ShapePadding;
+    children.add(
+      SceneText(
+        text: _stereotype(n),
+        bounds: Rect.fromLTWH(
+          rect.center.x - box.stereo.width / 2,
+          y,
+          box.stereo.width,
+          box.stereo.height,
+        ),
+        style: stereoStyle,
+        color: labelColor,
+      ),
+    );
     y += box.stereo.height;
     if (isPerson) {
       // Upstream draws a 48x48 base64 avatar here. Without a raster-image IR
@@ -1113,48 +1354,71 @@ RenderScene layoutC4Diagram(
       final cx = rect.center.x;
       final headR = 9.0;
       final headCy = y + headR + 2;
-      children.add(SceneShape(
-        geometry: CircleGeometry(Point(cx, headCy), headR),
-        fill: Fill(labelColor),
-      ));
-      children.add(SceneShape(
-        geometry: _shouldersPath(cx, headCy + headR + 2, 22, 16),
-        fill: Fill(labelColor),
-      ));
+      children.add(
+        SceneShape(
+          geometry: CircleGeometry(Point(cx, headCy), headR),
+          fill: Fill(labelColor),
+        ),
+      );
+      children.add(
+        SceneShape(
+          geometry: _shouldersPath(cx, headCy + headR + 2, 22, 16),
+          fill: Fill(labelColor),
+        ),
+      );
       y += 48;
     }
     y += 8;
-    children.add(SceneText(
-      text: n.label,
-      bounds: Rect.fromLTWH(rect.center.x - box.label.width / 2, y,
-          box.label.width, box.label.height),
-      style: labelStyle,
-      color: labelColor,
-    ));
+    children.add(
+      SceneText(
+        text: n.label,
+        bounds: Rect.fromLTWH(
+          rect.center.x - box.label.width / 2,
+          y,
+          box.label.width,
+          box.label.height,
+        ),
+        style: labelStyle,
+        color: labelColor,
+      ),
+    );
     y += box.label.height;
     if (box.techn.height > 0) {
       y += 5;
-      children.add(SceneText(
-        text: '[${n.technology}]',
-        bounds: Rect.fromLTWH(rect.center.x - box.techn.width / 2, y,
-            box.techn.width, box.techn.height),
-        style: technStyle,
-        color: labelColor,
-      ));
+      children.add(
+        SceneText(
+          text: '[${n.technology}]',
+          bounds: Rect.fromLTWH(
+            rect.center.x - box.techn.width / 2,
+            y,
+            box.techn.width,
+            box.techn.height,
+          ),
+          style: nodeTechnStyle,
+          color: labelColor,
+        ),
+      );
       y += box.techn.height;
     }
     if (box.desc.height > 0) {
       y += 20;
-      children.add(SceneText(
-        text: n.description,
-        bounds: Rect.fromLTWH(rect.center.x - box.desc.width / 2, y,
-            box.desc.width, box.desc.height),
-        style: descStyle,
-        color: labelColor,
-      ));
+      children.add(
+        SceneText(
+          text: n.description,
+          bounds: Rect.fromLTWH(
+            rect.center.x - box.desc.width / 2,
+            y,
+            box.desc.width,
+            box.desc.height,
+          ),
+          style: nodeStyle,
+          color: labelColor,
+        ),
+      );
     }
     elementNodes.add(
-        SceneGroup(id: id, semanticLabel: n.label, children: children));
+      SceneGroup(id: id, semanticLabel: n.label, children: children),
+    );
   });
 
   var nodes = <SceneNode>[
@@ -1167,14 +1431,19 @@ RenderScene layoutC4Diagram(
   final title = diagram.title;
   if (title != null && title.isNotEmpty) {
     final style = TextStyleSpec(
-        fontFamily: theme.fontFamily,
-        fontSize: theme.fontSize * 1.15,
-        fontWeight: 700);
+      fontFamily: theme.fontFamily,
+      fontSize: theme.fontSize * 1.15,
+      fontWeight: 700,
+    );
     final size = measurer.measure(title, style);
     final node = SceneText(
       text: title,
-      bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-          bounds.top - size.height - 12, size.width, size.height),
+      bounds: Rect.fromLTWH(
+        bounds.center.x - size.width / 2,
+        bounds.top - size.height - 12,
+        size.width,
+        size.height,
+      ),
       style: style,
       color: theme.titleColor,
     );
@@ -1217,9 +1486,16 @@ PathGeometry _cylinderTopSeamPath(Rect r) {
   final cx = r.center.x;
   return PathGeometry([
     MoveTo(Point(l, t + cap)),
-    CubicTo(Point(l, t + 2 * cap), Point(cx, t + 2 * cap), Point(cx, t + 2 * cap)),
-    CubicTo(Point(cx, t + 2 * cap), Point(r.right, t + 2 * cap),
-        Point(r.right, t + cap)),
+    CubicTo(
+      Point(l, t + 2 * cap),
+      Point(cx, t + 2 * cap),
+      Point(cx, t + 2 * cap),
+    ),
+    CubicTo(
+      Point(cx, t + 2 * cap),
+      Point(r.right, t + 2 * cap),
+      Point(r.right, t + cap),
+    ),
   ]);
 }
 
@@ -1262,6 +1538,7 @@ bool _segmentIntersectsRect(Point a, Point b, Rect rect) {
     if (value.abs() < 1e-9) return 0;
     return value > 0 ? 1 : -1;
   }
+
   bool onSegment(Point p, Point q, Point r) =>
       q.x >= math.min(p.x, r.x) - 1e-9 &&
       q.x <= math.max(p.x, r.x) + 1e-9 &&

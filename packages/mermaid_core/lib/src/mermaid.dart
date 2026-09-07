@@ -73,112 +73,206 @@ class Mermaid {
     final theme = resolveTheme(source, this.theme);
     switch (detectDiagramType(source)) {
       case DiagramType.flowchart:
-        return layoutFlowchart(parseFlowchart(source),
-            measurer: measurer,
-            theme: theme,
-            engine: resolveLayout(source),
-            elkOptions: resolveElkConfig(source),
-            config: FlowchartConfig.fromSource(source));
+        return layoutFlowchart(
+          parseFlowchart(source),
+          measurer: measurer,
+          theme: theme,
+          engine: resolveLayout(source),
+          elkOptions: resolveElkConfig(source),
+          config: FlowchartConfig.fromSource(source),
+        );
       case DiagramType.sequence:
-        return layoutSequence(parseSequence(source),
-            measurer: measurer,
-            theme: theme,
-            config: SequenceConfig.fromSource(source));
+        return layoutSequence(
+          parseSequence(source),
+          measurer: measurer,
+          theme: theme,
+          config: SequenceConfig.fromSource(source),
+        );
       case DiagramType.classDiagram:
-        return layoutClassDiagram(parseClassDiagram(source),
-            measurer: measurer,
-            theme: theme,
-            config: ClassConfig.fromSource(source));
+        return layoutClassDiagram(
+          parseClassDiagram(source),
+          measurer: measurer,
+          theme: theme,
+          config: ClassConfig.fromSource(source),
+        );
       case DiagramType.stateDiagram:
-        return layoutStateDiagram(parseStateDiagram(source),
-            measurer: measurer,
-            theme: theme,
-            engine: resolveLayout(source, defaultLayout: 'auto'),
-            elkOptions: resolveElkConfig(source),
-            config: StateConfig.fromSource(source));
+        return layoutStateDiagram(
+          parseStateDiagram(source),
+          measurer: measurer,
+          theme: theme,
+          engine: resolveLayout(source, defaultLayout: 'auto'),
+          elkOptions: resolveElkConfig(source),
+          config: StateConfig.fromSource(source),
+        );
       case DiagramType.er:
-        return layoutErDiagram(parseErDiagram(source),
-            measurer: measurer,
-            theme: theme,
-            config: ErConfig.fromSource(source));
+        return layoutErDiagram(
+          parseErDiagram(source),
+          measurer: measurer,
+          theme: theme,
+          config: ErConfig.fromSource(source),
+        );
       case DiagramType.pie:
-        return layoutPieChart(parsePieChart(source),
-            measurer: measurer,
-            theme: theme,
-            config: PieConfig.fromSource(source));
+        return layoutPieChart(
+          parsePieChart(source),
+          measurer: measurer,
+          theme: theme,
+          config: PieConfig.fromSource(source),
+        );
       case DiagramType.gantt:
-        return layoutGanttChart(parseGanttChart(source),
-            measurer: measurer,
-            theme: theme,
-            config: GanttConfig.fromSource(source));
+        return layoutGanttChart(
+          parseGanttChart(source),
+          measurer: measurer,
+          theme: theme,
+          config: GanttConfig.fromSource(source),
+        );
       case DiagramType.quadrant:
-        return layoutQuadrantChart(parseQuadrantChart(source),
-            measurer: measurer,
-            theme: theme,
-            config: QuadrantConfig.fromSource(source));
+        return layoutQuadrantChart(
+          parseQuadrantChart(source),
+          measurer: measurer,
+          theme: theme,
+          config: QuadrantConfig.fromSource(source),
+        );
       case DiagramType.journey:
-        return layoutJourney(parseJourney(source),
-            measurer: measurer, theme: theme);
+        return layoutJourney(
+          parseJourney(source),
+          measurer: measurer,
+          theme: theme,
+          config: JourneyConfig.fromSource(source),
+        );
       case DiagramType.timeline:
-        return layoutTimeline(parseTimeline(source),
-            measurer: measurer, theme: theme);
+        return layoutTimeline(
+          parseTimeline(source),
+          measurer: measurer,
+          theme: theme,
+          config: TimelineConfig.fromSource(source),
+        );
       case DiagramType.xychart:
-        return layoutXyChart(parseXyChart(source),
-            measurer: measurer, theme: theme);
+        return layoutXyChart(
+          parseXyChart(source),
+          measurer: measurer,
+          theme: theme,
+        );
       case DiagramType.mindmap:
-        return layoutMindmap(parseMindmap(source),
-            measurer: measurer, theme: theme, engine: resolveLayout(source));
+        return layoutMindmap(
+          parseMindmap(source),
+          measurer: measurer,
+          theme: theme,
+          engine: resolveLayout(source),
+          config: MindmapConfig.fromSource(source),
+        );
       case DiagramType.requirement:
-        return layoutRequirementDiagram(parseRequirementDiagram(source),
-            measurer: measurer, theme: theme);
+        return layoutRequirementDiagram(
+          parseRequirementDiagram(source),
+          measurer: measurer,
+          theme: theme,
+          config: RequirementConfig.fromSource(source),
+        );
       case DiagramType.c4:
-        return layoutC4Diagram(parseC4Diagram(source),
-            measurer: measurer, theme: theme);
+        return layoutC4Diagram(
+          parseC4Diagram(source),
+          measurer: measurer,
+          theme: theme,
+          config: C4Config.fromSource(source),
+        );
       case DiagramType.gitGraph:
         final config = GitGraphConfig.fromSource(source);
-        return layoutGitGraph(parseGitGraph(source, config: config),
-            measurer: measurer, theme: theme, config: config);
+        return layoutGitGraph(
+          parseGitGraph(source, config: config),
+          measurer: measurer,
+          theme: theme,
+          config: config,
+        );
       case DiagramType.sankey:
-        return layoutSankey(parseSankey(source),
-            measurer: measurer,
-            theme: theme,
-            config: SankeyConfig.fromSource(source));
+        return layoutSankey(
+          parseSankey(source),
+          measurer: measurer,
+          theme: theme,
+          config: SankeyConfig.fromSource(source),
+        );
       case DiagramType.packet:
-        return layoutPacket(parsePacket(source),
-            measurer: measurer, theme: theme);
+        return layoutPacket(
+          parsePacket(source),
+          measurer: measurer,
+          theme: theme,
+          config: PacketConfig.fromSource(source),
+        );
       case DiagramType.block:
-        return layoutBlock(parseBlock(source),
-            measurer: measurer, theme: theme);
+        return layoutBlock(
+          parseBlock(source),
+          measurer: measurer,
+          theme: theme,
+          config: BlockConfig.fromSource(source),
+        );
       case DiagramType.radar:
-        return layoutRadar(parseRadar(source),
-            measurer: measurer, theme: theme);
+        return layoutRadar(
+          parseRadar(source),
+          measurer: measurer,
+          theme: theme,
+          config: RadarConfig.fromSource(source),
+        );
       case DiagramType.treemap:
-        return layoutTreemap(parseTreemap(source),
-            measurer: measurer, theme: theme);
+        return layoutTreemap(
+          parseTreemap(source),
+          measurer: measurer,
+          theme: theme,
+          config: TreemapConfig.fromSource(source),
+        );
       case DiagramType.kanban:
-        return layoutKanban(parseKanban(source),
-            measurer: measurer, theme: theme);
+        return layoutKanban(
+          parseKanban(source),
+          measurer: measurer,
+          theme: theme,
+          config: KanbanConfig.fromSource(source),
+        );
       case DiagramType.architecture:
-        return layoutArchitecture(parseArchitecture(source),
-            measurer: measurer, theme: theme);
+        return layoutArchitecture(
+          parseArchitecture(source),
+          measurer: measurer,
+          theme: theme,
+          config: ArchitectureConfig.fromSource(source),
+        );
       case DiagramType.cynefin:
-        return layoutCynefin(parseCynefin(source),
-            measurer: measurer, theme: theme);
+        return layoutCynefin(
+          parseCynefin(source),
+          measurer: measurer,
+          theme: theme,
+          config: CynefinConfig.fromSource(source),
+        );
       case DiagramType.venn:
-        return layoutVenn(parseVenn(source),
-            measurer: measurer, theme: theme);
+        return layoutVenn(
+          parseVenn(source),
+          measurer: measurer,
+          theme: theme,
+          config: VennConfig.fromSource(source),
+        );
       case DiagramType.ishikawa:
-        return layoutIshikawa(parseIshikawa(source),
-            measurer: measurer, theme: theme);
+        return layoutIshikawa(
+          parseIshikawa(source),
+          measurer: measurer,
+          theme: theme,
+          config: IshikawaConfig.fromSource(source),
+        );
       case DiagramType.wardley:
-        return layoutWardley(parseWardley(source),
-            measurer: measurer, theme: theme);
+        return layoutWardley(
+          parseWardley(source),
+          measurer: measurer,
+          theme: theme,
+          config: WardleyConfig.fromSource(source),
+        );
       case DiagramType.eventModeling:
-        return layoutEventModeling(parseEventModeling(source),
-            measurer: measurer, theme: theme);
+        return layoutEventModeling(
+          parseEventModeling(source),
+          measurer: measurer,
+          theme: theme,
+          config: EventModelingConfig.fromSource(source),
+        );
       case DiagramType.railroad:
-        return layoutRailroad(parseRailroad(source),
-            measurer: measurer, theme: theme);
+        return layoutRailroad(
+          parseRailroad(source),
+          measurer: measurer,
+          theme: theme,
+          config: RailroadConfig.fromSource(source),
+        );
       case DiagramType.unknown:
         throw UnsupportedError(
           'Unrecognized or not-yet-supported diagram type. Currently '

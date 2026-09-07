@@ -37,7 +37,6 @@ import 'markdown_label.dart';
 /// Icon glyph square + gap to the label below it, for `@{ icon: }` nodes.
 const double _iconSize = 36;
 const double _iconGap = 4;
-const double _diagramPadding = 8;
 const double _clusterPadding = 8;
 const double _doubleCircleGap = 5;
 const double _subroutineFrame = 8;
@@ -59,21 +58,34 @@ class FlowchartConfig {
     this.curve = 'basis',
     this.padding = 15,
     this.wrappingWidth = 200,
-  })  : nodeSpacing = nodeSpacing ?? 50,
-        rankSpacing = rankSpacing ?? 50,
-        _nodeSpacingOverride = nodeSpacing,
-        _rankSpacingOverride = rankSpacing;
+    this.diagramPadding = 8,
+    this.titleTopMargin = 0,
+    this.subGraphTitleMarginTop = 0,
+    this.subGraphTitleMarginBottom = 0,
+  }) : nodeSpacing = nodeSpacing ?? 50,
+       rankSpacing = rankSpacing ?? 50,
+       _nodeSpacingOverride = nodeSpacing,
+       _rankSpacingOverride = rankSpacing;
 
   final double nodeSpacing;
   final double rankSpacing;
   final String curve;
   final double padding;
   final double wrappingWidth;
+  final double diagramPadding;
+  final double titleTopMargin;
+  final double subGraphTitleMarginTop;
+  final double subGraphTitleMarginBottom;
   final double? _nodeSpacingOverride;
   final double? _rankSpacingOverride;
 
   factory FlowchartConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'flowchart');
+    final subGraphTitleMargin = values['subGraphTitleMargin'] is Map
+        ? (values['subGraphTitleMargin'] as Map).map(
+            (key, value) => MapEntry('$key', value),
+          )
+        : const <String, Object?>{};
     return FlowchartConfig(
       nodeSpacing: nonNegativeDoubleOrNull(values, 'nodeSpacing'),
       rankSpacing: nonNegativeDoubleOrNull(values, 'rankSpacing'),
@@ -94,6 +106,14 @@ class FlowchartConfig {
       }, 'basis'),
       padding: nonNegativeDouble(values, 'padding', 15),
       wrappingWidth: positiveDouble(values, 'wrappingWidth', 200),
+      diagramPadding: nonNegativeDouble(values, 'diagramPadding', 8),
+      titleTopMargin: nonNegativeDouble(values, 'titleTopMargin', 0),
+      subGraphTitleMarginTop: nonNegativeDouble(subGraphTitleMargin, 'top', 0),
+      subGraphTitleMarginBottom: nonNegativeDouble(
+        subGraphTitleMargin,
+        'bottom',
+        0,
+      ),
     );
   }
 }
@@ -268,7 +288,7 @@ RenderScene layoutFlowchart(
       text: wrappedTitle.text,
       bounds: Rect.fromLTWH(
         bounds.center.x - titleSize.width / 2,
-        bounds.top - _diagramPadding - titleSize.height,
+        bounds.top - config.titleTopMargin - titleSize.height,
         titleSize.width,
         titleSize.height,
       ),
@@ -280,14 +300,14 @@ RenderScene layoutFlowchart(
   }
 
   // Translate so the min corner sits at (padding, padding).
-  final dx = _diagramPadding - bounds.left;
-  final dy = _diagramPadding - bounds.top;
+  final dx = config.diagramPadding - bounds.left;
+  final dy = config.diagramPadding - bounds.top;
   sceneNodes = [for (final n in sceneNodes) translateSceneNode(n, dx, dy)];
 
   return RenderScene(
     size: Size(
-      bounds.width + 2 * _diagramPadding,
-      bounds.height + 2 * _diagramPadding,
+      bounds.width + 2 * config.diagramPadding,
+      bounds.height + 2 * config.diagramPadding,
     ),
     background: theme.background,
     nodes: sceneNodes,
@@ -456,7 +476,12 @@ _Fragment _layoutGraph(
       height:
           fragment.bounds.height +
           2 * _clusterPadding +
-          (titleSize.height > 0 ? titleSize.height + 4 : 0),
+          (titleSize.height > 0
+              ? titleSize.height +
+                    4 +
+                    config.subGraphTitleMarginTop +
+                    config.subGraphTitleMarginBottom
+              : 0),
     );
     isolatedClusters[root] = cluster;
   }
@@ -691,7 +716,8 @@ _Fragment _layoutGraph(
       spacingNodeNode:
           elkOptions.spacingNodeNode ?? config._nodeSpacingOverride,
       spacingNodeNodeBetweenLayers:
-          elkOptions.spacingNodeNodeBetweenLayers ?? config._rankSpacingOverride,
+          elkOptions.spacingNodeNodeBetweenLayers ??
+          config._rankSpacingOverride,
     );
     elkResult = layoutWithElk(
       g,
@@ -802,13 +828,15 @@ _Fragment _layoutGraph(
         visibleClusterTops[sg.id] =
             contentTops.reduce(math.min) -
             _clusterPadding -
-            clusterTitleSizes[sg.id]!.height;
+            clusterTitleSizes[sg.id]!.height -
+            config.subGraphTitleMarginTop;
       }
       if (contentBottoms.isNotEmpty) {
         visibleClusterBottoms[sg.id] =
             contentBottoms.reduce(math.max) +
             _clusterPadding +
-            clusterTitleSizes[sg.id]!.height;
+            clusterTitleSizes[sg.id]!.height +
+            config.subGraphTitleMarginBottom;
       }
     }
   }
@@ -837,13 +865,18 @@ _Fragment _layoutGraph(
         : Rect.fromLTRB(
             pos.left - _clusterPadding,
             visibleClusterTops[sg.id] ??
-                pos.top - _clusterPadding - titleSize.height,
+                pos.top -
+                    _clusterPadding -
+                    titleSize.height -
+                    config.subGraphTitleMarginTop -
+                    config.subGraphTitleMarginBottom,
             pos.right + _clusterPadding,
             visibleClusterBottoms[sg.id] ??
                 pos.bottom + _clusterPadding + titleSize.height,
           );
     final titleTop =
         (useElk ? pos.top + _clusterPadding : rect.top) +
+        config.subGraphTitleMarginTop +
         _clusterTitleOffset(clusterTitleStyle.fontSize, titleSize);
     clusterRects[sg.id] = rect;
     clusterGroups.add(
@@ -893,6 +926,7 @@ _Fragment _layoutGraph(
           bounds: Rect.fromLTWH(
             rect.center.x - cluster.titleSize.width / 2,
             rect.top +
+                config.subGraphTitleMarginTop +
                 _clusterTitleOffset(
                   clusterTitleStyle.fontSize,
                   cluster.titleSize,
@@ -908,7 +942,9 @@ _Fragment _layoutGraph(
     final dy =
         rect.top +
         _clusterPadding +
-        cluster.titleBand -
+        cluster.titleBand +
+        config.subGraphTitleMarginTop +
+        config.subGraphTitleMarginBottom -
         cluster.fragment.bounds.top;
     children.addAll([
       for (final n in cluster.fragment.nodes) translateSceneNode(n, dx, dy),

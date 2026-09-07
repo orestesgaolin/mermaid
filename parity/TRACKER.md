@@ -4,6 +4,23 @@ Per-diagram parity vs upstream mermaid.js. Pipeline: **analyze → implement →
 
 **Parity:** 🟢 full · 🟡 minor-gaps · 🔴 major-gaps   ·   **Stage:** ✅ render-verified (default + dark themes)
 
+## Configuration update (2026-09-07)
+
+Active configuration is now resolved for all 28 diagram types through both
+frontmatter and init directives. The detailed current contracts supersede the
+older per-row configuration residuals below:
+
+- [Common diagrams](common-config-support.md)
+- [C4, ER and XY](c4-er-xy-config-support.md)
+- [Additional diagrams and quadrant](additional-config-support.md)
+
+Browser-only sizing, options unused by the active upstream renderer, and
+unsupported solver/grammar features are explicitly separated in those notes.
+Per-node style directives are distinct from diagram config: Kanban and
+requirement follow-ups are [#56](https://github.com/orestesgaolin/mermaid/issues/56)
+and [#57](https://github.com/orestesgaolin/mermaid/issues/57). Layout/grammar
+compatibility is tracked in [#61](https://github.com/orestesgaolin/mermaid/issues/61).
+
 ## Status: 28 🟢 / 0 🟡 / 0 🔴 across 28 types
 
 Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/0**. Gate: `dart analyze` clean · 412 tests · 184/184 corpus. All 28 rendered (default + dark) and checked for structural fidelity.
@@ -17,21 +34,21 @@ Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/
 | **classDiagram** | — | 🟢 | ✅ | [classDiagram.md](classDiagram.md) | note attach edge uses minLen 1 instead of upstream minLen 0 (pushes notes one rank away); gated on a fix to… |
 | **stateDiagram** | — | 🟢 | ✅ | [stateDiagram.md](stateDiagram.md) | Self-loop edge routing is bespoke (hand-routed cubic) rather than dagre-routed — geometry-only, not a defau… |
 | **er** | — | 🟢 | ✅ | [er.md](er.md) | classDef/class/style color-theme data-color-id indexing skipped (default-theme only; niche styling directiv… |
-| **pie** | — | 🟢 | ✅ | [pie.md](pie.md) | donutHole / legendPosition / highlightSlice config not supported (niche config, not default-render); requir… |
+| **pie** | — | 🟢 | ✅ | [pie.md](pie.md) | static config supported; hover highlighting requires pointer state |
 | **gantt** | — | 🟢 | ✅ | [gantt.md](gantt.md) | container-responsive plot width: intrinsic render uses fixed 1050px plot (no container offsetWidth availabl… |
 | **quadrant** | — | 🟢 | ✅ | [quadrant.md](quadrant.md) | default render matches; adapts across themes |
 | **journey** | — | 🟢 | ✅ | [journey.md](journey.md) | 4ex title size approximated as 2*taskFontSize (font ex-metrics not resolved) |
 | **timeline** | — | 🟢 | ✅ | [timeline.md](timeline.md) | timeline LR/TD direction is parsed but not honored (upstream renders columnar regardless of direction) |
-| **xychart** | — | 🟢 | ✅ | [xychart.md](xychart.md) | config-only residual (showDataLabel via %%{init}%% JSON, d3 tick formatting) |
+| **xychart** | — | 🟢 | ✅ | [xychart.md](xychart.md) | config supported; d3 tick-formatting parity remains an approximation |
 | **mindmap** | radial (default), elk, tidy-tree | 🟢 | ✅ | [mindmap.md](mindmap.md) | default layout is a deterministic radial tree vs upstream cose-bilkent force simulation (intentional); `layout: elk`/`tidy-tree` now relayout as a left-to-right tidy tree (P10) |
 | **requirement** | — | 🟢 | ✅ | [requirement.md](requirement.md) | classDef/class/style per-node cssStyles + colorIndex color-cycling still deferred (parser/IR feature, not a… |
 | **c4** | — | 🟢 | ✅ | [c4.md](c4.md) | person is a vector rendition of upstream raster avatar; rels straight not curved (cosmetic) |
-| **gitGraph** | — | 🟢 | ✅ | [gitGraph.md](gitGraph.md) | parallelCommits mode and showBranches/showCommitLabel toggles are not wired because layoutGitGraph(graph, m… |
+| **gitGraph** | — | 🟢 | ✅ | [gitGraph.md](gitGraph.md) | config supported; RL mirroring remains #58 |
 | **sankey** | — | 🟢 | ✅ | [sankey.md](sankey.md) | outlined-label text stroke is approximated with a background copy |
 | **packet** | — | 🟢 | ✅ | [packet.md](packet.md) | default render matches; adapts across themes |
 | **block** | — | 🟢 | ✅ | [block.md](block.md) | marker geometry (circle/cross) approximated vs upstream insertMarkers SVG markers |
 | **radar** | — | 🟢 | ✅ | [radar.md](radar.md) | header keyword: bare `radar` accepted as a lenient alias to `radar-beta` (non-visual, preserves existing te… |
-| **treemap** | — | 🟢 | ✅ | [treemap.md](treemap.md) | No D3 treemap config block (padding/nodeWidth/nodeHeight/showValues/font sizes) parsed - needs shared confi… |
+| **treemap** | — | 🟢 | ✅ | [treemap.md](treemap.md) | active renderer config supported; full D3 format dialect remains an approximation |
 | **kanban** | — | 🟢 | ✅ | [kanban.md](kanban.md) | icons (item @{icon}) parsed but not drawn: needs an icon/glyph primitive in the shared scene IR |
 | **architecture** | — | 🟢 | ✅ | [architecture.md](architecture.md) | iconText (('text')) form: upstream renders white text over a transparent 'blank' icon (invisible on default… |
 | **cynefin** | — | 🟢 | ✅ | [cynefin.md](cynefin.md) | per-domain background fills (complexBg/complicatedBg/chaoticBg/clearBg/confusionBg) and cliffColor live in … |
@@ -45,7 +62,7 @@ Progression: analysis **0/8/20** → implement **6/22/0** → theme-wire **28/0/
 
 Grouped by what would be needed to close them — all are niche config, custom-theme edge cases, or documented approximations:
 
-- **Config plumbing** (defaults already match upstream): pie highlightSlice · sequence bottomMarginAdj · treemap custom config block · xychart `%%{init}%%` JSON data-labels · requirement/kanban per-node style/class overrides. Common layout config is now wired for sequence, flowchart, state, class, gantt, pie, and gitGraph.
+- **Configuration and styles**: active diagram configuration is described in the current support matrices above. Requirement/Kanban per-node style directives remain separate parser/style features (#56, #57).
 - **Shared-IR primitives** (disproportionate for the payoff): C4 raster person avatar (async image decode in sync painter) → vector rendition used · railroad true ArcTo quarter-circles → cubic-bezier approximation.
 - **Layout subsystems**: architecture force-directed fcose → deterministic grid+align approximation · mindmap cose-bilkent → deterministic radial (intentional) · classDiagram note adjacency needs zero-length-edge support in vendored dagre.
 - **Custom-theme color sources without a theme variable upstream**: gantt task/section/crit palette, xychart handled via new field, C4 per-kind colors (config.schema constants) — default renders are exact.

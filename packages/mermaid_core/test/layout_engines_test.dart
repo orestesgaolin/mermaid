@@ -21,33 +21,51 @@ void main() {
     });
     test('reads layout from frontmatter config', () {
       expect(
-          resolveLayout('---\nconfig:\n  layout: elk\n---\nflowchart TD\nA-->B'),
-          'elk');
+        resolveLayout('---\nconfig:\n  layout: elk\n---\nflowchart TD\nA-->B'),
+        'elk',
+      );
     });
     test('reads layout from init directive', () {
-      expect(resolveLayout("%%{init: {'layout': 'tidy-tree'}}%%\ngraph TD\nA-->B"),
-          'tidy-tree');
+      expect(
+        resolveLayout("%%{init: {'layout': 'tidy-tree'}}%%\ngraph TD\nA-->B"),
+        'tidy-tree',
+      );
     });
     test('flowchart-elk keyword selects elk', () {
       expect(resolveLayout('flowchart-elk TD\nA-->B'), 'elk');
     });
     test('flowchart.defaultRenderer in init directive selects elk', () {
       expect(
-          resolveLayout(
-              "%%{init: {'flowchart': {'defaultRenderer': 'elk'}}}%%\n"
-              'flowchart TD\nA-->B'),
-          'elk');
+        resolveLayout(
+          "%%{init: {'flowchart': {'defaultRenderer': 'elk'}}}%%\n"
+          'flowchart TD\nA-->B',
+        ),
+        'elk',
+      );
     });
     test('flowchart.defaultRenderer in frontmatter selects elk', () {
       expect(
-          resolveLayout('---\nconfig:\n  flowchart:\n'
-              '    defaultRenderer: elk\n---\nflowchart TD\nA-->B'),
-          'elk');
+        resolveLayout(
+          '---\nconfig:\n  flowchart:\n'
+          '    defaultRenderer: elk\n---\nflowchart TD\nA-->B',
+        ),
+        'elk',
+      );
+    });
+    test('another diagram defaultRenderer does not select flowchart elk', () {
+      expect(
+        resolveLayout(
+          '---\nconfig:\n  state:\n'
+          '    defaultRenderer: elk\n---\nstateDiagram-v2\n[*] --> A',
+        ),
+        'dagre',
+      );
     });
     test('reads layout from a separate init directive alongside look', () {
       // The website emits layout and look as two separate %%{init}%% lines;
       // all init directives must be merged, not just the first.
-      const src = "%%{init: {'look': 'handDrawn'}}%%\n"
+      const src =
+          "%%{init: {'look': 'handDrawn'}}%%\n"
           "%%{init: {'layout': 'elk'}}%%\ngraph TD\nA-->B";
       expect(resolveLayout(src), 'elk');
       expect(resolveLook(src).isHandDrawn, isTrue);
@@ -67,7 +85,10 @@ void main() {
         flow: TreeFlow.topBottom,
       );
       // Root sits between its two children on the x axis, above them on y.
-      expect(centers['r']!.x, closeTo((centers['a']!.x + centers['b']!.x) / 2, 1));
+      expect(
+        centers['r']!.x,
+        closeTo((centers['a']!.x + centers['b']!.x) / 2, 1),
+      );
       expect(centers['r']!.y, lessThan(centers['a']!.y));
     });
   });
@@ -77,23 +98,33 @@ void main() {
 
     test('every engine produces a valid scene', () {
       for (final engine in ['dagre', 'tidy-tree', 'elk']) {
-        final scene = layoutFlowchart(g,
-            measurer: measurer, theme: theme, engine: engine);
+        final scene = layoutFlowchart(
+          g,
+          measurer: measurer,
+          theme: theme,
+          engine: engine,
+        );
         expect(scene.nodes, isNotEmpty, reason: engine);
-        final texts = _flat(scene.nodes)
-            .whereType<SceneText>()
-            .map((t) => t.text)
-            .toSet();
-        expect(texts.containsAll({'Root', 'A', 'B', 'A1'}), isTrue,
-            reason: engine);
+        final texts = _flat(
+          scene.nodes,
+        ).whereType<SceneText>().map((t) => t.text).toSet();
+        expect(
+          texts.containsAll({'Root', 'A', 'B', 'A1'}),
+          isTrue,
+          reason: engine,
+        );
       }
     });
 
     test('elk routes edges orthogonally (linear), unlike dagre curves', () {
       final g2 = parseFlowchart('graph TD\n  A-->B\n  A-->C\n  B-->D\n  C-->D');
       bool anyCubic(String engine) {
-        final scene = layoutFlowchart(g2,
-            measurer: measurer, theme: theme, engine: engine);
+        final scene = layoutFlowchart(
+          g2,
+          measurer: measurer,
+          theme: theme,
+          engine: engine,
+        );
         return _flat(scene.nodes)
             .whereType<SceneGroup>()
             .where((g) => (g.id ?? '').startsWith('edge_'))
@@ -121,9 +152,11 @@ void main() {
       // Centroid of an edge group's path (its bow direction).
       Point centroid(String idPrefix) {
         final group = _flat(scene.nodes).whereType<SceneGroup>().firstWhere(
-            (g) => (g.id ?? '').startsWith(idPrefix));
-        final geo = group.children.whereType<SceneShape>().first.geometry
-            as PathGeometry;
+          (g) => (g.id ?? '').startsWith(idPrefix),
+        );
+        final geo =
+            group.children.whereType<SceneShape>().first.geometry
+                as PathGeometry;
         final pts = <Point>[];
         for (final c in geo.commands) {
           switch (c) {
@@ -132,9 +165,14 @@ void main() {
             case LineTo():
               pts.add(c.p);
             case CubicTo():
-              pts..add(c.c1)..add(c.c2)..add(c.p);
+              pts
+                ..add(c.c1)
+                ..add(c.c2)
+                ..add(c.p);
             case QuadTo():
-              pts..add(c.c)..add(c.p);
+              pts
+                ..add(c.c)
+                ..add(c.p);
             case ClosePath():
               break;
           }
@@ -155,12 +193,13 @@ void main() {
       expect(dx * dx + dy * dy, greaterThan(15 * 15));
     });
 
-    test('elk lays out subgraphs via the faithful port (recursive hierarchy)',
-        () {
-      // The faithful ELK port now supports hierarchy (recursive
-      // SEPARATE_CHILDREN), so an elk flowchart with a cluster lays out — the
-      // cluster group is present and edges are orthogonal (no curves).
-      final src = '''
+    test(
+      'elk lays out subgraphs via the faithful port (recursive hierarchy)',
+      () {
+        // The faithful ELK port now supports hierarchy (recursive
+        // SEPARATE_CHILDREN), so an elk flowchart with a cluster lays out — the
+        // cluster group is present and edges are orthogonal (no curves).
+        final src = '''
 flowchart TB
   A-->B
   subgraph S1[Cluster]
@@ -169,27 +208,39 @@ flowchart TB
   end
   C-->E
   D-->E''';
-      final scene = layoutFlowchart(parseFlowchart(src),
-          measurer: measurer, theme: theme, engine: 'elk');
-      final groups = _flat(scene.nodes).whereType<SceneGroup>();
-      expect(groups.any((g) => g.id == 'S1'), isTrue,
-          reason: 'cluster S1 should be laid out under elk');
-      final anyCubic = _flat(scene.nodes)
-          .whereType<SceneGroup>()
-          .where((g) => (g.id ?? '').startsWith('edge_'))
-          .expand((g) => g.children.whereType<SceneShape>())
-          .map((s) => s.geometry)
-          .whereType<PathGeometry>()
-          .expand((p) => p.commands)
-          .any((c) => c is CubicTo);
-      expect(anyCubic, isFalse, reason: 'elk edges are orthogonal');
-    });
+        final scene = layoutFlowchart(
+          parseFlowchart(src),
+          measurer: measurer,
+          theme: theme,
+          engine: 'elk',
+        );
+        final groups = _flat(scene.nodes).whereType<SceneGroup>();
+        expect(
+          groups.any((g) => g.id == 'S1'),
+          isTrue,
+          reason: 'cluster S1 should be laid out under elk',
+        );
+        final anyCubic = _flat(scene.nodes)
+            .whereType<SceneGroup>()
+            .where((g) => (g.id ?? '').startsWith('edge_'))
+            .expand((g) => g.children.whereType<SceneShape>())
+            .map((s) => s.geometry)
+            .whereType<PathGeometry>()
+            .expand((p) => p.commands)
+            .any((c) => c is CubicTo);
+        expect(anyCubic, isFalse, reason: 'elk edges are orthogonal');
+      },
+    );
 
     test('elk placement differs from dagre', () {
       final g3 = parseFlowchart('graph TD\n  A-->B\n  A-->C\n  B-->D\n  C-->D');
       Map<String, Point> centers(String engine) {
-        final scene = layoutFlowchart(g3,
-            measurer: measurer, theme: theme, engine: engine);
+        final scene = layoutFlowchart(
+          g3,
+          measurer: measurer,
+          theme: theme,
+          engine: engine,
+        );
         final out = <String, Point>{};
         for (final t in _flat(scene.nodes).whereType<SceneText>()) {
           out[t.text] = Point(t.bounds.center.x, t.bounds.center.y);
@@ -211,8 +262,5 @@ flowchart TB
 }
 
 List<SceneNode> _flat(List<SceneNode> n) => [
-      for (final x in n) ...[
-        x,
-        if (x is SceneGroup) ..._flat(x.children),
-      ],
-    ];
+  for (final x in n) ...[x, if (x is SceneGroup) ..._flat(x.children)],
+];

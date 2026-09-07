@@ -5,7 +5,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -48,6 +50,46 @@ class RadarChart {
   final String graticule;
 }
 
+/// Typed layout values from `config.radar`.
+class RadarConfig {
+  const RadarConfig({
+    this.width = 600,
+    this.height = 600,
+    this.marginTop = 50,
+    this.marginRight = 50,
+    this.marginBottom = 50,
+    this.marginLeft = 50,
+    this.axisScaleFactor = 1,
+    this.axisLabelFactor = 1.05,
+    this.curveTension = 0.17,
+  });
+
+  final double width;
+  final double height;
+  final double marginTop;
+  final double marginRight;
+  final double marginBottom;
+  final double marginLeft;
+  final double axisScaleFactor;
+  final double axisLabelFactor;
+  final double curveTension;
+
+  factory RadarConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'radar');
+    return RadarConfig(
+      width: positiveDouble(values, 'width', 600),
+      height: positiveDouble(values, 'height', 600),
+      marginTop: nonNegativeDouble(values, 'marginTop', 50),
+      marginRight: nonNegativeDouble(values, 'marginRight', 50),
+      marginBottom: nonNegativeDouble(values, 'marginBottom', 50),
+      marginLeft: nonNegativeDouble(values, 'marginLeft', 50),
+      axisScaleFactor: nonNegativeDouble(values, 'axisScaleFactor', 1),
+      axisLabelFactor: nonNegativeDouble(values, 'axisLabelFactor', 1.05),
+      curveTension: clampedDouble(values, 'curveTension', 0.17, min: 0, max: 1),
+    );
+  }
+}
+
 String _unlabel(String s) {
   final m = RegExp(r'\[(.*?)\]').firstMatch(s);
   var label = m != null ? m.group(1)! : s.trim();
@@ -75,7 +117,8 @@ List<double> _parseCurveEntries(
   int lineNo,
 ) {
   final parts = [
-    for (final p in body.split(',')) if (p.trim().isNotEmpty) p.trim()
+    for (final p in body.split(','))
+      if (p.trim().isNotEmpty) p.trim(),
   ];
   if (parts.isEmpty) return const [];
   final keyed = parts.first.contains(':');
@@ -93,16 +136,19 @@ List<double> _parseCurveEntries(
   }
   if (axisNames.isEmpty) {
     throw MermaidParseException(
-        'Axes must be populated before curves for reference entries',
-        line: lineNo);
+      'Axes must be populated before curves for reference entries',
+      line: lineNo,
+    );
   }
   return [
     for (final name in axisNames)
       if (byAxis.containsKey(name))
         byAxis[name]!
       else
-        throw MermaidParseException('Missing entry for axis $name',
-            line: lineNo),
+        throw MermaidParseException(
+          'Missing entry for axis $name',
+          line: lineNo,
+        ),
   ];
 }
 
@@ -207,31 +253,32 @@ RadarChart parseRadar(String source) {
   );
 }
 
-/// Catmull-Rom spline tension (upstream `curveTension` default).
-const _curveTension = 0.17;
-
 RenderScene layoutRadar(
   RadarChart chart, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  RadarConfig config = const RadarConfig(),
 }) {
   // Axis/legend labels are a fixed 12px upstream.
   final labelStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 12);
   final nodes = <SceneNode>[];
-  // Upstream config defaults: 600x600 canvas, radius = min(w,h)/2 = 300.
-  const r = 300.0;
+  final r = math.min(config.width, config.height) / 2;
   final center = const Point(0, 0);
   final n = chart.axes.length;
   if (n < 3) {
     return RenderScene(
-        size: const Size(200, 80), background: theme.background, nodes: const []);
+      size: const Size(200, 80),
+      background: theme.background,
+      nodes: const [],
+    );
   }
   final isPolygon = chart.graticule == 'polygon';
   // Axis angle: start at top, clockwise.
   double angle(int i) => -math.pi / 2 + 2 * math.pi * i / n;
-  Point at(int i, double frac) =>
-      Point(center.x + r * frac * math.cos(angle(i)),
-          center.y + r * frac * math.sin(angle(i)));
+  Point at(int i, double frac) => Point(
+    center.x + r * frac * math.cos(angle(i)),
+    center.y + r * frac * math.sin(angle(i)),
+  );
 
   const graticuleColor = Color(0xffdedede);
   final ticks = chart.ticks < 1 ? 1 : chart.ticks;
@@ -240,39 +287,47 @@ RenderScene layoutRadar(
   for (var ring = 1; ring <= ticks; ring++) {
     final rr = r * ring / ticks;
     if (isPolygon) {
-      nodes.add(SceneShape(
-        geometry: PolygonGeometry([
-          for (var i = 0; i < n; i++)
-            Point(center.x + rr * math.cos(angle(i)),
-                center.y + rr * math.sin(angle(i))),
-        ]),
-        fill: Fill(graticuleColor.withOpacity(0.3)),
-        stroke: const Stroke(color: graticuleColor, width: 1),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PolygonGeometry([
+            for (var i = 0; i < n; i++)
+              Point(
+                center.x + rr * math.cos(angle(i)),
+                center.y + rr * math.sin(angle(i)),
+              ),
+          ]),
+          fill: Fill(graticuleColor.withOpacity(0.3)),
+          stroke: const Stroke(color: graticuleColor, width: 1),
+        ),
+      );
     } else {
-      nodes.add(SceneShape(
-        geometry: CircleGeometry(center, rr),
-        fill: Fill(graticuleColor.withOpacity(0.3)),
-        stroke: const Stroke(color: graticuleColor, width: 1),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: CircleGeometry(center, rr),
+          fill: Fill(graticuleColor.withOpacity(0.3)),
+          stroke: const Stroke(color: graticuleColor, width: 1),
+        ),
+      );
     }
   }
 
   // Axis spokes + labels.
   for (var i = 0; i < n; i++) {
-    final tip = at(i, 1);
-    nodes.add(SceneShape(
-      geometry: PathGeometry([MoveTo(center), LineTo(tip)]),
-      stroke: Stroke(color: theme.lineColor, width: 2),
-    ));
+    final tip = at(i, config.axisScaleFactor);
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([MoveTo(center), LineTo(tip)]),
+        stroke: Stroke(color: theme.lineColor, width: 2),
+      ),
+    );
     // Label anchor at factor 1.05 plus a 4px outward pad, with per-quadrant
     // horizontal/vertical anchoring (mirrors upstream text-anchor +
     // dominant-baseline derived from cos/sin sign).
     final cosA = math.cos(angle(i));
     final sinA = math.sin(angle(i));
     const labelPad = 4.0;
-    final ax = r * 1.05 * cosA + labelPad * cosA;
-    final ay = r * 1.05 * sinA + labelPad * sinA;
+    final ax = r * config.axisLabelFactor * cosA + labelPad * cosA;
+    final ay = r * config.axisLabelFactor * sinA + labelPad * sinA;
     final ts = measurer.measure(chart.axes[i], labelStyle);
 
     // Horizontal anchor: start (left), end (right), or middle.
@@ -298,13 +353,15 @@ RenderScene layoutRadar(
     } else {
       top = ay - ts.height / 2; // central
     }
-    nodes.add(SceneText(
-      text: chart.axes[i],
-      bounds: Rect.fromLTWH(left, top, ts.width, ts.height),
-      style: labelStyle,
-      color: theme.textColor,
-      align: align,
-    ));
+    nodes.add(
+      SceneText(
+        text: chart.axes[i],
+        bounds: Rect.fromLTWH(left, top, ts.width, ts.height),
+        style: labelStyle,
+        color: theme.textColor,
+        align: align,
+      ),
+    );
   }
 
   // Curve / legend colors = theme ordinal scale (`cScale0..11`).
@@ -321,44 +378,51 @@ RenderScene layoutRadar(
         at(i, (cu.values[i].clamp(chart.min, chart.max) - chart.min) / span),
     ];
     if (isPolygon) {
-      nodes.add(SceneShape(
-        geometry: PolygonGeometry(pts),
-        fill: Fill(color.withOpacity(0.5)),
-        stroke: Stroke(color: color, width: 2),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PolygonGeometry(pts),
+          fill: Fill(color.withOpacity(0.5)),
+          stroke: Stroke(color: color, width: 2),
+        ),
+      );
     } else {
-      nodes.add(SceneShape(
-        geometry: PathGeometry(_closedCurve(pts)),
-        fill: Fill(color.withOpacity(0.5)),
-        stroke: Stroke(color: color, width: 2),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PathGeometry(_closedCurve(pts, config.curveTension)),
+          fill: Fill(color.withOpacity(0.5)),
+          stroke: Stroke(color: color, width: 2),
+        ),
+      );
     }
   }
 
   // Legend (only when enabled). Upstream positions it top-right at
   // ((width/2 + marginRight) * 3/4, -(height/2 + marginTop) * 3/4).
   if (chart.showLegend) {
-    const legendX = (300.0 + 50.0) * 3 / 4; // 262.5
-    var ly = -(300.0 + 50.0) * 3 / 4; // -262.5
+    final legendX = ((config.width / 2 + config.marginRight) * 3) / 4;
+    var ly = (-(config.height / 2 + config.marginTop) * 3) / 4;
     for (var ci = 0; ci < chart.curves.length; ci++) {
       final color = cScale[ci % cScale.length];
-      nodes.add(SceneShape(
-        geometry: RectGeometry(Rect.fromLTWH(legendX, ly, 12, 12)),
-        fill: Fill(color),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: RectGeometry(Rect.fromLTWH(legendX, ly, 12, 12)),
+          fill: Fill(color),
+        ),
+      );
       final ts = measurer.measure(chart.curves[ci].label, labelStyle);
-      nodes.add(SceneText(
-        text: chart.curves[ci].label,
-        bounds: Rect.fromLTWH(legendX + 16, ly, ts.width, ts.height),
-        style: labelStyle,
-        color: theme.textColor,
-        align: TextAlignH.left,
-      ));
+      nodes.add(
+        SceneText(
+          text: chart.curves[ci].label,
+          bounds: Rect.fromLTWH(legendX + 16, ly, ts.width, ts.height),
+          style: labelStyle,
+          color: theme.textColor,
+          align: TextAlignH.left,
+        ),
+      );
       ly += 20;
     }
   }
 
-  var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(-r, -r, 2 * r, 2 * r);
   if (chart.title != null && chart.title!.isNotEmpty) {
     // Title uses theme fontSize, non-bold, anchored middle/hanging at the top.
     final style = labelStyle.copyWith(fontSize: theme.fontSize);
@@ -366,25 +430,36 @@ RenderScene layoutRadar(
     final node = SceneText(
       text: chart.title!,
       bounds: Rect.fromLTWH(
-          center.x - ts.width / 2, bounds.top - ts.height - 8, ts.width, ts.height),
+        center.x - ts.width / 2,
+        -config.height / 2 - config.marginTop,
+        ts.width,
+        ts.height,
+      ),
       style: style,
       color: theme.titleColor,
     );
     nodes.add(node);
-    bounds = bounds.union(node.bounds);
   }
-  const m = 16.0;
+  // Upstream drawFrame uses the configured canvas plus all four margins.
   return RenderScene(
-    size: Size(bounds.width + 2 * m, bounds.height + 2 * m),
+    size: Size(
+      config.width + config.marginLeft + config.marginRight,
+      config.height + config.marginTop + config.marginBottom,
+    ),
     background: theme.background,
     nodes: [
-      for (final nd in nodes) translateSceneNode(nd, m - bounds.left, m - bounds.top)
+      for (final nd in nodes)
+        translateSceneNode(
+          nd,
+          config.width / 2 + config.marginLeft,
+          config.height / 2 + config.marginTop,
+        ),
     ],
   );
 }
 
 /// A closed smooth (Catmull-Rom) curve through [pts], for radar area fills.
-List<PathCommand> _closedCurve(List<Point> pts) {
+List<PathCommand> _closedCurve(List<Point> pts, double tension) {
   final n = pts.length;
   if (n < 3) {
     return [MoveTo(pts.first), for (var i = 1; i < n; i++) LineTo(pts[i])];
@@ -395,13 +470,13 @@ List<PathCommand> _closedCurve(List<Point> pts) {
     final p1 = pts[i];
     final p2 = pts[(i + 1) % n];
     final p3 = pts[(i + 2) % n];
-    cmds.add(CubicTo(
-      Point(p1.x + (p2.x - p0.x) * _curveTension,
-          p1.y + (p2.y - p0.y) * _curveTension),
-      Point(p2.x - (p3.x - p1.x) * _curveTension,
-          p2.y - (p3.y - p1.y) * _curveTension),
-      p2,
-    ));
+    cmds.add(
+      CubicTo(
+        Point(p1.x + (p2.x - p0.x) * tension, p1.y + (p2.y - p0.y) * tension),
+        Point(p2.x - (p3.x - p1.x) * tension, p2.y - (p3.y - p1.y) * tension),
+        p2,
+      ),
+    );
   }
   cmds.add(const ClosePath());
   return cmds;

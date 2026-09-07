@@ -10,7 +10,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -36,6 +38,33 @@ class Packet {
   /// vertical padding upstream reserves for them is dropped. Mirrors the
   /// upstream `packet.showBits` config (default true).
   final bool showBits;
+}
+
+class PacketConfig {
+  const PacketConfig({
+    this.rowHeight = 32,
+    this.bitWidth = 32,
+    this.bitsPerRow = 32,
+    this.showBits = true,
+    this.paddingX = 5,
+    this.paddingY = 5,
+  });
+
+  final double rowHeight, bitWidth, paddingX, paddingY;
+  final int bitsPerRow;
+  final bool showBits;
+
+  factory PacketConfig.fromSource(String source) {
+    final v = resolveDiagramConfig(source, 'packet');
+    return PacketConfig(
+      rowHeight: positiveDouble(v, 'rowHeight', 32),
+      bitWidth: positiveDouble(v, 'bitWidth', 32),
+      bitsPerRow: positiveDouble(v, 'bitsPerRow', 32).round(),
+      showBits: boolValue(v, 'showBits', true),
+      paddingX: nonNegativeDouble(v, 'paddingX', 5),
+      paddingY: nonNegativeDouble(v, 'paddingY', 5),
+    );
+  }
 }
 
 Packet parsePacket(String source) {
@@ -66,8 +95,9 @@ Packet parsePacket(String source) {
       continue;
     }
     if (RegExp(r'^(accTitle|accDescr)\b').hasMatch(line)) continue;
-    final m = RegExp(r'^(\+?\d+)(?:\s*-\s*(\d+))?\s*:\s*"(.*)"\s*$')
-        .firstMatch(line);
+    final m = RegExp(
+      r'^(\+?\d+)(?:\s*-\s*(\d+))?\s*:\s*"(.*)"\s*$',
+    ).firstMatch(line);
     if (m == null) {
       throw MermaidParseException('invalid packet field "$line"', line: i + 1);
     }
@@ -87,9 +117,10 @@ Packet parsePacket(String source) {
     // Blocks must be contiguous (no gaps/overlaps), like upstream.
     if (start != prevEnd + 1) {
       throw MermaidParseException(
-          'Packet block $start - $end is not contiguous. '
-          'It should start from ${prevEnd + 1}.',
-          line: i + 1);
+        'Packet block $start - $end is not contiguous. '
+        'It should start from ${prevEnd + 1}.',
+        line: i + 1,
+      );
     }
     fields.add(PacketField(start, end, m.group(3)!));
     prevEnd = end;
@@ -98,22 +129,23 @@ Packet parsePacket(String source) {
   if (fields.isEmpty) {
     throw const MermaidParseException('packet has no fields');
   }
-  return Packet(
-      fields: fields, title: frontmatterTitle(source) ?? bodyTitle);
+  return Packet(fields: fields, title: frontmatterTitle(source) ?? bodyTitle);
 }
 
 RenderScene layoutPacket(
   Packet diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  PacketConfig config = const PacketConfig(),
 }) {
   // Upstream packet defaults (config.schema.yaml PacketDiagramConfig).
-  const bitsPerRow = 32;
-  const bitWidth = 32.0;
-  const rowHeight = 32.0;
-  const paddingX = 5.0;
+  final bitsPerRow = config.bitsPerRow;
+  final bitWidth = config.bitWidth;
+  final rowHeight = config.rowHeight;
+  final paddingX = config.paddingX;
   // db.ts:getConfig adds +10 to paddingY when showBits is true.
-  final paddingY = diagram.showBits ? 15.0 : 5.0;
+  final showBits = config.showBits;
+  final paddingY = config.paddingY + (showBits ? 10.0 : 0.0);
   const bitLabelH = 14.0; // notional band for bit numbers above each row
 
   // Packet styling is theme-INDEPENDENT upstream (styles.ts hardcodes these):
@@ -155,7 +187,7 @@ RenderScene layoutPacket(
           color: blackText,
         ),
       ];
-      if (diagram.showBits) {
+      if (showBits) {
         // Bit numbers sit just above the row. Upstream draws them with
         // dominant-baseline:auto at y = wordY - 2, i.e. the text *baseline*
         // lands at wordY-2 (renderer.ts:bitNumberY). The SVG backend places a
@@ -164,29 +196,38 @@ RenderScene layoutPacket(
         const baselineFactor = 0.78;
         final bitBandTop = y - 2 - bitLabelH * baselineFactor;
         final isSingle = segEnd == bit;
-        children.add(SceneText(
-          text: '$bit',
-          // Single-bit block centers the start number over the block.
-          bounds: isSingle
-              ? Rect.fromLTWH(x, bitBandTop, w, bitLabelH)
-              : Rect.fromLTWH(x, bitBandTop, 24, bitLabelH),
-          style: bitStyle,
-          color: blackText,
-          align: isSingle ? TextAlignH.center : TextAlignH.left,
-        ));
-        // End bit number at the top-right, if the segment is more than one bit.
-        if (!isSingle) {
-          children.add(SceneText(
-            text: '$segEnd',
-            bounds: Rect.fromLTWH(x + w - 24, bitBandTop, 24, bitLabelH),
+        children.add(
+          SceneText(
+            text: '$bit',
+            // Single-bit block centers the start number over the block.
+            bounds: isSingle
+                ? Rect.fromLTWH(x, bitBandTop, w, bitLabelH)
+                : Rect.fromLTWH(x, bitBandTop, 24, bitLabelH),
             style: bitStyle,
             color: blackText,
-            align: TextAlignH.right,
-          ));
+            align: isSingle ? TextAlignH.center : TextAlignH.left,
+          ),
+        );
+        // End bit number at the top-right, if the segment is more than one bit.
+        if (!isSingle) {
+          children.add(
+            SceneText(
+              text: '$segEnd',
+              bounds: Rect.fromLTWH(x + w - 24, bitBandTop, 24, bitLabelH),
+              style: bitStyle,
+              color: blackText,
+              align: TextAlignH.right,
+            ),
+          );
         }
       }
-      nodes.add(SceneGroup(
-          id: 'packet_${f.start}_$bit', semanticLabel: f.label, children: children));
+      nodes.add(
+        SceneGroup(
+          id: 'packet_${f.start}_$bit',
+          semanticLabel: f.label,
+          children: children,
+        ),
+      );
       bit = segEnd + 1;
     }
   }
@@ -201,13 +242,19 @@ RenderScene layoutPacket(
   if (diagram.title != null && diagram.title!.isNotEmpty) {
     final titleStyle = labelStyle.copyWith(fontSize: 14);
     final totalRowHeight = rowHeight + paddingY;
-    out.add(SceneText(
-      text: diagram.title!,
-      bounds: Rect.fromLTWH(
-          bounds.left, bounds.bottom, bounds.width, totalRowHeight),
-      style: titleStyle,
-      color: blackText,
-    ));
+    out.add(
+      SceneText(
+        text: diagram.title!,
+        bounds: Rect.fromLTWH(
+          bounds.left,
+          bounds.bottom,
+          bounds.width,
+          totalRowHeight,
+        ),
+        style: titleStyle,
+        color: blackText,
+      ),
+    );
   }
 
   final full = sceneBounds(out) ?? bounds;

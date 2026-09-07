@@ -9,7 +9,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -23,11 +25,7 @@ import '../flowchart/layout_engines.dart';
 enum MindmapShape { plain, rect, rounded, circle, bang, cloud, hexagon }
 
 class MindmapNode {
-  MindmapNode({
-    required this.label,
-    required this.shape,
-    required this.depth,
-  });
+  MindmapNode({required this.label, required this.shape, required this.depth});
 
   final String label;
   final MindmapShape shape;
@@ -76,8 +74,9 @@ Mindmap parseMindmap(String source) {
     final indent = line.length - line.trimLeft().length;
     final content = line.trim();
     // `classDef <name[,name...]> prop:val,prop:val` — diagram-level styles.
-    final classDefM =
-        RegExp(r'^classDef\s+([^\s]+)\s+(.+)$').firstMatch(content);
+    final classDefM = RegExp(
+      r'^classDef\s+([^\s]+)\s+(.+)$',
+    ).firstMatch(content);
     if (classDefM != null) {
       final styles = <String, String>{};
       for (final decl in classDefM.group(2)!.split(',')) {
@@ -99,8 +98,9 @@ Mindmap parseMindmap(String source) {
     }
     if (content.startsWith(':::')) {
       if (stack.isNotEmpty) {
-        stack.last.$2.cssClasses
-            .addAll(content.substring(3).trim().split(RegExp(r'\s+')));
+        stack.last.$2.cssClasses.addAll(
+          content.substring(3).trim().split(RegExp(r'\s+')),
+        );
       }
       continue;
     }
@@ -116,11 +116,16 @@ Mindmap parseMindmap(String source) {
     }
     if (stack.isEmpty) {
       throw MermaidParseException(
-          'multiple roots are not allowed in a mindmap', line: i + 1);
+        'multiple roots are not allowed in a mindmap',
+        line: i + 1,
+      );
     }
     final parent = stack.last.$2;
-    final node =
-        MindmapNode(label: label, shape: shape, depth: parent.depth + 1);
+    final node = MindmapNode(
+      label: label,
+      shape: shape,
+      depth: parent.depth + 1,
+    );
     parent.children.add(node);
     stack.add((indent, node));
   }
@@ -147,13 +152,13 @@ String _resolveIconRef(String ref) {
 }
 
 (MindmapShape, String) _parseNodeText(String content, int line) {
-  String normalize(String s) => s
-      .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
-      .trim();
+  String normalize(String s) =>
+      s.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n').trim();
   // id((label)) etc — the leading id is optional and unused for layout.
-  final m = RegExp(r'^([\wÀ-￿-]*)\s*'
-          r'(\(\(|\)\)|\(-|\)|\(|\[|\{\{)(.*?)(\)\)|\(\(|-\)|\(|\)|\]|\}\})\s*$')
-      .firstMatch(content);
+  final m = RegExp(
+    r'^([\wÀ-￿-]*)\s*'
+    r'(\(\(|\)\)|\(-|\)|\(|\[|\{\{)(.*?)(\)\)|\(\(|-\)|\(|\)|\]|\}\})\s*$',
+  ).firstMatch(content);
   if (m == null) return (MindmapShape.plain, normalize(content));
   final open = m.group(2)!;
   final close = m.group(4)!;
@@ -170,9 +175,10 @@ String _resolveIconRef(String ref) {
     '))' => (MindmapShape.bang, label),
     '(-' => (MindmapShape.cloud, label),
     ')' => (MindmapShape.cloud, label),
-    '(' => (close == ')'
-        ? (MindmapShape.rounded, label)
-        : (MindmapShape.cloud, label)),
+    '(' =>
+      (close == ')'
+          ? (MindmapShape.rounded, label)
+          : (MindmapShape.cloud, label)),
     '[' => (MindmapShape.rect, label),
     '{{' => (MindmapShape.hexagon, label),
     _ => (MindmapShape.plain, label),
@@ -260,8 +266,12 @@ Point _arcTo(
   }
 
   final theta1 = angle(1, 0, (dx2 - cxp) / rx, (dy2 - cyp) / ry);
-  var dtheta = angle((dx2 - cxp) / rx, (dy2 - cyp) / ry,
-      (-dx2 - cxp) / rx, (-dy2 - cyp) / ry);
+  var dtheta = angle(
+    (dx2 - cxp) / rx,
+    (dy2 - cyp) / ry,
+    (-dx2 - cxp) / rx,
+    (-dy2 - cyp) / ry,
+  );
   if (sweep == 0 && dtheta > 0) dtheta -= 2 * math.pi;
   if (sweep == 1 && dtheta < 0) dtheta += 2 * math.pi;
 
@@ -275,14 +285,8 @@ Point _arcTo(
     final cosTh = math.cos(th), sinTh = math.sin(th);
     final cosNext = math.cos(thNext), sinNext = math.sin(thNext);
     final ex = cx + rx * cosNext, ey = cy + ry * sinNext;
-    final c1 = Point(
-      startX + (-rx * sinTh) * t,
-      startY + (ry * cosTh) * t,
-    );
-    final c2 = Point(
-      ex - (-rx * sinNext) * t,
-      ey - (ry * cosNext) * t,
-    );
+    final c1 = Point(startX + (-rx * sinTh) * t, startY + (ry * cosTh) * t);
+    final c2 = Point(ex - (-rx * sinNext) * t, ey - (ry * cosNext) * t);
     out.add(CubicTo(c1, c2, Point(ex, ey)));
     startX = ex;
     startY = ey;
@@ -294,7 +298,11 @@ Point _arcTo(
 /// Builds the cloud-shape path (port of `svgDraw.cloudBkg`). [pt] maps a
 /// local point (origin at node top-left) to scene coordinates; [w]/[h] are
 /// the node size. Relative SVG arcs are approximated with cubic Béziers.
-List<PathCommand> _cloudPath(Point Function(double, double) pt, double w, double h) {
+List<PathCommand> _cloudPath(
+  Point Function(double, double) pt,
+  double w,
+  double h,
+) {
   final r1 = 0.15 * w;
   final r2 = 0.25 * w;
   final r3 = 0.35 * w;
@@ -306,8 +314,14 @@ List<PathCommand> _cloudPath(Point Function(double, double) pt, double w, double
   // Local arc helper: appends to a temporary list in local coords, then we
   // remap. Simpler: build a local list, then translate at the end.
   final local = <PathCommand>[];
-  Point arc(Point from, double rx, double ry, int sweep, double dx, double dy) =>
-      _arcTo(local, from, rx, ry, sweep, dx, dy);
+  Point arc(
+    Point from,
+    double rx,
+    double ry,
+    int sweep,
+    double dx,
+    double dy,
+  ) => _arcTo(local, from, rx, ry, sweep, dx, dy);
   cur = arc(cur, r1, r1, 1, w * 0.25, -w * 0.1);
   cur = arc(cur, r3, r3, 1, w * 0.4, -w * 0.1);
   cur = arc(cur, r2, r2, 1, w * 0.35, w * 0.2);
@@ -326,14 +340,24 @@ List<PathCommand> _cloudPath(Point Function(double, double) pt, double w, double
 }
 
 /// Builds the bang-shape path (port of `svgDraw.bangBkg`).
-List<PathCommand> _bangPath(Point Function(double, double) pt, double w, double h) {
+List<PathCommand> _bangPath(
+  Point Function(double, double) pt,
+  double w,
+  double h,
+) {
   final r = 0.15 * w;
   final out = <PathCommand>[];
   out.add(MoveTo(pt(0, 0)));
   final local = <PathCommand>[];
   var cur = const Point(0, 0);
-  Point arc(Point from, double rx, double ry, int sweep, double dx, double dy) =>
-      _arcTo(local, from, rx, ry, sweep, dx, dy);
+  Point arc(
+    Point from,
+    double rx,
+    double ry,
+    int sweep,
+    double dx,
+    double dy,
+  ) => _arcTo(local, from, rx, ry, sweep, dx, dy);
   cur = arc(cur, r, r, 0, w * 0.25, -h * 0.1);
   cur = arc(cur, r, r, 0, w * 0.25, 0);
   cur = arc(cur, r, r, 0, w * 0.25, 0);
@@ -357,7 +381,9 @@ List<PathCommand> _bangPath(Point Function(double, double) pt, double w, double 
 
 /// Remaps local-coordinate path commands through [pt] into scene coordinates.
 List<PathCommand> _remap(
-    List<PathCommand> local, Point Function(double, double) pt) {
+  List<PathCommand> local,
+  Point Function(double, double) pt,
+) {
   Point m(Point p) => pt(p.x, p.y);
   return [
     for (final c in local)
@@ -367,7 +393,7 @@ List<PathCommand> _remap(
         CubicTo() => CubicTo(m(c.c1), m(c.c2), m(c.p)),
         QuadTo() => QuadTo(m(c.c), m(c.p)),
         ClosePath() => const ClosePath(),
-      }
+      },
   ];
 }
 
@@ -386,11 +412,32 @@ class _PlacedMind {
   Color color = const Color(0xff000000);
 }
 
+class MindmapConfig {
+  const MindmapConfig({
+    this.padding = 10,
+    this.maxNodeWidth = 200,
+    this.layoutAlgorithm = 'cose-bilkent',
+  });
+
+  final double padding, maxNodeWidth;
+  final String layoutAlgorithm;
+
+  factory MindmapConfig.fromSource(String source) {
+    final v = resolveDiagramConfig(source, 'mindmap');
+    return MindmapConfig(
+      padding: nonNegativeDouble(v, 'padding', 10),
+      maxNodeWidth: positiveDouble(v, 'maxNodeWidth', 200),
+      layoutAlgorithm: stringValue(v, 'layoutAlgorithm', 'cose-bilkent'),
+    );
+  }
+}
+
 RenderScene layoutMindmap(
   Mindmap map, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
   String engine = 'dagre',
+  MindmapConfig config = const MindmapConfig(),
 }) {
   // Upstream feeds the mindmap's node/edge tree into the unified renderer with
   // `layoutAlgorithm = config.layout` (fallback cose-bilkent), so a `layout:`
@@ -399,10 +446,15 @@ RenderScene layoutMindmap(
   // top-down layered tree with orthogonal edges (root on top, branches in a
   // row beneath, leaves below that — matching mermaid's ELK render); any other
   // engine keeps the organic radial default.
-  final treeLayout = engine == 'elk' || engine == 'tidy-tree';
+  final algorithm = config.layoutAlgorithm == 'cose-bilkent'
+      ? engine
+      : config.layoutAlgorithm;
+  final treeLayout = algorithm == 'elk' || algorithm == 'tidy-tree';
   const siblingGap = 14.0;
-  final baseStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
+  final baseStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: theme.fontSize,
+  );
   final nodes = <SceneNode>[];
   final placed = <MindmapNode, _PlacedMind>{};
 
@@ -422,22 +474,28 @@ RenderScene layoutMindmap(
     if (!matched) return null;
     return (
       fill: merged['fill'] != null ? Color.tryParse(merged['fill']!) : null,
-      stroke:
-          merged['stroke'] != null ? Color.tryParse(merged['stroke']!) : null,
+      stroke: merged['stroke'] != null
+          ? Color.tryParse(merged['stroke']!)
+          : null,
       text: merged['color'] != null ? Color.tryParse(merged['color']!) : null,
     );
   }
 
   _PlacedMind measure(MindmapNode n) {
-    final style = n.depth == 0 ? baseStyle.copyWith(fontWeight: 700) : baseStyle;
+    final style = n.depth == 0
+        ? baseStyle.copyWith(fontWeight: 700)
+        : baseStyle;
     // Upstream: maxNodeWidth 200, padding 10 (doubled for rect/rounded/hexagon).
-    final labelSize = measurer.measure(n.label, style, maxWidth: 200);
+    final labelSize = measurer.measure(
+      n.label,
+      style,
+      maxWidth: config.maxNodeWidth,
+    );
     final padding = switch (n.shape) {
       MindmapShape.rect ||
       MindmapShape.rounded ||
-      MindmapShape.hexagon =>
-        20.0,
-      _ => 10.0,
+      MindmapShape.hexagon => 2 * config.padding,
+      _ => config.padding,
     };
     // svgDraw.drawNode: width = bbox.w + 2*padding,
     //                   height = bbox.h + fontSize*1.1*0.5 + padding.
@@ -476,9 +534,8 @@ RenderScene layoutMindmap(
   // gets an angular sector proportional to its leaf count, nodes sit at a
   // radius that grows with depth (stretched horizontally because labels
   // are wide).
-  int leaves(MindmapNode n) => n.children.isEmpty
-      ? 1
-      : n.children.fold(0, (a, c) => a + leaves(c));
+  int leaves(MindmapNode n) =>
+      n.children.isEmpty ? 1 : n.children.fold(0, (a, c) => a + leaves(c));
 
   final rootP = placed[map.root]!;
   rootP.center = Point.zero;
@@ -519,7 +576,7 @@ RenderScene layoutMindmap(
     final sizes = {for (final n in order) ids[n]!: placed[n]!.size};
     final treeEdges = <(String, String)>[
       for (final n in order)
-        for (final c in n.children) (ids[n]!, ids[c]!)
+        for (final c in n.children) (ids[n]!, ids[c]!),
     ];
     final centers = tidyTreeLayout(
       [for (final n in order) ids[n]!],
@@ -570,28 +627,36 @@ RenderScene layoutMindmap(
         final from = Point(p.center.x, p.center.y + p.size.height / 2);
         final to = Point(cp.center.x, cp.center.y - cp.size.height / 2);
         final route = orthogonalRoute(from, to, vertical: true);
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(route.first),
-            for (final pt in route.skip(1)) LineTo(pt),
-          ]),
-          stroke: Stroke(color: cp.color, width: width),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(route.first),
+              for (final pt in route.skip(1)) LineTo(pt),
+            ]),
+            stroke: Stroke(color: cp.color, width: width),
+          ),
+        );
       } else {
         // Radial: the organic curve tuned for the settled-simulation look.
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(p.center),
-            CubicTo(
-              Point(p.center.x + (cp.center.x - p.center.x) * 0.55,
-                  p.center.y + (cp.center.y - p.center.y) * 0.1),
-              Point(p.center.x + (cp.center.x - p.center.x) * 0.9,
-                  p.center.y + (cp.center.y - p.center.y) * 0.85),
-              cp.center,
-            ),
-          ]),
-          stroke: Stroke(color: cp.color, width: width),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(p.center),
+              CubicTo(
+                Point(
+                  p.center.x + (cp.center.x - p.center.x) * 0.55,
+                  p.center.y + (cp.center.y - p.center.y) * 0.1,
+                ),
+                Point(
+                  p.center.x + (cp.center.x - p.center.x) * 0.9,
+                  p.center.y + (cp.center.y - p.center.y) * 0.85,
+                ),
+                cp.center,
+              ),
+            ]),
+            stroke: Stroke(color: cp.color, width: width),
+          ),
+        );
       }
       edges(c);
     }
@@ -602,9 +667,14 @@ RenderScene layoutMindmap(
   // Nodes on top.
   void draw(MindmapNode n) {
     final p = placed[n]!;
-    final style =
-        n.depth == 0 ? baseStyle.copyWith(fontWeight: 700) : baseStyle;
-    final labelSize = measurer.measure(n.label, style, maxWidth: 200);
+    final style = n.depth == 0
+        ? baseStyle.copyWith(fontWeight: 700)
+        : baseStyle;
+    final labelSize = measurer.measure(
+      n.label,
+      style,
+      maxWidth: config.maxNodeWidth,
+    );
     final rect = Rect.fromCenter(p.center, p.size.width, p.size.height);
     final w = p.size.width;
     final h = p.size.height;
@@ -620,102 +690,118 @@ RenderScene layoutMindmap(
     final stroke = cls?.stroke;
     // Text color: explicit classDef `color:` wins; otherwise the theme paints
     // root text `gitBranchLabel0` and section text `cScaleLabel<i+1>`.
-    final textColor = cls?.text ??
+    final textColor =
+        cls?.text ??
         (cls?.fill != null
             ? (_luminance(cls!.fill!) < 0.5
-                ? const Color(0xffffffff)
-                : const Color(0xff333333))
+                  ? const Color(0xffffffff)
+                  : const Color(0xff333333))
             : (isRoot
-                ? theme.gitBranchLabel0
-                : _sectionTextColor(theme, p.section)));
+                  ? theme.gitBranchLabel0
+                  : _sectionTextColor(theme, p.section)));
     final children = <SceneNode>[];
     final nodeStroke = stroke != null ? Stroke(color: stroke, width: 2) : null;
     switch (n.shape) {
       case MindmapShape.circle:
-        children.add(SceneShape(
-          geometry: CircleGeometry(p.center, p.size.width / 2),
-          fill: Fill(fill),
-          stroke: nodeStroke,
-        ));
+        children.add(
+          SceneShape(
+            geometry: CircleGeometry(p.center, p.size.width / 2),
+            fill: Fill(fill),
+            stroke: nodeStroke,
+          ),
+        );
       case MindmapShape.rect:
-        children.add(SceneShape(
-          geometry: RectGeometry(rect),
-          fill: Fill(fill),
-          stroke: nodeStroke,
-        ));
+        children.add(
+          SceneShape(
+            geometry: RectGeometry(rect),
+            fill: Fill(fill),
+            stroke: nodeStroke,
+          ),
+        );
       case MindmapShape.hexagon:
         // Upstream hexagonBkg: m = h/4.
         final m = h / 4;
-        children.add(SceneShape(
-          geometry: PolygonGeometry([
-            pt(m, 0),
-            pt(w - m, 0),
-            pt(w, h / 2),
-            pt(w - m, h),
-            pt(m, h),
-            pt(0, h / 2),
-          ]),
-          fill: Fill(fill),
-          stroke: nodeStroke,
-        ));
+        children.add(
+          SceneShape(
+            geometry: PolygonGeometry([
+              pt(m, 0),
+              pt(w - m, 0),
+              pt(w, h / 2),
+              pt(w - m, h),
+              pt(m, h),
+              pt(0, h / 2),
+            ]),
+            fill: Fill(fill),
+            stroke: nodeStroke,
+          ),
+        );
       case MindmapShape.cloud:
-        children.add(SceneShape(
-          geometry: PathGeometry(_cloudPath(pt, w, h)),
-          fill: Fill(fill),
-          stroke: nodeStroke,
-        ));
+        children.add(
+          SceneShape(
+            geometry: PathGeometry(_cloudPath(pt, w, h)),
+            fill: Fill(fill),
+            stroke: nodeStroke,
+          ),
+        );
       case MindmapShape.bang:
-        children.add(SceneShape(
-          geometry: PathGeometry(_bangPath(pt, w, h)),
-          fill: Fill(fill),
-          stroke: nodeStroke,
-        ));
+        children.add(
+          SceneShape(
+            geometry: PathGeometry(_bangPath(pt, w, h)),
+            fill: Fill(fill),
+            stroke: nodeStroke,
+          ),
+        );
       case MindmapShape.rounded:
         // roundedRectBkg: rx/ry = padding (=20 for rounded).
-        children.add(SceneShape(
-          geometry: RectGeometry(rect, rx: 20, ry: 20),
-          fill: Fill(fill),
-          stroke: nodeStroke,
-        ));
+        children.add(
+          SceneShape(
+            geometry: RectGeometry(rect, rx: 20, ry: 20),
+            fill: Fill(fill),
+            stroke: nodeStroke,
+          ),
+        );
       case MindmapShape.plain:
         // defaultBkg: a rounded-top path (rd=5) with a flat bottom, plus a
         // thick horizontal underline at the bottom (`node-line`, width 3,
         // stroke cScaleInv<section>). The signature mindmap look.
         const rd = 5.0;
-        children.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(pt(0, h - rd)),
-            LineTo(pt(0, rd)),
-            QuadTo(pt(0, 0), pt(rd, 0)),
-            LineTo(pt(w - rd, 0)),
-            QuadTo(pt(w, 0), pt(w, rd)),
-            LineTo(pt(w, h)),
-            LineTo(pt(0, h)),
-            const ClosePath(),
-          ]),
-          fill: Fill(fill),
-          stroke: nodeStroke,
-        ));
-        final lineColor =
-            isRoot ? _sectionLine(theme, 0) : _sectionLine(theme, p.section);
-        children.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(pt(0, h)),
-            LineTo(pt(w, h)),
-          ]),
-          stroke: Stroke(color: lineColor, width: 3),
-        ));
+        children.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(pt(0, h - rd)),
+              LineTo(pt(0, rd)),
+              QuadTo(pt(0, 0), pt(rd, 0)),
+              LineTo(pt(w - rd, 0)),
+              QuadTo(pt(w, 0), pt(w, rd)),
+              LineTo(pt(w, h)),
+              LineTo(pt(0, h)),
+              const ClosePath(),
+            ]),
+            fill: Fill(fill),
+            stroke: nodeStroke,
+          ),
+        );
+        final lineColor = isRoot
+            ? _sectionLine(theme, 0)
+            : _sectionLine(theme, p.section);
+        children.add(
+          SceneShape(
+            geometry: PathGeometry([MoveTo(pt(0, h)), LineTo(pt(w, h))]),
+            stroke: Stroke(color: lineColor, width: 3),
+          ),
+        );
     }
-    children.add(SceneText(
-      text: n.label,
-      bounds:
-          Rect.fromCenter(p.center, labelSize.width, labelSize.height),
-      style: style,
-      // Default theme: root text white (`gitBranchLabel0`), section text dark
-      // `#333` (`cScaleLabel`). A classDef `color:`/`fill:` overrides (see
-      // [textColor] above).
-      color: textColor,
-    ));
+    children.add(
+      SceneText(
+        text: n.label,
+        bounds: Rect.fromCenter(p.center, labelSize.width, labelSize.height),
+        style: style,
+        // Default theme: root text white (`gitBranchLabel0`), section text dark
+        // `#333` (`cScaleLabel`). A classDef `color:`/`fill:` overrides (see
+        // [textColor] above).
+        color: textColor,
+      ),
+    );
     // `::icon(...)` glyph above the node, if it resolves in a registered pack.
     if (n.icon != null) {
       ensureBuiltinIconPacks();
@@ -726,8 +812,13 @@ RenderScene layoutMindmap(
       );
       children.addAll(glyph);
     }
-    nodes.add(SceneGroup(
-        id: 'mind_${n.label}', semanticLabel: n.label, children: children));
+    nodes.add(
+      SceneGroup(
+        id: 'mind_${n.label}',
+        semanticLabel: n.label,
+        children: children,
+      ),
+    );
     n.children.forEach(draw);
   }
 

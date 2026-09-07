@@ -21,17 +21,13 @@ const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
 List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
+  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
+];
 
 void main() {
   group('ER parser', () {
     test('symbol relationship with label', () {
-      final d = parseErDiagram(
-          'erDiagram\nCUSTOMER ||--o{ ORDER : places');
+      final d = parseErDiagram('erDiagram\nCUSTOMER ||--o{ ORDER : places');
       expect(d.entities.keys, containsAll(['CUSTOMER', 'ORDER']));
       final r = d.relationships.single;
       expect(r.cardFrom, ErCardinality.onlyOne);
@@ -40,10 +36,12 @@ void main() {
       expect(r.label, 'places');
     });
     test('all cardinality tokens', () {
-      final d = parseErDiagram('erDiagram\n'
-          'A |o..o| B : a\n'
-          'C }|--|{ D : b\n'
-          'E }o--o{ F : c');
+      final d = parseErDiagram(
+        'erDiagram\n'
+        'A |o..o| B : a\n'
+        'C }|--|{ D : b\n'
+        'E }o--o{ F : c',
+      );
       expect(d.relationships[0].cardFrom, ErCardinality.zeroOrOne);
       expect(d.relationships[0].cardTo, ErCardinality.zeroOrOne);
       expect(d.relationships[0].identifying, isFalse);
@@ -54,17 +52,20 @@ void main() {
     });
     test('word-form relationship', () {
       final d = parseErDiagram(
-          'erDiagram\nMANUFACTURER only one to zero or more CAR : makes');
+        'erDiagram\nMANUFACTURER only one to zero or more CAR : makes',
+      );
       final r = d.relationships.single;
       expect(r.cardFrom, ErCardinality.onlyOne);
       expect(r.cardTo, ErCardinality.zeroOrMore);
     });
     test('attributes with keys and comments', () {
-      final d = parseErDiagram('erDiagram\nCUSTOMER {\n'
-          'string name "the full name"\n'
-          'int custNumber PK "unique"\n'
-          'string sector FK,UK\n'
-          '}');
+      final d = parseErDiagram(
+        'erDiagram\nCUSTOMER {\n'
+        'string name "the full name"\n'
+        'int custNumber PK "unique"\n'
+        'string sector FK,UK\n'
+        '}',
+      );
       final attrs = d.entities['CUSTOMER']!.attributes;
       expect(attrs[0].type, 'string');
       expect(attrs[0].name, 'name');
@@ -77,32 +78,42 @@ void main() {
       expect(d.entities['p']!.label, 'Person');
     });
     test('quoted entity names', () {
-      final d =
-          parseErDiagram('erDiagram\n"Order Line" }|--|| ORDER : belongs');
+      final d = parseErDiagram(
+        'erDiagram\n"Order Line" }|--|| ORDER : belongs',
+      );
       expect(d.entities.keys, contains('Order Line'));
     });
     test('garbage throws', () {
-      expect(() => parseErDiagram('erDiagram\n!!!'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseErDiagram('erDiagram\n!!!'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
   group('ER layout', () {
     test('entity table with header and rows, crow feet rendered', () {
       final scene = layoutErDiagram(
-        parseErDiagram('erDiagram\n'
-            'CUSTOMER ||--o{ ORDER : places\n'
-            'CUSTOMER {\nstring name PK\nint age\n}'),
+        parseErDiagram(
+          'erDiagram\n'
+          'CUSTOMER ||--o{ ORDER : places\n'
+          'CUSTOMER {\nstring name PK\nint age\n}',
+        ),
         measurer: measurer,
         theme: theme,
       );
-      final texts = flatten(scene.nodes).whereType<SceneText>().map((t) => t.text);
-      expect(texts, containsAll(['CUSTOMER', 'ORDER', 'name', 'age', 'places']));
+      final texts = flatten(
+        scene.nodes,
+      ).whereType<SceneText>().map((t) => t.text);
+      expect(
+        texts,
+        containsAll(['CUSTOMER', 'ORDER', 'name', 'age', 'places']),
+      );
       // Crow's foot: at least one circle marker (zero side) present.
       expect(
-        flatten(scene.nodes)
-            .whereType<SceneShape>()
-            .any((s) => s.geometry is CircleGeometry),
+        flatten(
+          scene.nodes,
+        ).whereType<SceneShape>().any((s) => s.geometry is CircleGeometry),
         isTrue,
       );
       expect(scene.size.width, greaterThan(0));
@@ -115,7 +126,8 @@ void main() {
       );
       expect(
         flatten(scene.nodes).whereType<SceneShape>().any(
-            (s) => s.geometry is PathGeometry && s.stroke?.dash != null),
+          (s) => s.geometry is PathGeometry && s.stroke?.dash != null,
+        ),
         isTrue,
       );
     });
@@ -131,18 +143,22 @@ void main() {
           .where((shape) => shape.geometry is RectGeometry)
           .map((shape) => (shape.geometry as RectGeometry).rect)
           .reduce((a, b) => a.width * a.height > b.width * b.height ? a : b);
-      final key = entity.children
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == 'PK');
+      final key = entity.children.whereType<SceneText>().singleWhere(
+        (text) => text.text == 'PK',
+      );
 
+      // Mermaid's erBox splits the configured 20 px column padding evenly
+      // between the text inset on each side.
       expect(outerRect.right - key.bounds.right, closeTo(10, 0.001));
     });
     test('entity labels and attribute rows use Mermaid vertical spacing', () {
       final scene = layoutErDiagram(
-        parseErDiagram('erDiagram\n'
-            'CUSTOMER ||--o{ ORDER : places\n'
-            'ORDER ||--|{ LINE_ITEM : contains\n'
-            'CUSTOMER {\nstring name PK\nstring email UK\n}'),
+        parseErDiagram(
+          'erDiagram\n'
+          'CUSTOMER ||--o{ ORDER : places\n'
+          'ORDER ||--|{ LINE_ITEM : contains\n'
+          'CUSTOMER {\nstring name PK\nstring email UK\n}',
+        ),
         measurer: measurer,
         theme: theme,
       );
@@ -159,9 +175,9 @@ void main() {
       for (final id in ['ORDER', 'LINE_ITEM']) {
         final group = entity(id);
         final box = outerRect(group);
-        final label = group.children
-            .whereType<SceneText>()
-            .singleWhere((text) => text.text == id);
+        final label = group.children.whereType<SceneText>().singleWhere(
+          (text) => text.text == id,
+        );
         expect(label.bounds.center.x, closeTo(box.center.x, 0.001));
         expect(label.bounds.center.y, closeTo(box.center.y, 0.001));
         expect(label.bounds.height, lessThan(box.height));
@@ -176,13 +192,15 @@ void main() {
           .map((geometry) => geometry.rect)
           .where((rect) => rect != customerBox)
           .toList();
-      final name = customer.children
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == 'name');
+      final name = customer.children.whereType<SceneText>().singleWhere(
+        (text) => text.text == 'name',
+      );
       expect(rowRects, hasLength(2));
       expect(rowRects.first.height - name.bounds.height, closeTo(15, 0.001));
-      expect(rowRects.first.top - customerBox.top - name.bounds.height,
-          closeTo(15, 0.001));
+      expect(
+        rowRects.first.top - customerBox.top - name.bounds.height,
+        closeTo(15, 0.001),
+      );
     });
     test('attribute bands cover a short entity to its bottom edge', () {
       // One short attribute measures under the 75px minimum entity height, so
@@ -200,7 +218,8 @@ void main() {
           .map((geometry) => geometry.rect)
           .toList();
       final outer = rects.reduce(
-          (a, b) => a.width * a.height > b.width * b.height ? a : b);
+        (a, b) => a.width * a.height > b.width * b.height ? a : b,
+      );
       final bands = rects.where((rect) => rect != outer).toList();
 
       expect(outer.height, closeTo(75, 0.001));
@@ -209,9 +228,9 @@ void main() {
       expect(bands.first.left, closeTo(outer.left, 0.001));
       expect(bands.first.right, closeTo(outer.right, 0.001));
       // The header is the only part of the box the bands leave uncovered.
-      final header = entity.children
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == 'CAR');
+      final header = entity.children.whereType<SceneText>().singleWhere(
+        (text) => text.text == 'CAR',
+      );
       expect(bands.first.top, greaterThan(header.bounds.bottom));
       expect(
         bands.fold(0.0, (sum, rect) => sum + rect.height) +
@@ -229,9 +248,9 @@ erDiagram
     }
 ''';
       final scene = const Mermaid(measurer: measurer).render(source);
-      final customer = scene.nodes
-          .whereType<SceneGroup>()
-          .singleWhere((group) => group.id == 'CUSTOMER');
+      final customer = scene.nodes.whereType<SceneGroup>().singleWhere(
+        (group) => group.id == 'CUSTOMER',
+      );
       final outer = customer.children
           .whereType<SceneShape>()
           .map((shape) => shape.geometry)
@@ -244,9 +263,9 @@ erDiagram
           .whereType<RectGeometry>()
           .map((geometry) => geometry.rect)
           .firstWhere((rect) => rect != outer);
-      final name = customer.children
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == 'name');
+      final name = customer.children.whereType<SceneText>().singleWhere(
+        (text) => text.text == 'name',
+      );
 
       expect(row.height - name.bounds.height, closeTo(24, 0.001));
     });
@@ -254,8 +273,7 @@ erDiagram
 
   group('pie parser', () {
     test('title and slices', () {
-      final p = parsePieChart(
-          'pie title Pets\n"Dogs" : 386\n"Cats" : 85.9');
+      final p = parsePieChart('pie title Pets\n"Dogs" : 386\n"Cats" : 85.9');
       expect(p.title, 'Pets');
       expect(p.slices.length, 2);
       expect(p.slices[0].label, 'Dogs');
@@ -265,8 +283,10 @@ erDiagram
       expect(parsePieChart('pie showData\n"A" : 1').showData, isTrue);
     });
     test('invalid value throws', () {
-      expect(() => parsePieChart('pie\n"A" : abc'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parsePieChart('pie\n"A" : abc'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
@@ -277,24 +297,28 @@ erDiagram
         measurer: measurer,
         theme: theme,
       );
-      final texts =
-          flatten(scene.nodes).whereType<SceneText>().map((t) => t.text).toList();
+      final texts = flatten(
+        scene.nodes,
+      ).whereType<SceneText>().map((t) => t.text).toList();
       expect(texts, containsAll(['A', 'B', '75%', '25%', 'P']));
       expect(
-          flatten(scene.nodes).whereType<SceneGroup>().where(
-              (g) => (g.id ?? '').startsWith('slice_')),
-          hasLength(2));
+        flatten(scene.nodes).whereType<SceneGroup>().where(
+          (g) => (g.id ?? '').startsWith('slice_'),
+        ),
+        hasLength(2),
+      );
     });
   });
 
   group('gantt dates', () {
     test('parse YYYY-MM-DD', () {
-      expect(parseGanttDate('2014-01-06', 'YYYY-MM-DD'),
-          DateTime(2014, 1, 6));
+      expect(parseGanttDate('2014-01-06', 'YYYY-MM-DD'), DateTime(2014, 1, 6));
     });
     test('parse with time', () {
-      expect(parseGanttDate('2014-01-06 13:30', 'YYYY-MM-DD HH:mm'),
-          DateTime(2014, 1, 6, 13, 30));
+      expect(
+        parseGanttDate('2014-01-06 13:30', 'YYYY-MM-DD HH:mm'),
+        DateTime(2014, 1, 6, 13, 30),
+      );
     });
     test('mismatch returns null', () {
       expect(parseGanttDate('06/01/2014', 'YYYY-MM-DD'), isNull);
@@ -341,8 +365,10 @@ gantt
       expect(ship.start, ship.end);
     });
     test('task without start chains after previous', () {
-      final g = parseGanttChart('gantt\ndateFormat YYYY-MM-DD\n'
-          'A : 2024-01-01, 2d\nB : 3d');
+      final g = parseGanttChart(
+        'gantt\ndateFormat YYYY-MM-DD\n'
+        'A : 2024-01-01, 2d\nB : 3d',
+      );
       expect(g.sections[0].tasks[1].start, DateTime(2024, 1, 3));
       expect(g.sections[0].tasks[1].end, DateTime(2024, 1, 6));
     });
@@ -351,18 +377,20 @@ gantt
   group('gantt layout', () {
     test('bars positioned by time, axis labels present', () {
       final scene = layoutGanttChart(
-        parseGanttChart('gantt\ndateFormat YYYY-MM-DD\ntitle T\n'
-            'section S\nA : a1, 2024-01-01, 2d\nB : after a1, 2d'),
+        parseGanttChart(
+          'gantt\ndateFormat YYYY-MM-DD\ntitle T\n'
+          'section S\nA : a1, 2024-01-01, 2d\nB : after a1, 2d',
+        ),
         measurer: measurer,
         theme: theme,
       );
       Rect barOf(String id) {
-        final g = flatten(scene.nodes)
-            .whereType<SceneGroup>()
-            .firstWhere((g) => g.id == id);
-        final shape = flatten(g.children)
-            .whereType<SceneShape>()
-            .firstWhere((s) => s.geometry is RectGeometry);
+        final g = flatten(
+          scene.nodes,
+        ).whereType<SceneGroup>().firstWhere((g) => g.id == id);
+        final shape = flatten(
+          g.children,
+        ).whereType<SceneShape>().firstWhere((s) => s.geometry is RectGeometry);
         return (shape.geometry as RectGeometry).rect;
       }
 
@@ -372,23 +400,25 @@ gantt
       expect(b.top, greaterThan(a.top));
       // Axis tick labels exist (upstream default %Y-%m-%d format).
       expect(
-        flatten(scene.nodes)
-            .whereType<SceneText>()
-            .any((t) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t.text)),
+        flatten(scene.nodes).whereType<SceneText>().any(
+          (t) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t.text),
+        ),
         isTrue,
       );
     });
     test('milestone renders a diamond', () {
       final scene = layoutGanttChart(
-        parseGanttChart('gantt\ndateFormat YYYY-MM-DD\n'
-            'M : milestone, 2024-01-05, 1d'),
+        parseGanttChart(
+          'gantt\ndateFormat YYYY-MM-DD\n'
+          'M : milestone, 2024-01-05, 1d',
+        ),
         measurer: measurer,
         theme: theme,
       );
       expect(
-        flatten(scene.nodes)
-            .whereType<SceneShape>()
-            .any((s) => s.geometry is PolygonGeometry),
+        flatten(
+          scene.nodes,
+        ).whereType<SceneShape>().any((s) => s.geometry is PolygonGeometry),
         isTrue,
       );
     });

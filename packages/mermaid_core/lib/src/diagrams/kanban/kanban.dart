@@ -5,7 +5,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -18,7 +20,8 @@ import '../../theme/theme.dart';
 /// `icon`) is parsed from a trailing `@{ ... }` YAML-ish block, matching
 /// upstream `kanbanDb.ts:addNode`.
 class KanbanTask {
-  KanbanTask(this.title);
+  KanbanTask(this.title, {this.id});
+  final String? id;
   String title;
   String? ticket;
   String? priority;
@@ -55,8 +58,9 @@ class _NodeHead {
 _NodeHead _parseHead(String s) {
   final t = s.trim();
   // `id[label]`, `id(label)`, `id((label))`, `id{{label}}` — id + inner label.
-  final m =
-      RegExp(r'^([^\s\[\(\{@]+)\s*[\[\(\{]+(.*?)[\]\)\}]+\s*$').firstMatch(t);
+  final m = RegExp(
+    r'^([^\s\[\(\{@]+)\s*[\[\(\{]+(.*?)[\]\)\}]+\s*$',
+  ).firstMatch(t);
   String? id;
   String label;
   if (m != null) {
@@ -87,7 +91,10 @@ void _applyMeta(KanbanTask task, String key, String value) {
   switch (key.trim()) {
     case 'label':
     case 'descr':
-      task.title = v.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n');
+      task.title = v.replaceAll(
+        RegExp(r'<br\s*/?>', caseSensitive: false),
+        '\n',
+      );
       break;
     case 'ticket':
       task.ticket = v;
@@ -216,7 +223,7 @@ KanbanBoard parseKanban(String source) {
       columns.add(KanbanColumn(head.label));
       lastTask = null;
     } else if (columns.isNotEmpty) {
-      final task = KanbanTask(head.label);
+      final task = KanbanTask(head.label, id: head.id);
       columns.last.cards.add(task);
       if (head.id != null) tasksById[head.id!] = task;
       lastTask = task;
@@ -241,13 +248,8 @@ void _applyBlock(KanbanTask task, String body) {
 
 // Upstream renderer constants. `sectionWidth` defaults to 200; the renderer
 // hardcodes `padding = 10`.
-const _width = 200.0;
-const _padding = 10.0;
-// Item width = WIDTH - 1.5*padding (upstream kanbanRenderer.ts).
-const _cardW = _width - 1.5 * _padding; // 185
 // Inner label padding (upstream `labelPaddingX/Y = 10`).
 const _labelPadX = 10.0;
-const _labelPadY = 10.0;
 // Default minimum label height upstream seeds `maxLabelHeight` with.
 const _minLabelHeight = 25.0;
 
@@ -326,13 +328,39 @@ double _hue2rgb(double p, double q, double t) {
 /// the default render; kept inlined to preserve pixel-identity.)
 const _sectionTextColor = Color(0xff333333);
 
+class KanbanConfig {
+  const KanbanConfig({
+    this.padding = 10,
+    this.sectionWidth = 200,
+    this.ticketBaseUrl = '',
+  });
+
+  final double padding, sectionWidth;
+  final String ticketBaseUrl;
+
+  factory KanbanConfig.fromSource(String source) {
+    final v = resolveDiagramConfig(source, 'kanban');
+    return KanbanConfig(
+      padding: nonNegativeDouble(v, 'padding', 10),
+      sectionWidth: positiveDouble(v, 'sectionWidth', 200),
+      ticketBaseUrl: stringValue(v, 'ticketBaseUrl', ''),
+    );
+  }
+}
+
 RenderScene layoutKanban(
   KanbanBoard board, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  KanbanConfig config = const KanbanConfig(),
 }) {
-  final baseStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: theme.fontSize);
+  final width = config.sectionWidth;
+  final padding = config.padding;
+  final cardW = width - 1.5 * padding;
+  final baseStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: theme.fontSize,
+  );
   final titleStyle = baseStyle.copyWith(fontWeight: 700);
   final nodes = <SceneNode>[];
 
@@ -341,7 +369,7 @@ RenderScene layoutKanban(
   var maxLabelHeight = _minLabelHeight;
   final titleSizes = <Size>[];
   for (final col in board.columns) {
-    final ts = measurer.measure(col.title, titleStyle, maxWidth: _width);
+    final ts = measurer.measure(col.title, titleStyle, maxWidth: width);
     titleSizes.add(ts);
     maxLabelHeight = math.max(maxLabelHeight, ts.height);
   }
@@ -356,7 +384,7 @@ RenderScene layoutKanban(
 
     // Horizontal placement mirrors upstream `section.x = WIDTH*cnt +
     // (cnt-1)*padding/2` (cnt = ci+1): step = WIDTH + padding/2.
-    final x = ci * (_width + _padding / 2);
+    final x = ci * (width + padding / 2);
 
     // Stack cards. Upstream item `totalHeight = max(bbox.height +
     // labelPaddingY*2, node.height)` (+ ticket/assigned adjust). The vertical
@@ -364,58 +392,78 @@ RenderScene layoutKanban(
     final cardLayout = <_CardLayout>[];
     var y = labelTop; // top of the section box content (== upstream `top`)
     for (final task in col.cards) {
-      final titleSz = measurer.measure(task.title, baseStyle, maxWidth: _cardW);
+      final titleSz = measurer.measure(task.title, baseStyle, maxWidth: cardW);
       final ticketSz = (task.ticket != null && task.ticket!.isNotEmpty)
-          ? measurer.measure(task.ticket!, baseStyle, maxWidth: _cardW)
+          ? measurer.measure(task.ticket!, baseStyle, maxWidth: cardW)
           : null;
       final assignedSz = (task.assigned != null && task.assigned!.isNotEmpty)
-          ? measurer.measure(task.assigned!, baseStyle, maxWidth: _cardW)
+          ? measurer.measure(task.assigned!, baseStyle, maxWidth: cardW)
           : null;
-      final heightAdj = math.max(
-            ticketSz?.height ?? 0,
-            assignedSz?.height ?? 0,
-          ) /
-          2;
-      final totalHeight = titleSz.height + _labelPadY * 2 + heightAdj;
-      cardLayout.add(_CardLayout(task, titleSz, ticketSz, assignedSz,
-          y, totalHeight));
+      final metadataHeight = math.max(
+        ticketSz?.height ?? 0,
+        assignedSz?.height ?? 0,
+      );
+      final metadataGap = metadataHeight > 0 ? padding / 2 : 0.0;
+      final totalHeight =
+          padding + titleSz.height + metadataGap + metadataHeight + padding;
+      cardLayout.add(
+        _CardLayout(
+          task,
+          titleSz,
+          ticketSz,
+          assignedSz,
+          y,
+          totalHeight,
+          metadataGap,
+        ),
+      );
       // Advance cursor: upstream `y = item.y + bbox.height/2 + padding/2`,
       // with `item.y = y + bbox.height/2` ⇒ y += totalHeight + padding/2.
-      y += totalHeight + _padding / 2;
+      y += totalHeight + padding / 2;
     }
 
     // Section height: max(y - top + 3*padding, 50) + (maxLabelHeight - 25).
-    final boxHeight = math.max(y - labelTop + 3 * _padding, 50.0) +
+    final boxHeight =
+        math.max(y - labelTop + 3 * padding, 50.0) +
         (maxLabelHeight - _minLabelHeight);
 
     // Section box: pale theme fill, same color stroke (upstream paints both
     // fill and stroke with `adjuster(cScale, 10)`). rx/ry = 5.
-    nodes.add(SceneShape(
-      geometry:
-          RectGeometry(Rect.fromLTWH(x, 0, _width, boxHeight), rx: 5, ry: 5),
-      fill: Fill(fill),
-      stroke: Stroke(color: fill),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(
+          Rect.fromLTWH(x, 0, width, boxHeight),
+          rx: 5,
+          ry: 5,
+        ),
+        fill: Fill(fill),
+        stroke: Stroke(color: fill),
+      ),
+    );
     // Section label starts at the section box top and is centered across it.
     final titleSz = titleSizes[ci];
-    nodes.add(SceneText(
-      text: col.title,
-      bounds: Rect.fromLTWH(x, 0, _width, titleSz.height),
-      style: titleStyle,
-      color: _sectionTextColor,
-    ));
+    nodes.add(
+      SceneText(
+        text: col.title,
+        bounds: Rect.fromLTWH(x, 0, width, titleSz.height),
+        style: titleStyle,
+        color: _sectionTextColor,
+      ),
+    );
 
     // Cards: white fill, neutral nodeBorder stroke (1px), rx/ry = 5.
     for (final card in cardLayout) {
       // Upstream shares the section and item center; the narrower card is
       // therefore inset equally on both sides.
-      final cardX = x + (_width - _cardW) / 2;
-      final cardRect = Rect.fromLTWH(cardX, card.y, _cardW, card.totalHeight);
-      nodes.add(SceneShape(
-        geometry: RectGeometry(cardRect, rx: 5, ry: 5),
-        fill: Fill(theme.background),
-        stroke: Stroke(color: theme.nodeBorder, width: 1),
-      ));
+      final cardX = x + (width - cardW) / 2;
+      final cardRect = Rect.fromLTWH(cardX, card.y, cardW, card.totalHeight);
+      nodes.add(
+        SceneShape(
+          geometry: RectGeometry(cardRect, rx: 5, ry: 5),
+          fill: Fill(theme.background),
+          stroke: Stroke(color: theme.nodeBorder, width: 1),
+        ),
+      );
 
       // Priority bar: a 4px vertical line on the left inner edge.
       final priColor = _colorFromPriority(card.task.priority);
@@ -423,60 +471,80 @@ RenderScene layoutKanban(
         final lineX = cardRect.left + 2;
         final y1 = cardRect.top + (5 ~/ 2); // floor(rx/2), rx = 5
         final y2 = cardRect.bottom - (5 ~/ 2);
-        nodes.add(SceneShape(
-          geometry: RectGeometry(
-              Rect.fromLTWH(lineX - 2, y1, 4, y2 - y1)),
-          fill: Fill(priColor),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: RectGeometry(Rect.fromLTWH(lineX - 2, y1, 4, y2 - y1)),
+            fill: Fill(priColor),
+          ),
+        );
       }
 
       // Title (left-aligned, `padding - totalWidth/2` from center ⇒ left
       // inset of `labelPadX`). Sits in the upper band of the card.
-      final hAdj = math.max(
-            card.ticketSize?.height ?? 0,
-            card.assignedSize?.height ?? 0,
-          ) /
-          2;
-      final titleY = cardRect.top + card.totalHeight / 2 - hAdj -
-          card.titleSize.height / 2;
-      nodes.add(SceneText(
-        text: card.task.title,
-        bounds: Rect.fromLTWH(cardRect.left + _labelPadX, titleY,
-            _cardW - 2 * _labelPadX, card.titleSize.height),
-        style: baseStyle,
-        color: theme.textColor,
-        align: TextAlignH.left,
-      ));
-
-      // Ticket label (under the title, left-aligned). Linked when a
-      // ticketBaseUrl is configured; the default is empty so it renders as
-      // plain underlined link-styled text only when present — here we just
-      // render the text left-aligned.
-      if (card.ticketSize != null) {
-        final ticketY = cardRect.top + card.totalHeight / 2 - hAdj +
-            card.titleSize.height / 2 - card.ticketSize!.height / 2;
-        nodes.add(SceneText(
-          text: card.task.ticket!,
-          bounds: Rect.fromLTWH(cardRect.left + _labelPadX, ticketY,
-              _cardW - 2 * _labelPadX, card.ticketSize!.height),
+      final titleY = cardRect.top + padding;
+      nodes.add(
+        SceneText(
+          text: card.task.title,
+          bounds: Rect.fromLTWH(
+            cardRect.left + _labelPadX,
+            titleY,
+            cardW - 2 * _labelPadX,
+            card.titleSize.height,
+          ),
           style: baseStyle,
           color: theme.textColor,
           align: TextAlignH.left,
-        ));
+        ),
+      );
+
+      // Keep the ticket link scoped to the ticket label, not the whole card.
+      if (card.ticketSize != null) {
+        final ticketY = titleY + card.titleSize.height + card.metadataGap;
+        final ticket = SceneText(
+          text: card.task.ticket!,
+          bounds: Rect.fromLTWH(
+            cardRect.left + _labelPadX,
+            ticketY,
+            cardW - 2 * _labelPadX,
+            card.ticketSize!.height,
+          ),
+          style: baseStyle,
+          color: theme.textColor,
+          align: TextAlignH.left,
+          underline: config.ticketBaseUrl.isNotEmpty,
+        );
+        nodes.add(
+          config.ticketBaseUrl.isEmpty
+              ? ticket
+              : SceneGroup(
+                  id: card.task.id,
+                  role: SceneGroupRole.node,
+                  link: config.ticketBaseUrl.replaceFirst(
+                    '#TICKET#',
+                    card.task.ticket!,
+                  ),
+                  children: [ticket],
+                ),
+        );
       }
 
       // Assigned label (right-aligned, on the same row as the ticket).
       if (card.assignedSize != null) {
-        final assignedY = cardRect.top + card.totalHeight / 2 - hAdj +
-            card.titleSize.height / 2 - card.assignedSize!.height / 2;
-        nodes.add(SceneText(
-          text: card.task.assigned!,
-          bounds: Rect.fromLTWH(cardRect.left + _labelPadX, assignedY,
-              _cardW - 2 * _labelPadX, card.assignedSize!.height),
-          style: baseStyle,
-          color: theme.textColor,
-          align: TextAlignH.right,
-        ));
+        final assignedY = titleY + card.titleSize.height + card.metadataGap;
+        nodes.add(
+          SceneText(
+            text: card.task.assigned!,
+            bounds: Rect.fromLTWH(
+              cardRect.left + _labelPadX,
+              assignedY,
+              cardW - 2 * _labelPadX,
+              card.assignedSize!.height,
+            ),
+            style: baseStyle,
+            color: theme.textColor,
+            align: TextAlignH.right,
+          ),
+        );
       }
     }
   }
@@ -488,18 +556,26 @@ RenderScene layoutKanban(
     background: theme.background,
     nodes: [
       for (final n in nodes)
-        translateSceneNode(n, m - bounds.left, m - bounds.top)
+        translateSceneNode(n, m - bounds.left, m - bounds.top),
     ],
   );
 }
 
 class _CardLayout {
-  _CardLayout(this.task, this.titleSize, this.ticketSize, this.assignedSize,
-      this.y, this.totalHeight);
+  _CardLayout(
+    this.task,
+    this.titleSize,
+    this.ticketSize,
+    this.assignedSize,
+    this.y,
+    this.totalHeight,
+    this.metadataGap,
+  );
   final KanbanTask task;
   final Size titleSize;
   final Size? ticketSize;
   final Size? assignedSize;
   final double y;
   final double totalHeight;
+  final double metadataGap;
 }

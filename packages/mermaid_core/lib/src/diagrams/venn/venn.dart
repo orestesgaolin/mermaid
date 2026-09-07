@@ -12,7 +12,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -85,6 +87,31 @@ class VennDiagram {
   }
 }
 
+/// Typed layout values from `config.venn`.
+class VennConfig {
+  const VennConfig({
+    this.width = 800,
+    this.height = 450,
+    this.padding = 8,
+    this.useDebugLayout = false,
+  });
+
+  final double width;
+  final double height;
+  final double padding;
+  final bool useDebugLayout;
+
+  factory VennConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'venn');
+    return VennConfig(
+      width: positiveDouble(values, 'width', 800),
+      height: positiveDouble(values, 'height', 450),
+      padding: nonNegativeDouble(values, 'padding', 8),
+      useDebugLayout: boolValue(values, 'useDebugLayout', false),
+    );
+  }
+}
+
 String _normalizeText(String text) {
   final trimmed = text.trim();
   if (trimmed.length >= 2 && trimmed.startsWith('"') && trimmed.endsWith('"')) {
@@ -95,7 +122,11 @@ String _normalizeText(String text) {
 
 /// Splits a comma-separated identifier list, honoring optional quotes.
 List<String> _parseIdentifierList(String raw) {
-  return raw.split(',').map((s) => _normalizeText(s)).where((s) => s.isNotEmpty).toList();
+  return raw
+      .split(',')
+      .map((s) => _normalizeText(s))
+      .where((s) => s.isNotEmpty)
+      .toList();
 }
 
 VennDiagram parseVenn(String source) {
@@ -114,7 +145,8 @@ VennDiagram parseVenn(String source) {
   var indentMode = false;
 
   // Captures an optional `["label"]` then optional `:NUMERIC` tail.
-  const labelSize = r'(?:\s*\[(?:"([^"]*)"|([^\]]*))\])?\s*(?::\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)))?';
+  const labelSize =
+      r'(?:\s*\[(?:"([^"]*)"|([^\]]*))\])?\s*(?::\s*([+-]?(?:\d+(?:\.\d+)?|\.\d+)))?';
 
   for (var i = 0; i < lines.length; i++) {
     final rawLine = lines[i];
@@ -132,7 +164,8 @@ VennDiagram parseVenn(String source) {
     }
 
     // Indented `text` line: attach to the most recent set/union.
-    final indented = rawLine.isNotEmpty && (rawLine[0] == ' ' || rawLine[0] == '\t');
+    final indented =
+        rawLine.isNotEmpty && (rawLine[0] == ' ' || rawLine[0] == '\t');
     if (indentMode && indented) {
       final tm = RegExp('^text\\s+(.+)\$').firstMatch(line);
       if (tm != null) {
@@ -160,7 +193,9 @@ VennDiagram parseVenn(String source) {
       final list = [id];
       sets.add(id);
       knownSets.add(id);
-      subsets.add(VennSubset(list, size, label == null ? null : _normalizeText(label)));
+      subsets.add(
+        VennSubset(list, size, label == null ? null : _normalizeText(label)),
+      );
       currentSets = list;
       indentMode = true;
       continue;
@@ -170,18 +205,25 @@ VennDiagram parseVenn(String source) {
     if (m != null) {
       final list = _parseIdentifierList(m.group(1)!)..sort();
       if (list.length < 2) {
-        throw MermaidParseException('union requires multiple identifiers', line: i + 1);
+        throw MermaidParseException(
+          'union requires multiple identifiers',
+          line: i + 1,
+        );
       }
       final unknown = list.where((s) => !knownSets.contains(s)).toList();
       if (unknown.isNotEmpty) {
         throw MermaidParseException(
-            'unknown set identifier: ${unknown.join(', ')}', line: i + 1);
+          'unknown set identifier: ${unknown.join(', ')}',
+          line: i + 1,
+        );
       }
       final label = m.group(2) ?? m.group(3);
       final size = m.group(4) != null
           ? double.parse(m.group(4)!)
           : 10.0 / math.pow(list.length, 2);
-      subsets.add(VennSubset(list, size, label == null ? null : _normalizeText(label)));
+      subsets.add(
+        VennSubset(list, size, label == null ? null : _normalizeText(label)),
+      );
       currentSets = list;
       indentMode = true;
       continue;
@@ -216,9 +258,14 @@ class _TextId {
 }
 
 _TextId _parseTextId(String raw) {
-  final m = RegExp(r'^(.+?)\s*\[(?:"([^"]*)"|([^\]]*))\]\s*$').firstMatch(raw.trim());
+  final m = RegExp(
+    r'^(.+?)\s*\[(?:"([^"]*)"|([^\]]*))\]\s*$',
+  ).firstMatch(raw.trim());
   if (m != null) {
-    return _TextId(_normalizeText(m.group(1)!), _normalizeText(m.group(2) ?? m.group(3) ?? ''));
+    return _TextId(
+      _normalizeText(m.group(1)!),
+      _normalizeText(m.group(2) ?? m.group(3) ?? ''),
+    );
   }
   return _TextId(_normalizeText(raw), null);
 }
@@ -285,7 +332,12 @@ Color _fromHsl(_Hsl c, int alpha) {
   final r = _hue2rgb(p, q, h + 1 / 3);
   final g = _hue2rgb(p, q, h);
   final b = _hue2rgb(p, q, h - 1 / 3);
-  return Color.fromARGB(alpha, (r * 255).round(), (g * 255).round(), (b * 255).round());
+  return Color.fromARGB(
+    alpha,
+    (r * 255).round(),
+    (g * 255).round(),
+    (b * 255).round(),
+  );
 }
 
 /// khroma `darken(c, amount)` — lightness minus `amount` percentage points.
@@ -353,11 +405,18 @@ double _lensArea(double r1, double r2, double d) {
   }
   if (d >= r1 + r2) return 0;
   final r1sq = r1 * r1, r2sq = r2 * r2;
-  final a1 = r1sq * math.acos(((d * d + r1sq - r2sq) / (2 * d * r1)).clamp(-1.0, 1.0));
-  final a2 = r2sq * math.acos(((d * d + r2sq - r1sq) / (2 * d * r2)).clamp(-1.0, 1.0));
-  final a3 = 0.5 *
-      math.sqrt(math.max(
-          0, (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2)));
+  final a1 =
+      r1sq * math.acos(((d * d + r1sq - r2sq) / (2 * d * r1)).clamp(-1.0, 1.0));
+  final a2 =
+      r2sq * math.acos(((d * d + r2sq - r1sq) / (2 * d * r2)).clamp(-1.0, 1.0));
+  final a3 =
+      0.5 *
+      math.sqrt(
+        math.max(
+          0,
+          (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2),
+        ),
+      );
   return a1 + a2 - a3;
 }
 
@@ -383,7 +442,10 @@ double _distanceForOverlap(double r1, double r2, double target) {
 /// Computes per-set circles (in layout-space units, centred near origin) that
 /// honor the requested sizes/overlaps. Analytic for 1–2 sets; constraint
 /// relaxation for ≥3.
-Map<String, _Circle> _layoutCircles(List<String> setIds, List<VennSubset> subsets) {
+Map<String, _Circle> _layoutCircles(
+  List<String> setIds,
+  List<VennSubset> subsets,
+) {
   final radii = <String, double>{};
   for (final id in setIds) {
     final s = subsets.firstWhere(
@@ -402,9 +464,13 @@ Map<String, _Circle> _layoutCircles(List<String> setIds, List<VennSubset> subset
   // Desired pairwise distances from the union sizes (default overlap if absent).
   double pairDistance(String a, String b) {
     final key = ([a, b]..sort()).join('|');
-    final sub = subsets.where((e) => e.key == key && e.sets.length == 2).toList();
+    final sub = subsets
+        .where((e) => e.key == key && e.sets.length == 2)
+        .toList();
     final ra = radii[a]!, rb = radii[b]!;
-    final overlap = sub.isNotEmpty ? sub.first.size : math.min(ra, rb) * math.min(ra, rb) * 0.5;
+    final overlap = sub.isNotEmpty
+        ? sub.first.size
+        : math.min(ra, rb) * math.min(ra, rb) * 0.5;
     return _distanceForOverlap(ra, rb, overlap);
   }
 
@@ -455,12 +521,12 @@ RenderScene layoutVenn(
   VennDiagram d, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  VennConfig config = const VennConfig(),
 }) {
-  // Match upstream viewBox: 800×450, scale = width / 1600.
-  const svgWidth = 800.0;
-  const svgHeight = 450.0;
-  const scale = svgWidth / 1600.0;
-  const padding = 15.0;
+  final svgWidth = config.width;
+  final svgHeight = config.height;
+  final scale = svgWidth / 1600.0;
+  final padding = config.padding;
 
   // Mermaid's `.venn-title` stylesheet fixes the rendered font at 32px,
   // overriding the scaled `font-size` presentation attribute from its renderer.
@@ -469,10 +535,12 @@ RenderScene layoutVenn(
   // clears the circle area and the scene keeps the 800x450 viewBox.
   final titleText = (d.title?.isNotEmpty ?? false) ? d.title! : null;
   final titleStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 32);
-  final titleSize =
-      titleText == null ? null : measurer.measure(titleText, titleStyle);
-  final titleHeight =
-      titleSize == null ? 0.0 : math.max(48.0 * scale, titleSize.height);
+  final titleSize = titleText == null
+      ? null
+      : measurer.measure(titleText, titleStyle);
+  final titleHeight = titleSize == null
+      ? 0.0
+      : math.max(48.0 * scale, titleSize.height);
 
   final themeDark = _isDark(theme.background);
   // Upstream intersection/text-node fill = `vennSetTextColor`.
@@ -507,19 +575,26 @@ RenderScene layoutVenn(
     final circle = fitted[id];
     if (circle == null) continue;
     final custom = styleByKey[id];
-    final baseColor = _resolveColor(custom?['fill']) ?? vennColors[i % vennColors.length];
+    final baseColor =
+        _resolveColor(custom?['fill']) ?? vennColors[i % vennColors.length];
     final fillOpacity = _parseOpacity(custom?['fill-opacity']) ?? 0.1;
     final strokeColor = _resolveColor(custom?['stroke']) ?? baseColor;
     final strokeWidth = _parseNum(custom?['stroke-width']) ?? (5 * scale);
 
-    nodes.add(SceneShape(
-      geometry: CircleGeometry(Point(circle.x, circle.y), circle.radius),
-      fill: Fill(baseColor.withOpacity(fillOpacity)),
-      stroke: Stroke(color: strokeColor.withOpacity(0.95), width: strokeWidth),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: CircleGeometry(Point(circle.x, circle.y), circle.radius),
+        fill: Fill(baseColor.withOpacity(fillOpacity)),
+        stroke: Stroke(
+          color: strokeColor.withOpacity(0.95),
+          width: strokeWidth,
+        ),
+      ),
+    );
 
     // Set label: font 48*scale, colored darken/lighten(baseColor,30).
-    final labelColor = _resolveColor(custom?['color']) ??
+    final labelColor =
+        _resolveColor(custom?['color']) ??
         (themeDark ? _lighten(baseColor, 30) : _darken(baseColor, 30));
     final labelText = _setLabel(d.subsets, id);
     final labelStyle = TextStyleSpec(
@@ -530,12 +605,14 @@ RenderScene layoutVenn(
     // Approximate venn.js' exclusive-region text centre by moving away from
     // the other sets. Equal horizontal sets then share the union's baseline.
     final lp = _setLabelCenter(id, circle, fitted);
-    nodes.add(SceneText(
-      text: labelText,
-      bounds: Rect.fromCenter(lp, ls.width, ls.height),
-      style: labelStyle,
-      color: labelColor,
-    ));
+    nodes.add(
+      SceneText(
+        text: labelText,
+        bounds: Rect.fromCenter(lp, ls.width, ls.height),
+        style: labelStyle,
+        color: labelColor,
+      ),
+    );
   }
 
   // Intersection (union) regions: label seated at the overlap centroid, font
@@ -543,8 +620,10 @@ RenderScene layoutVenn(
   // only filled when a custom `fill` style is present (upstream fill-opacity 0).
   for (final sub in d.subsets) {
     if (sub.sets.length < 2) continue;
-    final memberCircles =
-        sub.sets.map((s) => fitted[s]).whereType<_Circle>().toList();
+    final memberCircles = sub.sets
+        .map((s) => fitted[s])
+        .whereType<_Circle>()
+        .toList();
     if (memberCircles.length != sub.sets.length) continue;
     final centroid = _intersectionCentroid(memberCircles);
     final custom = styleByKey[sub.key];
@@ -554,47 +633,67 @@ RenderScene layoutVenn(
       // Approximate the shared region with a circle at the centroid sized to
       // the smallest member, so a styled intersection has a visible fill.
       final r = memberCircles.map((c) => c.radius).reduce(math.min) * 0.5;
-      nodes.add(SceneShape(
-        geometry: CircleGeometry(centroid, r),
-        fill: Fill(customFill),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: CircleGeometry(centroid, r),
+          fill: Fill(customFill),
+        ),
+      );
     }
 
     final label = sub.label;
     if (label != null && label.isNotEmpty) {
       final color = _resolveColor(custom?['color']) ?? setTextColor;
-      final style = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 48 * scale);
+      final style = TextStyleSpec(
+        fontFamily: theme.fontFamily,
+        fontSize: 48 * scale,
+      );
       final ls = measurer.measure(label, style);
-      nodes.add(SceneText(
-        text: label,
-        bounds: Rect.fromCenter(centroid, ls.width, ls.height),
-        style: style,
-        color: color,
-      ));
+      nodes.add(
+        SceneText(
+          text: label,
+          bounds: Rect.fromCenter(centroid, ls.width, ls.height),
+          style: style,
+          color: color,
+        ),
+      );
     }
   }
 
   // Free text nodes: grid placement inside each region (font 40*scale).
-  _placeTextNodes(d, fitted, styleByKey, scale, measurer, theme, setTextColor, nodes);
+  _placeTextNodes(
+    d,
+    fitted,
+    styleByKey,
+    scale,
+    measurer,
+    theme,
+    setTextColor,
+    nodes,
+    useDebugLayout: config.useDebugLayout,
+  );
 
   final children = <SceneNode>[...nodes];
 
   // Title centred in the reserved header band, horizontally centred on the
   // viewBox (upstream `x="50%"`).
   if (titleText != null && titleSize != null) {
-    children.add(SceneText(
-      text: titleText,
-      bounds: Rect.fromCenter(
-        Point(svgWidth / 2, titleHeight / 2),
-        titleSize.width,
-        titleSize.height,
+    children.add(
+      SceneText(
+        text: titleText,
+        bounds: Rect.fromCenter(
+          Point(svgWidth / 2, titleHeight / 2),
+          titleSize.width,
+          titleSize.height,
+        ),
+        style: titleStyle,
+        color: theme.vennTitleTextColor,
       ),
-      style: titleStyle,
-      color: theme.vennTitleTextColor,
-    ));
+    );
   }
 
-  final bounds = sceneBounds(children) ?? const Rect.fromLTWH(0, 0, svgWidth, svgHeight);
+  final bounds =
+      sceneBounds(children) ?? Rect.fromLTWH(0, 0, svgWidth, svgHeight);
   // Use the upstream viewBox size, expanded if any content overflows it.
   final right = math.max(svgWidth, bounds.right);
   final bottom = math.max(svgHeight, bounds.bottom);
@@ -617,8 +716,7 @@ String _setLabel(List<VennSubset> subsets, String id) {
   return id;
 }
 
-Point _setLabelCenter(
-    String id, _Circle circle, Map<String, _Circle> circles) {
+Point _setLabelCenter(String id, _Circle circle, Map<String, _Circle> circles) {
   final others = circles.entries.where((entry) => entry.key != id).toList();
   if (others.isEmpty) return Point(circle.x, circle.y);
 
@@ -632,8 +730,10 @@ Point _setLabelCenter(
   if (distance == 0) return Point(circle.x, circle.y);
 
   final offset = circle.radius * 0.45;
-  return Point(circle.x + dx / distance * offset,
-      circle.y + dy / distance * offset);
+  return Point(
+    circle.x + dx / distance * offset,
+    circle.y + dy / distance * offset,
+  );
 }
 
 /// Centroid of the overlap region: the average of the two nearest boundary
@@ -690,8 +790,9 @@ void _placeTextNodes(
   TextMeasurer measurer,
   MermaidTheme theme,
   Color setTextColor,
-  List<SceneNode> out,
-) {
+  List<SceneNode> out, {
+  required bool useDebugLayout,
+}) {
   if (d.textNodes.isEmpty) return;
   final byArea = <String, List<VennTextNode>>{};
   for (final n in d.textNodes) {
@@ -699,14 +800,19 @@ void _placeTextNodes(
   }
   for (final entry in byArea.entries) {
     final memberIds = entry.key.split('|');
-    final memberCircles = memberIds.map((s) => fitted[s]).whereType<_Circle>().toList();
+    final memberCircles = memberIds
+        .map((s) => fitted[s])
+        .whereType<_Circle>()
+        .toList();
     if (memberCircles.length != memberIds.length) continue;
     final center = _intersectionCentroid(memberCircles);
     final minR = memberCircles.map((c) => c.radius).reduce(math.min);
     var innerRadius = double.infinity;
     for (final c in memberCircles) {
       final dist = math.sqrt(
-          (center.x - c.x) * (center.x - c.x) + (center.y - c.y) * (center.y - c.y));
+        (center.x - c.x) * (center.x - c.x) +
+            (center.y - c.y) * (center.y - c.y),
+      );
       innerRadius = math.min(innerRadius, c.radius - dist);
     }
     if (!innerRadius.isFinite || innerRadius <= 0) innerRadius = minR * 0.6;
@@ -715,10 +821,14 @@ void _placeTextNodes(
     final innerWidth = math.max(80 * scale, innerRadius * 2 * 0.95);
     final innerHeight = math.max(60 * scale, innerRadius * 2 * 0.95);
     // Offset down if the region carries its own union label.
-    final hasLabel = d.subsets.any((s) =>
-        s.key == entry.key && (s.label?.isNotEmpty ?? false));
-    final labelOffsetBase = hasLabel ? math.min(32 * scale, innerRadius * 0.25) : 0.0;
-    final labelOffset = labelOffsetBase + (nodes.length <= 2 ? 30 * scale : 0.0);
+    final hasLabel = d.subsets.any(
+      (s) => s.key == entry.key && (s.label?.isNotEmpty ?? false),
+    );
+    final labelOffsetBase = hasLabel
+        ? math.min(32 * scale, innerRadius * 0.25)
+        : 0.0;
+    final labelOffset =
+        labelOffsetBase + (nodes.length <= 2 ? 30 * scale : 0.0);
     final startX = center.x - innerWidth / 2;
     final startY = center.y - innerHeight / 2 + labelOffset;
     final cols = math.max(1, math.sqrt(nodes.length).ceil());
@@ -726,22 +836,62 @@ void _placeTextNodes(
     final cellW = innerWidth / cols;
     final cellH = innerHeight / rows;
 
-    final style = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 40 * scale);
+    if (useDebugLayout) {
+      out.add(
+        SceneShape(
+          geometry: CircleGeometry(center, innerRadius),
+          stroke: Stroke(
+            color: const Color(0xff800080),
+            width: 1.5 * scale,
+            dash: [6 * scale, 4 * scale],
+          ),
+        ),
+      );
+    }
+
+    final style = TextStyleSpec(
+      fontFamily: theme.fontFamily,
+      fontSize: 40 * scale,
+    );
     for (var i = 0; i < nodes.length; i++) {
       final node = nodes[i];
       final col = i % cols;
       final row = i ~/ cols;
       final x = startX + cellW * (col + 0.5);
       final y = startY + cellH * (row + 0.5);
-      final text = (node.label != null && node.label!.isNotEmpty) ? node.label! : node.id;
-      final color = _resolveColor(styleByKey[node.id]?['color']) ?? setTextColor;
+      if (useDebugLayout) {
+        out.add(
+          SceneShape(
+            geometry: RectGeometry(
+              Rect.fromLTWH(
+                startX + cellW * col,
+                startY + cellH * row,
+                cellW,
+                cellH,
+              ),
+            ),
+            stroke: Stroke(
+              color: const Color(0xff008080),
+              width: scale,
+              dash: [4 * scale, 3 * scale],
+            ),
+          ),
+        );
+      }
+      final text = (node.label != null && node.label!.isNotEmpty)
+          ? node.label!
+          : node.id;
+      final color =
+          _resolveColor(styleByKey[node.id]?['color']) ?? setTextColor;
       final ts = measurer.measure(text, style);
-      out.add(SceneText(
-        text: text,
-        bounds: Rect.fromCenter(Point(x, y), ts.width, ts.height),
-        style: style,
-        color: color,
-      ));
+      out.add(
+        SceneText(
+          text: text,
+          bounds: Rect.fromCenter(Point(x, y), ts.width, ts.height),
+          style: style,
+          color: color,
+        ),
+      );
     }
   }
 }

@@ -6,7 +6,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -38,8 +40,7 @@ class CynefinDiagram {
   final String? accDescription;
 }
 
-String _canonicalDomain(String name) =>
-    name == 'disorder' ? 'confusion' : name;
+String _canonicalDomain(String name) => name == 'disorder' ? 'confusion' : name;
 
 CynefinDiagram parseCynefin(String source) {
   final text = stripMetadata(source);
@@ -91,16 +92,19 @@ CynefinDiagram parseCynefin(String source) {
       // Self-loop transitions are not meaningful and are filtered out.
       if (from != to) {
         final label = trm.group(3)?.trim();
-        transitions.add(CynefinTransition(
-          from,
-          to,
-          (label == null || label.isEmpty) ? null : label,
-        ));
+        transitions.add(
+          CynefinTransition(
+            from,
+            to,
+            (label == null || label.isEmpty) ? null : label,
+          ),
+        );
       }
       continue;
     }
-    final dm = RegExp(r'^(clear|complicated|complex|chaotic|confusion|disorder)$')
-        .firstMatch(t);
+    final dm = RegExp(
+      r'^(clear|complicated|complex|chaotic|confusion|disorder)$',
+    ).firstMatch(t);
     if (dm != null) {
       current = _canonicalDomain(dm.group(1)!);
       domains.putIfAbsent(current, () => []);
@@ -123,10 +127,41 @@ CynefinDiagram parseCynefin(String source) {
   );
 }
 
-// Canvas geometry (mermaid defaults: width 800, height 600, padding 40).
-const _width = 800.0, _height = 600.0, _padding = 40.0;
-const _boundaryAmplitude = 8.0;
-const _showDomainDescriptions = true;
+class CynefinConfig {
+  const CynefinConfig({
+    this.width = 800,
+    this.height = 600,
+    this.padding = 40,
+    this.showDomainDescriptions = true,
+    this.boundaryAmplitude = 8,
+    this.seed = 0,
+  });
+
+  final double width;
+  final double height;
+  final double padding;
+  final bool showDomainDescriptions;
+  final double boundaryAmplitude;
+  final int seed;
+
+  factory CynefinConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'cynefin');
+    return CynefinConfig(
+      width: positiveDouble(values, 'width', 800),
+      height: positiveDouble(values, 'height', 600),
+      padding: nonNegativeDouble(values, 'padding', 40),
+      showDomainDescriptions: boolValue(values, 'showDomainDescriptions', true),
+      boundaryAmplitude: clampedDouble(
+        values,
+        'boundaryAmplitude',
+        8,
+        min: 0,
+        max: 50,
+      ),
+      seed: nonNegativeDouble(values, 'seed', 0).round(),
+    );
+  }
+}
 
 // Per-domain background colors (theme-default.js cynefin block).
 const _domainFills = {
@@ -156,10 +191,12 @@ class _DomainLayout {
 /// Deterministic pseudo-random number generator (mulberry32),
 /// ported from cynefinBoundaries.ts:seededRandom.
 double _seededRandom(int seed) {
-  var t = (seed + 0x6d2b79f5) | 0;
-  t = _imul(t ^ (t >>> 15), t | 1);
-  t ^= t + _imul(t ^ (t >>> 7), t | 61);
-  return ((t ^ (t >>> 14)) >>> 0) / 4294967296.0;
+  // JS bitwise operations truncate to 32 bits. Dart VM integers are wider,
+  // so `| 0` and `>>> 0` alone can produce enormous boundary displacements.
+  var t = (seed + 0x6d2b79f5).toUnsigned(32);
+  t = _imul(t ^ (t >>> 15), t | 1).toUnsigned(32);
+  t = (t ^ (t + _imul(t ^ (t >>> 7), t | 61))).toUnsigned(32);
+  return (t ^ (t >>> 14)).toUnsigned(32) / 4294967296.0;
 }
 
 /// 32-bit integer multiply matching JS Math.imul.
@@ -168,7 +205,9 @@ int _imul(int a, int b) {
   final aLo = a & 0xffff;
   final bHi = (b >>> 16) & 0xffff;
   final bLo = b & 0xffff;
-  return (aLo * bLo + (((aHi * bLo + aLo * bHi) << 16) & 0xffffffff)).toSigned(32);
+  return (aLo * bLo + (((aHi * bLo + aLo * bHi) << 16) & 0xffffffff)).toSigned(
+    32,
+  );
 }
 
 /// Simple string hash for seeding the PRNG (cynefinBoundaries.ts:hashString).
@@ -189,13 +228,17 @@ Map<String, _DomainLayout> _getDomainLayouts(double width, double height) {
     'complicated': _DomainLayout(hw + hw / 2, hh / 2, hw, 0, hw, hh),
     'chaotic': _DomainLayout(hw / 2, hh + hh / 2, 0, hh, hw, hh),
     'clear': _DomainLayout(hw + hw / 2, hh + hh / 2, hw, hh, hw, hh),
-    'confusion':
-        _DomainLayout(hw, hh, hw * 0.7, hh * 0.7, hw * 0.6, hh * 0.6),
+    'confusion': _DomainLayout(hw, hh, hw * 0.7, hh * 0.7, hw * 0.6, hh * 0.6),
   };
 }
 
 /// Port of generateFoldPath: vertical wavy "fold" through the center.
-PathGeometry _foldPath(double width, double height, int seed, double amplitude) {
+PathGeometry _foldPath(
+  double width,
+  double height,
+  int seed,
+  double amplitude,
+) {
   final cx = width / 2;
   const segments = 7;
   final segHeight = height / segments;
@@ -211,18 +254,20 @@ PathGeometry _foldPath(double width, double height, int seed, double amplitude) 
     final midY = (p0.y + p1.y) / 2;
     final dir = i % 2 == 0 ? 1 : -1;
     final offset = amplitude * 1.5 * dir * _seededRandom(seed + i * 31 + 7);
-    commands.add(CubicTo(
-      Point(p0.x + offset, midY),
-      Point(p1.x - offset, midY),
-      p1,
-    ));
+    commands.add(
+      CubicTo(Point(p0.x + offset, midY), Point(p1.x - offset, midY), p1),
+    );
   }
   return PathGeometry(commands);
 }
 
 /// Port of generateHorizontalBoundary: horizontal wavy line through the center.
 PathGeometry _horizontalBoundary(
-    double width, double height, int seed, double amplitude) {
+  double width,
+  double height,
+  int seed,
+  double amplitude,
+) {
   final cy = height / 2;
   const segments = 7;
   final segWidth = width / segments;
@@ -238,11 +283,9 @@ PathGeometry _horizontalBoundary(
     final midX = (p0.x + p1.x) / 2;
     final dir = i % 2 == 0 ? 1 : -1;
     final offset = amplitude * 1.5 * dir * _seededRandom(seed + i * 37 + 11);
-    commands.add(CubicTo(
-      Point(midX, p0.y + offset),
-      Point(midX, p1.y - offset),
-      p1,
-    ));
+    commands.add(
+      CubicTo(Point(midX, p0.y + offset), Point(midX, p1.y - offset), p1),
+    );
   }
   return PathGeometry(commands);
 }
@@ -273,6 +316,7 @@ RenderScene layoutCynefin(
   CynefinDiagram d, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  CynefinConfig config = const CynefinConfig(),
 }) {
   // Theme-default cynefin block values. Upstream maps cynefin.labelColor to
   // primaryTextColor (invert of primaryColor → #131300 in the default theme),
@@ -307,10 +351,14 @@ RenderScene layoutCynefin(
     fontWeight: 700,
   );
 
-  final layouts = _getDomainLayouts(_width, _height);
+  final width = config.width;
+  final height = config.height;
+  final padding = config.padding;
+  final showDomainDescriptions = config.showDomainDescriptions;
+  final layouts = _getDomainLayouts(width, height);
   // Seed derived from a stable id (we have no svg id; use a fixed string so
   // boundaries are deterministic across renders).
-  final seed = _hashString('cynefin');
+  final seed = config.seed == 0 ? _hashString('cynefin') : config.seed;
 
   final nodes = <SceneNode>[];
   const quadrantDomains = ['complex', 'complicated', 'chaotic', 'clear'];
@@ -318,60 +366,85 @@ RenderScene layoutCynefin(
   // 1. Domain background rectangles (fill-opacity 0.4, no stroke).
   for (final name in quadrantDomains) {
     final l = layouts[name]!;
-    nodes.add(SceneShape(
-      geometry: RectGeometry(Rect.fromLTWH(l.x, l.y, l.w, l.h)),
-      fill: Fill(_domainFills[name]!.withOpacity(0.4)),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(Rect.fromLTWH(l.x, l.y, l.w, l.h)),
+        fill: Fill(_domainFills[name]!.withOpacity(0.4)),
+      ),
+    );
   }
 
   // 2. Wavy boundaries (dashed 6 3).
-  final boundaryStroke = Stroke(color: boundaryColor, width: 2, dash: const [6, 3]);
-  nodes.add(SceneShape(
-    geometry: _foldPath(_width, _height, seed, _boundaryAmplitude),
-    stroke: boundaryStroke,
-  ));
-  nodes.add(SceneShape(
-    geometry:
-        _horizontalBoundary(_width, _height, seed + 100, _boundaryAmplitude),
-    stroke: boundaryStroke,
-  ));
+  final boundaryStroke = Stroke(
+    color: boundaryColor,
+    width: 2,
+    dash: const [6, 3],
+  );
+  nodes.add(
+    SceneShape(
+      geometry: _foldPath(width, height, seed, config.boundaryAmplitude),
+      stroke: boundaryStroke,
+    ),
+  );
+  nodes.add(
+    SceneShape(
+      geometry: _horizontalBoundary(
+        width,
+        height,
+        seed + 100,
+        config.boundaryAmplitude,
+      ),
+      stroke: boundaryStroke,
+    ),
+  );
 
   // 3. The cliff (thick dark-red S-curve between Clear and Chaotic).
-  nodes.add(SceneShape(
-    geometry: _cliffPath(_width, _height),
-    stroke: const Stroke(color: cliffColor, width: 4),
-  ));
+  nodes.add(
+    SceneShape(
+      geometry: _cliffPath(width, height),
+      stroke: const Stroke(color: cliffColor, width: 4),
+    ),
+  );
 
   // 4. Confusion ellipse (center overlay), dashed stroke, 0.5 fill opacity.
-  final confusionRx = _width * 0.15;
-  final confusionRy = _height * 0.15;
-  nodes.add(SceneShape(
-    geometry: EllipseGeometry(
-      const Point(_width / 2, _height / 2),
-      confusionRx,
-      confusionRy,
+  final confusionRx = width * 0.15;
+  final confusionRy = height * 0.15;
+  nodes.add(
+    SceneShape(
+      geometry: EllipseGeometry(
+        Point(width / 2, height / 2),
+        confusionRx,
+        confusionRy,
+      ),
+      fill: Fill(_domainFills['confusion']!.withOpacity(0.5)),
+      stroke: Stroke(color: boundaryColor, width: 1.5, dash: const [4, 2]),
     ),
-    fill: Fill(_domainFills['confusion']!.withOpacity(0.5)),
-    stroke: Stroke(color: boundaryColor, width: 1.5, dash: const [4, 2]),
-  ));
+  );
 
   // 5 & 6. Domain labels + subtitles.
-  void addCenteredText(String text, double cx, double cy, TextStyleSpec style,
-      Color color) {
+  void addCenteredText(
+    String text,
+    double cx,
+    double cy,
+    TextStyleSpec style,
+    Color color,
+  ) {
     if (text.isEmpty) return;
     final s = measurer.measure(text, style);
-    nodes.add(SceneText(
-      text: text,
-      bounds: Rect.fromCenter(Point(cx, cy), s.width, s.height),
-      style: style,
-      color: color,
-      align: TextAlignH.center,
-    ));
+    nodes.add(
+      SceneText(
+        text: text,
+        bounds: Rect.fromCenter(Point(cx, cy), s.width, s.height),
+        style: style,
+        color: color,
+        align: TextAlignH.center,
+      ),
+    );
   }
 
   for (final name in quadrantDomains) {
     final l = layouts[name]!;
-    final labelY = _showDomainDescriptions ? l.cy - 30 : l.cy;
+    final labelY = showDomainDescriptions ? l.cy - 30 : l.cy;
     addCenteredText(
       name[0].toUpperCase() + name.substring(1),
       l.cx,
@@ -379,7 +452,7 @@ RenderScene layoutCynefin(
       labelStyle,
       labelColor,
     );
-    if (_showDomainDescriptions) {
+    if (showDomainDescriptions) {
       final meta = _domainMeta[name]!;
       addCenteredText(meta[0], l.cx, l.cy - 10, subtitleStyle, textColor);
       addCenteredText(meta[1], l.cx, l.cy + 5, subtitleStyle, textColor);
@@ -389,16 +462,16 @@ RenderScene layoutCynefin(
   // Confusion label + subtitle.
   addCenteredText(
     'Confusion',
-    _width / 2,
-    _showDomainDescriptions ? _height / 2 - 10 : _height / 2,
+    width / 2,
+    showDomainDescriptions ? height / 2 - 10 : height / 2,
     labelStyle,
     labelColor,
   );
-  if (_showDomainDescriptions) {
+  if (showDomainDescriptions) {
     addCenteredText(
       _domainMeta['confusion']![1],
-      _width / 2,
-      _height / 2 + 8,
+      width / 2,
+      height / 2 + 8,
       subtitleStyle,
       textColor,
     );
@@ -407,7 +480,13 @@ RenderScene layoutCynefin(
   // 7. Items as rounded badges.
   const itemHeight = 26.0;
   const itemPaddingX = 10.0;
-  const allDomains = ['complex', 'complicated', 'chaotic', 'clear', 'confusion'];
+  const allDomains = [
+    'complex',
+    'complicated',
+    'chaotic',
+    'clear',
+    'confusion',
+  ];
 
   void addBadge(
     String label,
@@ -420,22 +499,31 @@ RenderScene layoutCynefin(
     final s = measurer.measure(label, itemStyle);
     final badgeWidth = s.width + itemPaddingX * 2;
     final x = cx - badgeWidth / 2;
-    nodes.add(SceneShape(
-      geometry: RectGeometry(
-        Rect.fromLTWH(x, y, badgeWidth, itemHeight),
-        rx: 4,
-        ry: 4,
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(
+          Rect.fromLTWH(x, y, badgeWidth, itemHeight),
+          rx: 4,
+          ry: 4,
+        ),
+        fill: Fill(fillColor.withOpacity(fillOpacity)),
+        stroke: Stroke(color: boundaryColor, dash: dash),
       ),
-      fill: Fill(fillColor.withOpacity(fillOpacity)),
-      stroke: Stroke(color: boundaryColor, dash: dash),
-    ));
-    nodes.add(SceneText(
-      text: label,
-      bounds: Rect.fromLTWH(x, y + (itemHeight - s.height) / 2, badgeWidth, s.height),
-      style: itemStyle,
-      color: textColor,
-      align: TextAlignH.center,
-    ));
+    );
+    nodes.add(
+      SceneText(
+        text: label,
+        bounds: Rect.fromLTWH(
+          x,
+          y + (itemHeight - s.height) / 2,
+          badgeWidth,
+          s.height,
+        ),
+        style: itemStyle,
+        color: textColor,
+        align: TextAlignH.center,
+      ),
+    );
   }
 
   for (final name in allDomains) {
@@ -453,10 +541,10 @@ RenderScene layoutCynefin(
 
     final double startY;
     if (isConfusion) {
-      final labelOffset = _showDomainDescriptions ? 22.0 : 14.0;
+      final labelOffset = showDomainDescriptions ? 22.0 : 14.0;
       startY = l.cy + labelOffset;
     } else {
-      startY = l.cy + (_showDomainDescriptions ? 25.0 : 15.0);
+      startY = l.cy + (showDomainDescriptions ? 25.0 : 15.0);
     }
 
     for (var idx = 0; idx < itemsToRender.length; idx++) {
@@ -496,13 +584,15 @@ RenderScene layoutCynefin(
     final cpx = mx + nx * offsetAmount;
     final cpy = my + ny * offsetAmount;
 
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(x1, y1)),
-        QuadTo(Point(cpx, cpy), Point(x2, y2)),
-      ]),
-      stroke: Stroke(color: arrowColor, width: 2),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(x1, y1)),
+          QuadTo(Point(cpx, cpy), Point(x2, y2)),
+        ]),
+        stroke: Stroke(color: arrowColor, width: 2),
+      ),
+    );
 
     // Arrowhead (filled triangle) oriented along the curve's end tangent.
     // Tangent of a quadratic bezier at t=1 is (P2 - control).
@@ -519,54 +609,62 @@ RenderScene layoutCynefin(
       // perpendicular
       final px = -uy;
       final py = ux;
-      nodes.add(SceneShape(
-        geometry: PolygonGeometry([
-          Point(x2, y2),
-          Point(baseX + px * aw, baseY + py * aw),
-          Point(baseX - px * aw, baseY - py * aw),
-        ]),
-        fill: Fill(arrowColor),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PolygonGeometry([
+            Point(x2, y2),
+            Point(baseX + px * aw, baseY + py * aw),
+            Point(baseX - px * aw, baseY - py * aw),
+          ]),
+          fill: Fill(arrowColor),
+        ),
+      );
     }
 
     if (tr.label != null) {
       final s = measurer.measure(tr.label!, subtitleStyle);
-      nodes.add(SceneText(
-        text: tr.label!,
-        bounds: Rect.fromCenter(Point(cpx, cpy - 6 - s.height / 2), s.width, s.height),
-        style: subtitleStyle,
-        color: textColor,
-        align: TextAlignH.center,
-      ));
+      nodes.add(
+        SceneText(
+          text: tr.label!,
+          bounds: Rect.fromCenter(
+            Point(cpx, cpy - 6 - s.height / 2),
+            s.width,
+            s.height,
+          ),
+          style: subtitleStyle,
+          color: textColor,
+          align: TextAlignH.center,
+        ),
+      );
     }
   }
 
   // Translate everything by padding so the canvas origin matches upstream's
   // root <g transform="translate(padding, padding)">.
-  final body = [
-    for (final n in nodes) translateSceneNode(n, _padding, _padding)
-  ];
+  final body = [for (final n in nodes) translateSceneNode(n, padding, padding)];
 
   final children = <SceneNode>[...body];
 
   // Title centered at the top (y = -padding/2 in root coords → padding/2 here).
   if (d.title != null && d.title!.isNotEmpty) {
     final ts = measurer.measure(d.title!, titleStyle);
-    children.add(SceneText(
-      text: d.title!,
-      bounds: Rect.fromCenter(
-        Point(_width / 2 + _padding, _padding / 2),
-        ts.width,
-        ts.height,
+    children.add(
+      SceneText(
+        text: d.title!,
+        bounds: Rect.fromCenter(
+          Point(width / 2 + padding, padding / 2),
+          ts.width,
+          ts.height,
+        ),
+        style: titleStyle,
+        color: labelColor,
+        align: TextAlignH.center,
       ),
-      style: titleStyle,
-      color: labelColor,
-      align: TextAlignH.center,
-    ));
+    );
   }
 
   return RenderScene(
-    size: const Size(_width + 2 * _padding, _height + 2 * _padding),
+    size: Size(width + 2 * padding, height + 2 * padding),
     background: theme.background,
     nodes: children,
   );

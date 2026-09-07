@@ -17,8 +17,6 @@ import 'gantt_dates.dart';
 import 'gantt_model.dart';
 
 // Upstream config defaults (config.schema.yaml GanttDiagramConfig).
-const double _leftPadding = 75;
-const double _chartWidth = 1050; // 1200 - leftPadding(75) - rightPadding(75)
 const double _diagramPadding = 12;
 
 /// Layout values resolved from `config.gantt`.
@@ -29,6 +27,16 @@ class GanttConfig {
     this.axisFormat,
     this.tickInterval,
     this.topAxis = false,
+    this.topPadding = 50,
+    this.leftPadding = 75,
+    this.rightPadding = 75,
+    this.gridLineStartPadding = 35,
+    this.fontSize = 11,
+    this.sectionFontSize = 11,
+    this.numberSectionStyles = 4,
+    this.displayMode = '',
+    this.weekday = 'sunday',
+    this.titleTopMargin = 25,
   });
 
   final double barHeight;
@@ -36,6 +44,16 @@ class GanttConfig {
   final String? axisFormat;
   final String? tickInterval;
   final bool topAxis;
+  final double topPadding;
+  final double leftPadding;
+  final double rightPadding;
+  final double gridLineStartPadding;
+  final double fontSize;
+  final double sectionFontSize;
+  final int numberSectionStyles;
+  final String displayMode;
+  final String weekday;
+  final double titleTopMargin;
 
   factory GanttConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'gantt');
@@ -55,6 +73,32 @@ class GanttConfig {
           : null,
       tickInterval: tickInterval,
       topAxis: boolValue(values, 'topAxis', false),
+      topPadding: nonNegativeDouble(values, 'topPadding', 50),
+      leftPadding: nonNegativeDouble(values, 'leftPadding', 75),
+      rightPadding: nonNegativeDouble(values, 'rightPadding', 75),
+      gridLineStartPadding: nonNegativeDouble(
+        values,
+        'gridLineStartPadding',
+        35,
+      ),
+      fontSize: positiveDouble(values, 'fontSize', 11),
+      sectionFontSize: positiveDouble(values, 'sectionFontSize', 11),
+      numberSectionStyles: positiveDouble(
+        values,
+        'numberSectionStyles',
+        4,
+      ).round(),
+      displayMode: enumValue(values, 'displayMode', const {'compact'}, ''),
+      weekday: enumValue(values, 'weekday', const {
+        'monday',
+        'tuesday',
+        'wednesday',
+        'thursday',
+        'friday',
+        'saturday',
+        'sunday',
+      }, 'sunday'),
+      titleTopMargin: nonNegativeDouble(values, 'titleTopMargin', 25),
     );
   }
 }
@@ -94,13 +138,16 @@ RenderScene layoutGanttChart(
   GanttConfig config = const GanttConfig(),
 }) {
   final baseStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: theme.fontSize * 0.85);
+    fontFamily: theme.fontFamily,
+    fontSize: config.fontSize,
+  );
   final tasks = chart.tasks.toList();
   if (tasks.isEmpty) {
     return RenderScene(
-        size: const Size(200, 60),
-        background: theme.background,
-        nodes: const []);
+      size: const Size(200, 60),
+      background: theme.background,
+      nodes: const [],
+    );
   }
 
   var minDate = tasks.first.start;
@@ -116,18 +163,25 @@ RenderScene layoutGanttChart(
 
   // Bars start at a fixed left padding (upstream leftPadding=75); section
   // names are placed within that gutter.
-  final sectionStyle = baseStyle.copyWith(fontWeight: 700);
-  const gutter = _leftPadding;
+  final sectionStyle = baseStyle.copyWith(
+    fontWeight: 700,
+    fontSize: config.sectionFontSize,
+  );
+  final gutter = config.leftPadding;
+  final chartWidth = math.max(
+    1.0,
+    1200 - config.leftPadding - config.rightPadding,
+  );
 
   double xOf(DateTime d) =>
-      gutter + d.difference(minDate).inMilliseconds / spanMs * _chartWidth;
+      gutter + d.difference(minDate).inMilliseconds / spanMs * chartWidth;
 
   // Plot right edge (upstream `w - rightPadding`), used for label overflow.
-  final plotRight = gutter + _chartWidth;
+  final plotRight = gutter + chartWidth;
 
   final nodes = <SceneNode>[];
   final rowStride = config.barHeight + config.barGap;
-  final chartTop = 8.0;
+  final chartTop = config.topPadding;
   var y = chartTop;
 
   // `vert` markers don't occupy rows; collect them and draw full-height bars
@@ -138,31 +192,54 @@ RenderScene layoutGanttChart(
   var sectionIndex = 0;
   for (final section in chart.sections) {
     final rowTasks = section.tasks.where((t) => !t.vert).toList();
+    final taskRows = config.displayMode == 'compact'
+        ? _compactTaskRows(rowTasks)
+        : {for (var i = 0; i < rowTasks.length; i++) rowTasks[i]: i};
+    final rowCount = taskRows.isEmpty
+        ? 0
+        : taskRows.values.reduce(math.max) + 1;
     // Section band: spans the full width, `y = rowTop - 2`, one stride per row
     // (upstream drawRects band geometry). Vert markers don't occupy rows.
-    final bandHeight = rowTasks.length * rowStride;
-    nodes.add(SceneShape(
-      geometry: RectGeometry(
-          Rect.fromLTWH(0, y - 2, gutter + _chartWidth + 20,
-              bandHeight.toDouble())),
-      fill: Fill(_sectionBands[sectionIndex % _sectionBands.length]),
-    ));
+    final bandHeight = rowCount * rowStride;
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(
+          Rect.fromLTWH(
+            0,
+            y - 2,
+            gutter + chartWidth + config.rightPadding,
+            bandHeight.toDouble(),
+          ),
+        ),
+        fill: Fill(
+          _sectionBands[(sectionIndex % config.numberSectionStyles) %
+              _sectionBands.length],
+        ),
+      ),
+    );
     if (section.name.isNotEmpty) {
       final size = measurer.measure(section.name, sectionStyle);
-      nodes.add(SceneText(
-        text: section.name,
-        bounds: Rect.fromLTWH(4, y + bandHeight / 2 - size.height / 2,
-            size.width, size.height),
-        style: sectionStyle,
-        color: theme.titleColor,
-        align: TextAlignH.left,
-      ));
+      nodes.add(
+        SceneText(
+          text: section.name,
+          bounds: Rect.fromLTWH(
+            4,
+            y + bandHeight / 2 - size.height / 2,
+            size.width,
+            size.height,
+          ),
+          style: sectionStyle,
+          color: theme.titleColor,
+          align: TextAlignH.left,
+        ),
+      );
     }
     for (final t in section.tasks) {
       if (t.vert) {
         vertTasks.add(t);
         continue;
       }
+      final taskY = y + taskRows[t]! * rowStride;
       final x1 = xOf(t.start);
       // Bar is drawn to renderEnd (original duration); excluded days extend
       // `end` for sequencing/axis only, matching upstream's renderEndTime.
@@ -184,7 +261,7 @@ RenderScene layoutGanttChart(
         // Upstream `.milestone`: a barHeight square rotated 45° scaled 0.8.
         // Half-diagonal = barHeight * 0.8 / sqrt(2) (~0.566 * barHeight).
         final cx = (x1 + x2) / 2;
-        final cy = y + config.barHeight / 2;
+        final cy = taskY + config.barHeight / 2;
         final r = config.barHeight * 0.8 / math.sqrt2;
         children.add(
           SceneShape(
@@ -203,7 +280,7 @@ RenderScene layoutGanttChart(
         children.add(
           SceneShape(
             geometry: RectGeometry(
-              Rect.fromLTWH(x1, y, math.max(x2 - x1, 2), config.barHeight),
+              Rect.fromLTWH(x1, taskY, math.max(x2 - x1, 2), config.barHeight),
               rx: 3,
               ry: 3,
             ),
@@ -226,7 +303,7 @@ RenderScene layoutGanttChart(
       if (fitsInside) {
         labelBounds = Rect.fromLTWH(
           (x1 + x2) / 2 - size.width / 2,
-          y + config.barHeight / 2 - size.height / 2,
+          taskY + config.barHeight / 2 - size.height / 2,
           size.width,
           size.height,
         );
@@ -240,7 +317,7 @@ RenderScene layoutGanttChart(
         if (overflowsRight) {
           labelBounds = Rect.fromLTWH(
             x1 - 6 - size.width,
-            y + config.barHeight / 2 - size.height / 2,
+            taskY + config.barHeight / 2 - size.height / 2,
             size.width,
             size.height,
           );
@@ -248,7 +325,7 @@ RenderScene layoutGanttChart(
         } else {
           labelBounds = Rect.fromLTWH(
             rightX,
-            y + config.barHeight / 2 - size.height / 2,
+            taskY + config.barHeight / 2 - size.height / 2,
             size.width,
             size.height,
           );
@@ -268,8 +345,8 @@ RenderScene layoutGanttChart(
       nodes.add(
         SceneGroup(id: t.id, semanticLabel: t.name, children: children),
       );
-      y += rowStride;
     }
+    y += bandHeight;
     sectionIndex++;
   }
   final chartBottom = y;
@@ -294,21 +371,28 @@ RenderScene layoutGanttChart(
     final children = <SceneNode>[
       SceneShape(
         geometry: RectGeometry(
-            Rect.fromLTWH(x - width / 2, chartTop, width, chartBottom - chartTop)),
+          Rect.fromLTWH(x - width / 2, chartTop, width, chartBottom - chartTop),
+        ),
         fill: Fill(fill),
         stroke: Stroke(color: border),
       ),
     ];
     if (t.name.isNotEmpty) {
       final size = measurer.measure(t.name, baseStyle);
-      children.add(SceneText(
-        text: t.name,
-        bounds: Rect.fromLTWH(
-            x - size.width / 2, chartBottom + 2, size.width, size.height),
-        style: baseStyle,
-        color: _taskTextDark,
-        align: TextAlignH.center,
-      ));
+      children.add(
+        SceneText(
+          text: t.name,
+          bounds: Rect.fromLTWH(
+            x - size.width / 2,
+            chartBottom + 2,
+            size.width,
+            size.height,
+          ),
+          style: baseStyle,
+          color: _taskTextDark,
+          align: TextAlignH.center,
+        ),
+      );
     }
     nodes.add(SceneGroup(id: t.id, semanticLabel: t.name, children: children));
   }
@@ -325,16 +409,20 @@ RenderScene layoutGanttChart(
       if (rangeStart == null) return;
       final x1 = xOf(rangeStart!);
       final x2 = xOf(endExclusive);
-      overlays.add(SceneShape(
-        geometry: RectGeometry(
-            Rect.fromLTWH(x1, chartTop - 2, x2 - x1, chartBottom - chartTop)),
-        fill: const Fill(_excludeBkgColor),
-      ));
+      overlays.add(
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromLTWH(x1, chartTop - 2, x2 - x1, chartBottom - chartTop),
+          ),
+          fill: const Fill(_excludeBkgColor),
+        ),
+      );
       rangeStart = null;
     }
 
     while (!day.isAfter(maxDate)) {
-      final excluded = chart.excludeWeekdays.contains(day.weekday) ||
+      final excluded =
+          chart.excludeWeekdays.contains(day.weekday) ||
           chart.excludeDates.contains(day);
       if (excluded) {
         rangeStart ??= day;
@@ -365,7 +453,12 @@ RenderScene layoutGanttChart(
 
   // Axis ticks + grid. Every tick draws a grid line; labels thin out when
   // they would collide.
-  final ticks = _ticks(minDate, maxDate, interval: config.tickInterval);
+  final ticks = _ticks(
+    minDate,
+    maxDate,
+    interval: config.tickInterval,
+    weekday: _weekdays[config.weekday] ?? DateTime.sunday,
+  );
   final fmt =
       chart.axisFormat ??
       config.axisFormat ??
@@ -385,7 +478,7 @@ RenderScene layoutGanttChart(
     gridNodes.add(
       SceneShape(
         geometry: PathGeometry([
-          MoveTo(Point(x, chartTop - 10)),
+          MoveTo(Point(x, chartTop - config.gridLineStartPadding)),
           LineTo(Point(x, chartBottom + 4)),
         ]),
         stroke: const Stroke(color: _gridColor, width: 1),
@@ -434,31 +527,39 @@ RenderScene layoutGanttChart(
   final title = chart.title;
   if (title != null && title.isNotEmpty) {
     final style = TextStyleSpec(
-        fontFamily: theme.fontFamily, fontSize: 18, fontWeight: 700);
+      fontFamily: theme.fontFamily,
+      fontSize: 18,
+      fontWeight: 700,
+    );
     final size = measurer.measure(title, style);
     final topAxisHeight = config.topAxis
         ? measurer.measure('0', baseStyle).height + 18
         : 0.0;
     // Full chart width includes the right padding (mirrors leftPadding).
-    final fullWidth = gutter + _chartWidth + _leftPadding;
-    nodes.add(SceneText(
-      text: title,
-      bounds: Rect.fromLTWH(
+    final fullWidth = gutter + chartWidth + config.rightPadding;
+    nodes.add(
+      SceneText(
+        text: title,
+        bounds: Rect.fromLTWH(
           fullWidth / 2 - size.width / 2,
-          chartTop - size.height - 14 - topAxisHeight,
+          chartTop - size.height - config.titleTopMargin - topAxisHeight,
           size.width,
-          size.height),
-      style: style,
-      color: theme.titleColor,
-    ));
+          size.height,
+        ),
+        style: style,
+        color: theme.titleColor,
+      ),
+    );
   }
 
   final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 60);
   final dx = _diagramPadding - bounds.left;
   final dy = _diagramPadding - bounds.top;
   return RenderScene(
-    size: Size(bounds.width + 2 * _diagramPadding,
-        bounds.height + 2 * _diagramPadding),
+    size: Size(
+      bounds.width + 2 * _diagramPadding,
+      bounds.height + 2 * _diagramPadding,
+    ),
     background: theme.background,
     nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
   );
@@ -466,7 +567,47 @@ RenderScene layoutGanttChart(
 
 /// Ticks at natural boundaries; density tracks mermaid's d3 auto ticks
 /// (roughly one tick per 45-90px of chart).
-List<DateTime> _ticks(DateTime min, DateTime max, {String? interval}) {
+const _weekdays = <String, int>{
+  'monday': DateTime.monday,
+  'tuesday': DateTime.tuesday,
+  'wednesday': DateTime.wednesday,
+  'thursday': DateTime.thursday,
+  'friday': DateTime.friday,
+  'saturday': DateTime.saturday,
+  'sunday': DateTime.sunday,
+};
+
+Map<GanttTask, int> _compactTaskRows(List<GanttTask> tasks) {
+  final rows = <GanttTask, int>{};
+  final rowEnds = <DateTime>[];
+  final sorted = tasks.toList()
+    ..sort((a, b) {
+      final start = a.start.compareTo(b.start);
+      return start != 0 ? start : a.renderEnd.compareTo(b.renderEnd);
+    });
+  for (final task in sorted) {
+    var row = rowEnds.indexWhere((end) => !task.start.isBefore(end));
+    if (row < 0) {
+      row = rowEnds.length;
+      rowEnds.add(_compactEnd(task));
+    } else {
+      rowEnds[row] = _compactEnd(task);
+    }
+    rows[task] = row;
+  }
+  return rows;
+}
+
+DateTime _compactEnd(GanttTask task) => task.renderEnd.isAfter(task.start)
+    ? task.renderEnd
+    : task.start.add(const Duration(microseconds: 1));
+
+List<DateTime> _ticks(
+  DateTime min,
+  DateTime max, {
+  String? interval,
+  int weekday = DateTime.sunday,
+}) {
   if (interval != null) {
     final match = RegExp(
       r'^([1-9][0-9]*)(millisecond|second|minute|hour|day|week|month)$',
@@ -493,15 +634,18 @@ List<DateTime> _ticks(DateTime min, DateTime max, {String? interval}) {
         tick = day.subtract(Duration(days: remainder));
       case 'week':
         final day = DateTime(min.year, min.month, min.day);
-        tick = day.subtract(Duration(days: day.weekday % DateTime.daysPerWeek));
-        const epochSundayOffset = 3;
-        final weeks = tick
-                .difference(DateTime(1970).add(
-                    const Duration(days: epochSundayOffset)))
-                .inDays ~/
-            DateTime.daysPerWeek;
-        tick = tick.subtract(Duration(
-            days: (weeks % count) * DateTime.daysPerWeek));
+        tick = day.subtract(
+          Duration(days: (day.weekday - weekday) % DateTime.daysPerWeek),
+        );
+        final epoch = DateTime(1970);
+        final epochWeekdayOffset =
+            (weekday - epoch.weekday) % DateTime.daysPerWeek;
+        final epochAnchor = epoch.add(Duration(days: epochWeekdayOffset));
+        final weeks =
+            tick.difference(epochAnchor).inDays ~/ DateTime.daysPerWeek;
+        tick = tick.subtract(
+          Duration(days: (weeks % count) * DateTime.daysPerWeek),
+        );
       case 'month':
         final monthIndex = min.year * 12 + min.month - 1;
         final aligned = monthIndex - monthIndex % count;
@@ -511,8 +655,8 @@ List<DateTime> _ticks(DateTime min, DateTime max, {String? interval}) {
     }
     if (duration != null) {
       final stepMs = duration.inMilliseconds;
-      final alignedMs = min.millisecondsSinceEpoch -
-          min.millisecondsSinceEpoch % stepMs;
+      final alignedMs =
+          min.millisecondsSinceEpoch - min.millisecondsSinceEpoch % stepMs;
       tick = DateTime.fromMillisecondsSinceEpoch(alignedMs);
     }
     DateTime advance(DateTime value) => unit == 'month'

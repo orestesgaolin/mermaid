@@ -39,6 +39,7 @@ class PieConfig {
     this.textPosition = 0.75,
     this.donutHole = 0,
     this.legendPosition = 'right',
+    this.highlightSlice,
   });
 
   /// Radial label position, from the center (`0`) to the outer edge (`1`).
@@ -49,6 +50,7 @@ class PieConfig {
 
   /// One of `top`, `bottom`, `left`, `right`, or `center`.
   final String legendPosition;
+  final String? highlightSlice;
 
   factory PieConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'pie');
@@ -62,6 +64,9 @@ class PieConfig {
         'right',
         'center',
       }, 'right'),
+      highlightSlice: values['highlightSlice'] is String
+          ? values['highlightSlice'] as String
+          : null,
     );
   }
 }
@@ -82,10 +87,14 @@ RenderScene layoutPieChart(
   // Upstream pie1..pie12 ordinal scale (theme-derived; default theme equals the
   // precomputed default-theme hex). 1-indexed list of 12.
   final palette = theme.pie;
-  final sectionStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _sectionTextSize);
-  final legendStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _legendTextSize);
+  final sectionStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: _sectionTextSize,
+  );
+  final legendStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: _legendTextSize,
+  );
   final nodes = <SceneNode>[];
   final center = const Point(_radius + 20, _radius + 20);
   final total = chart.slices.fold(0.0, (a, s) => a + s.value);
@@ -138,6 +147,8 @@ RenderScene layoutPieChart(
     final slice = chart.slices[i];
     final sweep = slice.value / total * 2 * math.pi;
     final color = palette[i % palette.length];
+    final highlighted = config.highlightSlice == slice.label;
+    final radius = highlighted ? _radius * 1.05 : _radius;
     final end = angle + sweep;
     final pct = '${(slice.value / total * 100).round()}%';
     final size = measurer.measure(pct, sectionStyle);
@@ -149,13 +160,13 @@ RenderScene layoutPieChart(
     final geometry = config.donutHole == 0
         ? PathGeometry([
             MoveTo(pieCenter),
-            LineTo(_polar(pieCenter, _radius, angle)),
-            ..._arc(pieCenter, _radius, angle, end),
+            LineTo(_polar(pieCenter, radius, angle)),
+            ..._arc(pieCenter, radius, angle, end),
             const ClosePath(),
           ])
         : PathGeometry([
-            MoveTo(_polar(pieCenter, _radius, angle)),
-            ..._arc(pieCenter, _radius, angle, end),
+            MoveTo(_polar(pieCenter, radius, angle)),
+            ..._arc(pieCenter, radius, angle, end),
             LineTo(_polar(pieCenter, _radius * config.donutHole, end)),
             ..._arc(pieCenter, _radius * config.donutHole, end, angle),
             const ClosePath(),
@@ -167,7 +178,7 @@ RenderScene layoutPieChart(
         children: [
           SceneShape(
             geometry: geometry,
-            fill: Fill(color.withOpacity(_pieOpacity)),
+            fill: Fill(color.withOpacity(highlighted ? 1 : _pieOpacity)),
             stroke: Stroke(color: strokeColor, width: 2),
           ),
           SceneText(
@@ -204,44 +215,59 @@ RenderScene layoutPieChart(
       _ => center.y + i * legendHeight - legendOffset,
     };
     final color = palette[i % palette.length];
-    nodes.add(SceneGroup(id: 'legend_$i', role: SceneGroupRole.internal, children: [
-      SceneShape(
-        geometry: RectGeometry(
-            Rect.fromLTWH(legendX, legendY, _legendRectSize, _legendRectSize)),
-        // Upstream legend rect: fill AND stroke = slice color.
-        fill: Fill(color),
-        stroke: Stroke(color: color, width: 1),
+    nodes.add(
+      SceneGroup(
+        id: 'legend_$i',
+        role: SceneGroupRole.internal,
+        children: [
+          SceneShape(
+            geometry: RectGeometry(
+              Rect.fromLTWH(legendX, legendY, _legendRectSize, _legendRectSize),
+            ),
+            // Upstream legend rect: fill AND stroke = slice color.
+            fill: Fill(color),
+            stroke: Stroke(color: color, width: 1),
+          ),
+          SceneText(
+            text: text,
+            bounds: Rect.fromLTWH(
+              legendX + _legendRectSize + _legendSpacing,
+              legendY + (_legendRectSize - _legendSpacing) - size.height,
+              size.width,
+              size.height,
+            ),
+            style: legendStyle,
+            color: legendTextColor,
+            align: TextAlignH.left,
+          ),
+        ],
       ),
-      SceneText(
-        text: text,
-        bounds: Rect.fromLTWH(
-            legendX + _legendRectSize + _legendSpacing,
-            legendY + (_legendRectSize - _legendSpacing) - size.height,
-            size.width,
-            size.height),
-        style: legendStyle,
-        color: legendTextColor,
-        align: TextAlignH.left,
-      ),
-    ]));
+    );
   }
 
   // Title centered above the pie group, at y = -(height-50)/2 = -200 (upstream).
   final title = chart.title;
   var top = 0.0;
   if (title != null && title.isNotEmpty) {
-    final style =
-        TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _titleTextSize);
+    final style = TextStyleSpec(
+      fontFamily: theme.fontFamily,
+      fontSize: _titleTextSize,
+    );
     final size = measurer.measure(title, style);
     final titleY = center.y - 200;
-    nodes.add(SceneText(
-      text: title,
-      bounds: Rect.fromLTWH(
-          center.x - size.width / 2, titleY - size.height / 2, size.width,
-          size.height),
-      style: style,
-      color: titleTextColor,
-    ));
+    nodes.add(
+      SceneText(
+        text: title,
+        bounds: Rect.fromLTWH(
+          center.x - size.width / 2,
+          titleY - size.height / 2,
+          size.width,
+          size.height,
+        ),
+        style: style,
+        color: titleTextColor,
+      ),
+    );
     top = titleY - size.height / 2;
   }
 
@@ -268,17 +294,24 @@ RenderScene layoutPieChart(
   var minTop = math.min(center.y - _radius, top);
   for (var i = 0; i < chart.slices.length; i++) {
     final slice = chart.slices[i];
-    final text =
-        chart.showData ? '${slice.label} [${_fmt(slice.value)}]' : slice.label;
+    final text = chart.showData
+        ? '${slice.label} [${_fmt(slice.value)}]'
+        : slice.label;
     final w = measurer.measure(text, legendStyle).width;
     maxRight = math.max(
-        maxRight, legendX + _legendRectSize + _legendSpacing + w);
+      maxRight,
+      legendX + _legendRectSize + _legendSpacing + w,
+    );
     final legendY = center.y + i * legendHeight - legendOffset;
     maxBottom = math.max(maxBottom, legendY + _legendRectSize);
   }
   if (title != null && title.isNotEmpty) {
-    final w = measurer.measure(title, TextStyleSpec(
-        fontFamily: theme.fontFamily, fontSize: _titleTextSize)).width;
+    final w = measurer
+        .measure(
+          title,
+          TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _titleTextSize),
+        )
+        .width;
     minLeft = math.min(minLeft, center.x - w / 2);
     maxRight = math.max(maxRight, center.x + w / 2);
   }
@@ -286,19 +319,18 @@ RenderScene layoutPieChart(
   final dx = _diagramPadding - minLeft;
   final dy = _diagramPadding - minTop;
   return RenderScene(
-    size: Size(maxRight - minLeft + 2 * _diagramPadding,
-        maxBottom - minTop + 2 * _diagramPadding),
+    size: Size(
+      maxRight - minLeft + 2 * _diagramPadding,
+      maxBottom - minTop + 2 * _diagramPadding,
+    ),
     background: theme.background,
-    nodes: [
-      for (final n in nodes) translateSceneNode(n, dx, dy),
-    ],
+    nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
   );
 }
 
 // Upstream legend renders raw JS `d.value`; integers print without a decimal,
 // fractions keep their digits. Mirror that here.
-String _fmt(double v) =>
-    v == v.roundToDouble() ? '${v.round()}' : v.toString();
+String _fmt(double v) => v == v.roundToDouble() ? '${v.round()}' : v.toString();
 
 Point _polar(Point c, double r, double a) =>
     Point(c.x + r * math.cos(a), c.y + r * math.sin(a));

@@ -7,7 +7,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -51,6 +53,50 @@ class Treemap {
   final Map<String, TreemapClass> classes;
 }
 
+/// Typed values from upstream's `config.treemap` interface and defaults.
+///
+/// Treemap is not yet included in upstream's generated config schema. Its
+/// configuration is declared beside the renderer in `types.ts` and
+/// `defaultConfig.ts`.
+class TreemapConfig {
+  const TreemapConfig({
+    this.padding = 10,
+    this.diagramPadding = 8,
+    this.showValues = true,
+    this.nodeWidth = 100,
+    this.nodeHeight = 40,
+    this.borderWidth = 1,
+    this.valueFontSize = 12,
+    this.labelFontSize = 14,
+    this.valueFormat = ',',
+  });
+
+  final double padding;
+  final double diagramPadding;
+  final bool showValues;
+  final double nodeWidth;
+  final double nodeHeight;
+  final double borderWidth;
+  final double valueFontSize;
+  final double labelFontSize;
+  final String valueFormat;
+
+  factory TreemapConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'treemap');
+    return TreemapConfig(
+      padding: nonNegativeDouble(values, 'padding', 10),
+      diagramPadding: nonNegativeDouble(values, 'diagramPadding', 8),
+      showValues: boolValue(values, 'showValues', true),
+      nodeWidth: positiveDouble(values, 'nodeWidth', 100),
+      nodeHeight: positiveDouble(values, 'nodeHeight', 40),
+      borderWidth: nonNegativeDouble(values, 'borderWidth', 1),
+      valueFontSize: positiveDouble(values, 'valueFontSize', 12),
+      labelFontSize: positiveDouble(values, 'labelFontSize', 14),
+      valueFormat: stringValue(values, 'valueFormat', ','),
+    );
+  }
+}
+
 Treemap parseTreemap(String source) {
   var title = frontmatterTitle(source);
   final text = stripMetadata(source);
@@ -75,8 +121,9 @@ Treemap parseTreemap(String source) {
     final content = line.trim();
 
     // classDef <name> <styles>[;]
-    final cd = RegExp(r'^classDef\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(.*?);?\s*$')
-        .firstMatch(content);
+    final cd = RegExp(
+      r'^classDef\s+([a-zA-Z_][a-zA-Z0-9_]*)\s*(.*?);?\s*$',
+    ).firstMatch(content);
     if (cd != null) {
       classes[cd.group(1)!] = _parseClass(cd.group(2) ?? '');
       continue;
@@ -186,8 +233,10 @@ TreemapClass _parseClass(String styleText) {
 List<Color?> _scaleRange(MermaidTheme theme) => <Color?>[null, ...theme.cScale];
 
 // colorScalePeer range = [transparent, cScalePeer0..11] (border colors).
-List<Color?> _peerRange(MermaidTheme theme) =>
-    <Color?>[null, ...theme.cScalePeer];
+List<Color?> _peerRange(MermaidTheme theme) => <Color?>[
+  null,
+  ...theme.cScalePeer,
+];
 
 // colorScaleLabel range = [cScaleLabel0..11] (section/leaf text colors).
 List<Color> _labelRange(MermaidTheme theme) => theme.cScaleLabel;
@@ -217,6 +266,39 @@ String _fmt(double v) {
   return '${_group(s.substring(0, dot))}${s.substring(dot)}';
 }
 
+String _formatValue(double value, String pattern) {
+  final currency = pattern.startsWith(r'$');
+  final spec = currency ? pattern.substring(1) : pattern;
+  final match = RegExp(r'^(,)?(?:\.(\d+))?([f%eg])$').firstMatch(spec);
+  var text = _fmt(value);
+  if (match != null) {
+    final precision = int.tryParse(match.group(2) ?? '6') ?? 6;
+    if (precision <= 20) {
+      final kind = match.group(3);
+      text = switch (kind) {
+        '%' => '${(value * 100).toStringAsFixed(precision)}%',
+        'e' => value.toStringAsExponential(precision),
+        'g' => value.toStringAsPrecision(math.max(1, precision)),
+        _ => value.toStringAsFixed(precision),
+      };
+      if (match.group(1) != null && kind != 'e') {
+        text = _groupFormattedNumber(text);
+      }
+    }
+  }
+  return currency ? '${String.fromCharCode(36)}$text' : text;
+}
+
+/// Groups only the leading integer portion of a formatted number.
+///
+/// The formatter may append a percent suffix or an exponent. Those characters
+/// must not affect where thousands separators are inserted.
+String _groupFormattedNumber(String text) {
+  final match = RegExp(r'^(-?\d+)(.*)$').firstMatch(text);
+  if (match == null) return text;
+  return '${_group(match.group(1)!)}${match.group(2)!}';
+}
+
 String _group(String intPart) {
   final neg = intPart.startsWith('-');
   var digits = neg ? intPart.substring(1) : intPart;
@@ -230,18 +312,19 @@ String _group(String intPart) {
 
 const _sectionHeaderHeight = 25.0;
 const _sectionInnerPadding = 10.0;
-const _innerPadding = 10.0;
 const _goldenRatio = 1.618033988749895;
 
 RenderScene layoutTreemap(
   Treemap map, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  TreemapConfig config = const TreemapConfig(),
 }) {
   final nodes = <SceneNode>[];
   // Mermaid's default treemap config supplies nodeWidth=100 and nodeHeight=40;
   // the renderer multiplies both by SECTION_INNER_PADDING (10).
-  const w = 1000.0, h = 400.0;
+  final w = config.nodeWidth * _sectionInnerPadding;
+  final h = config.nodeHeight * _sectionInnerPadding;
   var titleH = 0.0;
   if (map.title != null && map.title!.isNotEmpty) titleH = 30;
 
@@ -306,16 +389,18 @@ RenderScene layoutTreemap(
   final spacing = isComplex ? 1.0 : 2.0;
 
   // D3's golden-ratio squarifier. [rect] is the tiling area after the parent's
-  // directional padding has been applied; `_innerPadding` becomes half-padding
+  // directional padding has been applied; inner padding becomes half-padding
   // on each child, exactly as d3-hierarchy's padding stack does.
   List<Rect> squarify(List<TreemapNode> children, Rect rect) {
-    const gap = _innerPadding;
+    final gap = config.padding;
     final n = children.length;
     final placed = List<Rect?>.filled(n, null);
     if (n == 0) return const [];
     var remainingValue = children.fold(0.0, (a, c) => a + math.max(c.total, 0));
     if (rect.width <= 0 || rect.height <= 0 || remainingValue <= 0) {
-      return [for (var i = 0; i < n; i++) Rect.fromLTWH(rect.left, rect.top, 0, 0)];
+      return [
+        for (var i = 0; i < n; i++) Rect.fromLTWH(rect.left, rect.top, 0, 0),
+      ];
     }
 
     var x = rect.left, y = rect.top, fw = rect.width, fh = rect.height;
@@ -330,8 +415,8 @@ RenderScene layoutTreemap(
       }
       var minValue = sumValue;
       var maxValue = sumValue;
-      final alpha = math.max(dy / dx, dx / dy) /
-          (remainingValue * _goldenRatio);
+      final alpha =
+          math.max(dy / dx, dx / dy) / (remainingValue * _goldenRatio);
       var beta = sumValue * sumValue * alpha;
       var minRatio = math.max(maxValue / beta, beta / minValue);
 
@@ -395,7 +480,7 @@ RenderScene layoutTreemap(
             r0.top + half,
             math.max(0, r0.width - gap),
             math.max(0, r0.height - gap),
-          )
+          ),
     ];
   }
 
@@ -415,11 +500,13 @@ RenderScene layoutTreemap(
         final base = colorScale[node.label] ?? Color.transparent;
         final fillColor = cls?.fill ?? base.withOpacity(0.3);
         final strokeColor = cls?.stroke ?? base;
-        nodes.add(SceneShape(
-          geometry: RectGeometry(cellRect),
-          fill: Fill(fillColor),
-          stroke: Stroke(color: strokeColor, width: 3),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: RectGeometry(cellRect),
+            fill: Fill(fillColor),
+            stroke: Stroke(color: strokeColor, width: 3),
+          ),
+        );
         _drawLeafText(
           nodes: nodes,
           measurer: measurer,
@@ -435,6 +522,8 @@ RenderScene layoutTreemap(
           labelPad: labelPad,
           minDisplay: minDisplay,
           spacing: spacing,
+          showValue: config.showValues,
+          valueFormat: config.valueFormat,
         );
       } else {
         // Section: body rect (colorScale @0.6 + peer stroke @0.4) under a
@@ -443,11 +532,13 @@ RenderScene layoutTreemap(
         final peer = peerScale[child.label] ?? Color.transparent;
         final bodyFill = cls?.fill ?? base.withOpacity(0.6);
         final bodyStroke = cls?.stroke ?? peer.withOpacity(0.4);
-        nodes.add(SceneShape(
-          geometry: RectGeometry(cellRect),
-          fill: Fill(bodyFill),
-          stroke: Stroke(color: bodyStroke, width: 2),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: RectGeometry(cellRect),
+            fill: Fill(bodyFill),
+            stroke: Stroke(color: bodyStroke, width: 2),
+          ),
+        );
 
         final lblColor = cls?.color ?? labelColor(child.label);
         _drawSectionHeader(
@@ -458,14 +549,16 @@ RenderScene layoutTreemap(
           label: child.label,
           value: child.total,
           labelColor: lblColor,
+          showValue: config.showValues,
+          valueFormat: config.valueFormat,
         );
 
         // D3 subtracts half the sibling padding before tiling, then restores it
         // when each child is positioned. Since [squarify] performs the latter,
         // this rect uses 5px/30px rather than applying the full padding twice.
-        const halfInner = _innerPadding / 2;
-        const left = _sectionInnerPadding - halfInner;
-        const top = _sectionHeaderHeight + _sectionInnerPadding - halfInner;
+        final halfInner = config.padding / 2;
+        final left = _sectionInnerPadding - halfInner;
+        final top = _sectionHeaderHeight + _sectionInnerPadding - halfInner;
         final inner = Rect.fromLTWH(
           cellRect.left + left,
           cellRect.top + top,
@@ -481,29 +574,39 @@ RenderScene layoutTreemap(
 
   // The synthetic root is a branch too. Its header remains invisible, but D3
   // still reserves the same top and outer padding before laying out sections.
-  const halfInner = _innerPadding / 2;
+  final halfInner = config.padding / 2;
   final rootTileRect = Rect.fromLTWH(
     _sectionInnerPadding - halfInner,
     titleH + _sectionHeaderHeight + _sectionInnerPadding - halfInner,
     w - 2 * (_sectionInnerPadding - halfInner),
-    h - (_sectionHeaderHeight + _sectionInnerPadding - halfInner) -
+    h -
+        (_sectionHeaderHeight + _sectionInnerPadding - halfInner) -
         (_sectionInnerPadding - halfInner),
   );
   layout(root, rootTileRect);
 
   if (titleH > 0) {
-    final titleStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 14);
+    final titleStyle = TextStyleSpec(
+      fontFamily: theme.fontFamily,
+      fontSize: 14,
+    );
     final ts = measurer.measure(map.title!, titleStyle);
-    nodes.add(SceneText(
-      text: map.title!,
-      bounds: Rect.fromLTWH(w / 2 - ts.width / 2, titleH / 2 - ts.height / 2,
-          ts.width, ts.height),
-      style: titleStyle,
-      color: theme.titleColor,
-    ));
+    nodes.add(
+      SceneText(
+        text: map.title!,
+        bounds: Rect.fromLTWH(
+          w / 2 - ts.width / 2,
+          titleH / 2 - ts.height / 2,
+          ts.width,
+          ts.height,
+        ),
+        style: titleStyle,
+        color: theme.titleColor,
+      ),
+    );
   }
 
-  const m = 8.0; // diagramPadding default
+  final m = config.diagramPadding;
   return RenderScene(
     size: Size(w + 2 * m, h + titleH + 2 * m),
     background: theme.background,
@@ -522,22 +625,27 @@ void _drawSectionHeader({
   required String label,
   required double value,
   required Color labelColor,
+  required bool showValue,
+  required String valueFormat,
 }) {
   if (rect.width <= 0 || rect.height <= 0) return;
   final headerH = math.min(_sectionHeaderHeight, rect.height);
   final centerY = rect.top + headerH / 2;
 
   final valueStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: 10, italic: true);
-  final valueText = _fmt(value);
+    fontFamily: theme.fontFamily,
+    fontSize: 10,
+    italic: true,
+  );
+  final valueText = _formatValue(value, valueFormat);
   final valueSize = measurer.measure(valueText, valueStyle);
-  final showValue = value != 0;
+  final renderValue = showValue && value != 0;
 
   // Space available for the label (mirrors upstream's estimate).
   final totalW = rect.width;
   const labelX = 6.0;
   double spaceForLabel;
-  if (showValue) {
+  if (renderValue) {
     final valueEndsAt = totalW - 10;
     const estValueW = 30.0;
     const gap = 10.0;
@@ -547,8 +655,11 @@ void _drawSectionHeader({
   }
   spaceForLabel = math.max(15.0, spaceForLabel);
 
-  final labelStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: 12, fontWeight: 700);
+  final labelStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: 12,
+    fontWeight: 700,
+  );
   var shown = label;
   var lw = measurer.measure(shown, labelStyle).width;
   if (lw > spaceForLabel) {
@@ -571,24 +682,32 @@ void _drawSectionHeader({
   }
   if (shown.isNotEmpty) {
     final lh = measurer.measure(shown, labelStyle).height;
-    nodes.add(SceneText(
-      text: shown,
-      bounds: Rect.fromLTWH(rect.left + labelX, centerY - lh / 2, lw, lh),
-      style: labelStyle,
-      color: labelColor,
-      align: TextAlignH.left,
-    ));
+    nodes.add(
+      SceneText(
+        text: shown,
+        bounds: Rect.fromLTWH(rect.left + labelX, centerY - lh / 2, lw, lh),
+        style: labelStyle,
+        color: labelColor,
+        align: TextAlignH.left,
+      ),
+    );
   }
 
-  if (showValue && valueSize.width <= totalW) {
-    nodes.add(SceneText(
-      text: valueText,
-      bounds: Rect.fromLTWH(rect.left + totalW - 10 - valueSize.width,
-          centerY - valueSize.height / 2, valueSize.width, valueSize.height),
-      style: valueStyle,
-      color: labelColor,
-      align: TextAlignH.right,
-    ));
+  if (renderValue && valueSize.width <= totalW) {
+    nodes.add(
+      SceneText(
+        text: valueText,
+        bounds: Rect.fromLTWH(
+          rect.left + totalW - 10 - valueSize.width,
+          centerY - valueSize.height / 2,
+          valueSize.width,
+          valueSize.height,
+        ),
+        style: valueStyle,
+        color: labelColor,
+        align: TextAlignH.right,
+      ),
+    );
   }
 }
 
@@ -610,6 +729,8 @@ void _drawLeafText({
   required double labelPad,
   required double minDisplay,
   required double spacing,
+  required bool showValue,
+  required String valueFormat,
 }) {
   final availW = rect.width - 2 * labelPad;
   final availH = rect.height - 2 * labelPad;
@@ -628,7 +749,9 @@ void _drawLeafText({
   }
 
   double valueFont() => math.max(
-      minValueFont, math.min(baseValueFont, (labelFont * 0.6).roundToDouble()));
+    minValueFont,
+    math.min(baseValueFont, (labelFont * 0.6).roundToDouble()),
+  );
 
   // 2. Shrink to fit combined height.
   var combined = labelFont + spacing + valueFont();
@@ -651,35 +774,44 @@ void _drawLeafText({
 
   final labelMetrics = measurer.measure(label, labelStyle());
   final centerY = rect.top + rect.height / 2;
-  nodes.add(SceneText(
-    text: label,
-    bounds: Rect.fromLTWH(
+  nodes.add(
+    SceneText(
+      text: label,
+      bounds: Rect.fromLTWH(
         rect.left + (rect.width - labelMetrics.width) / 2,
         centerY - labelFont / 2,
         labelMetrics.width,
-        labelFont),
-    style: labelStyle(),
-    color: textColor,
-  ));
+        labelFont,
+      ),
+      style: labelStyle(),
+      color: textColor,
+    ),
+  );
 
   // Value below the label (dominant-baseline: hanging in upstream).
   final vf = valueFont();
-  final valueText = _fmt(value);
-  final valueStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: vf);
+  final valueText = _formatValue(value, valueFormat);
+  final valueStyle = TextStyleSpec(fontFamily: theme.fontFamily, fontSize: vf);
   final vm = measurer.measure(valueText, valueStyle);
   final valueTop = centerY + labelFont / 2 + spacing;
   final maxBottom = rect.bottom - 4;
-  if (value != 0 &&
+  if (showValue &&
+      value != 0 &&
       vm.width <= availW &&
       valueTop + vf <= maxBottom &&
       vf >= minValueFont) {
-    nodes.add(SceneText(
-      text: valueText,
-      bounds: Rect.fromLTWH(
-          rect.left + (rect.width - vm.width) / 2, valueTop, vm.width, vf),
-      style: valueStyle,
-      color: textColor,
-    ));
+    nodes.add(
+      SceneText(
+        text: valueText,
+        bounds: Rect.fromLTWH(
+          rect.left + (rect.width - vm.width) / 2,
+          valueTop,
+          vm.width,
+          vf,
+        ),
+        style: valueStyle,
+        color: textColor,
+      ),
+    );
   }
 }

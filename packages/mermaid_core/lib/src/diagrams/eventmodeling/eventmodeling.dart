@@ -10,7 +10,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -113,15 +115,19 @@ EventModeling parseEventModeling(String source) {
 
     if (!seenHeader) {
       if (!RegExp(r'^eventmodeling\b').hasMatch(line)) {
-        throw MermaidParseException('expected "eventmodeling" header',
-            line: i + 1);
+        throw MermaidParseException(
+          'expected "eventmodeling" header',
+          line: i + 1,
+        );
       }
       seenHeader = true;
       continue;
     }
 
     // `data <name> { ... multi-line ... }` block.
-    final dataHead = RegExp(r'^data\s+([_a-zA-Z][\w]*)\s*\{?\s*$').firstMatch(line);
+    final dataHead = RegExp(
+      r'^data\s+([_a-zA-Z][\w]*)\s*\{?\s*$',
+    ).firstMatch(line);
     if (dataHead != null) {
       final bodyLines = <String>[];
       var j = i + 1;
@@ -147,8 +153,7 @@ EventModeling parseEventModeling(String source) {
 
     final m = frameRe.firstMatch(line);
     if (m != null) {
-      final isReset =
-          line.startsWith('rf') || line.startsWith('resetframe');
+      final isReset = line.startsWith('rf') || line.startsWith('resetframe');
       final type = _typeCanonical[m.group(2)!] ?? 'evt';
       final rest = m.group(4)!.trim();
 
@@ -159,7 +164,9 @@ EventModeling parseEventModeling(String source) {
       }
 
       // `[[dataRef]]`.
-      final dataRefM = RegExp(r'\[\[\s*([_a-zA-Z][\w]*)\s*\]\]').firstMatch(rest);
+      final dataRefM = RegExp(
+        r'\[\[\s*([_a-zA-Z][\w]*)\s*\]\]',
+      ).firstMatch(rest);
 
       // Inline data: `{...}`, "...", or '...' (optionally preceded by
       // a `\`type\`` data-type tag, which we drop).
@@ -168,22 +175,23 @@ EventModeling parseEventModeling(String source) {
       if (braceM != null) {
         inline = braceM.group(1)!.trim();
       } else {
-        final quoteM =
-            RegExp(r'''(?:"([^"]*)"|'([^']*)')''').firstMatch(rest);
+        final quoteM = RegExp(r'''(?:"([^"]*)"|'([^']*)')''').firstMatch(rest);
         if (quoteM != null) {
           inline = (quoteM.group(1) ?? quoteM.group(2) ?? '').trim();
         }
       }
 
-      blocks.add(EmBlock(
-        int.parse(m.group(1)!),
-        type,
-        m.group(3)!,
-        isReset: isReset,
-        sourceFrames: sources,
-        dataReference: dataRefM?.group(1),
-        inlineBody: inline,
-      ));
+      blocks.add(
+        EmBlock(
+          int.parse(m.group(1)!),
+          type,
+          m.group(3)!,
+          isReset: isReset,
+          sourceFrames: sources,
+          dataReference: dataRefM?.group(1),
+          inlineBody: inline,
+        ),
+      );
     }
   }
   if (!seenHeader) {
@@ -216,6 +224,21 @@ const _labelCommandReadModelPrefix = 'C/RM: ';
 const _labelEvents = 'Events';
 const _labelEventsPrefix = 'Stream: ';
 
+class EventModelingConfig {
+  const EventModelingConfig({this.padding = 30, this.rowHeight = 32});
+
+  final double padding;
+  final double rowHeight;
+
+  factory EventModelingConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'eventmodeling');
+    return EventModelingConfig(
+      padding: nonNegativeDouble(values, 'padding', 30),
+      rowHeight: positiveDouble(values, 'rowHeight', 32),
+    );
+  }
+}
+
 // Entity visual props (upstream `calculateEntityVisualProps`, default theme).
 const _entityFill = {
   'ui': Color(0xffffffff),
@@ -233,14 +256,20 @@ const _entityStroke = {
 };
 
 class _Swimlane {
-  _Swimlane({required this.index, required this.label, this.namespace});
+  _Swimlane({
+    required this.index,
+    required this.label,
+    required double minHeight,
+    this.namespace,
+  }) : height = minHeight,
+       maxHeight = minHeight;
   final int index;
   String label;
   String? namespace;
   double r = 0;
   double y = 0;
-  double height = _swimlaneMinHeight;
-  double maxHeight = _swimlaneMinHeight;
+  double height;
+  double maxHeight;
 }
 
 class _PositionedBox {
@@ -301,13 +330,13 @@ class _Relation {
         return (
           index: sw.index,
           label: sw.namespace ?? _labelUiAutomation,
-          namespace: sw.namespace
+          namespace: sw.namespace,
         );
       } else if (namespace != null) {
         return (
           index: nextIndex(0, 100),
           label: _labelUiAutomationPrefix + namespace,
-          namespace: namespace
+          namespace: namespace,
         );
       }
       return (index: 0, label: _labelUiAutomation, namespace: null);
@@ -317,13 +346,13 @@ class _Relation {
         return (
           index: sw.index,
           label: sw.namespace ?? _labelCommandReadModel,
-          namespace: sw.namespace
+          namespace: sw.namespace,
         );
       } else if (namespace != null) {
         return (
           index: nextIndex(100, 200),
           label: _labelCommandReadModelPrefix + namespace,
-          namespace: namespace
+          namespace: namespace,
         );
       }
       return (index: 100, label: _labelCommandReadModel, namespace: null);
@@ -332,13 +361,13 @@ class _Relation {
         return (
           index: sw.index,
           label: sw.namespace ?? _labelEvents,
-          namespace: sw.namespace
+          namespace: sw.namespace,
         );
       } else if (namespace != null) {
         return (
           index: nextIndex(200, 300),
           label: _labelEventsPrefix + namespace,
-          namespace: namespace
+          namespace: namespace,
         );
       }
       return (index: 200, label: _labelEvents, namespace: null);
@@ -349,7 +378,9 @@ RenderScene layoutEventModeling(
   EventModeling d, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  EventModelingConfig config = const EventModelingConfig(),
 }) {
+  final minSwimlaneHeight = math.max(_swimlaneMinHeight, config.rowHeight);
   // Box name: bold 16px trebuchet (upstream wrapLabelConfig).
   final nameStyle = TextStyleSpec(
     fontFamily: theme.fontFamily,
@@ -377,6 +408,7 @@ RenderScene layoutEventModeling(
       () => _Swimlane(
         index: props.index,
         label: props.label,
+        minHeight: minSwimlaneHeight,
         namespace: props.namespace,
       ),
     );
@@ -393,23 +425,29 @@ RenderScene layoutEventModeling(
     }
 
     // Measure content to size the box.
-    final nameSize =
-        measurer.measure(b.name, nameStyle, maxWidth: _textMaxWidth);
+    final nameSize = measurer.measure(
+      b.name,
+      nameStyle,
+      maxWidth: _textMaxWidth,
+    );
     var contentW = nameSize.width;
     var contentH = nameSize.height;
     if (body != null && body.isNotEmpty) {
-      final bodySize =
-          measurer.measure(body, bodyStyle, maxWidth: _textMaxWidth);
+      final bodySize = measurer.measure(
+        body,
+        bodyStyle,
+        maxWidth: _textMaxWidth,
+      );
       contentW = contentW > bodySize.width ? contentW : bodySize.width;
       // name + blank gap + body (upstream inserts <br/><br/>).
       contentH += _emFontSize * 2 + bodySize.height;
     }
 
-    final width = _clamp(contentW + 2 * _boxTextPadding, _boxMinWidth,
-            _boxMaxWidth) +
+    final width =
+        _clamp(contentW + 2 * _boxTextPadding, _boxMinWidth, _boxMaxWidth) +
         2 * _boxPadding;
-    final height = _clamp(contentH + 2 * _boxTextPadding, _boxMinHeight,
-            _boxMaxHeight) +
+    final height =
+        _clamp(contentH + 2 * _boxTextPadding, _boxMinHeight, _boxMaxHeight) +
         2 * _boxPadding;
 
     // Horizontal flow (calculateX).
@@ -429,15 +467,20 @@ RenderScene layoutEventModeling(
     }
 
     final r = x + width + _boxPadding;
-    maxR = [for (final s in swimlanes.values) s.r, r, maxR]
-        .reduce((a, c) => a > c ? a : c);
+    maxR = [
+      for (final s in swimlanes.values) s.r,
+      r,
+      maxR,
+    ].reduce((a, c) => a > c ? a : c);
 
     swimlane.r = x + width;
-    swimlane.maxHeight =
-        swimlane.maxHeight > height ? swimlane.maxHeight : height;
-    swimlane.height = (swimlane.maxHeight > _swimlaneMinHeight
+    swimlane.maxHeight = swimlane.maxHeight > height
+        ? swimlane.maxHeight
+        : height;
+    swimlane.height =
+        (swimlane.maxHeight > minSwimlaneHeight
             ? swimlane.maxHeight
-            : _swimlaneMinHeight) +
+            : minSwimlaneHeight) +
         2 * _swimlanePadding;
 
     final box = _PositionedBox(
@@ -496,74 +539,99 @@ RenderScene layoutEventModeling(
   final sortedSwimlanes = swimlanes.values.toList()
     ..sort((a, c) => a.index.compareTo(c.index));
   for (final s in sortedSwimlanes) {
-    nodes.add(SceneShape(
-      geometry: RectGeometry(
-        Rect.fromLTWH(0, s.y, maxR + _swimlanePadding, s.height),
-        rx: 3,
-        ry: 3,
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(
+          Rect.fromLTWH(0, s.y, maxR + _swimlanePadding, s.height),
+          rx: 3,
+          ry: 3,
+        ),
+        fill: const Fill(Color(0xfffafafa)), // rgb(250,250,250)
+        stroke: const Stroke(color: Color(0xfff0f0f0)), // rgb(240,240,240)
       ),
-      fill: const Fill(Color(0xfffafafa)), // rgb(250,250,250)
-      stroke: const Stroke(color: Color(0xfff0f0f0)), // rgb(240,240,240)
-    ));
+    );
     final labelSize = measurer.measure(s.label, nameStyle);
-    nodes.add(SceneText(
-      text: s.label,
-      bounds: Rect.fromLTWH(
-          30, s.y + 30 - labelSize.height, labelSize.width, labelSize.height),
-      style: nameStyle,
-      color: theme.textColor,
-      align: TextAlignH.left,
-    ));
+    nodes.add(
+      SceneText(
+        text: s.label,
+        bounds: Rect.fromLTWH(
+          30,
+          s.y + 30 - labelSize.height,
+          labelSize.width,
+          labelSize.height,
+        ),
+        style: nameStyle,
+        color: theme.textColor,
+        align: TextAlignH.left,
+      ),
+    );
   }
 
   // Boxes (renderD3Box).
   for (final box in boxes) {
     final y = box.top;
-    nodes.add(SceneShape(
-      geometry: RectGeometry(
-        Rect.fromLTWH(box.x, y, box.width, box.height),
-        rx: 3,
-        ry: 3,
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(
+          Rect.fromLTWH(box.x, y, box.width, box.height),
+          rx: 3,
+          ry: 3,
+        ),
+        fill: Fill(_entityFill[box.block.type] ?? const Color(0xffff0000)),
+        stroke: Stroke(color: _entityStroke[box.block.type] ?? Color.black),
       ),
-      fill: Fill(_entityFill[box.block.type] ?? const Color(0xffff0000)),
-      stroke: Stroke(color: _entityStroke[box.block.type] ?? Color.black),
-    ));
+    );
 
     final innerW = box.width - 2 * _boxPadding;
     if (box.body == null) {
       // Centered bold name.
       final ns = measurer.measure(box.name, nameStyle, maxWidth: innerW);
-      nodes.add(SceneText(
-        text: box.name,
-        bounds: Rect.fromCenter(
+      nodes.add(
+        SceneText(
+          text: box.name,
+          bounds: Rect.fromCenter(
             Point(box.x + box.width / 2, y + box.height / 2),
             ns.width,
-            ns.height),
-        style: nameStyle,
-        color: theme.textColor,
-        align: TextAlignH.center,
-      ));
+            ns.height,
+          ),
+          style: nameStyle,
+          color: theme.textColor,
+          align: TextAlignH.center,
+        ),
+      );
     } else {
       // Bold name centered near the top, then a left-aligned monospace body.
       final ns = measurer.measure(box.name, nameStyle, maxWidth: innerW);
       final bs = measurer.measure(box.body!, bodyStyle, maxWidth: innerW);
       final contentTop = y + _boxPadding + _boxTextPadding;
-      nodes.add(SceneText(
-        text: box.name,
-        bounds: Rect.fromLTWH(
-            box.x + box.width / 2 - ns.width / 2, contentTop, ns.width, ns.height),
-        style: nameStyle,
-        color: theme.textColor,
-        align: TextAlignH.center,
-      ));
-      nodes.add(SceneText(
-        text: box.body!,
-        bounds: Rect.fromLTWH(box.x + _boxPadding + _boxTextPadding,
-            contentTop + ns.height + _emFontSize, innerW, bs.height),
-        style: bodyStyle,
-        color: theme.textColor,
-        align: TextAlignH.left,
-      ));
+      nodes.add(
+        SceneText(
+          text: box.name,
+          bounds: Rect.fromLTWH(
+            box.x + box.width / 2 - ns.width / 2,
+            contentTop,
+            ns.width,
+            ns.height,
+          ),
+          style: nameStyle,
+          color: theme.textColor,
+          align: TextAlignH.center,
+        ),
+      );
+      nodes.add(
+        SceneText(
+          text: box.body!,
+          bounds: Rect.fromLTWH(
+            box.x + _boxPadding + _boxTextPadding,
+            contentTop + ns.height + _emFontSize,
+            innerW,
+            bs.height,
+          ),
+          style: bodyStyle,
+          color: theme.textColor,
+          align: TextAlignH.left,
+        ),
+      );
     }
   }
 
@@ -589,13 +657,15 @@ RenderScene layoutEventModeling(
     // Relation stroke + arrowhead: upstream default theme sets
     // `emRelationStroke`/`emArrowhead` to `lineColor` (#333333), and the dark
     // theme keeps them tied to `lineColor`, so wire to `theme.lineColor`.
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(sourceX, sourceY)),
-        LineTo(Point(targetX, targetY)),
-      ]),
-      stroke: Stroke(color: theme.lineColor),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(sourceX, sourceY)),
+          LineTo(Point(targetX, targetY)),
+        ]),
+        stroke: Stroke(color: theme.lineColor),
+      ),
+    );
 
     // Triangle arrowhead (polygon "0 0, 10 3.5, 0 7", refX=10) pointing along
     // the path direction toward the target.
@@ -608,25 +678,27 @@ RenderScene layoutEventModeling(
       final tip = Point(targetX, targetY);
       final base = Point(targetX - ux * 10, targetY - uy * 10);
       final perp = Point(-uy, ux);
-      nodes.add(SceneShape(
-        geometry: PolygonGeometry([
-          tip,
-          base + perp * 3.5,
-          base - perp * 3.5,
-        ]),
-        fill: Fill(theme.lineColor),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PolygonGeometry([
+            tip,
+            base + perp * 3.5,
+            base - perp * 3.5,
+          ]),
+          fill: Fill(theme.lineColor),
+        ),
+      );
     }
   }
 
   final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 200, 100);
-  const m = 30.0; // config.padding ?? 30
+  final m = config.padding;
   return RenderScene(
     size: Size(bounds.width + 2 * m, bounds.height + 2 * m),
     background: theme.background,
     nodes: [
       for (final n in nodes)
-        translateSceneNode(n, m - bounds.left, m - bounds.top)
+        translateSceneNode(n, m - bounds.left, m - bounds.top),
     ],
   );
 }

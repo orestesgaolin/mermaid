@@ -6,7 +6,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -45,6 +47,36 @@ class TimelinePeriod {
 
   final String label;
   final List<String> events;
+}
+
+/// Values used by the active timeline renderer from `config.timeline`.
+///
+/// Most timeline schema fields are legacy journey/sequence compatibility
+/// fields and are not read by upstream timelineRenderer. The active renderer
+/// uses only the leading margin, outer padding, and multicolor toggle.
+class TimelineConfig {
+  const TimelineConfig({
+    this.leftMargin = 50,
+    this.padding = 12,
+    this.disableMulticolor = false,
+  });
+
+  final double leftMargin;
+  final double padding;
+  final bool disableMulticolor;
+
+  factory TimelineConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'timeline');
+    return TimelineConfig(
+      // Preserve the active renderer/Dart fallback. The shared schema still
+      // carries the journey-derived value 150.
+      leftMargin: nonNegativeDouble(values, 'leftMargin', 50),
+      // Upstream has no schema default and its renderer falls back to 50. This
+      // port keeps its established 12px intrinsic-scene padding by default.
+      padding: nonNegativeDouble(values, 'padding', 12),
+      disableMulticolor: boolValue(values, 'disableMulticolor', false),
+    );
+  }
 }
 
 TimelineDiagram parseTimeline(String source) {
@@ -103,8 +135,10 @@ TimelineDiagram parseTimeline(String source) {
     final parts = line.split(':').map((p) => p.trim()).toList();
     final label = _normalize(parts.first);
     if (label.isEmpty) {
-      throw MermaidParseException('unrecognized statement "$line"',
-          line: i + 1);
+      throw MermaidParseException(
+        'unrecognized statement "$line"',
+        line: i + 1,
+      );
     }
     final events = [
       for (final e in parts.skip(1))
@@ -128,9 +162,8 @@ TimelineDiagram parseTimeline(String source) {
   );
 }
 
-String _normalize(String s) => s
-    .replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n')
-    .trim();
+String _normalize(String s) =>
+    s.replaceAll(RegExp(r'<br\s*/?>', caseSensitive: false), '\n').trim();
 
 // Section/task/event fills are upstream's `cScale<i>` and the per-node bottom
 // underline uses `cScaleInv<i>` (`.section-<i> {rect,path,circle} fill:
@@ -142,14 +175,13 @@ const _themeColorLimit = 12;
 /// CSS `filter: brightness(120%)` — multiply each RGB channel by 1.2, clamped.
 /// Upstream applies this to `.eventWrapper` to lighten the section fill.
 Color _brightness(Color c, double factor) => Color.fromARGB(
-      c.alpha,
-      (c.red * factor).round().clamp(0, 255),
-      (c.green * factor).round().clamp(0, 255),
-      (c.blue * factor).round().clamp(0, 255),
-    );
+  c.alpha,
+  (c.red * factor).round().clamp(0, 255),
+  (c.green * factor).round().clamp(0, 255),
+  (c.blue * factor).round().clamp(0, 255),
+);
 
-// Upstream timelineRenderer constants (default `conf.timeline.leftMargin`).
-const _leftMargin = 50.0;
+// Upstream timelineRenderer constants.
 const _nodeBaseWidth = 150.0;
 const _nodePadding = 20.0;
 const _nodeWidth = _nodeBaseWidth + 2 * _nodePadding; // 190
@@ -161,12 +193,15 @@ RenderScene layoutTimeline(
   TimelineDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  TimelineConfig config = const TimelineConfig(),
 }) {
   // Upstream node text uses the diagram fontSize (default 16px) directly, not
   // a scaled-down variant; section/task labels are bold via `.section-<i>`.
   final fontSize = theme.fontSize;
-  final labelStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: fontSize);
+  final labelStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: fontSize,
+  );
   final nodes = <SceneNode>[];
 
   // Virtual node height (svgDraw.getVirtualNodeHeight): text wrapped to the
@@ -183,8 +218,10 @@ RenderScene layoutTimeline(
   if (hasSections) {
     for (final section in diagram.sections) {
       if (section.name.isEmpty) continue;
-      maxSectionHeight =
-          math.max(maxSectionHeight, virtualHeight(section.name) + 20);
+      maxSectionHeight = math.max(
+        maxSectionHeight,
+        virtualHeight(section.name) + 20,
+      );
     }
   }
   var maxTaskHeight = 0.0;
@@ -220,36 +257,43 @@ RenderScene layoutTimeline(
     var fill = theme.cScale[ci];
     if (event) fill = _brightness(fill, 1.2);
     final size = measurer.measure(text, labelStyle, maxWidth: width);
-    return SceneGroup(id: '${idPrefix}_${x.round()}_${y.round()}', children: [
-      SceneShape(
-        geometry: RectGeometry(Rect.fromLTWH(x, y, width, height),
-            rx: _nodeRadius, ry: _nodeRadius),
-        fill: Fill(fill),
-        stroke: Stroke(color: theme.nodeBorder, width: 0.7),
-      ),
-      // Per-node bottom underline (`defaultBkg` <line>, cScaleInv, width 3).
-      SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(x, y + height)),
-          LineTo(Point(x + width, y + height)),
-        ]),
-        stroke: Stroke(color: theme.cScaleInv[ci], width: 3),
-      ),
-      SceneText(
-        text: text,
-        bounds: Rect.fromLTWH(
+    return SceneGroup(
+      id: '${idPrefix}_${x.round()}_${y.round()}',
+      children: [
+        SceneShape(
+          geometry: RectGeometry(
+            Rect.fromLTWH(x, y, width, height),
+            rx: _nodeRadius,
+            ry: _nodeRadius,
+          ),
+          fill: Fill(fill),
+          stroke: Stroke(color: theme.nodeBorder, width: 0.7),
+        ),
+        // Per-node bottom underline (`defaultBkg` <line>, cScaleInv, width 3).
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(x, y + height)),
+            LineTo(Point(x + width, y + height)),
+          ]),
+          stroke: Stroke(color: theme.cScaleInv[ci], width: 3),
+        ),
+        SceneText(
+          text: text,
+          bounds: Rect.fromLTWH(
             x + width / 2 - size.width / 2,
             y + height / 2 - size.height / 2,
             size.width,
-            size.height),
-        style: event ? labelStyle : labelStyle.copyWith(fontWeight: 700),
-        color: event ? theme.textColor : theme.cScaleLabel[ci],
-      ),
-    ]);
+            size.height,
+          ),
+          style: event ? labelStyle : labelStyle.copyWith(fontWeight: 700),
+          color: event ? theme.textColor : theme.cScaleLabel[ci],
+        ),
+      ],
+    );
   }
 
   const sectionBeginY = 50.0;
-  var masterX = 50.0 + _leftMargin; // 100
+  var masterX = 50.0 + config.leftMargin;
   var sectionNumber = 0;
 
   void drawTasks(List<TimelinePeriod> tasks, int sectionColor, double startX) {
@@ -258,15 +302,17 @@ RenderScene layoutTimeline(
     var color = sectionColor;
     for (final period in tasks) {
       // Task node.
-      nodes.add(drawNode(
-        x: x,
-        y: taskY,
-        width: _nodeWidth,
-        height: maxTaskHeight,
-        text: period.label,
-        colorIndex: color,
-        idPrefix: 'period',
-      ));
+      nodes.add(
+        drawNode(
+          x: x,
+          y: taskY,
+          width: _nodeWidth,
+          height: maxTaskHeight,
+          text: period.label,
+          colorIndex: color,
+          idPrefix: 'period',
+        ),
+      );
 
       // Vertical dashed connector from the task bottom down to the content
       // boundary. Upstream draws this for EVERY task (timelineRenderer.ts
@@ -276,36 +322,40 @@ RenderScene layoutTimeline(
       // boundary regardless of how many events the task has.
       final lineX = x + _nodeWidth / 2;
       final lineEnd = taskY + maxTaskHeight + 100 + maxEventLineLength + 100;
-      nodes.add(SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(lineX, taskY + maxTaskHeight)),
-          LineTo(Point(lineX, lineEnd)),
-        ]),
-        stroke: Stroke(color: Color.black, width: 2, dash: const [5, 5]),
-      ));
+      nodes.add(
+        SceneShape(
+          geometry: PathGeometry([
+            MoveTo(Point(lineX, taskY + maxTaskHeight)),
+            LineTo(Point(lineX, lineEnd)),
+          ]),
+          stroke: Stroke(color: Color.black, width: 2, dash: const [5, 5]),
+        ),
+      );
 
       // Events stacked vertically below the task (+200 from task top).
       if (period.events.isNotEmpty) {
         var ey = taskY + 200;
         for (final event in period.events) {
           final h = math.max(virtualHeight(event), _eventMaxHeight);
-          nodes.add(drawNode(
-            x: x,
-            y: ey,
-            width: _nodeWidth,
-            height: h,
-            text: event,
-            colorIndex: color,
-            idPrefix: 'event',
-            event: true,
-          ));
+          nodes.add(
+            drawNode(
+              x: x,
+              y: ey,
+              width: _nodeWidth,
+              height: h,
+              text: event,
+              colorIndex: color,
+              idPrefix: 'event',
+              event: true,
+            ),
+          );
           ey += 10 + h;
         }
       }
 
       x += _columnAdvance;
       // Without sections, cycle the color per task (multicolor).
-      if (!hasSections) color++;
+      if (!hasSections && !config.disableMulticolor) color++;
     }
   }
 
@@ -314,15 +364,17 @@ RenderScene layoutTimeline(
       final tasks = section.periods;
       final sectionWidth =
           _columnAdvance * (math.max(tasks.length, 1) - 1) + _nodeWidth;
-      nodes.add(drawNode(
-        x: masterX,
-        y: sectionBeginY,
-        width: sectionWidth,
-        height: maxSectionHeight,
-        text: section.name,
-        colorIndex: sectionNumber,
-        idPrefix: 'tl_section',
-      ));
+      nodes.add(
+        drawNode(
+          x: masterX,
+          y: sectionBeginY,
+          width: sectionWidth,
+          height: maxSectionHeight,
+          text: section.name,
+          colorIndex: sectionNumber,
+          idPrefix: 'tl_section',
+        ),
+      );
       if (tasks.isNotEmpty) {
         drawTasks(tasks, sectionNumber, masterX);
       }
@@ -330,9 +382,7 @@ RenderScene layoutTimeline(
       sectionNumber++;
     }
   } else {
-    final tasks = [
-      for (final section in diagram.sections) ...section.periods,
-    ];
+    final tasks = [for (final section in diagram.sections) ...section.periods];
     drawTasks(tasks, sectionNumber, masterX);
   }
 
@@ -342,33 +392,39 @@ RenderScene layoutTimeline(
   final depthY = hasSections
       ? maxSectionHeight + maxTaskHeight + 150
       : maxTaskHeight + 100;
-  final axisX2 = bounds.width + 3 * _leftMargin;
-  nodes.add(SceneShape(
-    geometry: PathGeometry([
-      MoveTo(Point(_leftMargin, depthY)),
-      LineTo(Point(axisX2, depthY)),
-      // Arrowhead (marker `M0,0 V4 L6,2 Z`, scaled to the line).
-      MoveTo(Point(axisX2 - 6, depthY - 3)),
-      LineTo(Point(axisX2 + 2, depthY)),
-      LineTo(Point(axisX2 - 6, depthY + 3)),
-    ]),
-    stroke: Stroke(color: Color.black, width: 4),
-  ));
+  final axisX2 = bounds.width + 3 * config.leftMargin;
+  nodes.add(
+    SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(config.leftMargin, depthY)),
+        LineTo(Point(axisX2, depthY)),
+        // Arrowhead (marker `M0,0 V4 L6,2 Z`, scaled to the line).
+        MoveTo(Point(axisX2 - 6, depthY - 3)),
+        LineTo(Point(axisX2 + 2, depthY)),
+        LineTo(Point(axisX2 - 6, depthY + 3)),
+      ]),
+      stroke: Stroke(color: Color.black, width: 4),
+    ),
+  );
   bounds = sceneBounds(nodes) ?? bounds;
 
   // Title: large bold, near the top-left (`font-size:4ex`, y=20).
   final title = diagram.title;
   if (title != null && title.isNotEmpty) {
     final style = TextStyleSpec(
-        fontFamily: theme.fontFamily,
-        fontSize: fontSize * 2,
-        fontWeight: 700);
+      fontFamily: theme.fontFamily,
+      fontSize: fontSize * 2,
+      fontWeight: 700,
+    );
     final size = measurer.measure(title, style);
     final node = SceneText(
       text: title,
       bounds: Rect.fromLTWH(
-          bounds.width / 2 - _leftMargin, 20 - size.height / 2,
-          size.width, size.height),
+        bounds.width / 2 - config.leftMargin,
+        20 - size.height / 2,
+        size.width,
+        size.height,
+      ),
       style: style,
       color: theme.titleColor,
       align: TextAlignH.left,
@@ -377,7 +433,7 @@ RenderScene layoutTimeline(
     bounds = bounds.union(node.bounds);
   }
 
-  const pad = 12.0;
+  final pad = config.padding;
   final dx = pad - bounds.left;
   final dy = pad - bounds.top;
   return RenderScene(

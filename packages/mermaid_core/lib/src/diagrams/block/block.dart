@@ -7,7 +7,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -471,6 +473,17 @@ Map<String, String> _parseStyles(String s) {
 
 // --- layout ----------------------------------------------------------------
 
+class BlockConfig {
+  const BlockConfig({this.padding = 8});
+
+  final double padding;
+
+  factory BlockConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'block');
+    return BlockConfig(padding: nonNegativeDouble(values, 'padding', 8));
+  }
+}
+
 const _cellGap = 8.0;
 // Upstream layout default padding is `config.block.padding ?? 8`.
 const _pad = 8.0;
@@ -500,7 +513,9 @@ RenderScene layoutBlock(
   BlockDiagram diagram, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  BlockConfig config = const BlockConfig(),
 }) {
+  final pad = config.padding;
   final baseStyle = TextStyleSpec(
     fontFamily: theme.fontFamily,
     fontSize: theme.fontSize,
@@ -510,11 +525,11 @@ RenderScene layoutBlock(
 
   _Sized measure(BlockItem item) {
     if (item is BlockGroup) {
-      final grid = _layoutGrid(item.children, item.columns, measure);
+      final grid = _layoutGrid(item.children, item.columns, measure, pad: pad);
       final s = _Sized(
         item,
-        grid.width + 2 * _pad,
-        grid.height + 2 * _pad + (item.label.isEmpty ? 0 : 16),
+        grid.width + 2 * pad,
+        grid.height + 2 * pad + (item.label.isEmpty ? 0 : 16),
         grid,
       );
       return s;
@@ -531,9 +546,9 @@ RenderScene layoutBlock(
           n.arrowDirs.contains(BlockArrowDir.up) ||
           n.arrowDirs.contains(BlockArrowDir.down);
       final w =
-          math.max(ls.width + 2 * _pad, 60.0) + (horiz ? 2 * _arrowHead : 0);
+          math.max(ls.width + 2 * pad, 60.0) + (horiz ? 2 * _arrowHead : 0);
       final h =
-          math.max(ls.height + 2 * _pad, 40.0) + (vert ? 2 * _arrowHead : 0);
+          math.max(ls.height + 2 * pad, 40.0) + (vert ? 2 * _arrowHead : 0);
       return _Sized(item, w, h);
     }
     switch (n.shape) {
@@ -543,28 +558,28 @@ RenderScene layoutBlock(
         final s = math.max(ls.width, ls.height) + 40;
         return _Sized(item, s, s);
       case BlockShape.ellipse:
-        return _Sized(item, ls.width + 4 * _pad, ls.height + 2 * _pad);
+        return _Sized(item, ls.width + 4 * pad, ls.height + 2 * pad);
       case BlockShape.hexagon:
         // hexagon reserves m = h/4 of horizontal slant on each side.
-        final h = ls.height + 2 * _pad;
-        return _Sized(item, ls.width + 2 * _pad + h / 2, h);
+        final h = ls.height + 2 * pad;
+        return _Sized(item, ls.width + 2 * pad + h / 2, h);
       case BlockShape.subroutine:
-        return _Sized(item, ls.width + 2 * _pad + 16, ls.height + 2 * _pad);
+        return _Sized(item, ls.width + 2 * pad + 16, ls.height + 2 * pad);
       case BlockShape.leanRight:
       case BlockShape.leanLeft:
       case BlockShape.trapezoid:
       case BlockShape.invTrapezoid:
         // Parallelogram/trapezoid slant adds ~h of horizontal extent.
-        final h = ls.height + 2 * _pad;
-        return _Sized(item, ls.width + 2 * _pad + h, h);
+        final h = ls.height + 2 * pad;
+        return _Sized(item, ls.width + 2 * pad + h, h);
       case BlockShape.odd:
-        return _Sized(item, ls.width + 2 * _pad + 10, ls.height + 2 * _pad);
+        return _Sized(item, ls.width + 2 * pad + 10, ls.height + 2 * pad);
       default:
-        return _Sized(item, ls.width + 2 * _pad, ls.height + 2 * _pad);
+        return _Sized(item, ls.width + 2 * pad, ls.height + 2 * pad);
     }
   }
 
-  final root = _layoutGrid(diagram.root, diagram.columns, measure);
+  final root = _layoutGrid(diagram.root, diagram.columns, measure, pad: pad);
 
   final nodes = <SceneNode>[];
   void place(_GridLayout grid, double ox, double oy) {
@@ -601,8 +616,8 @@ RenderScene layoutBlock(
         }
         place(
           s.childLayout!,
-          rect.left + _pad,
-          rect.top + _pad + (item.label.isEmpty ? 0 : 16),
+          rect.left + pad,
+          rect.top + pad + (item.label.isEmpty ? 0 : 16),
         );
       } else {
         final n = item as BlockNode;
@@ -700,8 +715,9 @@ RenderScene layoutBlock(
 _GridLayout _layoutGrid(
   List<BlockItem> items,
   int columns,
-  _Sized Function(BlockItem) measure,
-) {
+  _Sized Function(BlockItem) measure, {
+  double pad = _pad,
+}) {
   final sized = [for (final it in items) measure(it)];
   final cols = columns > 0
       ? columns
@@ -741,7 +757,11 @@ _GridLayout _layoutGrid(
       s.width = spanW;
       if (s.item is BlockNode) s.height = rh;
       if (s.childLayout != null) {
-        _expandGridWidth(s.childLayout!, math.max(0, spanW - 2 * _pad));
+        _expandGridWidth(
+          s.childLayout!,
+          math.max(0, spanW - 2 * pad),
+          pad: pad,
+        );
       }
       s.center = Point(rx + spanW / 2, y + rh / 2);
       rx += spanW + _cellGap;
@@ -764,7 +784,11 @@ _GridLayout _layoutGrid(
 int _spanIn(BlockItem item, int columns) =>
     columns > 0 ? math.min(item.span, columns) : item.span;
 
-void _expandGridWidth(_GridLayout grid, double targetWidth) {
+void _expandGridWidth(
+  _GridLayout grid,
+  double targetWidth, {
+  double pad = _pad,
+}) {
   if (targetWidth <= grid.width || grid.cells.isEmpty) return;
   final cellW = math.max(
     0,
@@ -782,7 +806,11 @@ void _expandGridWidth(_GridLayout grid, double targetWidth) {
     cell.width = spanW;
     cell.center = Point(rx + spanW / 2, cell.center.y);
     if (cell.childLayout != null) {
-      _expandGridWidth(cell.childLayout!, math.max(0, spanW - 2 * _pad));
+      _expandGridWidth(
+        cell.childLayout!,
+        math.max(0, spanW - 2 * pad),
+        pad: pad,
+      );
     }
     rx += spanW + _cellGap;
     col += span;

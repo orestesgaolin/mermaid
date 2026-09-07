@@ -20,7 +20,6 @@ import '../flowchart/flow_model.dart' show FlowDirection;
 import 'class_model.dart';
 
 const double _memberGap = 4;
-const double _diagramPadding = 8;
 const double _markerSize = 14;
 
 /// Layout values resolved from `config.class`.
@@ -29,11 +28,19 @@ class ClassConfig {
     this.padding = 12,
     this.nodeSpacing = 50,
     this.rankSpacing = 50,
+    this.diagramPadding = 8,
+    this.hideEmptyMembersBox = false,
+    this.hierarchicalNamespaces = true,
+    this.titleTopMargin = 25,
   });
 
   final double padding;
   final double nodeSpacing;
   final double rankSpacing;
+  final double diagramPadding;
+  final bool hideEmptyMembersBox;
+  final bool hierarchicalNamespaces;
+  final double titleTopMargin;
 
   factory ClassConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'class');
@@ -42,6 +49,10 @@ class ClassConfig {
       padding: nonNegativeDouble(values, 'padding', 12),
       nodeSpacing: nonNegativeDouble(values, 'nodeSpacing', 50),
       rankSpacing: nonNegativeDouble(values, 'rankSpacing', 50),
+      diagramPadding: nonNegativeDouble(values, 'diagramPadding', 8),
+      hideEmptyMembersBox: boolValue(values, 'hideEmptyMembersBox', false),
+      hierarchicalNamespaces: boolValue(values, 'hierarchicalNamespaces', true),
+      titleTopMargin: nonNegativeDouble(values, 'titleTopMargin', 25),
     );
   }
 }
@@ -75,8 +86,15 @@ class _Box {
 }
 
 class _BoxLine {
-  _BoxLine(this.text, this.style, this.size, this.dy,
-      {this.centered = false, this.separatorAbove = false, this.underline = false});
+  _BoxLine(
+    this.text,
+    this.style,
+    this.size,
+    this.dy, {
+    this.centered = false,
+    this.separatorAbove = false,
+    this.underline = false,
+  });
 
   final String text;
   final TextStyleSpec style;
@@ -91,10 +109,10 @@ class _BoxLine {
 
 class _ClassLayout {
   _ClassLayout(this.diagram, this.measurer, this.theme, this.config)
-      : baseStyle = TextStyleSpec(
-          fontFamily: theme.fontFamily,
-          fontSize: _classFontSize,
-        );
+    : baseStyle = TextStyleSpec(
+        fontFamily: theme.fontFamily,
+        fontSize: _classFontSize,
+      );
 
   final ClassDiagram diagram;
   final TextMeasurer measurer;
@@ -107,6 +125,24 @@ class _ClassLayout {
   double get _rankSpacing => config.rankSpacing;
 
   final boxes = <String, _Box>{};
+
+  List<ClassNamespace> get _namespaces {
+    if (!config.hierarchicalNamespaces) return diagram.namespaces;
+    final result = <String, ClassNamespace>{};
+    for (final ns in diagram.namespaces) {
+      final parts = ns.id.split('.');
+      for (var i = 0; i < parts.length; i++) {
+        final id = parts.take(i + 1).join('.');
+        final previous = result[id];
+        result[id] = ClassNamespace(
+          id: id,
+          label: i == parts.length - 1 ? ns.label : parts[i],
+          classIds: {...?previous?.classIds, ...ns.classIds}.toList(),
+        );
+      }
+    }
+    return result.values.toList();
+  }
 
   RenderScene run() {
     for (final node in diagram.classes.values) {
@@ -127,15 +163,32 @@ class _ClassLayout {
 
     final g = dagre.DagreGraph();
     final parentOf = <String, String>{};
-    for (final ns in diagram.namespaces) {
+    final namespaces = _namespaces;
+    final namespaceIds = {for (final ns in namespaces) ns.id};
+    for (final ns in namespaces) {
       for (final id in ns.classIds) {
         parentOf[id] = '__ns_${ns.id}';
       }
-      g.addNode(dagre.DagreNode('__ns_${ns.id}'));
+      final dot = ns.id.lastIndexOf('.');
+      final parentId = dot < 0 ? null : ns.id.substring(0, dot);
+      g.addNode(
+        dagre.DagreNode(
+          '__ns_${ns.id}',
+          parent: parentId != null && namespaceIds.contains(parentId)
+              ? '__ns_$parentId'
+              : null,
+        ),
+      );
     }
     for (final b in boxes.values) {
-      g.addNode(dagre.DagreNode(b.node.id,
-          width: b.width, height: b.height, parent: parentOf[b.node.id]));
+      g.addNode(
+        dagre.DagreNode(
+          b.node.id,
+          width: b.width,
+          height: b.height,
+          parent: parentOf[b.node.id],
+        ),
+      );
     }
     noteBoxes.forEach((i, b) {
       g.addNode(dagre.DagreNode(b.node.id, width: b.width, height: b.height));
@@ -149,15 +202,17 @@ class _ClassLayout {
         size = measurer.measure(r.label!, baseStyle, maxWidth: 200);
         labelSizes[i] = size;
       }
-      g.addEdge(dagre.DagreEdge(
-        r.from,
-        r.to,
-        id: 'e$i',
-        minLen: 1,
-        width: size?.width ?? 0,
-        height: size?.height ?? 0,
-        labelPos: dagre.LabelPosition.center,
-      ));
+      g.addEdge(
+        dagre.DagreEdge(
+          r.from,
+          r.to,
+          id: 'e$i',
+          minLen: 1,
+          width: size?.width ?? 0,
+          height: size?.height ?? 0,
+          labelPos: dagre.LabelPosition.center,
+        ),
+      );
     }
     for (var i = 0; i < diagram.notes.length; i++) {
       final target = diagram.notes[i].forClass;
@@ -194,7 +249,7 @@ class _ClassLayout {
     // are already claimed by an earlier one is nested, so it moves with it.
     final separable = <({String label, Set<String> members})>[];
     final claimed = <String>{};
-    for (final ns in diagram.namespaces) {
+    for (final ns in namespaces) {
       final members = ns.classIds.where(boxes.containsKey).toSet();
       if (members.isEmpty || members.any(claimed.contains)) continue;
       claimed.addAll(members);
@@ -257,28 +312,34 @@ class _ClassLayout {
 
     // Reversed: namespaces close innermost-first during parsing, so painting
     // in reverse puts enclosing clusters behind nested ones.
-    for (final ns in diagram.namespaces.reversed) {
+    for (final ns in namespaces.reversed) {
       final rect = _namespaceRect(ns.label, ns.classIds);
       if (rect == null) continue;
       final titleSize = _namespaceTitleSize(ns.label);
-      clusterNodes.add(SceneGroup(
-        id: 'namespace_${ns.id}',
-        role: SceneGroupRole.cluster,
-        children: [
-        SceneShape(
-          geometry: RectGeometry(rect),
-          fill: Fill(theme.clusterBkg),
-          stroke: Stroke(color: theme.clusterBorder),
+      clusterNodes.add(
+        SceneGroup(
+          id: 'namespace_${ns.id}',
+          role: SceneGroupRole.cluster,
+          children: [
+            SceneShape(
+              geometry: RectGeometry(rect),
+              fill: Fill(theme.clusterBkg),
+              stroke: Stroke(color: theme.clusterBorder),
+            ),
+            SceneText(
+              text: ns.label,
+              bounds: Rect.fromLTWH(
+                rect.center.x - titleSize.width / 2,
+                rect.top + 4,
+                titleSize.width,
+                titleSize.height,
+              ),
+              style: baseStyle,
+              color: theme.titleColor,
+            ),
+          ],
         ),
-        SceneText(
-          text: ns.label,
-          bounds: Rect.fromLTWH(rect.center.x - titleSize.width / 2,
-              rect.top + 4, titleSize.width, titleSize.height),
-          style: baseStyle,
-          color: theme.titleColor,
-        ),
-        ],
-      ));
+      );
     }
 
     for (var i = 0; i < diagram.relations.length; i++) {
@@ -326,8 +387,10 @@ class _ClassLayout {
         );
       }
       points[0] = intersectRect(from.rectAt(from.center), points[1]);
-      points[points.length - 1] =
-          intersectRect(to.rectAt(to.center), points[points.length - 2]);
+      points[points.length - 1] = intersectRect(
+        to.rectAt(to.center),
+        points[points.length - 2],
+      );
 
       final children = <SceneNode>[];
       final startTip = points.first;
@@ -342,62 +405,72 @@ class _ClassLayout {
         points[points.length - 1] = endTip - endDir * _markerInset(r.endTo);
       }
       final path = PathGeometry(curveBasis(points));
-      children.add(SceneShape(
-        geometry: path,
-        stroke: Stroke(
-          color: theme.lineColor,
-          width: 1.5,
-          dash: r.dotted ? const [3, 3] : null,
+      children.add(
+        SceneShape(
+          geometry: path,
+          stroke: Stroke(
+            color: theme.lineColor,
+            width: 1.5,
+            dash: r.dotted ? const [3, 3] : null,
+          ),
         ),
-      ));
+      );
       children.addAll(_marker(r.endFrom, startTip, startDir));
       children.addAll(_marker(r.endTo, endTip, endDir));
-      edgeNodes.add(SceneGroup(
+      edgeNodes.add(
+        SceneGroup(
           id: 'rel_${r.from}_${r.to}_$i',
           role: SceneGroupRole.edge,
           semanticLabel: r.label,
-          children: children));
+          children: children,
+        ),
+      );
 
       final labelSize = labelSizes[i];
       if (labelSize != null) {
         // Namespace separation changes the route after Dagre calculates its
         // label position. Anchor the label on the final painted curve.
         final c = pathMidpoint(path);
-        labelNodes.add(SceneGroup(
-          id: 'rellabel_$i',
-          role: SceneGroupRole.edgeLabel,
-          children: [
-          SceneShape(
-            geometry: RectGeometry(
-                Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
-                rx: 2,
-                ry: 2),
-            // Mermaid 11's unified renderer uses the generic edge-label
-            // background rather than the legacy translucent `.classLabel` box.
-            // Opaque (the theme colour carries its own alpha) so the relation
-            // line does not show through the label.
-            fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
+        labelNodes.add(
+          SceneGroup(
+            id: 'rellabel_$i',
+            role: SceneGroupRole.edgeLabel,
+            children: [
+              SceneShape(
+                geometry: RectGeometry(
+                  Rect.fromCenter(c, labelSize.width + 4, labelSize.height + 4),
+                  rx: 2,
+                  ry: 2,
+                ),
+                // Mermaid 11's unified renderer uses the generic edge-label
+                // background rather than the legacy translucent `.classLabel` box.
+                // Opaque (the theme colour carries its own alpha) so the relation
+                // line does not show through the label.
+                fill: Fill(theme.edgeLabelBackground.withOpacity(1)),
+              ),
+              SceneText(
+                text: r.label!,
+                bounds: Rect.fromCenter(c, labelSize.width, labelSize.height),
+                style: baseStyle,
+                color: theme.textColor,
+              ),
+            ],
           ),
-          SceneText(
-            text: r.label!,
-            bounds: Rect.fromCenter(c, labelSize.width, labelSize.height),
-            style: baseStyle,
-            color: theme.textColor,
-          ),
-          ],
-        ));
+        );
       }
       final cardStyle = baseStyle.copyWith(fontSize: _cardinalityFontSize);
       void cardinality(String? card, Point tip, Point dir) {
         if (card == null || card.isEmpty) return;
         final size = measurer.measure(card, cardStyle);
         final pos = tip - dir * 18 + Point(-dir.y, dir.x) * 12;
-        labelNodes.add(SceneText(
-          text: card,
-          bounds: Rect.fromCenter(pos, size.width, size.height),
-          style: cardStyle,
-          color: Color.black,
-        ));
+        labelNodes.add(
+          SceneText(
+            text: card,
+            bounds: Rect.fromCenter(pos, size.width, size.height),
+            style: cardStyle,
+            color: Color.black,
+          ),
+        );
       }
 
       cardinality(r.cardFrom, startTip, startDir);
@@ -412,31 +485,39 @@ class _ClassLayout {
         final to = boxes[target]!;
         final p1 = intersectRect(noteBox.rectAt(noteBox.center), to.center);
         final p2 = intersectRect(to.rectAt(to.center), noteBox.center);
-        edgeNodes.add(SceneShape(
-          geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
-          stroke: Stroke(color: theme.lineColor, width: 1, dash: const [2, 2]),
-        ));
+        edgeNodes.add(
+          SceneShape(
+            geometry: PathGeometry([MoveTo(p1), LineTo(p2)]),
+            stroke: Stroke(
+              color: theme.lineColor,
+              width: 1,
+              dash: const [2, 2],
+            ),
+          ),
+        );
       }
       final rect = noteBox.rectAt(noteBox.center);
-      boxNodes.add(SceneGroup(
-        id: '__note$i',
-        role: SceneGroupRole.annotation,
-        children: [
-        SceneShape(
-          geometry: RectGeometry(rect),
-          // Upstream classDb sets `fill: noteBkgColor; stroke: noteBorderColor`.
-          fill: Fill(theme.noteBkgColor),
-          stroke: Stroke(color: theme.noteBorderColor),
+      boxNodes.add(
+        SceneGroup(
+          id: '__note$i',
+          role: SceneGroupRole.annotation,
+          children: [
+            SceneShape(
+              geometry: RectGeometry(rect),
+              // Upstream classDb sets `fill: noteBkgColor; stroke: noteBorderColor`.
+              fill: Fill(theme.noteBkgColor),
+              stroke: Stroke(color: theme.noteBorderColor),
+            ),
+            SceneText(
+              text: diagram.notes[i].text,
+              bounds: rect.inflate(-_padding),
+              style: baseStyle,
+              // Upstream `.noteLabel .nodeLabel { color: noteTextColor }`.
+              color: theme.noteTextColor,
+            ),
+          ],
         ),
-        SceneText(
-          text: diagram.notes[i].text,
-          bounds: rect.inflate(-_padding),
-          style: baseStyle,
-          // Upstream `.noteLabel .nodeLabel { color: noteTextColor }`.
-          color: theme.noteTextColor,
-        ),
-        ],
-      ));
+      );
     }
 
     for (final b in boxes.values) {
@@ -449,8 +530,7 @@ class _ClassLayout {
       ...labelNodes,
       ...boxNodes,
     ];
-    var bounds =
-        sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 100);
+    var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 100, 100);
 
     final title = diagram.title;
     if (title != null && title.isNotEmpty) {
@@ -458,8 +538,12 @@ class _ClassLayout {
       final size = measurer.measure(title, style);
       final node = SceneText(
         text: title,
-        bounds: Rect.fromLTWH(bounds.center.x - size.width / 2,
-            bounds.top - size.height - 8, size.width, size.height),
+        bounds: Rect.fromLTWH(
+          bounds.center.x - size.width / 2,
+          bounds.top - size.height - config.titleTopMargin,
+          size.width,
+          size.height,
+        ),
         style: style,
         color: theme.titleColor,
       );
@@ -467,11 +551,13 @@ class _ClassLayout {
       bounds = bounds.union(node.bounds);
     }
 
-    final dx = _diagramPadding - bounds.left;
-    final dy = _diagramPadding - bounds.top;
+    final dx = config.diagramPadding - bounds.left;
+    final dy = config.diagramPadding - bounds.top;
     return RenderScene(
-      size: Size(bounds.width + 2 * _diagramPadding,
-          bounds.height + 2 * _diagramPadding),
+      size: Size(
+        bounds.width + 2 * config.diagramPadding,
+        bounds.height + 2 * config.diagramPadding,
+      ),
       background: theme.background,
       nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
     );
@@ -485,11 +571,25 @@ class _ClassLayout {
     var y = _padding / 2 + 2;
     var width = 0.0;
 
-    void add(String text, TextStyleSpec style,
-        {bool centered = false, bool separator = false, bool underline = false}) {
+    void add(
+      String text,
+      TextStyleSpec style, {
+      bool centered = false,
+      bool separator = false,
+      bool underline = false,
+    }) {
       final size = measurer.measure(text, style, maxWidth: 300);
-      lines.add(_BoxLine(text, style, size, y,
-          centered: centered, separatorAbove: separator, underline: underline));
+      lines.add(
+        _BoxLine(
+          text,
+          style,
+          size,
+          y,
+          centered: centered,
+          separatorAbove: separator,
+          underline: underline,
+        ),
+      );
       y += size.height + _memberGap;
       width = math.max(width, size.width);
     }
@@ -507,7 +607,10 @@ class _ClassLayout {
     // by two divider lines (`renderExtraBox`). Otherwise draw a divider above
     // each present compartment, reserving the methods region when methods are
     // empty but members are present.
-    final renderExtraBox = node.attributes.isEmpty && node.methods.isEmpty;
+    final renderExtraBox =
+        !config.hideEmptyMembersBox &&
+        node.attributes.isEmpty &&
+        node.methods.isEmpty;
 
     if (renderExtraBox) {
       // Divider under the label and a second divider closing the extra box.
@@ -517,8 +620,12 @@ class _ClassLayout {
     } else {
       var first = true;
       for (final m in node.attributes) {
-        add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
-            separator: first, underline: m.isStatic);
+        add(
+          m.text,
+          m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
+          separator: first,
+          underline: m.isStatic,
+        );
         first = false;
       }
       if (node.attributes.isEmpty) {
@@ -531,8 +638,12 @@ class _ClassLayout {
 
       first = true;
       for (final m in node.methods) {
-        add(m.text, m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
-            separator: first, underline: m.isStatic);
+        add(
+          m.text,
+          m.isAbstract ? baseStyle.copyWith(italic: true) : baseStyle,
+          separator: first,
+          underline: m.isStatic,
+        );
         first = false;
       }
       if (node.methods.isEmpty) {
@@ -572,40 +683,55 @@ class _ClassLayout {
     for (final line in b.lines) {
       if (line.separatorAbove) {
         final sepY = rect.top + line.dy - _memberGap / 2 - 1;
-        children.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(rect.left, sepY)),
-            LineTo(Point(rect.right, sepY)),
-          ]),
-          stroke: Stroke(color: stroke),
-        ));
+        children.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(rect.left, sepY)),
+              LineTo(Point(rect.right, sepY)),
+            ]),
+            stroke: Stroke(color: stroke),
+          ),
+        );
       }
       if (line.text.isEmpty) continue;
-      children.add(SceneText(
-        text: line.text,
-        bounds: line.centered
-            ? Rect.fromLTWH(rect.center.x - line.size.width / 2,
-                rect.top + line.dy, line.size.width, line.size.height)
-            : Rect.fromLTWH(rect.left + _padding, rect.top + line.dy,
-                line.size.width, line.size.height),
-        style: line.style,
-        color: theme.textColor,
-        align: line.centered ? TextAlignH.center : TextAlignH.left,
-        underline: line.underline,
-      ));
+      children.add(
+        SceneText(
+          text: line.text,
+          bounds: line.centered
+              ? Rect.fromLTWH(
+                  rect.center.x - line.size.width / 2,
+                  rect.top + line.dy,
+                  line.size.width,
+                  line.size.height,
+                )
+              : Rect.fromLTWH(
+                  rect.left + _padding,
+                  rect.top + line.dy,
+                  line.size.width,
+                  line.size.height,
+                ),
+          style: line.style,
+          color: theme.textColor,
+          align: line.centered ? TextAlignH.center : TextAlignH.left,
+          underline: line.underline,
+        ),
+      );
     }
     return SceneGroup(
-        id: b.node.id, semanticLabel: b.node.label, children: children);
+      id: b.node.id,
+      semanticLabel: b.node.label,
+      children: children,
+    );
   }
 
   // --- markers -------------------------------------------------------------------
 
   double _markerInset(RelationEnd end) => switch (end) {
-        RelationEnd.extension => _markerSize - 1,
-        RelationEnd.composition || RelationEnd.aggregation => _markerSize + 2,
-        RelationEnd.lollipop => 11,
-        _ => 0,
-      };
+    RelationEnd.extension => _markerSize - 1,
+    RelationEnd.composition || RelationEnd.aggregation => _markerSize + 2,
+    RelationEnd.lollipop => 11,
+    _ => 0,
+  };
 
   List<SceneNode> _marker(RelationEnd end, Point tip, Point dir) {
     final perp = Point(-dir.y, dir.x);
@@ -616,8 +742,11 @@ class _ClassLayout {
         final base = tip - dir * _markerSize;
         return [
           SceneShape(
-            geometry: PolygonGeometry(
-                [tip, base + perp * (_markerSize / 2), base - perp * (_markerSize / 2)]),
+            geometry: PolygonGeometry([
+              tip,
+              base + perp * (_markerSize / 2),
+              base - perp * (_markerSize / 2),
+            ]),
             fill: Fill(theme.background),
             stroke: Stroke(color: theme.lineColor, width: 1.5),
           ),
@@ -633,9 +762,11 @@ class _ClassLayout {
               back,
               mid - perp * (_markerSize / 2.8),
             ]),
-            fill: Fill(end == RelationEnd.composition
-                ? theme.lineColor
-                : theme.background),
+            fill: Fill(
+              end == RelationEnd.composition
+                  ? theme.lineColor
+                  : theme.background,
+            ),
             stroke: Stroke(color: theme.lineColor, width: 1.5),
           ),
         ];
@@ -694,14 +825,16 @@ class _ClassLayout {
     for (var i = 0; i < diagram.relations.length; i++) {
       final relation = diagram.relations[i];
       if (relation.endFrom == RelationEnd.extension) {
-        byEndpoint
-            .putIfAbsent(relation.from, () => [])
-            .add((i, boxes[relation.to]!.center));
+        byEndpoint.putIfAbsent(relation.from, () => []).add((
+          i,
+          boxes[relation.to]!.center,
+        ));
       }
       if (relation.endTo == RelationEnd.extension) {
-        byEndpoint
-            .putIfAbsent(relation.to, () => [])
-            .add((i, boxes[relation.from]!.center));
+        byEndpoint.putIfAbsent(relation.to, () => []).add((
+          i,
+          boxes[relation.from]!.center,
+        ));
       }
     }
 
@@ -709,7 +842,8 @@ class _ClassLayout {
     for (final MapEntry(key: endpointId, value: relations)
         in byEndpoint.entries) {
       final endpoint = boxes[endpointId]!;
-      final vertical = diagram.direction == FlowDirection.tb ||
+      final vertical =
+          diagram.direction == FlowDirection.tb ||
           diagram.direction == FlowDirection.bt;
       relations.sort((a, b) {
         final aCross = vertical ? a.$2.x : a.$2.y;
@@ -721,8 +855,8 @@ class _ClassLayout {
       // A single relation lands on the centre of the endpoint's edge, which is
       // what the even spread below yields for a one-element list.
       final extent = vertical ? endpoint.width : endpoint.height;
-      final start = (vertical ? endpoint.center.x : endpoint.center.y) -
-          extent / 2;
+      final start =
+          (vertical ? endpoint.center.x : endpoint.center.y) - extent / 2;
       for (var index = 0; index < relations.length; index++) {
         ports[(relations[index].$1, endpointId)] =
             start + extent * (index + 1) / (relations.length + 1);
@@ -735,13 +869,15 @@ class _ClassLayout {
     if (diagram.direction == FlowDirection.tb ||
         diagram.direction == FlowDirection.bt) {
       final sign = other.y < endpoint.center.y ? -1.0 : 1.0;
-      return Point(crossAxis ?? endpoint.center.x,
-          endpoint.center.y + sign * (endpoint.height / 2 + _rankSpacing / 2));
+      return Point(
+        crossAxis ?? endpoint.center.x,
+        endpoint.center.y + sign * (endpoint.height / 2 + _rankSpacing / 2),
+      );
     }
     final sign = other.x < endpoint.center.x ? -1.0 : 1.0;
     return Point(
-        endpoint.center.x +
-            sign * (endpoint.width / 2 + _rankSpacing / 2),
-        crossAxis ?? endpoint.center.y);
+      endpoint.center.x + sign * (endpoint.width / 2 + _rankSpacing / 2),
+      crossAxis ?? endpoint.center.y,
+    );
   }
 }

@@ -33,7 +33,9 @@ void main() {
     });
     test('flowchart-elk keyword', () {
       expect(
-          parseFlowchart('flowchart-elk TD\nA-->B').direction, FlowDirection.tb);
+        parseFlowchart('flowchart-elk TD\nA-->B').direction,
+        FlowDirection.tb,
+      );
     });
     test('legacy direction >', () {
       expect(parseFlowchart('graph >;A-->B;').direction, FlowDirection.lr);
@@ -56,8 +58,10 @@ void main() {
       expect(g.edges.length, 2);
     });
     test('non-flowchart header throws', () {
-      expect(() => parseFlowchart('sequenceDiagram\nA->>B: hi'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseFlowchart('sequenceDiagram\nA->>B: hi'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
@@ -108,10 +112,12 @@ void main() {
     test('ampersand groups produce cartesian product', () {
       final g = parseFlowchart('graph TD;A & B --> C & D;');
       expect(g.edges.length, 4);
-      expect(
-        g.edges.map((e) => '${e.from}${e.to}').toList(),
-        ['AC', 'AD', 'BC', 'BD'],
-      );
+      expect(g.edges.map((e) => '${e.from}${e.to}').toList(), [
+        'AC',
+        'AD',
+        'BC',
+        'BD',
+      ]);
     });
     test('no whitespace around edge', () {
       final g = parseFlowchart('graph TD;A-->B;');
@@ -124,8 +130,9 @@ void main() {
     test('statement garbage throws with line info', () {
       expect(
         () => parseFlowchart('graph TD\nA --> B\nA -> B'),
-        throwsA(isA<MermaidParseException>()
-            .having((e) => e.line, 'line', isNotNull)),
+        throwsA(
+          isA<MermaidParseException>().having((e) => e.line, 'line', isNotNull),
+        ),
       );
     });
   });
@@ -370,8 +377,7 @@ void main() {
 
   group('subgraphs', () {
     test('basic subgraph membership', () {
-      final g = parseFlowchart(
-          'graph TB\nsubgraph one\na1-->a2\nend');
+      final g = parseFlowchart('graph TB\nsubgraph one\na1-->a2\nend');
       final sg = g.subgraphs.single;
       expect(sg.id, 'one');
       expect(sg.title, 'one');
@@ -379,7 +385,8 @@ void main() {
     });
     test('multiple subgraphs', () {
       final g = parseFlowchart(
-          'graph TB\nsubgraph one\na1-->a2\nend\nsubgraph two\nb1-->b2\nend');
+        'graph TB\nsubgraph one\na1-->a2\nend\nsubgraph two\nb1-->b2\nend',
+      );
       expect(g.subgraphs.length, 2);
       expect(g.subgraphs[1].nodeIds, ['b1', 'b2']);
     });
@@ -388,13 +395,16 @@ void main() {
       expect(g.subgraphs.single.title, 'Some Title');
     });
     test('id with bracket title', () {
-      final g = parseFlowchart('graph TB\nsubgraph sg1[Nice Title]\na-->b\nend');
+      final g = parseFlowchart(
+        'graph TB\nsubgraph sg1[Nice Title]\na-->b\nend',
+      );
       expect(g.subgraphs.single.id, 'sg1');
       expect(g.subgraphs.single.title, 'Nice Title');
     });
     test('id with quoted bracket title', () {
-      final g =
-          parseFlowchart('graph TB\nsubgraph sg1["Quoted Title"]\na-->b\nend');
+      final g = parseFlowchart(
+        'graph TB\nsubgraph sg1["Quoted Title"]\na-->b\nend',
+      );
       expect(g.subgraphs.single.title, 'Quoted Title');
     });
     test('multi-word title without brackets', () {
@@ -423,16 +433,30 @@ end
     });
     test('direction inside subgraph', () {
       final g = parseFlowchart(
-          'flowchart TB\nsubgraph s1\ndirection LR\na-->b\nend');
+        'flowchart TB\nsubgraph s1\ndirection LR\na-->b\nend',
+      );
       expect(g.subgraphs.single.direction, FlowDirection.lr);
     });
+    test('inheritDir ignores a nested direction in both config forms', () {
+      const body = 'flowchart TB\nsubgraph s1\ndirection LR\na-->b\nend';
+      final sources = [
+        '%%{init: {"flowchart": {"inheritDir": true}}}%%\n$body',
+        '---\nconfig:\n  flowchart:\n    inheritDir: true\n---\n$body',
+      ];
+      for (final source in sources) {
+        final graph = parseFlowchart(source);
+        expect(graph.direction, FlowDirection.tb);
+        expect(graph.subgraphs.single.direction, isNull);
+      }
+    });
     test('unclosed subgraph throws', () {
-      expect(() => parseFlowchart('graph TB\nsubgraph one\na-->b'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseFlowchart('graph TB\nsubgraph one\na-->b'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
     test('edges may cross subgraph boundary', () {
-      final g = parseFlowchart(
-          'graph TB\nsubgraph one\na1\nend\nb1-->a1');
+      final g = parseFlowchart('graph TB\nsubgraph one\na1\nend\nb1-->a1');
       expect(g.edges.single.from, 'b1');
       expect(g.edges.single.to, 'a1');
     });
@@ -441,12 +465,17 @@ end
   group('styling', () {
     test('classDef single', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;classDef exClass background:#bbb,border:1px solid red;');
-      expect(g.classDefs['exClass'],
-          {'background': '#bbb', 'border': '1px solid red'});
+        'graph TD;A-->B;classDef exClass background:#bbb,border:1px solid red;',
+      );
+      expect(g.classDefs['exClass'], {
+        'background': '#bbb',
+        'border': '1px solid red',
+      });
     });
     test('classDef multiple names', () {
-      final g = parseFlowchart('graph TD;A;classDef firstClass,secondClass background:#bbb;');
+      final g = parseFlowchart(
+        'graph TD;A;classDef firstClass,secondClass background:#bbb;',
+      );
       expect(g.classDefs.keys, containsAll(['firstClass', 'secondClass']));
     });
     test('classDef default', () {
@@ -455,19 +484,22 @@ end
     });
     test('class statement', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;classDef exClass fill:#f9f;class A exClass;');
+        'graph TD;A-->B;classDef exClass fill:#f9f;class A exClass;',
+      );
       expect(g.nodes['A']!.classes, ['exClass']);
       expect(g.nodes['B']!.classes, isEmpty);
     });
     test('class statement multiple nodes', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;classDef c fill:#f9f;class A,B c;');
+        'graph TD;A-->B;classDef c fill:#f9f;class A,B c;',
+      );
       expect(g.nodes['A']!.classes, ['c']);
       expect(g.nodes['B']!.classes, ['c']);
     });
     test('shorthand :::', () {
       final g = parseFlowchart(
-          'graph TD;A[label]:::exClass-->B;classDef exClass fill:#f9f;');
+        'graph TD;A[label]:::exClass-->B;classDef exClass fill:#f9f;',
+      );
       expect(g.nodes['A']!.classes, ['exClass']);
       expect(g.nodes['A']!.label, 'label');
     });
@@ -477,38 +509,50 @@ end
     });
     test('style statement', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;style A fill:#f9f,stroke:#333,stroke-width:4px;');
-      expect(g.nodes['A']!.styles,
-          {'fill': '#f9f', 'stroke': '#333', 'stroke-width': '4px'});
+        'graph TD;A-->B;style A fill:#f9f,stroke:#333,stroke-width:4px;',
+      );
+      expect(g.nodes['A']!.styles, {
+        'fill': '#f9f',
+        'stroke': '#333',
+        'stroke-width': '4px',
+      });
     });
     test('style with rgb value keeps commas inside parens', () {
-      final g = parseFlowchart('graph TD;A;style A fill:rgb(1,2,3),stroke:#333;');
+      final g = parseFlowchart(
+        'graph TD;A;style A fill:rgb(1,2,3),stroke:#333;',
+      );
       expect(g.nodes['A']!.styles['fill'], 'rgb(1,2,3)');
     });
     test('linkStyle by index', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;A-->C;linkStyle 1 stroke:#ff3,stroke-width:4px;');
+        'graph TD;A-->B;A-->C;linkStyle 1 stroke:#ff3,stroke-width:4px;',
+      );
       expect(g.edges[0].styles, isEmpty);
       expect(g.edges[1].styles, {'stroke': '#ff3', 'stroke-width': '4px'});
     });
     test('linkStyle with interpolate is tolerated', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;linkStyle 0 interpolate basis stroke:#ff3;');
+        'graph TD;A-->B;linkStyle 0 interpolate basis stroke:#ff3;',
+      );
       expect(g.edges[0].styles, {'stroke': '#ff3'});
     });
     test('linkStyle out of range throws', () {
-      expect(() => parseFlowchart('graph TD;A-->B;linkStyle 5 stroke:#ff3;'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseFlowchart('graph TD;A-->B;linkStyle 5 stroke:#ff3;'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
     test('click with url and tooltip', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;click A "https://example.com" "the tip";');
+        'graph TD;A-->B;click A "https://example.com" "the tip";',
+      );
       expect(g.nodes['A']!.link, 'https://example.com');
       expect(g.nodes['A']!.tooltip, 'the tip');
     });
     test('click href form', () {
-      final g =
-          parseFlowchart('graph TD;A;click A href "https://example.com";');
+      final g = parseFlowchart(
+        'graph TD;A;click A href "https://example.com";',
+      );
       expect(g.nodes['A']!.link, 'https://example.com');
     });
     test('click callback is ignored gracefully', () {
@@ -520,7 +564,8 @@ end
   group('v11 @{} attribute syntax', () {
     test('shape and label attributes', () {
       final g = parseFlowchart(
-          'flowchart LR\nA@{ shape: datastore, label: "Datastore" } --> B');
+        'flowchart LR\nA@{ shape: datastore, label: "Datastore" } --> B',
+      );
       expect(g.nodes['A']!.shape, FlowNodeShape.cylinder);
       expect(g.nodes['A']!.label, 'Datastore');
     });
@@ -534,35 +579,46 @@ end
       expect(g.nodes['A']!.label, 'new');
     });
     test('v11 geometries map to their shape', () {
-      expect(parseFlowchart('flowchart TD\nA@{ shape: hourglass }')
-          .nodes['A']!.shape, FlowNodeShape.hourglass);
-      expect(parseFlowchart('flowchart TD\nA@{ shape: doc }')
-          .nodes['A']!.shape, FlowNodeShape.document);
+      expect(
+        parseFlowchart(
+          'flowchart TD\nA@{ shape: hourglass }',
+        ).nodes['A']!.shape,
+        FlowNodeShape.hourglass,
+      );
+      expect(
+        parseFlowchart('flowchart TD\nA@{ shape: doc }').nodes['A']!.shape,
+        FlowNodeShape.document,
+      );
     });
     test('valid-but-unported shape (image) falls back to rect', () {
       final g = parseFlowchart('flowchart TD\nA@{ shape: image }');
       expect(g.nodes['A']!.shape, FlowNodeShape.rect);
     });
     test('unknown shape throws', () {
-      expect(() => parseFlowchart('flowchart TD\nA@{ shape: zigzag }'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseFlowchart('flowchart TD\nA@{ shape: zigzag }'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
     test('unrecognized attributes are ignored', () {
       final g = parseFlowchart(
-          'flowchart TD\nA@{ shape: rounded, w: 200, icon: "gear" } --> B');
+        'flowchart TD\nA@{ shape: rounded, w: 200, icon: "gear" } --> B',
+      );
       expect(g.nodes['A']!.shape, FlowNodeShape.rounded);
       expect(g.edges.single.to, 'B');
     });
     test('quoted label may contain commas and braces', () {
-      final g =
-          parseFlowchart('flowchart TD\nA@{ label: "a, b } c", shape: stadium }');
+      final g = parseFlowchart(
+        'flowchart TD\nA@{ label: "a, b } c", shape: stadium }',
+      );
       expect(g.nodes['A']!.label, 'a, b } c');
       expect(g.nodes['A']!.shape, FlowNodeShape.stadium);
     });
     test('fixture 60 style: attributes mid-chain', () {
       final g = parseFlowchart(
-          'flowchart LR\nDataStore@{shape: datastore, label: "Datastore"} '
-          '-->|input| Process((System)) -->|output| Entity[Customer];');
+        'flowchart LR\nDataStore@{shape: datastore, label: "Datastore"} '
+        '-->|input| Process((System)) -->|output| Entity[Customer];',
+      );
       expect(g.nodes['DataStore']!.shape, FlowNodeShape.cylinder);
       expect(g.nodes['Process']!.shape, FlowNodeShape.circle);
       expect(g.edges.length, 2);
@@ -573,19 +629,23 @@ end
   group('linkStyle default', () {
     test('applies to every edge', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;B-->C;linkStyle default stroke:#999,stroke-width:2px;');
+        'graph TD;A-->B;B-->C;linkStyle default stroke:#999,stroke-width:2px;',
+      );
       expect(g.edges[0].styles['stroke'], '#999');
       expect(g.edges[1].styles['stroke'], '#999');
     });
     test('per-index linkStyle overrides default', () {
-      final g = parseFlowchart('graph TD;A-->B;B-->C;'
-          'linkStyle default stroke:#999;linkStyle 1 stroke:#f00;');
+      final g = parseFlowchart(
+        'graph TD;A-->B;B-->C;'
+        'linkStyle default stroke:#999;linkStyle 1 stroke:#f00;',
+      );
       expect(g.edges[0].styles['stroke'], '#999');
       expect(g.edges[1].styles['stroke'], '#f00');
     });
     test('default declared before later edges still applies to them', () {
       final g = parseFlowchart(
-          'graph TD;A-->B;linkStyle default stroke:#999;B-->C;');
+        'graph TD;A-->B;linkStyle default stroke:#999;B-->C;',
+      );
       expect(g.edges[1].styles['stroke'], '#999');
     });
   });
@@ -601,22 +661,27 @@ end
     });
     test('init directive is ignored', () {
       final g = parseFlowchart(
-          '%%{init: {"theme": "dark"}}%%\ngraph TD\nA-->B');
+        '%%{init: {"theme": "dark"}}%%\ngraph TD\nA-->B',
+      );
       expect(g.edges.length, 1);
     });
     test('frontmatter title is captured', () {
-      final g = parseFlowchart('---\ntitle: My Chart\n---\nflowchart LR\nA-->B');
+      final g = parseFlowchart(
+        '---\ntitle: My Chart\n---\nflowchart LR\nA-->B',
+      );
       expect(g.title, 'My Chart');
       expect(g.direction, FlowDirection.lr);
     });
     test('accTitle and accDescr are tolerated', () {
       final g = parseFlowchart(
-          'graph TD\naccTitle: Big chart\naccDescr: A description\nA-->B');
+        'graph TD\naccTitle: Big chart\naccDescr: A description\nA-->B',
+      );
       expect(g.edges.length, 1);
     });
     test('multiline accDescr block is tolerated', () {
       final g = parseFlowchart(
-          'graph TD\naccDescr {\nA long description\nspanning lines\n}\nA-->B');
+        'graph TD\naccDescr {\nA long description\nspanning lines\n}\nA-->B',
+      );
       expect(g.edges.length, 1);
     });
     test('empty source throws', () {

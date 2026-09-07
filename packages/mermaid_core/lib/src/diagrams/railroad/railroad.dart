@@ -10,7 +10,9 @@ library;
 import 'dart:math' as math;
 
 import '../../color.dart';
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -142,7 +144,22 @@ RailroadDiagram parseRailroad(String source) {
 }
 
 /// Token kinds for the expression parser.
-enum _Tok { ident, string, lparen, rparen, lbrack, rbrack, lbrace, rbrace, bar, comma, star, plus, question, eof }
+enum _Tok {
+  ident,
+  string,
+  lparen,
+  rparen,
+  lbrack,
+  rbrack,
+  lbrace,
+  rbrace,
+  bar,
+  comma,
+  star,
+  plus,
+  question,
+  eof,
+}
 
 class _Token {
   _Token(this.kind, this.value);
@@ -410,12 +427,6 @@ List<String> _splitTop(String s, String sep) {
 // Layout
 // ---------------------------------------------------------------------------
 
-// Upstream DEFAULT_RAILROAD_CONFIG: horizontalSeparation 10,
-// verticalSeparation 8, padding 10, arcRadius 10, strokeWidth 2.
-const _hGap = 10.0, _vGap = 8.0, _pad = 10.0;
-const _arc = 10.0; // corner radius for loop/bypass arcs (arcRadius)
-const _strokeWidth = 2.0;
-
 // Terminal corner radius is a fixed 10px (not a full pill).
 const _terminalRadius = 10.0;
 
@@ -435,7 +446,89 @@ const _terminalRadius = 10.0;
 const _specialFill = Color(0xfff0e0ff);
 const _specialStroke = Color(0xff8800cc);
 
-const _markerRadius = 5.0;
+Color? _configuredColor(Map<String, Object?> values, String key) {
+  final value = values[key];
+  return value is String ? Color.tryParse(value) : null;
+}
+
+class RailroadConfig {
+  const RailroadConfig({
+    this.compactMode = false,
+    this.padding = 10,
+    this.verticalSeparation = 8,
+    this.horizontalSeparation = 10,
+    this.arcRadius = 10,
+    this.fontSize = 14,
+    this.fontFamily = 'monospace',
+    this.strokeWidth = 2,
+    this.showMarkers = true,
+    this.markerRadius = 5,
+    this.terminalFill,
+    this.terminalStroke,
+    this.terminalTextColor,
+    this.nonTerminalFill,
+    this.nonTerminalStroke,
+    this.nonTerminalTextColor,
+    this.lineColor,
+    this.markerFill,
+    this.specialFill,
+    this.specialStroke,
+    this.ruleNameColor,
+  });
+
+  final bool compactMode;
+  final double padding;
+  final double verticalSeparation;
+  final double horizontalSeparation;
+  final double arcRadius;
+  final double fontSize;
+  final String fontFamily;
+  final double strokeWidth;
+  final bool showMarkers;
+  final double markerRadius;
+  final Color? terminalFill;
+  final Color? terminalStroke;
+  final Color? terminalTextColor;
+  final Color? nonTerminalFill;
+  final Color? nonTerminalStroke;
+  final Color? nonTerminalTextColor;
+  final Color? lineColor;
+  final Color? markerFill;
+  final Color? specialFill;
+  final Color? specialStroke;
+  final Color? ruleNameColor;
+
+  factory RailroadConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'railroad');
+    return RailroadConfig(
+      compactMode: boolValue(values, 'compactMode', false),
+      padding: nonNegativeDouble(values, 'padding', 10),
+      verticalSeparation: nonNegativeDouble(values, 'verticalSeparation', 8),
+      horizontalSeparation: nonNegativeDouble(
+        values,
+        'horizontalSeparation',
+        10,
+      ),
+      arcRadius: nonNegativeDouble(values, 'arcRadius', 10),
+      fontSize: nonNegativeDouble(values, 'fontSize', 14),
+      fontFamily: stringValue(values, 'fontFamily', 'monospace'),
+      strokeWidth: nonNegativeDouble(values, 'strokeWidth', 2),
+      showMarkers: boolValue(values, 'showMarkers', true),
+      markerRadius: nonNegativeDouble(values, 'markerRadius', 5),
+      terminalFill: _configuredColor(values, 'terminalFill'),
+      terminalStroke: _configuredColor(values, 'terminalStroke'),
+      terminalTextColor: _configuredColor(values, 'terminalTextColor'),
+      nonTerminalFill: _configuredColor(values, 'nonTerminalFill'),
+      nonTerminalStroke: _configuredColor(values, 'nonTerminalStroke'),
+      nonTerminalTextColor: _configuredColor(values, 'nonTerminalTextColor'),
+      lineColor: _configuredColor(values, 'lineColor'),
+      markerFill: _configuredColor(values, 'markerFill'),
+      specialFill: _configuredColor(values, 'specialFill'),
+      specialStroke: _configuredColor(values, 'specialStroke'),
+      ruleNameColor: _configuredColor(values, 'ruleNameColor'),
+    );
+  }
+}
 
 /// A laid-out fragment of a railroad track. Coordinates are local to the
 /// fragment's own origin; [entryY] / [exitY] give the y of the rail where the
@@ -457,27 +550,36 @@ class _Frag {
 }
 
 class _Layouter {
-  _Layouter(this.measurer, this.theme)
-      : baseStyle = const TextStyleSpec(
-          // Upstream railroad forces fontFamily: monospace, fontSize: 14.
-          fontFamily: 'monospace',
-          fontSize: 14,
-        );
+  _Layouter(this.measurer, this.theme, this.config)
+    : baseStyle = TextStyleSpec(
+        fontFamily: config.fontFamily,
+        fontSize: config.fontSize,
+      );
   final TextMeasurer measurer;
   final MermaidTheme theme;
+  final RailroadConfig config;
   final TextStyleSpec baseStyle;
+
+  double get _hGap =>
+      config.horizontalSeparation * (config.compactMode ? 0.5 : 1);
+  double get _vGap =>
+      config.verticalSeparation * (config.compactMode ? 0.5 : 1);
+  double get _pad => config.padding * (config.compactMode ? 0.5 : 1);
+  double get _arc => config.arcRadius;
+  double get _strokeWidth => config.strokeWidth;
 
   Stroke get _rail => Stroke(color: theme.lineColor, width: _strokeWidth);
 
   List<SceneNode> _hLine(double x1, double x2, double y) => [
-        SceneShape(
-          geometry: PathGeometry([MoveTo(Point(x1, y)), LineTo(Point(x2, y))]),
-          stroke: _rail,
-        ),
-      ];
+    SceneShape(
+      geometry: PathGeometry([MoveTo(Point(x1, y)), LineTo(Point(x2, y))]),
+      stroke: _rail,
+    ),
+  ];
 
-  List<SceneNode> _path(List<PathCommand> cmds) =>
-      [SceneShape(geometry: PathGeometry(cmds), stroke: _rail)];
+  List<SceneNode> _path(List<PathCommand> cmds) => [
+    SceneShape(geometry: PathGeometry(cmds), stroke: _rail),
+  ];
 
   _Frag _box(String label, {required bool terminal}) {
     final ts = measurer.measure(label, baseStyle);
@@ -491,9 +593,15 @@ class _Layouter {
     // Theme-derived: terminal uses secondBkg/secondaryColor + secondary text;
     // non-terminal uses mainBkg + primaryBorder + primary text (see comment at
     // top of file mirroring upstream buildThemeDefaults).
-    final fill = terminal ? theme.secondaryColor : theme.mainBkg;
-    final stroke = terminal ? theme.lineColor : theme.nodeBorder;
-    final textColor = terminal ? theme.textColor : theme.primaryTextColor;
+    final fill = terminal
+        ? config.terminalFill ?? theme.secondaryColor
+        : config.nonTerminalFill ?? theme.mainBkg;
+    final stroke = terminal
+        ? config.terminalStroke ?? theme.lineColor
+        : config.nonTerminalStroke ?? theme.nodeBorder;
+    final textColor = terminal
+        ? config.terminalTextColor ?? theme.textColor
+        : config.nonTerminalTextColor ?? theme.primaryTextColor;
     return _Frag(
       nodes: [
         SceneShape(
@@ -527,9 +635,9 @@ class _Layouter {
       nodes: [
         SceneShape(
           geometry: RectGeometry(rect),
-          fill: const Fill(_specialFill),
-          stroke: const Stroke(
-            color: _specialStroke,
+          fill: Fill(config.specialFill ?? _specialFill),
+          stroke: Stroke(
+            color: config.specialStroke ?? _specialStroke,
             width: _strokeWidth,
             dash: [5, 3],
           ),
@@ -551,7 +659,7 @@ class _Layouter {
 
   /// A short straight rail used for empty fragments.
   _Frag _stub() {
-    const h = 14.0 + 2 * _pad; // approx box height for alignment
+    final h = baseStyle.fontSize + 2 * _pad;
     return _Frag(
       nodes: _hLine(0, _hGap, h / 2),
       width: _hGap,
@@ -562,27 +670,31 @@ class _Layouter {
   }
 
   _Frag layout(RailroadExpr e) => switch (e) {
-        RailroadTerminal(:final text) => _box(text, terminal: true),
-        RailroadNonTerminal(:final text) => _box(text, terminal: false),
-        RailroadSpecial(:final text) => _special(text),
-        RailroadEmpty() => _stub(),
-        RailroadSequence(:final items) => _layoutSequence(items),
-        RailroadChoice(:final options) => _layoutChoice(options),
-        RailroadOptional(:final child) => _layoutOptional(child),
-        RailroadRepetition(:final child, :final oneOrMore) =>
-          _layoutRepetition(child, oneOrMore),
-      };
+    RailroadTerminal(:final text) => _box(text, terminal: true),
+    RailroadNonTerminal(:final text) => _box(text, terminal: false),
+    RailroadSpecial(:final text) => _special(text),
+    RailroadEmpty() => _stub(),
+    RailroadSequence(:final items) => _layoutSequence(items),
+    RailroadChoice(:final options) => _layoutChoice(options),
+    RailroadOptional(:final child) => _layoutOptional(child),
+    RailroadRepetition(:final child, :final oneOrMore) => _layoutRepetition(
+      child,
+      oneOrMore,
+    ),
+  };
 
   /// Shifts every node in [frag] by (dx, dy).
-  List<SceneNode> _shift(_Frag frag, double dx, double dy) =>
-      [for (final n in frag.nodes) translateSceneNode(n, dx, dy)];
+  List<SceneNode> _shift(_Frag frag, double dx, double dy) => [
+    for (final n in frag.nodes) translateSceneNode(n, dx, dy),
+  ];
 
   _Frag _layoutSequence(List<RailroadExpr> items) {
     if (items.isEmpty) return _stub();
     final frags = [for (final it in items) layout(it)];
     // Baseline: align all fragment entry rails to a common y.
-    final entryAbove =
-        frags.map((f) => f.entryY).reduce(math.max); // space above baseline
+    final entryAbove = frags
+        .map((f) => f.entryY)
+        .reduce(math.max); // space above baseline
     final exitBelow = frags
         .map((f) => f.height - f.entryY)
         .reduce(math.max); // space below baseline
@@ -603,10 +715,12 @@ class _Layouter {
       // to the baseline with a short connector if it differs.
       final exitYAbs = dy + f.exitY;
       if ((exitYAbs - baseline).abs() > 0.01 && i < frags.length - 1) {
-        nodes.addAll(_path([
-          MoveTo(Point(x + f.width, exitYAbs)),
-          LineTo(Point(x + f.width, baseline)),
-        ]));
+        nodes.addAll(
+          _path([
+            MoveTo(Point(x + f.width, exitYAbs)),
+            LineTo(Point(x + f.width, baseline)),
+          ]),
+        );
       }
       x += f.width;
     }
@@ -623,7 +737,7 @@ class _Layouter {
     final frags = [for (final o in options) layout(o)];
     final innerW = frags.map((f) => f.width).reduce(math.max);
     // Upstream choice adds arcRadius*4 of horizontal room (2 each side).
-    const lead = _arc * 2;
+    final lead = _arc * 2;
 
     final nodes = <SceneNode>[];
     // Lay options stacked top-to-bottom.
@@ -688,11 +802,7 @@ class _Layouter {
       ),
       LineTo(Point(x0 + r, y1 - dir * r)),
       // Second quarter turn back to horizontal at the row.
-      CubicTo(
-        Point(x0 + r, y1),
-        Point(x0 + r, y1),
-        Point(x0 + 2 * r, y1),
-      ),
+      CubicTo(Point(x0 + r, y1), Point(x0 + r, y1), Point(x0 + 2 * r, y1)),
       LineTo(Point(x1, y1)),
     ]);
   }
@@ -711,11 +821,7 @@ class _Layouter {
         Point(x1 - r, y1 - dir * r),
       ),
       LineTo(Point(x1 - r, y0 + dir * r)),
-      CubicTo(
-        Point(x1 - r, y0),
-        Point(x1 - r, y0),
-        Point(x1, y0),
-      ),
+      CubicTo(Point(x1 - r, y0), Point(x1 - r, y0), Point(x1, y0)),
     ]);
   }
 
@@ -723,8 +829,8 @@ class _Layouter {
   _Frag _layoutOptional(RailroadExpr child) {
     final f = layout(child);
     // Upstream: element offset by arcRadius*2 each side, bypass rise arcHeight.
-    const lead = _arc * 2;
-    const bypassRise = _arc * 2; // how far above the baseline the bypass runs
+    final lead = _arc * 2;
+    final bypassRise = _arc * 2; // how far above the baseline the bypass runs
     final baseline = bypassRise + f.entryY;
     final width = lead + f.width + lead;
     final nodes = <SceneNode>[];
@@ -738,19 +844,30 @@ class _Layouter {
 
     // Bypass arc: from left baseline up, across the top, back down to right.
     final topY = baseline - bypassRise;
-    nodes.addAll(_path([
-      MoveTo(Point(0, baseline)),
-      CubicTo(Point(_arc, baseline), Point(_arc, baseline),
-          Point(_arc, baseline - _arc)),
-      LineTo(Point(_arc, topY + _arc)),
-      CubicTo(Point(_arc, topY), Point(_arc, topY), Point(_arc + _arc, topY)),
-      LineTo(Point(width - 2 * _arc, topY)),
-      CubicTo(Point(width - _arc, topY), Point(width - _arc, topY),
-          Point(width - _arc, topY + _arc)),
-      LineTo(Point(width - _arc, baseline - _arc)),
-      CubicTo(Point(width - _arc, baseline), Point(width - _arc, baseline),
-          Point(width, baseline)),
-    ]));
+    nodes.addAll(
+      _path([
+        MoveTo(Point(0, baseline)),
+        CubicTo(
+          Point(_arc, baseline),
+          Point(_arc, baseline),
+          Point(_arc, baseline - _arc),
+        ),
+        LineTo(Point(_arc, topY + _arc)),
+        CubicTo(Point(_arc, topY), Point(_arc, topY), Point(_arc + _arc, topY)),
+        LineTo(Point(width - 2 * _arc, topY)),
+        CubicTo(
+          Point(width - _arc, topY),
+          Point(width - _arc, topY),
+          Point(width - _arc, topY + _arc),
+        ),
+        LineTo(Point(width - _arc, baseline - _arc)),
+        CubicTo(
+          Point(width - _arc, baseline),
+          Point(width - _arc, baseline),
+          Point(width, baseline),
+        ),
+      ]),
+    );
 
     return _Frag(
       nodes: nodes,
@@ -767,9 +884,9 @@ class _Layouter {
   _Frag _layoutRepetition(RailroadExpr child, bool oneOrMore) {
     final f = layout(child);
     // Upstream: element offset by arcRadius*2 each side; loop/bypass arcHeight.
-    const lead = _arc * 2;
-    const loopDrop = _arc * 2; // how far below baseline the return arc runs
-    const bypassRise = _arc * 2; // skip arc above (zero-or-more only)
+    final lead = _arc * 2;
+    final loopDrop = _arc * 2; // how far below baseline the return arc runs
+    final bypassRise = _arc * 2; // skip arc above (zero-or-more only)
     final topPad = oneOrMore ? 0.0 : bypassRise;
     final baseline = topPad + f.entryY;
     final width = lead + f.width + lead;
@@ -782,40 +899,66 @@ class _Layouter {
 
     // Return loop below: from right side of item back to left side.
     final botY = baseline + loopDrop;
-    nodes.addAll(_path([
-      MoveTo(Point(lead + f.width, baseline)),
-      CubicTo(Point(lead + f.width + _arc, baseline),
+    nodes.addAll(
+      _path([
+        MoveTo(Point(lead + f.width, baseline)),
+        CubicTo(
           Point(lead + f.width + _arc, baseline),
-          Point(lead + f.width + _arc, baseline + _arc)),
-      LineTo(Point(lead + f.width + _arc, botY - _arc)),
-      CubicTo(
+          Point(lead + f.width + _arc, baseline),
+          Point(lead + f.width + _arc, baseline + _arc),
+        ),
+        LineTo(Point(lead + f.width + _arc, botY - _arc)),
+        CubicTo(
           Point(lead + f.width + _arc, botY),
           Point(lead + f.width + _arc, botY),
-          Point(lead + f.width, botY)),
-      LineTo(Point(lead, botY)),
-      CubicTo(Point(lead - _arc, botY), Point(lead - _arc, botY),
-          Point(lead - _arc, botY - _arc)),
-      LineTo(Point(lead - _arc, baseline + _arc)),
-      CubicTo(Point(lead - _arc, baseline), Point(lead - _arc, baseline),
-          Point(lead, baseline)),
-    ]));
+          Point(lead + f.width, botY),
+        ),
+        LineTo(Point(lead, botY)),
+        CubicTo(
+          Point(lead - _arc, botY),
+          Point(lead - _arc, botY),
+          Point(lead - _arc, botY - _arc),
+        ),
+        LineTo(Point(lead - _arc, baseline + _arc)),
+        CubicTo(
+          Point(lead - _arc, baseline),
+          Point(lead - _arc, baseline),
+          Point(lead, baseline),
+        ),
+      ]),
+    );
 
     if (!oneOrMore) {
       // Skip bypass above (zero traversals).
       final topY = baseline - bypassRise;
-      nodes.addAll(_path([
-        MoveTo(Point(0, baseline)),
-        CubicTo(Point(_arc, baseline), Point(_arc, baseline),
-            Point(_arc, baseline - _arc)),
-        LineTo(Point(_arc, topY + _arc)),
-        CubicTo(Point(_arc, topY), Point(_arc, topY), Point(_arc + _arc, topY)),
-        LineTo(Point(width - 2 * _arc, topY)),
-        CubicTo(Point(width - _arc, topY), Point(width - _arc, topY),
-            Point(width - _arc, topY + _arc)),
-        LineTo(Point(width - _arc, baseline - _arc)),
-        CubicTo(Point(width - _arc, baseline), Point(width - _arc, baseline),
-            Point(width, baseline)),
-      ]));
+      nodes.addAll(
+        _path([
+          MoveTo(Point(0, baseline)),
+          CubicTo(
+            Point(_arc, baseline),
+            Point(_arc, baseline),
+            Point(_arc, baseline - _arc),
+          ),
+          LineTo(Point(_arc, topY + _arc)),
+          CubicTo(
+            Point(_arc, topY),
+            Point(_arc, topY),
+            Point(_arc + _arc, topY),
+          ),
+          LineTo(Point(width - 2 * _arc, topY)),
+          CubicTo(
+            Point(width - _arc, topY),
+            Point(width - _arc, topY),
+            Point(width - _arc, topY + _arc),
+          ),
+          LineTo(Point(width - _arc, baseline - _arc)),
+          CubicTo(
+            Point(width - _arc, baseline),
+            Point(width - _arc, baseline),
+            Point(width, baseline),
+          ),
+        ]),
+      );
     }
 
     final bottom = math.max(botY, baseline + (f.height - f.entryY));
@@ -833,19 +976,24 @@ RenderScene layoutRailroad(
   RailroadDiagram d, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  RailroadConfig config = const RailroadConfig(),
 }) {
-  // Upstream forces monospace / fontSize 14 for the whole diagram.
-  final baseStyle =
-      const TextStyleSpec(fontFamily: 'monospace', fontSize: 14);
+  final baseStyle = TextStyleSpec(
+    fontFamily: config.fontFamily,
+    fontSize: config.fontSize,
+  );
   final nameStyle = baseStyle.copyWith(fontWeight: 700);
-  final layouter = _Layouter(measurer, theme);
+  final layouter = _Layouter(measurer, theme, config);
   final nodes = <SceneNode>[];
   var y = 0.0;
 
   // Rail / marker color is theme.lineColor; rule-name color is theme.titleColor
   // (upstream lineColor / titleColor; see buildThemeDefaults).
-  final rail = Stroke(color: theme.lineColor, width: _strokeWidth);
-  final markerFill = Fill(theme.lineColor);
+  final rail = Stroke(
+    color: config.lineColor ?? theme.lineColor,
+    width: config.strokeWidth,
+  );
+  final markerFill = Fill(config.markerFill ?? theme.lineColor);
 
   for (final rule in d.rules) {
     // Upstream: name label is "<name> =" on the rail baseline, to the left.
@@ -865,46 +1013,84 @@ RenderScene layoutRailroad(
     ];
 
     // Rule name label, vertically centred on the rail baseline.
-    children.add(SceneText(
-      text: ruleName,
-      bounds: Rect.fromLTWH(0, baselineY - ns.height / 2, ns.width, ns.height),
-      style: nameStyle,
-      color: theme.titleColor,
-      align: TextAlignH.left,
-    ));
+    children.add(
+      SceneText(
+        text: ruleName,
+        bounds: Rect.fromLTWH(
+          0,
+          baselineY - ns.height / 2,
+          ns.width,
+          ns.height,
+        ),
+        style: nameStyle,
+        color: theme.titleColor,
+        align: TextAlignH.left,
+      ),
+    );
 
     // Start marker (filled circle) + line into the definition.
-    children.add(SceneShape(
-      geometry: CircleGeometry(Point(nameWidth, baselineY), _markerRadius),
-      fill: markerFill,
-    ));
-    children.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(nameWidth + _markerRadius, baselineY)),
-        LineTo(Point(definitionX, baselineY)),
-      ]),
-      stroke: rail,
-    ));
+    if (config.showMarkers) {
+      children.add(
+        SceneShape(
+          geometry: CircleGeometry(
+            Point(nameWidth, baselineY),
+            config.markerRadius,
+          ),
+          fill: markerFill,
+        ),
+      );
+    }
+    children.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(
+            Point(
+              nameWidth + (config.showMarkers ? config.markerRadius : 0),
+              baselineY,
+            ),
+          ),
+          LineTo(Point(definitionX, baselineY)),
+        ]),
+        stroke: rail,
+      ),
+    );
 
     // End marker (filled circle) + line out of the definition.
     final endX = definitionX + frag.width + 10;
-    children.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(definitionX + frag.width, baselineY)),
-        LineTo(Point(endX - _markerRadius, baselineY)),
-      ]),
-      stroke: rail,
-    ));
-    children.add(SceneShape(
-      geometry: CircleGeometry(Point(endX, baselineY), _markerRadius),
-      fill: markerFill,
-    ));
+    children.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(definitionX + frag.width, baselineY)),
+          LineTo(
+            Point(
+              endX - (config.showMarkers ? config.markerRadius : 0),
+              baselineY,
+            ),
+          ),
+        ]),
+        stroke: rail,
+      ),
+    );
+    if (config.showMarkers) {
+      children.add(
+        SceneShape(
+          geometry: CircleGeometry(Point(endX, baselineY), config.markerRadius),
+          fill: markerFill,
+        ),
+      );
+    }
 
     nodes.add(SceneGroup(id: rule.name, children: children));
 
     // Advance below this rule (upstream: rule height + verticalSeparation).
     final ruleBottom = definitionY + frag.height;
-    y = math.max(baselineY + _markerRadius, ruleBottom) + 2 * _pad + _vGap;
+    y =
+        math.max(
+          baselineY + (config.showMarkers ? config.markerRadius : 0),
+          ruleBottom,
+        ) +
+        2 * config.padding +
+        config.verticalSeparation;
   }
 
   var bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 200, 80);
@@ -916,19 +1102,19 @@ RenderScene layoutRailroad(
       text: d.title!,
       bounds: Rect.fromLTWH(0, bounds.top - ts.height - 8, ts.width, ts.height),
       style: style,
-      color: theme.titleColor,
+      color: config.ruleNameColor ?? theme.titleColor,
       align: TextAlignH.left,
     );
     children.add(node);
     bounds = bounds.union(node.bounds);
   }
-  const m = _pad; // outer margin = upstream padding (10)
+  final m = config.padding;
   return RenderScene(
     size: Size(bounds.width + 2 * m, bounds.height + 2 * m),
     background: theme.background,
     nodes: [
       for (final n in children)
-        translateSceneNode(n, m - bounds.left, m - bounds.top)
+        translateSceneNode(n, m - bounds.left, m - bounds.top),
     ],
   );
 }

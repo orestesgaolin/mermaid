@@ -15,8 +15,6 @@ import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 import 'sequence_model.dart';
 
-const double _blockLabelHeight = 24;
-
 /// Layout values resolved from `config.sequence`.
 class SequenceConfig {
   const SequenceConfig({
@@ -36,6 +34,20 @@ class SequenceConfig {
     this.showSequenceNumbers = false,
     this.wrap = false,
     this.wrapPadding = 10,
+    this.hideUnusedParticipants = false,
+    this.bottomMarginAdj = 1,
+    this.labelBoxWidth = 50,
+    this.labelBoxHeight = 20,
+    this.actorFontSize,
+    this.actorFontFamily,
+    this.actorFontWeight,
+    this.noteFontSize,
+    this.noteFontFamily,
+    this.noteFontWeight,
+    this.messageFontSize,
+    this.messageFontFamily,
+    this.messageFontWeight,
+    this.rightAngles = false,
   });
 
   final double activationWidth;
@@ -54,6 +66,20 @@ class SequenceConfig {
   final bool showSequenceNumbers;
   final bool wrap;
   final double wrapPadding;
+  final bool hideUnusedParticipants;
+  final double bottomMarginAdj;
+  final double labelBoxWidth;
+  final double labelBoxHeight;
+  final double? actorFontSize;
+  final String? actorFontFamily;
+  final int? actorFontWeight;
+  final double? noteFontSize;
+  final String? noteFontFamily;
+  final int? noteFontWeight;
+  final double? messageFontSize;
+  final String? messageFontFamily;
+  final int? messageFontWeight;
+  final bool rightAngles;
 
   factory SequenceConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'sequence');
@@ -82,8 +108,47 @@ class SequenceConfig {
       showSequenceNumbers: boolValue(values, 'showSequenceNumbers', false),
       wrap: boolValue(values, 'wrap', false),
       wrapPadding: nonNegativeDouble(values, 'wrapPadding', 10),
+      hideUnusedParticipants: boolValue(
+        values,
+        'hideUnusedParticipants',
+        false,
+      ),
+      bottomMarginAdj: nonNegativeDouble(values, 'bottomMarginAdj', 1),
+      labelBoxWidth: positiveDouble(values, 'labelBoxWidth', 50),
+      labelBoxHeight: positiveDouble(values, 'labelBoxHeight', 20),
+      actorFontSize: _fontSizeValue(values['actorFontSize']),
+      actorFontFamily: values['actorFontFamily'] is String
+          ? values['actorFontFamily'] as String
+          : null,
+      actorFontWeight: _fontWeightValue(values['actorFontWeight']),
+      noteFontSize: _fontSizeValue(values['noteFontSize']),
+      noteFontFamily: values['noteFontFamily'] is String
+          ? values['noteFontFamily'] as String
+          : null,
+      noteFontWeight: _fontWeightValue(values['noteFontWeight']),
+      messageFontSize: _fontSizeValue(values['messageFontSize']),
+      messageFontFamily: values['messageFontFamily'] is String
+          ? values['messageFontFamily'] as String
+          : null,
+      messageFontWeight: _fontWeightValue(values['messageFontWeight']),
+      rightAngles: boolValue(values, 'rightAngles', false),
     );
   }
+}
+
+double? _fontSizeValue(Object? raw) {
+  if (raw is num && raw > 0) return raw.toDouble();
+  if (raw is String) {
+    final match = RegExp(r'^\s*(\d+(?:\.\d+)?)').firstMatch(raw);
+    final value = match == null ? null : double.tryParse(match.group(1)!);
+    if (value != null && value > 0) return value;
+  }
+  return null;
+}
+
+int? _fontWeightValue(Object? raw) {
+  final value = raw is num ? raw.toInt() : int.tryParse('$raw');
+  return value != null && value >= 100 && value <= 900 ? value : null;
 }
 
 RenderScene layoutSequence(
@@ -141,6 +206,22 @@ class _SequenceLayout {
   final SequenceConfig config;
   final TextStyleSpec baseStyle;
 
+  TextStyleSpec get actorStyle => baseStyle.copyWith(
+    fontFamily: config.actorFontFamily,
+    fontSize: config.actorFontSize,
+    fontWeight: config.actorFontWeight,
+  );
+  TextStyleSpec get noteStyle => baseStyle.copyWith(
+    fontFamily: config.noteFontFamily,
+    fontSize: config.noteFontSize,
+    fontWeight: config.noteFontWeight,
+  );
+  TextStyleSpec get messageStyle => baseStyle.copyWith(
+    fontFamily: config.messageFontFamily,
+    fontSize: config.messageFontSize,
+    fontWeight: config.messageFontWeight,
+  );
+
   double get _diagramMarginX => config.diagramMarginX;
   double get _diagramMarginY => config.diagramMarginY;
   double get _actorMargin => config.actorMargin;
@@ -152,6 +233,7 @@ class _SequenceLayout {
   double get _messageMargin => config.messageMargin;
   double get _activationWidth => config.activationWidth;
   double get _wrapPadding => config.wrapPadding;
+  double get _blockLabelHeight => config.labelBoxHeight;
 
   final columns = <String, _Column>{};
   final order = <String>[];
@@ -415,7 +497,7 @@ class _SequenceLayout {
     return RenderScene(
       size: Size(
         bounds.width + _diagramMarginX,
-        bounds.height + 2 * _diagramMarginY,
+        bounds.height + 2 * _diagramMarginY + config.bottomMarginAdj,
       ),
       background: theme.background,
       nodes: [for (final n in nodes) translateSceneNode(n, dx, dy)],
@@ -425,8 +507,19 @@ class _SequenceLayout {
   // --- columns ---------------------------------------------------------------
 
   void _buildColumns() {
+    final used = <String>{};
+    if (config.hideUnusedParticipants) {
+      for (final event in diagram.events) {
+        if (event case SeqMessage(:final from, :final to)) {
+          used
+            ..add(from)
+            ..add(to);
+        }
+      }
+    }
     for (final p in diagram.participants.values) {
-      final labelSize = measurer.measure(p.label, baseStyle, maxWidth: 200);
+      if (config.hideUnusedParticipants && !used.contains(p.id)) continue;
+      final labelSize = measurer.measure(p.label, actorStyle, maxWidth: 200);
       final w = math.max(
         _actorMinWidth,
         labelSize.width + 2 * _boxTextMargin * 2,
@@ -581,7 +674,7 @@ class _SequenceLayout {
             col.labelSize.width,
             col.labelSize.height,
           ),
-          style: baseStyle,
+          style: actorStyle,
           color: theme.actorTextColor,
         ),
       ]);
@@ -599,7 +692,7 @@ class _SequenceLayout {
             col.labelSize.width,
             col.labelSize.height,
           ),
-          style: baseStyle,
+          style: actorStyle,
           color: theme.actorTextColor,
         ),
       ]);
@@ -632,12 +725,13 @@ class _SequenceLayout {
               (toCol.x - fromCol.x).abs() + 2 * _wrapPadding,
               _actorMinWidth,
             ),
+            messageStyle,
           )
         : _ResolvedText(
             msg.text,
             msg.text.isEmpty
                 ? Size.zero
-                : measurer.measure(msg.text, baseStyle),
+                : measurer.measure(msg.text, messageStyle),
           );
     final textSize = text.size;
     y += math.max(_messageMargin, textSize.height + 14);
@@ -671,7 +765,7 @@ class _SequenceLayout {
             textSize.width,
             textSize.height,
           ),
-          style: baseStyle,
+          style: messageStyle,
           color: theme.signalTextColor,
         ),
       );
@@ -715,12 +809,16 @@ class _SequenceLayout {
   ) {
     final col = columns[msg.from]!;
     final text = _wraps(msg.wrap, msg.wrapSpecified) && msg.text.isNotEmpty
-        ? _resolveWrappedText(msg.text, _actorMinWidth - 2 * _wrapPadding)
+        ? _resolveWrappedText(
+            msg.text,
+            _actorMinWidth - 2 * _wrapPadding,
+            messageStyle,
+          )
         : _ResolvedText(
             msg.text,
             msg.text.isEmpty
                 ? Size.zero
-                : measurer.measure(msg.text, baseStyle),
+                : measurer.measure(msg.text, messageStyle),
           );
     final textSize = text.size;
     y += _messageMargin;
@@ -729,14 +827,23 @@ class _SequenceLayout {
     final h = math.max(20.0, textSize.height + 6);
     final children = <SceneNode>[
       SceneShape(
-        geometry: PathGeometry([
-          MoveTo(Point(x, y)),
-          CubicTo(
-            Point(x + out, y - 6),
-            Point(x + out, y + h + 6),
-            Point(x + 4, y + h),
-          ),
-        ]),
+        geometry: PathGeometry(
+          config.rightAngles
+              ? [
+                  MoveTo(Point(x, y)),
+                  LineTo(Point(x + out, y)),
+                  LineTo(Point(x + out, y + h)),
+                  LineTo(Point(x + 4, y + h)),
+                ]
+              : [
+                  MoveTo(Point(x, y)),
+                  CubicTo(
+                    Point(x + out, y - 6),
+                    Point(x + out, y + h + 6),
+                    Point(x + 4, y + h),
+                  ),
+                ],
+        ),
         stroke: Stroke(
           color: theme.signalColor,
           width: 1.5,
@@ -753,7 +860,7 @@ class _SequenceLayout {
             textSize.width,
             textSize.height,
           ),
-          style: baseStyle,
+          style: messageStyle,
           color: theme.signalTextColor,
           align: TextAlignH.left,
         ),
@@ -856,8 +963,12 @@ class _SequenceLayout {
   void _note(SeqNote note, void Function(double, double) include) {
     final wraps = _wraps(note.wrap, note.wrapSpecified);
     final text = wraps
-        ? _resolveWrappedText(note.text, _actorMinWidth - 2 * _wrapPadding)
-        : _ResolvedText(note.text, measurer.measure(note.text, baseStyle));
+        ? _resolveWrappedText(
+            note.text,
+            _actorMinWidth - 2 * _wrapPadding,
+            noteStyle,
+          )
+        : _ResolvedText(note.text, measurer.measure(note.text, noteStyle));
     final textSize = text.size;
     final w = wraps ? _actorMinWidth : textSize.width + 2 * _noteMargin;
     final h = textSize.height + 2 * _noteMargin;
@@ -907,7 +1018,7 @@ class _SequenceLayout {
               textSize.width,
               textSize.height,
             ),
-            style: baseStyle,
+            style: noteStyle,
             color: theme.noteTextColor,
             align: switch (config.noteAlign) {
               'left' => TextAlignH.left,
@@ -959,8 +1070,11 @@ class _SequenceLayout {
     };
     final keywordStyle = baseStyle.copyWith(fontWeight: 700);
     final kwSize = measurer.measure(keyword, keywordStyle);
-    final tabW = kwSize.width + 2 * _boxTextMargin + 8;
-    final tabH = kwSize.height + 4;
+    final tabW = math.max(
+      config.labelBoxWidth,
+      kwSize.width + 2 * _boxTextMargin + 8,
+    );
+    final tabH = math.max(config.labelBoxHeight, kwSize.height + 4);
 
     frames.add(
       SceneGroup(
@@ -1091,7 +1205,12 @@ class _SequenceLayout {
     return len == 0 ? const Point(1, 0) : Point(p.x / len, p.y / len);
   }
 
-  _ResolvedText _resolveWrappedText(String text, double maxWidth) {
+  _ResolvedText _resolveWrappedText(
+    String text,
+    double maxWidth, [
+    TextStyleSpec? textStyle,
+  ]) {
+    final style = textStyle ?? baseStyle;
     final lines = <String>[];
     for (final hardLine in text.split('\n')) {
       final words = hardLine.trim().split(RegExp(r'\s+'));
@@ -1100,7 +1219,7 @@ class _SequenceLayout {
         if (word.isEmpty) continue;
         final candidate = current.isEmpty ? word : '$current $word';
         if (current.isNotEmpty &&
-            measurer.measure(candidate, baseStyle).width > maxWidth) {
+            measurer.measure(candidate, style).width > maxWidth) {
           lines.add(current);
           current = word;
         } else {
@@ -1110,6 +1229,6 @@ class _SequenceLayout {
       lines.add(current);
     }
     final resolved = lines.join('\n');
-    return _ResolvedText(resolved, measurer.measure(resolved, baseStyle));
+    return _ResolvedText(resolved, measurer.measure(resolved, style));
   }
 }

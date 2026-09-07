@@ -48,6 +48,21 @@ class QuadrantConfig {
     this.chartWidth = 500,
     this.chartHeight = 500,
     this.quadrantPadding = 5,
+    this.titlePadding = 10,
+    this.titleFontSize = 20,
+    this.xAxisLabelPadding = 5,
+    this.yAxisLabelPadding = 5,
+    this.xAxisLabelFontSize = 16,
+    this.yAxisLabelFontSize = 16,
+    this.quadrantLabelFontSize = 16,
+    this.quadrantTextTopPadding = 5,
+    this.pointTextPadding = 5,
+    this.pointLabelFontSize = 12,
+    this.pointRadius = 5,
+    this.quadrantInternalBorderStrokeWidth = 1,
+    this.quadrantExternalBorderStrokeWidth = 2,
+    this.xAxisPosition = 'top',
+    this.yAxisPosition = 'left',
   });
 
   /// Fixed scene and chart width in logical pixels.
@@ -59,6 +74,21 @@ class QuadrantConfig {
   /// Inset between the scene edge and reserved axis/title space.
   final double quadrantPadding;
 
+  final double titlePadding;
+  final double titleFontSize;
+  final double xAxisLabelPadding;
+  final double yAxisLabelPadding;
+  final double xAxisLabelFontSize;
+  final double yAxisLabelFontSize;
+  final double quadrantLabelFontSize;
+  final double quadrantTextTopPadding;
+  final double pointTextPadding;
+  final double pointLabelFontSize;
+  final double pointRadius;
+  final double quadrantInternalBorderStrokeWidth;
+  final double quadrantExternalBorderStrokeWidth;
+  final String xAxisPosition, yAxisPosition;
+
   /// Resolves frontmatter first, then applies every init directive in order.
   factory QuadrantConfig.fromSource(String source) {
     final values = resolveDiagramConfig(source, 'quadrantChart');
@@ -66,6 +96,43 @@ class QuadrantConfig {
       chartWidth: positiveDouble(values, 'chartWidth', 500),
       chartHeight: positiveDouble(values, 'chartHeight', 500),
       quadrantPadding: nonNegativeDouble(values, 'quadrantPadding', 5),
+      titlePadding: nonNegativeDouble(values, 'titlePadding', 10),
+      titleFontSize: nonNegativeDouble(values, 'titleFontSize', 20),
+      xAxisLabelPadding: nonNegativeDouble(values, 'xAxisLabelPadding', 5),
+      yAxisLabelPadding: nonNegativeDouble(values, 'yAxisLabelPadding', 5),
+      xAxisLabelFontSize: nonNegativeDouble(values, 'xAxisLabelFontSize', 16),
+      yAxisLabelFontSize: nonNegativeDouble(values, 'yAxisLabelFontSize', 16),
+      quadrantLabelFontSize: nonNegativeDouble(
+        values,
+        'quadrantLabelFontSize',
+        16,
+      ),
+      quadrantTextTopPadding: nonNegativeDouble(
+        values,
+        'quadrantTextTopPadding',
+        5,
+      ),
+      pointTextPadding: nonNegativeDouble(values, 'pointTextPadding', 5),
+      pointLabelFontSize: nonNegativeDouble(values, 'pointLabelFontSize', 12),
+      pointRadius: nonNegativeDouble(values, 'pointRadius', 5),
+      quadrantInternalBorderStrokeWidth: nonNegativeDouble(
+        values,
+        'quadrantInternalBorderStrokeWidth',
+        1,
+      ),
+      quadrantExternalBorderStrokeWidth: nonNegativeDouble(
+        values,
+        'quadrantExternalBorderStrokeWidth',
+        2,
+      ),
+      xAxisPosition: enumValue(values, 'xAxisPosition', const {
+        'top',
+        'bottom',
+      }, 'top'),
+      yAxisPosition: enumValue(values, 'yAxisPosition', const {
+        'left',
+        'right',
+      }, 'left'),
     );
   }
 }
@@ -87,11 +154,11 @@ class QuadrantPointStyle {
   final double? strokeWidth;
 
   QuadrantPointStyle merge(QuadrantPointStyle other) => QuadrantPointStyle(
-        radius: other.radius ?? radius,
-        color: other.color ?? color,
-        strokeColor: other.strokeColor ?? strokeColor,
-        strokeWidth: other.strokeWidth ?? strokeWidth,
-      );
+    radius: other.radius ?? radius,
+    color: other.color ?? color,
+    strokeColor: other.strokeColor ?? strokeColor,
+    strokeWidth: other.strokeWidth ?? strokeWidth,
+  );
 }
 
 class QuadrantPoint {
@@ -133,40 +200,47 @@ QuadrantPointStyle _parseStyles(Iterable<String> styles, int lineNo) {
       case 'radius':
         if (!RegExp(r'^\d+$').hasMatch(value)) {
           throw MermaidParseException(
-              'value for radius $value is invalid, please use a valid number',
-              line: lineNo);
+            'value for radius $value is invalid, please use a valid number',
+            line: lineNo,
+          );
         }
         result = result.merge(QuadrantPointStyle(radius: double.parse(value)));
       case 'color':
         final c = _parseHex(value);
         if (c == null) {
           throw MermaidParseException(
-              'value for color $value is invalid, please use a valid hex code',
-              line: lineNo);
+            'value for color $value is invalid, please use a valid hex code',
+            line: lineNo,
+          );
         }
         result = result.merge(QuadrantPointStyle(color: c));
       case 'stroke-color':
         final c = _parseHex(value);
         if (c == null) {
           throw MermaidParseException(
-              'value for stroke-color $value is invalid, please use a valid '
-              'hex code',
-              line: lineNo);
+            'value for stroke-color $value is invalid, please use a valid '
+            'hex code',
+            line: lineNo,
+          );
         }
         result = result.merge(QuadrantPointStyle(strokeColor: c));
       case 'stroke-width':
         final m = RegExp(r'^(\d+)px$').firstMatch(value);
         if (m == null) {
           throw MermaidParseException(
-              'value for stroke-width $value is invalid, please use a valid '
-              'number of pixels (eg. 10px)',
-              line: lineNo);
+            'value for stroke-width $value is invalid, please use a valid '
+            'number of pixels (eg. 10px)',
+            line: lineNo,
+          );
         }
-        result = result
-            .merge(QuadrantPointStyle(strokeWidth: double.parse(m.group(1)!)));
+        result = result.merge(
+          QuadrantPointStyle(strokeWidth: double.parse(m.group(1)!)),
+        );
       default:
-        throw MermaidParseException('style named $key is not supported.',
-            line: lineNo);
+        throw MermaidParseException(
+          'style named $key is not supported.',
+          line: lineNo,
+        );
     }
   }
   return result;
@@ -204,8 +278,10 @@ QuadrantChart parseQuadrantChart(String source) {
     if (line.isEmpty) continue;
     if (!seenHeader) {
       if (!RegExp(r'^quadrantChart\b').hasMatch(line)) {
-        throw MermaidParseException('expected "quadrantChart" header',
-            line: i + 1);
+        throw MermaidParseException(
+          'expected "quadrantChart" header',
+          line: i + 1,
+        );
       }
       seenHeader = true;
       continue;
@@ -242,19 +318,23 @@ QuadrantChart parseQuadrantChart(String source) {
       continue;
     }
     // Point: `label[:::class] : [x, y][ radius: N, color: #hex, ...]`
-    m = RegExp(r'^(.+?)(?::::(\w+))?\s*:\s*\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]'
-            r'(?:\s+(.+))?$')
-        .firstMatch(line);
+    m = RegExp(
+      r'^(.+?)(?::::(\w+))?\s*:\s*\[\s*([\d.]+)\s*,\s*([\d.]+)\s*\]'
+      r'(?:\s+(.+))?$',
+    ).firstMatch(line);
     if (m != null) {
-      final inline =
-          m.group(5) != null ? _parseStyles(_splitStyles(m.group(5)!), i + 1) : const QuadrantPointStyle();
-      points.add(QuadrantPoint(
-        label: m.group(1)!.trim(),
-        className: m.group(2),
-        x: double.parse(m.group(3)!).clamp(0, 1),
-        y: double.parse(m.group(4)!).clamp(0, 1),
-        style: inline,
-      ));
+      final inline = m.group(5) != null
+          ? _parseStyles(_splitStyles(m.group(5)!), i + 1)
+          : const QuadrantPointStyle();
+      points.add(
+        QuadrantPoint(
+          label: m.group(1)!.trim(),
+          className: m.group(2),
+          x: double.parse(m.group(3)!).clamp(0, 1),
+          y: double.parse(m.group(4)!).clamp(0, 1),
+          style: inline,
+        ),
+      );
       continue;
     }
     if (RegExp(r'^acc(Title|Descr)\s*[:{]').hasMatch(line)) continue;
@@ -303,9 +383,7 @@ QuadrantChart parseQuadrantChart(String source) {
     while (end < text.length && text.codeUnitAt(end) == 0x2d) {
       end++;
     }
-    if (end - i >= 2 &&
-        end < text.length &&
-        text.codeUnitAt(end) == 0x3e) {
+    if (end - i >= 2 && end < text.length && text.codeUnitAt(end) == 0x3e) {
       return (i, end + 1);
     }
   }
@@ -318,21 +396,6 @@ String _unquote(String text) {
   }
   return text;
 }
-
-// Upstream QuadrantBuilder default config (quadrantBuilder.ts).
-const _titlePadding = 10.0;
-const _titleFontSize = 20.0;
-const _xAxisLabelPadding = 5.0;
-const _yAxisLabelPadding = 5.0;
-const _xAxisLabelFontSize = 16.0;
-const _yAxisLabelFontSize = 16.0;
-const _quadrantLabelFontSize = 16.0;
-const _quadrantTextTopPadding = 5.0;
-const _pointTextPadding = 5.0;
-const _pointLabelFontSize = 12.0;
-const _pointRadius = 5.0;
-const _internalBorderStrokeWidth = 1.0;
-const _externalBorderStrokeWidth = 2.0;
 
 /// Text anchored at [x],[y] mirroring upstream's `text-anchor`/
 /// `dominant-baseline`: [left] => start anchor (left-aligned at x), else
@@ -367,23 +430,30 @@ RenderScene layoutQuadrantChart(
   final nodes = <SceneNode>[];
 
   final hasPoints = chart.points.isNotEmpty;
-  final showXAxis = (chart.xAxisLeft != null && chart.xAxisLeft!.isNotEmpty) ||
+  final showXAxis =
+      (chart.xAxisLeft != null && chart.xAxisLeft!.isNotEmpty) ||
       (chart.xAxisRight != null && chart.xAxisRight!.isNotEmpty);
   final showYAxis =
       (chart.yAxisTop != null && chart.yAxisTop!.isNotEmpty) ||
-          (chart.yAxisBottom != null && chart.yAxisBottom!.isNotEmpty);
+      (chart.yAxisBottom != null && chart.yAxisBottom!.isNotEmpty);
   final showTitle = chart.title != null && chart.title!.isNotEmpty;
 
   // Upstream forces x-axis to the bottom once there are points.
-  final xAxisTop = !hasPoints;
+  final xAxisTop = !hasPoints && config.xAxisPosition == 'top';
+  final yAxisLeft = config.yAxisPosition == 'left';
 
   // calculateSpace().
-  final xAxisSpaceCalc = _xAxisLabelPadding * 2 + _xAxisLabelFontSize;
+  final xAxisSpaceCalc =
+      config.xAxisLabelPadding * 2 + config.xAxisLabelFontSize;
   final xAxisTopSpace = xAxisTop && showXAxis ? xAxisSpaceCalc : 0.0;
   final xAxisBottomSpace = !xAxisTop && showXAxis ? xAxisSpaceCalc : 0.0;
-  final yAxisLeftSpace =
-      showYAxis ? _yAxisLabelPadding * 2 + _yAxisLabelFontSize : 0.0;
-  final titleTopSpace = showTitle ? _titleFontSize + _titlePadding * 2 : 0.0;
+  final yAxisSpace = showYAxis
+      ? config.yAxisLabelPadding * 2 + config.yAxisLabelFontSize
+      : 0.0;
+  final yAxisLeftSpace = yAxisLeft ? yAxisSpace : 0.0;
+  final titleTopSpace = showTitle
+      ? config.titleFontSize + config.titlePadding * 2
+      : 0.0;
 
   final quadrantLeft = config.quadrantPadding + yAxisLeftSpace;
   final quadrantTop = config.quadrantPadding + xAxisTopSpace + titleTopSpace;
@@ -394,7 +464,7 @@ RenderScene layoutQuadrantChart(
   // UnsupportedError — instead of throwing ArgumentError.
   final quadrantWidth = math.max(
     0.0,
-    config.chartWidth - config.quadrantPadding * 2 - yAxisLeftSpace,
+    config.chartWidth - config.quadrantPadding * 2 - yAxisSpace,
   );
   final quadrantHeight = math.max(
     0.0,
@@ -410,156 +480,219 @@ RenderScene layoutQuadrantChart(
   // Quadrant regions: q1 top-right, q2 top-left, q3 bottom-left,
   // q4 bottom-right (upstream numbering).
   final regions = [
-    Rect.fromLTWH(quadrantLeft + quadrantHalfWidth, quadrantTop,
-        quadrantHalfWidth, quadrantHalfHeight),
     Rect.fromLTWH(
-        quadrantLeft, quadrantTop, quadrantHalfWidth, quadrantHalfHeight),
-    Rect.fromLTWH(quadrantLeft, quadrantTop + quadrantHalfHeight,
-        quadrantHalfWidth, quadrantHalfHeight),
-    Rect.fromLTWH(quadrantLeft + quadrantHalfWidth,
-        quadrantTop + quadrantHalfHeight, quadrantHalfWidth, quadrantHalfHeight),
+      quadrantLeft + quadrantHalfWidth,
+      quadrantTop,
+      quadrantHalfWidth,
+      quadrantHalfHeight,
+    ),
+    Rect.fromLTWH(
+      quadrantLeft,
+      quadrantTop,
+      quadrantHalfWidth,
+      quadrantHalfHeight,
+    ),
+    Rect.fromLTWH(
+      quadrantLeft,
+      quadrantTop + quadrantHalfHeight,
+      quadrantHalfWidth,
+      quadrantHalfHeight,
+    ),
+    Rect.fromLTWH(
+      quadrantLeft + quadrantHalfWidth,
+      quadrantTop + quadrantHalfHeight,
+      quadrantHalfWidth,
+      quadrantHalfHeight,
+    ),
   ];
   final quadrantFills = [
     theme.quadrant1Fill,
     theme.quadrant2Fill,
     theme.quadrant3Fill,
-    theme.quadrant4Fill
+    theme.quadrant4Fill,
   ];
   final quadrantTextFills = [
     theme.quadrant1TextFill,
     theme.quadrant2TextFill,
     theme.quadrant3TextFill,
-    theme.quadrant4TextFill
+    theme.quadrant4TextFill,
   ];
   final quadrantStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: _quadrantLabelFontSize);
+    fontFamily: theme.fontFamily,
+    fontSize: config.quadrantLabelFontSize,
+  );
 
   for (var q = 0; q < 4; q++) {
-    nodes.add(SceneShape(
-      geometry: RectGeometry(regions[q]),
-      fill: Fill(quadrantFills[q]),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(regions[q]),
+        fill: Fill(quadrantFills[q]),
+      ),
+    );
     final label = chart.quadrantLabels[q];
     if (label != null && label.isNotEmpty) {
-      final size = measurer.measure(label, quadrantStyle,
-          maxWidth: math.max(1.0, quadrantHalfWidth));
+      final size = measurer.measure(
+        label,
+        quadrantStyle,
+        maxWidth: math.max(1.0, quadrantHalfWidth),
+      );
       final cx = regions[q].left + regions[q].width / 2;
       // No points => centered in region; points => anchored at region top.
       final top = hasPoints;
       final ty = hasPoints
-          ? regions[q].top + _quadrantTextTopPadding
+          ? regions[q].top + config.quadrantTextTopPadding
           : regions[q].center.y;
-      nodes.add(_anchoredText(
-        text: label,
-        x: cx,
-        y: ty,
-        size: size,
-        style: quadrantStyle,
-        color: quadrantTextFills[q],
-        left: false,
-        top: top,
-      ));
+      nodes.add(
+        _anchoredText(
+          text: label,
+          x: cx,
+          y: ty,
+          size: size,
+          style: quadrantStyle,
+          color: quadrantTextFills[q],
+          left: false,
+          top: top,
+        ),
+      );
     }
   }
 
   // Borders: 4 external (width 2) + 2 internal divider lines (width 1).
-  const halfExt = _externalBorderStrokeWidth / 2;
+  final halfExt = config.quadrantExternalBorderStrokeWidth / 2;
   final extStroke = Stroke(
-      color: theme.quadrantExternalBorderStrokeFill,
-      width: _externalBorderStrokeWidth);
+    color: theme.quadrantExternalBorderStrokeFill,
+    width: config.quadrantExternalBorderStrokeWidth,
+  );
   final intStroke = Stroke(
-      color: theme.quadrantInternalBorderStrokeFill,
-      width: _internalBorderStrokeWidth);
+    color: theme.quadrantInternalBorderStrokeFill,
+    width: config.quadrantInternalBorderStrokeWidth,
+  );
   void line(double x1, double y1, double x2, double y2, Stroke stroke) {
-    nodes.add(SceneShape(
-      geometry: PolygonGeometry([Point(x1, y1), Point(x2, y2)]),
-      stroke: stroke,
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PolygonGeometry([Point(x1, y1), Point(x2, y2)]),
+        stroke: stroke,
+      ),
+    );
   }
 
   final right = quadrantLeft + quadrantWidth;
   final bottom = quadrantTop + quadrantHeight;
   // top
-  line(quadrantLeft - halfExt, quadrantTop, right + halfExt, quadrantTop,
-      extStroke);
+  line(
+    quadrantLeft - halfExt,
+    quadrantTop,
+    right + halfExt,
+    quadrantTop,
+    extStroke,
+  );
   // right
   line(right, quadrantTop + halfExt, right, bottom - halfExt, extStroke);
   // bottom
   line(quadrantLeft - halfExt, bottom, right + halfExt, bottom, extStroke);
   // left
-  line(quadrantLeft, quadrantTop + halfExt, quadrantLeft, bottom - halfExt,
-      extStroke);
+  line(
+    quadrantLeft,
+    quadrantTop + halfExt,
+    quadrantLeft,
+    bottom - halfExt,
+    extStroke,
+  );
   // vertical inner
-  line(quadrantLeft + quadrantHalfWidth, quadrantTop + halfExt,
-      quadrantLeft + quadrantHalfWidth, bottom - halfExt, intStroke);
+  line(
+    quadrantLeft + quadrantHalfWidth,
+    quadrantTop + halfExt,
+    quadrantLeft + quadrantHalfWidth,
+    bottom - halfExt,
+    intStroke,
+  );
   // horizontal inner
-  line(quadrantLeft + halfExt, quadrantTop + quadrantHalfHeight,
-      right - halfExt, quadrantTop + quadrantHalfHeight, intStroke);
+  line(
+    quadrantLeft + halfExt,
+    quadrantTop + quadrantHalfHeight,
+    right - halfExt,
+    quadrantTop + quadrantHalfHeight,
+    intStroke,
+  );
 
   // Points: scaleLinear x∈[0,1]→[left,left+width], y∈[0,1]→[top+height,top].
   final pointStyle = TextStyleSpec(
-      fontFamily: theme.fontFamily, fontSize: _pointLabelFontSize);
+    fontFamily: theme.fontFamily,
+    fontSize: config.pointLabelFontSize,
+  );
   for (final p in chart.points) {
     var style = chart.classes[p.className] ?? const QuadrantPointStyle();
     // Inline styles override class styles (upstream `{...class, ...point}`).
     style = style.merge(p.style);
     final px = quadrantLeft + p.x * quadrantWidth;
     final py = quadrantTop + quadrantHeight - p.y * quadrantHeight;
-    final radius = style.radius ?? _pointRadius;
+    final radius = style.radius ?? config.pointRadius;
     final fill = style.color ?? theme.quadrantPointFill;
     final strokeColor = style.strokeColor ?? theme.quadrantPointFill;
     final strokeWidth = style.strokeWidth ?? 0;
     final size = measurer.measure(p.label, pointStyle);
-    nodes.add(SceneGroup(id: 'point_${p.label}', children: [
-      SceneShape(
-        geometry: CircleGeometry(Point(px, py), radius),
-        fill: Fill(fill),
-        stroke:
-            strokeWidth > 0 ? Stroke(color: strokeColor, width: strokeWidth) : null,
+    nodes.add(
+      SceneGroup(
+        id: 'point_${p.label}',
+        children: [
+          SceneShape(
+            geometry: CircleGeometry(Point(px, py), radius),
+            fill: Fill(fill),
+            stroke: strokeWidth > 0
+                ? Stroke(color: strokeColor, width: strokeWidth)
+                : null,
+          ),
+          // Label centered below the dot (anchor center, hanging baseline).
+          _anchoredText(
+            text: p.label,
+            x: px,
+            y: py + config.pointTextPadding,
+            size: size,
+            style: pointStyle,
+            color: theme.quadrantPointTextFill,
+            left: false,
+            top: true,
+          ),
+        ],
       ),
-      // Label centered below the dot (anchor center, hanging baseline).
-      _anchoredText(
-        text: p.label,
-        x: px,
-        y: py + _pointTextPadding,
-        size: size,
-        style: pointStyle,
-        color: theme.quadrantPointTextFill,
-        left: false,
-        top: true,
-      ),
-    ]));
+    );
   }
 
   // Axis labels.
-  final axisStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _xAxisLabelFontSize);
-  final yAxisStyle =
-      TextStyleSpec(fontFamily: theme.fontFamily, fontSize: _yAxisLabelFontSize);
+  final axisStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: config.xAxisLabelFontSize,
+  );
+  final yAxisStyle = TextStyleSpec(
+    fontFamily: theme.fontFamily,
+    fontSize: config.yAxisLabelFontSize,
+  );
   final drawXMiddle = chart.xAxisRight != null && chart.xAxisRight!.isNotEmpty;
   final drawYMiddle = chart.yAxisTop != null && chart.yAxisTop!.isNotEmpty;
 
   final xAxisY = xAxisTop
-      ? _xAxisLabelPadding + titleTopSpace
-      : _xAxisLabelPadding +
-          quadrantTop +
-          quadrantHeight +
-          config.quadrantPadding;
+      ? config.xAxisLabelPadding + titleTopSpace
+      : config.xAxisLabelPadding +
+            quadrantTop +
+            quadrantHeight +
+            config.quadrantPadding;
 
   void xLabel(String? text, double baseX) {
     if (text == null || text.isEmpty || !showXAxis) return;
     final size = measurer.measure(text, axisStyle);
     final x = baseX + (drawXMiddle ? quadrantHalfWidth / 2 : 0);
-    nodes.add(_anchoredText(
-      text: text,
-      x: x,
-      y: xAxisY,
-      size: size,
-      style: axisStyle,
-      color: theme.quadrantXAxisTextFill,
-      left: !drawXMiddle,
-      top: true,
-    ));
+    nodes.add(
+      _anchoredText(
+        text: text,
+        x: x,
+        y: xAxisY,
+        size: size,
+        style: axisStyle,
+        color: theme.quadrantXAxisTextFill,
+        left: !drawXMiddle,
+        top: true,
+      ),
+    );
   }
 
   xLabel(chart.xAxisLeft, quadrantLeft);
@@ -570,44 +703,54 @@ RenderScene layoutQuadrantChart(
     if (text == null || text.isEmpty || !showYAxis) return;
     final size = measurer.measure(text, yAxisStyle);
     final center = Point(
-      _yAxisLabelPadding + size.height / 2,
+      yAxisLeft
+          ? config.yAxisLabelPadding + size.height / 2
+          : config.chartWidth - config.yAxisLabelPadding - size.height / 2,
       drawYMiddle ? anchorY : anchorY - size.width / 2,
     );
-    nodes.add(SceneText(
-      text: text,
-      bounds: Rect.fromCenter(center, size.width, size.height),
-      style: yAxisStyle,
-      color: theme.quadrantYAxisTextFill,
-      align: TextAlignH.left,
-      rotation: -90,
-    ));
+    nodes.add(
+      SceneText(
+        text: text,
+        bounds: Rect.fromCenter(center, size.width, size.height),
+        style: yAxisStyle,
+        color: theme.quadrantYAxisTextFill,
+        align: TextAlignH.left,
+        rotation: -90,
+      ),
+    );
   }
 
   yLabel(
-      chart.yAxisBottom,
-      quadrantTop +
-          quadrantHeight -
-          (drawYMiddle ? quadrantHalfHeight / 2 : 0));
-  yLabel(chart.yAxisTop,
-      quadrantTop + quadrantHalfHeight - (drawYMiddle ? quadrantHalfHeight / 2 : 0));
+    chart.yAxisBottom,
+    quadrantTop + quadrantHeight - (drawYMiddle ? quadrantHalfHeight / 2 : 0),
+  );
+  yLabel(
+    chart.yAxisTop,
+    quadrantTop +
+        quadrantHalfHeight -
+        (drawYMiddle ? quadrantHalfHeight / 2 : 0),
+  );
 
   // Title: centered at chartWidth/2, anchored (top baseline) at titlePadding.
   if (showTitle) {
     final style = TextStyleSpec(
-        fontFamily: theme.fontFamily,
-        fontSize: _titleFontSize,
-        fontWeight: 700);
+      fontFamily: theme.fontFamily,
+      fontSize: config.titleFontSize,
+      fontWeight: 700,
+    );
     final size = measurer.measure(chart.title!, style);
-    nodes.add(_anchoredText(
-      text: chart.title!,
-      x: config.chartWidth / 2,
-      y: _titlePadding,
-      size: size,
-      style: style,
-      color: theme.quadrantTitleFill,
-      left: false,
-      top: true,
-    ));
+    nodes.add(
+      _anchoredText(
+        text: chart.title!,
+        x: config.chartWidth / 2,
+        y: config.titlePadding,
+        size: size,
+        style: style,
+        color: theme.quadrantTitleFill,
+        left: false,
+        top: true,
+      ),
+    );
   }
 
   return RenderScene(

@@ -5,7 +5,9 @@ library;
 
 import 'dart:math' as math;
 
+import '../../config_values.dart';
 import '../../detect.dart';
+import '../../directives.dart';
 import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
@@ -38,6 +40,19 @@ const double _bonePerChild = 5;
 final double _angle = 82 * math.pi / 180;
 final double _cosA = math.cos(_angle);
 final double _sinA = math.sin(_angle);
+
+class IshikawaConfig {
+  const IshikawaConfig({this.diagramPadding = 20});
+
+  final double diagramPadding;
+
+  factory IshikawaConfig.fromSource(String source) {
+    final values = resolveDiagramConfig(source, 'ishikawa');
+    return IshikawaConfig(
+      diagramPadding: nonNegativeDouble(values, 'diagramPadding', 20),
+    );
+  }
+}
 
 IshikawaDiagram parseIshikawa(String source) {
   final text = stripMetadata(source);
@@ -106,6 +121,7 @@ RenderScene layoutIshikawa(
   IshikawaDiagram d, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
+  IshikawaConfig config = const IshikawaConfig(),
 }) {
   final root = d.root;
   final fontSize = theme.fontSize == 0 ? _fontSizeDefault : theme.fontSize;
@@ -126,13 +142,14 @@ RenderScene layoutIshikawa(
     fontSize: fontSize,
     labelStyle: labelStyle,
     headStyle: headStyle,
+    diagramPadding: config.diagramPadding,
   );
 
   final nodes = ctx.nodes;
 
   if (root == null) {
     return RenderScene(
-      size: const Size(40, 40),
+      size: Size(config.diagramPadding * 2, config.diagramPadding * 2),
       background: theme.background,
       nodes: const [],
     );
@@ -148,13 +165,15 @@ RenderScene layoutIshikawa(
 
   if (causes.isEmpty) {
     // Spine collapses to a point; just the head is shown.
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(spineX, spineY)),
-        LineTo(Point(spineX, spineY)),
-      ]),
-      stroke: Stroke(color: theme.lineColor, width: 2),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(spineX, spineY)),
+          LineTo(Point(spineX, spineY)),
+        ]),
+        stroke: Stroke(color: theme.lineColor, width: 2),
+      ),
+    );
     return ctx.finish();
   }
 
@@ -208,13 +227,15 @@ RenderScene layoutIshikawa(
   }
 
   // Spine from the head (x=0) leftward to the leftmost bone label.
-  nodes.add(SceneShape(
-    geometry: PathGeometry([
-      MoveTo(Point(spineLeft, spineY)),
-      LineTo(Point(0, spineY)),
-    ]),
-    stroke: Stroke(color: theme.lineColor, width: 2),
-  ));
+  nodes.add(
+    SceneShape(
+      geometry: PathGeometry([
+        MoveTo(Point(spineLeft, spineY)),
+        LineTo(Point(0, spineY)),
+      ]),
+      stroke: Stroke(color: theme.lineColor, width: 2),
+    ),
+  );
 
   return ctx.finish();
 }
@@ -291,12 +312,14 @@ _FlattenResult _flattenTree(List<IshikawaNode> children, int direction) {
     for (final child in ordered) {
       final idx = entries.length;
       final gc = child.children;
-      entries.add(_LabelEntry(
-        depth: depth,
-        text: _wrapText(child.text, 15),
-        parentIndex: pid,
-        childCount: gc.length,
-      ));
+      entries.add(
+        _LabelEntry(
+          depth: depth,
+          text: _wrapText(child.text, 15),
+          parentIndex: pid,
+          childCount: gc.length,
+        ),
+      );
       if (depth.isEven) {
         // Even-depth: pre-order (closer to the spine).
         yOrder.add(idx);
@@ -322,6 +345,7 @@ class _LayoutContext {
     required this.fontSize,
     required this.labelStyle,
     required this.headStyle,
+    required this.diagramPadding,
   });
 
   final TextMeasurer measurer;
@@ -329,6 +353,7 @@ class _LayoutContext {
   final double fontSize;
   final TextStyleSpec labelStyle;
   final TextStyleSpec headStyle;
+  final double diagramPadding;
 
   final nodes = <SceneNode>[];
 
@@ -345,12 +370,13 @@ class _LayoutContext {
       }
     }
     final bounds = sceneBounds(nodes) ?? const Rect.fromLTWH(0, 0, 200, 200);
-    const m = 20.0;
+    final m = diagramPadding;
     return RenderScene(
       size: Size(bounds.width + 2 * m, bounds.height + 2 * m),
       background: theme.background,
       nodes: [
-        for (final nd in nodes) translateSceneNode(nd, m - bounds.left, m - bounds.top)
+        for (final nd in nodes)
+          translateSceneNode(nd, m - bounds.left, m - bounds.top),
       ],
     );
   }
@@ -382,16 +408,18 @@ class _LayoutContext {
     final h = math.max(40.0, tb.size.height * 2 + 40);
 
     // Path: M 0 -h/2 L 0 h/2 Q w*2.4 0 0 -h/2 Z (relative to the head origin).
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(x, y - h / 2)),
-        LineTo(Point(x, y + h / 2)),
-        QuadTo(Point(x + w * 2.4, y), Point(x, y - h / 2)),
-        const ClosePath(),
-      ]),
-      fill: Fill(theme.mainBkg),
-      stroke: Stroke(color: theme.lineColor, width: 2),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(x, y - h / 2)),
+          LineTo(Point(x, y + h / 2)),
+          QuadTo(Point(x + w * 2.4, y), Point(x, y - h / 2)),
+          const ClosePath(),
+        ]),
+        fill: Fill(theme.mainBkg),
+        stroke: Stroke(color: theme.lineColor, width: 2),
+      ),
+    );
     // Label horizontally centered within the head wedge body.
     final labelCx = x + w / 2 + 3;
     _drawMultilineText(tb, labelCx, y, headStyle, TextAlignH.center);
@@ -417,13 +445,15 @@ class _LayoutContext {
 
     var leftmost = double.infinity;
 
-    nodes.add(SceneShape(
-      geometry: PathGeometry([
-        MoveTo(Point(startX, startY)),
-        LineTo(Point(endX, endY)),
-      ]),
-      stroke: Stroke(color: theme.lineColor, width: 2),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PathGeometry([
+          MoveTo(Point(startX, startY)),
+          LineTo(Point(endX, endY)),
+        ]),
+        stroke: Stroke(color: theme.lineColor, width: 2),
+      ),
+    );
     // Arrow points back toward the spine origin (marker-start).
     _drawArrow(startX, startY, startX - endX, startY - endY, 2);
 
@@ -468,17 +498,20 @@ class _LayoutContext {
         final dyP = par.y1 - par.y0;
         bx0 = _lerp(par.x0, par.x1, dyP != 0 ? (y - par.y0) / dyP : 0.5);
         by0 = y;
-        bx1 = bx0 -
+        bx1 =
+            bx0 -
             (e.childCount > 0
                 ? _boneBase + e.childCount * _bonePerChild
                 : _boneStub);
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(bx0, y)),
-            LineTo(Point(bx1, y)),
-          ]),
-          stroke: Stroke(color: theme.lineColor, width: 1),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(bx0, y)),
+              LineTo(Point(bx1, y)),
+            ]),
+            stroke: Stroke(color: theme.lineColor, width: 1),
+          ),
+        );
         _drawArrow(bx0, y, 1, 0, 1);
         // 'align': end-anchored, vertically centered at (bx1, y).
         final left = _drawSubLabel(e.text, bx1, y, _SubAnchor.middle);
@@ -487,16 +520,22 @@ class _LayoutContext {
         // Diagonal bone: start from an evenly-spaced point on the parent's
         // horizontal, angle toward the target Y.
         final k = par.childrenDrawn++;
-        bx0 = _lerp(par.x0, par.x1, (par.childCount - k) / (par.childCount + 1));
+        bx0 = _lerp(
+          par.x0,
+          par.x1,
+          (par.childCount - k) / (par.childCount + 1),
+        );
         by0 = par.y0;
         bx1 = bx0 + diagonalX * ((y - by0) / diagonalY);
-        nodes.add(SceneShape(
-          geometry: PathGeometry([
-            MoveTo(Point(bx0, by0)),
-            LineTo(Point(bx1, y)),
-          ]),
-          stroke: Stroke(color: theme.lineColor, width: 1),
-        ));
+        nodes.add(
+          SceneShape(
+            geometry: PathGeometry([
+              MoveTo(Point(bx0, by0)),
+              LineTo(Point(bx1, y)),
+            ]),
+            stroke: Stroke(color: theme.lineColor, width: 1),
+          ),
+        );
         _drawArrow(bx0, by0, bx0 - bx1, by0 - y, 1);
         // 'up'/'down': end-anchored, baseline above (dir<0) / hanging below.
         final left = _drawSubLabel(
@@ -533,11 +572,13 @@ class _LayoutContext {
       label.size.width + 40,
       label.size.height + 4,
     );
-    nodes.add(SceneShape(
-      geometry: RectGeometry(boxRect),
-      fill: Fill(theme.mainBkg),
-      stroke: Stroke(color: theme.lineColor, width: 2),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: RectGeometry(boxRect),
+        fill: Fill(theme.mainBkg),
+        stroke: Stroke(color: theme.lineColor, width: 2),
+      ),
+    );
     // Upstream anchors every `dominant-baseline: middle` label on its own
     // point, so the text block is centred on (x, cy) exactly like the head and
     // the `align` sub-labels.
@@ -560,14 +601,20 @@ class _LayoutContext {
     }
     // Multi-line block right-aligned to x.
     final bounds = Rect.fromLTWH(
-        x - label.size.width, topY, label.size.width, label.size.height);
-    nodes.add(SceneText(
-      text: label.text,
-      bounds: bounds,
-      style: labelStyle,
-      color: theme.textColor,
-      align: TextAlignH.right,
-    ));
+      x - label.size.width,
+      topY,
+      label.size.width,
+      label.size.height,
+    );
+    nodes.add(
+      SceneText(
+        text: label.text,
+        bounds: bounds,
+        style: labelStyle,
+        color: theme.textColor,
+        align: TextAlignH.right,
+      ),
+    );
     return bounds.left;
   }
 
@@ -579,18 +626,29 @@ class _LayoutContext {
     TextStyleSpec style,
     TextAlignH align,
   ) {
-    nodes.add(SceneText(
-      text: label.text,
-      bounds:
-          Rect.fromCenter(Point(cx, cy), label.size.width, label.size.height),
-      style: style,
-      color: theme.textColor,
-      align: align,
-    ));
+    nodes.add(
+      SceneText(
+        text: label.text,
+        bounds: Rect.fromCenter(
+          Point(cx, cy),
+          label.size.width,
+          label.size.height,
+        ),
+        style: style,
+        color: theme.textColor,
+        align: align,
+      ),
+    );
   }
 
   // Small filled arrow triangle whose tip sits at (x, y), pointing along (dx,dy).
-  void _drawArrow(double x, double y, double dx, double dy, double strokeWidth) {
+  void _drawArrow(
+    double x,
+    double y,
+    double dx,
+    double dy,
+    double strokeWidth,
+  ) {
     final len = math.sqrt(dx * dx + dy * dy);
     if (len == 0) return;
     final ux = dx / len;
@@ -598,15 +656,17 @@ class _LayoutContext {
     const s = 6.0;
     final px = -uy * s;
     final py = ux * s;
-    nodes.add(SceneShape(
-      geometry: PolygonGeometry([
-        Point(x, y),
-        Point(x - ux * s * 2 + px, y - uy * s * 2 + py),
-        Point(x - ux * s * 2 - px, y - uy * s * 2 - py),
-      ]),
-      fill: Fill(theme.lineColor),
-      stroke: Stroke(color: theme.lineColor, width: 1),
-    ));
+    nodes.add(
+      SceneShape(
+        geometry: PolygonGeometry([
+          Point(x, y),
+          Point(x - ux * s * 2 + px, y - uy * s * 2 + py),
+          Point(x - ux * s * 2 - px, y - uy * s * 2 - py),
+        ]),
+        fill: Fill(theme.lineColor),
+        stroke: Stroke(color: theme.lineColor, width: 1),
+      ),
+    );
   }
 }
 
@@ -622,8 +682,7 @@ class _MeasuredText {
   final Size size;
 }
 
-List<String> _splitLines(String text) =>
-    text.split(RegExp(r'<br\s*/?>|\n'));
+List<String> _splitLines(String text) => text.split(RegExp(r'<br\s*/?>|\n'));
 
 String _wrapText(String text, int maxChars) {
   if (text.length <= maxChars) return text;
