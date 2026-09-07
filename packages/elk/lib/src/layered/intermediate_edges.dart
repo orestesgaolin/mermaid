@@ -24,6 +24,10 @@ const longEdgeSource = Property<LPort?>('longEdgeSource');
 /// The original target port of the long-edge chain.
 const longEdgeTarget = Property<LPort?>('longEdgeTarget');
 
+/// Orthogonal hyperedge junctions attached to an edge, matching ELK's
+/// output-only `CoreOptions.JUNCTION_POINTS` property.
+const junctionPoints = Property<KVectorChain?>('junctionPoints');
+
 // ---------------------------------------------------------------------------
 // LongEdgeSplitter
 // ---------------------------------------------------------------------------
@@ -102,9 +106,10 @@ class LongEdgeSplitter implements ILayoutProcessor {
       ..copyPropertiesFrom(edge)
       ..source = dummyOutput
       ..target = oldTarget;
-
-    // TODO(elk-faithful): JUNCTION_POINTS cleared on dummyEdge (LayeredOptions
-    // not ported).
+    // Junctions belong to the route segment that creates them. Copying the
+    // original chain here would duplicate them when LongEdgeJoiner merges the
+    // continuation back into the surviving edge.
+    dummyEdge.setProperty(junctionPoints, null);
 
     _setDummyNodeProperties(dummyNode, edge, dummyEdge);
 
@@ -117,18 +122,33 @@ class LongEdgeSplitter implements ILayoutProcessor {
   /// Mirrors `setDummyNodeProperties`: propagates [longEdgeSource] /
   /// [longEdgeTarget] along the dummy chain.
   static void _setDummyNodeProperties(
-      LNode dummyNode, LEdge inEdge, LEdge outEdge) {
+    LNode dummyNode,
+    LEdge inEdge,
+    LEdge outEdge,
+  ) {
     final inSrcNode = inEdge.source!.node;
     final outTgtNode = outEdge.target!.node;
 
     if (inSrcNode.type == NodeType.longEdge) {
       // Propagate from the preceding dummy.
-      dummyNode.setProperty(longEdgeSource, inSrcNode.getProperty(longEdgeSource));
-      dummyNode.setProperty(longEdgeTarget, inSrcNode.getProperty(longEdgeTarget));
+      dummyNode.setProperty(
+        longEdgeSource,
+        inSrcNode.getProperty(longEdgeSource),
+      );
+      dummyNode.setProperty(
+        longEdgeTarget,
+        inSrcNode.getProperty(longEdgeTarget),
+      );
     } else if (outTgtNode.type == NodeType.longEdge) {
       // TODO(elk-faithful): LABEL dummy node handling skipped.
-      dummyNode.setProperty(longEdgeSource, outTgtNode.getProperty(longEdgeSource));
-      dummyNode.setProperty(longEdgeTarget, outTgtNode.getProperty(longEdgeTarget));
+      dummyNode.setProperty(
+        longEdgeSource,
+        outTgtNode.getProperty(longEdgeSource),
+      );
+      dummyNode.setProperty(
+        longEdgeTarget,
+        outTgtNode.getProperty(longEdgeTarget),
+      );
     } else {
       // First dummy in the chain: source is the in-edge's source port, target
       // is the out-edge's target port.
@@ -172,10 +192,12 @@ class LongEdgeJoiner implements ILayoutProcessor {
   /// *survive*; the eastern (output) port's edges are *discarded*.
   static void _joinAt(LNode longEdgeDummy, bool addUnnecessaryBendpoints) {
     // Find the single west (input) and east (output) port.
-    final inputPort = longEdgeDummy.ports
-        .firstWhere((p) => p.side == PortSide.west);
-    final outputPort = longEdgeDummy.ports
-        .firstWhere((p) => p.side == PortSide.east);
+    final inputPort = longEdgeDummy.ports.firstWhere(
+      (p) => p.side == PortSide.west,
+    );
+    final outputPort = longEdgeDummy.ports.firstWhere(
+      (p) => p.side == PortSide.east,
+    );
 
     // Optional bend point at the dummy node position.
     // The Java uses the first port's absoluteAnchor.
@@ -226,11 +248,26 @@ class LongEdgeJoiner implements ILayoutProcessor {
         survivingEdge.bendPoints.add(bp.clone());
       }
 
+      final droppedJunctions = droppedEdge.getProperty(junctionPoints);
+      if (droppedJunctions != null && droppedJunctions.points.isNotEmpty) {
+        var survivingJunctions = survivingEdge.getProperty(junctionPoints);
+        if (survivingJunctions == null) {
+          survivingJunctions = KVectorChain();
+          survivingEdge.setProperty(junctionPoints, survivingJunctions);
+        }
+        for (final point in droppedJunctions.points) {
+          if (!survivingJunctions.points.any(
+            (existing) =>
+                (existing.x - point.x).abs() < 1e-6 &&
+                (existing.y - point.y).abs() < 1e-6,
+          )) {
+            survivingJunctions.add(point.clone());
+          }
+        }
+      }
+
       // Merge labels.
       survivingEdge.labels.addAll(droppedEdge.labels);
-
-      // TODO(elk-faithful): JUNCTION_POINTS merging skipped (LayeredOptions not
-      // ported).
     }
   }
 }
@@ -257,6 +294,7 @@ class ReversedEdgeRestorer implements ILayoutProcessor {
               // Also reverse the bend-point list (the Java does this too via
               // KVectorChain.reverse inside LEdge.reverse).
               _reverseBendPoints(edge);
+              _reverseJunctionPoints(edge);
             }
           }
         }
@@ -270,6 +308,16 @@ class ReversedEdgeRestorer implements ILayoutProcessor {
       final tmp = pts[lo];
       pts[lo] = pts[hi];
       pts[hi] = tmp;
+    }
+  }
+
+  void _reverseJunctionPoints(LEdge edge) {
+    final points = edge.getProperty(junctionPoints)?.points;
+    if (points == null) return;
+    for (var lo = 0, hi = points.length - 1; lo < hi; lo++, hi--) {
+      final tmp = points[lo];
+      points[lo] = points[hi];
+      points[hi] = tmp;
     }
   }
 }

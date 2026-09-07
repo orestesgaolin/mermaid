@@ -16,7 +16,6 @@
 ///
 /// Omissions (all marked TODO(elk-faithful)):
 ///   - Hierarchical / compound-graph sweep (nested graphs)
-///   - ForsterConstraintResolver (ordering constraints between nodes)
 ///   - NorthSouth-port dummy crossing counting
 ///   - HyperedgeCrossingsCounter (multi-edge hyperedge variant)
 ///   - Greedy-switch heuristic, median heuristic (non-default CrossMinTypes)
@@ -80,6 +79,12 @@ const considerModelOrder = Property<bool>('considerModelOrder', false);
 /// real node against their model-order index.
 const forceNodeModelOrder = Property<bool>('forceNodeModelOrder', false);
 
+/// Nodes that must follow this node within their shared layer.
+const inLayerSuccessors = Property<List<LNode>?>('inLayerSuccessors');
+
+/// Nodes whose incident-edge weights contribute to this node's barycenter.
+const barycenterAssociates = Property<List<LNode>?>('barycenterAssociates');
+
 // ---------------------------------------------------------------------------
 // Public processor
 // ---------------------------------------------------------------------------
@@ -128,11 +133,19 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     // run it once.
     final _SweepCopy best;
     if (crossMin.useModelOrder) {
-      best = _minimizeCrossingsWithCounter(order, crossMin, portDist, crossCount)
-          .bestCopy;
+      best = _minimizeCrossingsWithCounter(
+        order,
+        crossMin,
+        portDist,
+        crossCount,
+      ).bestCopy;
     } else {
       best = _compareDifferentRandomizedLayouts(
-          order, crossMin, portDist, crossCount);
+        order,
+        crossMin,
+        portDist,
+        crossCount,
+      );
     }
 
     // Apply the best found order back to the graph.
@@ -154,8 +167,12 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     var bestCrossings = 0;
     _SweepCopy? bestCopy;
     for (var i = 0; i < _thoroughness; i++) {
-      final run =
-          _minimizeCrossingsWithCounter(order, crossMin, portDist, crossCount);
+      final run = _minimizeCrossingsWithCounter(
+        order,
+        crossMin,
+        portDist,
+        crossCount,
+      );
       if (bestCopy == null || run.crossings < bestCrossings) {
         bestCrossings = run.crossings;
         bestCopy = run.bestCopy;
@@ -206,9 +223,7 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
 
   /// Builds the [layer][position] working matrix from the graph's layers.
   List<List<LNode>> _buildOrder(List<Layer> layers) {
-    return [
-      for (final layer in layers) List<LNode>.from(layer.nodes),
-    ];
+    return [for (final layer in layers) List<LNode>.from(layer.nodes)];
   }
 
   /// Assigns contiguous IDs needed as array indices.
@@ -276,8 +291,8 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
       final state = baryList[startIdx][node.id];
       final double seedValue = useModelOrder
           ? (node.hasProperty(modelOrder)
-              ? node.getProperty(modelOrder).toDouble()
-              : i.toDouble())
+                ? node.getProperty(modelOrder).toDouble()
+                : i.toDouble())
           : crossMin.random.nextDouble();
       state.barycenter = seedValue;
       state.summedWeight = seedValue;
@@ -296,7 +311,11 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
   ) {
     final length = order.length;
     // Distribute ports for the first (fixed) layer.
-    portDist.distributePortsWhileSweeping(order, _firstIndex(forward, length), forward);
+    portDist.distributePortsWhileSweeping(
+      order,
+      _firstIndex(forward, length),
+      forward,
+    );
 
     // Sweep through the free layers.
     for (
@@ -352,10 +371,36 @@ class _BarycenterState {
   bool visited = false;
 }
 
+class _ConstraintGroup {
+  _ConstraintGroup(this.nodes, this.summedWeight, this.degree, this.barycenter);
+
+  factory _ConstraintGroup.merge(
+    _ConstraintGroup before,
+    _ConstraintGroup after,
+  ) {
+    final weight = before.summedWeight + after.summedWeight;
+    final degree = before.degree + after.degree;
+    final barycenter = degree > 0
+        ? weight / degree
+        : (before.barycenter + after.barycenter) / 2;
+    return _ConstraintGroup(
+      [...before.nodes, ...after.nodes],
+      weight,
+      degree,
+      barycenter,
+    );
+  }
+
+  final List<LNode> nodes;
+  final double summedWeight;
+  final int degree;
+  final double barycenter;
+}
+
 class _BarycenterHeuristic {
   _BarycenterHeuristic(this._portRanks, this.bary, LGraph graph, this.random)
-      : useModelOrder = graph.getProperty(considerModelOrder),
-        _forceModelOrder = graph.getProperty(forceNodeModelOrder);
+    : useModelOrder = graph.getProperty(considerModelOrder),
+      _forceModelOrder = graph.getProperty(forceNodeModelOrder);
 
   /// Shared port-ranks array (written by `_PortDistributor.calculatePortRanks`).
   final List<double> _portRanks;
@@ -392,8 +437,7 @@ class _BarycenterHeuristic {
     bool isFirstSweep,
   ) {
     // Calculate port ranks for the fixed (already-ordered) neighbour layer.
-    final isFirst = freeLayerIndex ==
-        (forwardSweep ? 0 : order.length - 1);
+    final isFirst = freeLayerIndex == (forwardSweep ? 0 : order.length - 1);
     if (!isFirst) {
       final fixedLayerIndex = freeLayerIndex + (forwardSweep ? -1 : 1);
       final portType = forwardSweep ? _PortType.output : _PortType.input;
@@ -404,8 +448,8 @@ class _BarycenterHeuristic {
         ? null
         : order[freeLayerIndex][0];
     // preOrdered = not first sweep, or first node is an external-port dummy.
-    final preOrdered = !isFirstSweep ||
-        (firstNodeInLayer?.type == NodeType.externalPort);
+    final preOrdered =
+        !isFirstSweep || (firstNodeInLayer?.type == NodeType.externalPort);
 
     final layer = order[freeLayerIndex];
     _calculateBarycenters(layer, freeLayerIndex, forwardSweep);
@@ -420,8 +464,7 @@ class _BarycenterHeuristic {
       } else {
         final stateList = bary[freeLayerIndex];
         layer.sort((a, b) => _compareNodes(a, b, stateList));
-        // TODO(elk-faithful): constraintResolver.processConstraints omitted
-        //   (ForsterConstraintResolver / ordering constraints not ported).
+        _resolveConstraints(layer, freeLayerIndex);
       }
     }
 
@@ -429,6 +472,66 @@ class _BarycenterHeuristic {
     for (var n = 0; n < layer.length; n++) {
       layer[n].id = n;
     }
+  }
+
+  /// Resolves violated constraints by merging their endpoint groups and
+  /// re-inserting the weighted group by barycenter, as Forster's resolver does.
+  /// Nodes in a merged group remain adjacent and in constraint order.
+  void _resolveConstraints(List<LNode> layer, int layerIndex) {
+    final inLayer = layer.toSet();
+    final stateList = bary[layerIndex];
+    final groups = <_ConstraintGroup>[
+      for (final node in layer)
+        _ConstraintGroup(
+          [node],
+          stateList[node.id].summedWeight,
+          stateList[node.id].degree,
+          stateList[node.id].barycenter ?? 0,
+        ),
+    ];
+    while (true) {
+      _ConstraintGroup? before;
+      _ConstraintGroup? after;
+      for (final group in groups) {
+        for (final node in group.nodes) {
+          for (final successor
+              in node.getProperty(inLayerSuccessors) ?? const []) {
+            if (!inLayer.contains(successor) ||
+                group.nodes.contains(successor)) {
+              continue;
+            }
+            final successorGroup = groups.firstWhere(
+              (candidate) => candidate.nodes.contains(successor),
+            );
+            final sourceIndex = groups.indexOf(group);
+            final targetIndex = groups.indexOf(successorGroup);
+            if (group.barycenter > successorGroup.barycenter ||
+                (group.barycenter == successorGroup.barycenter &&
+                    sourceIndex > targetIndex)) {
+              before = group;
+              after = successorGroup;
+              break;
+            }
+          }
+          if (before != null) break;
+        }
+        if (before != null) break;
+      }
+      if (before == null || after == null) break;
+      final merged = _ConstraintGroup.merge(before, after);
+      groups.remove(before);
+      groups.remove(after);
+      final insertion = groups.indexWhere(
+        (candidate) => candidate.barycenter > merged.barycenter,
+      );
+      groups.insert(insertion < 0 ? groups.length : insertion, merged);
+      for (final node in merged.nodes) {
+        stateList[node.id].barycenter = merged.barycenter;
+      }
+    }
+    layer
+      ..clear()
+      ..addAll([for (final group in groups) ...group.nodes]);
   }
 
   // ---------------------------------------------------------------------------
@@ -467,7 +570,11 @@ class _BarycenterHeuristic {
     return _compareByBarycenter(n1, n2, stateList);
   }
 
-  int _compareByBarycenter(LNode n1, LNode n2, List<_BarycenterState> stateList) {
+  int _compareByBarycenter(
+    LNode n1,
+    LNode n2,
+    List<_BarycenterState> stateList,
+  ) {
     final sa = stateList[n1.id];
     final sb = stateList[n2.id];
     final ba = sa.barycenter;
@@ -565,11 +672,7 @@ class _BarycenterHeuristic {
     _clearTransitiveOrdering();
   }
 
-  void _calculateBarycenters(
-    List<LNode> layer,
-    int layerIndex,
-    bool forward,
-  ) {
+  void _calculateBarycenters(List<LNode> layer, int layerIndex, bool forward) {
     for (final node in layer) {
       bary[layerIndex][node.id].visited = false;
     }
@@ -611,12 +714,20 @@ class _BarycenterHeuristic {
         }
       }
     }
-    // TODO(elk-faithful): BARYCENTER_ASSOCIATES property not handled.
+    for (final associate
+        in node.getProperty(barycenterAssociates) ?? const []) {
+      if (associate.layer != node.layer || associate == node) continue;
+      _calculateBarycenter(associate, layerIndex, forward);
+      final associateState = bary[layerIndex][associate.id];
+      state.degree += associateState.degree;
+      state.summedWeight += associateState.summedWeight;
+    }
 
     if (state.degree > 0) {
       // Small random perturbation, exactly as ELK: increases solution diversity
       // so the thoroughness restarts can escape tie-broken local optima.
-      state.summedWeight += random.nextFloat() * _randomAmount - _randomAmount / 2;
+      state.summedWeight +=
+          random.nextFloat() * _randomAmount - _randomAmount / 2;
       state.barycenter = state.summedWeight / state.degree;
     }
   }
@@ -797,8 +908,16 @@ class _PortDistributor {
   void _distributePorts(LNode node, PortSide side, List<LNode> currentLayer) {
     if (node.getProperty(_portOrderFixed)) return;
     _distributePortsOnSide(node, _portsOnSide(node, side), currentLayer);
-    _distributePortsOnSide(node, _portsOnSide(node, PortSide.south), currentLayer);
-    _distributePortsOnSide(node, _portsOnSide(node, PortSide.north), currentLayer);
+    _distributePortsOnSide(
+      node,
+      _portsOnSide(node, PortSide.south),
+      currentLayer,
+    );
+    _distributePortsOnSide(
+      node,
+      _portsOnSide(node, PortSide.north),
+      currentLayer,
+    );
     _sortPorts(node);
   }
 
@@ -860,8 +979,10 @@ class _PortDistributor {
 
       if (port.degree > 0) {
         _portBarycenter[port.id] = sum / port.degree;
-        if (_portBarycenter[port.id] < minBary) minBary = _portBarycenter[port.id];
-        if (_portBarycenter[port.id] > maxBary) maxBary = _portBarycenter[port.id];
+        if (_portBarycenter[port.id] < minBary)
+          minBary = _portBarycenter[port.id];
+        if (_portBarycenter[port.id] > maxBary)
+          maxBary = _portBarycenter[port.id];
       }
     }
 
@@ -933,7 +1054,12 @@ void _calculatePortRanks(
 ) {
   double consumedRank = 0;
   for (final node in layer) {
-    consumedRank += _calculateNodePortRanks(node, consumedRank, portType, portRanks);
+    consumedRank += _calculateNodePortRanks(
+      node,
+      consumedRank,
+      portType,
+      portRanks,
+    );
   }
 }
 
@@ -948,8 +1074,12 @@ double _calculateNodePortRanks(
   // For free port order: same behaviour (ELK subclass GreedyPortDistributor
   // uses the same approach for the barycenter case).
   final relevant = portType == _PortType.output
-      ? node.ports.where((p) => p.outgoingEdges.isNotEmpty || p.side == PortSide.east)
-      : node.ports.where((p) => p.incomingEdges.isNotEmpty || p.side == PortSide.west);
+      ? node.ports.where(
+          (p) => p.outgoingEdges.isNotEmpty || p.side == PortSide.east,
+        )
+      : node.ports.where(
+          (p) => p.incomingEdges.isNotEmpty || p.side == PortSide.west,
+        );
 
   final ports = relevant.toList();
   if (ports.isEmpty) {
@@ -969,13 +1099,14 @@ double _calculateNodePortRanks(
 
 class _AllCrossingsCounter {
   _AllCrossingsCounter(this._portPositions, List<List<LNode>> initialOrder)
-      : _hasNorthSouthPorts = List<bool>.filled(initialOrder.length, false) {
+    : _hasNorthSouthPorts = List<bool>.filled(initialOrder.length, false) {
     // Detect north/south-port dummy layers for later use.
     for (var l = 0; l < initialOrder.length; l++) {
       for (final node in initialOrder[l]) {
         if (node.type == NodeType.northSouthPort ||
-            node.ports.any((p) =>
-                p.side == PortSide.north || p.side == PortSide.south)) {
+            node.ports.any(
+              (p) => p.side == PortSide.north || p.side == PortSide.south,
+            )) {
           _hasNorthSouthPorts[l] = true;
         }
       }
@@ -990,11 +1121,17 @@ class _AllCrossingsCounter {
     if (order.isEmpty) return 0;
     int crossings = 0;
     // In-layer crossings on the west side of the leftmost layer.
-    crossings +=
-        _crossingCounter().countInLayerCrossingsOnSide(order[0], order[0], PortSide.west);
+    crossings += _crossingCounter().countInLayerCrossingsOnSide(
+      order[0],
+      order[0],
+      PortSide.west,
+    );
     // In-layer crossings on the east side of the rightmost layer.
     crossings += _crossingCounter().countInLayerCrossingsOnSide(
-        order[order.length - 1], order[order.length - 1], PortSide.east);
+      order[order.length - 1],
+      order[order.length - 1],
+      PortSide.east,
+    );
     for (var layerIndex = 0; layerIndex < order.length; layerIndex++) {
       crossings += _countCrossingsAt(layerIndex, order);
     }
@@ -1005,8 +1142,10 @@ class _AllCrossingsCounter {
     int total = 0;
     if (layerIndex < order.length - 1) {
       // Between-layer crossings (no hyperedge variant in scope).
-      total += _crossingCounter()
-          .countCrossingsBetweenLayers(order[layerIndex], order[layerIndex + 1]);
+      total += _crossingCounter().countCrossingsBetweenLayers(
+        order[layerIndex],
+        order[layerIndex + 1],
+      );
     }
     if (_hasNorthSouthPorts[layerIndex]) {
       total += _countNorthSouthPortCrossings(order[layerIndex]);
@@ -1035,9 +1174,7 @@ class _AllCrossingsCounter {
         }
         for (var i = 0; i < ends.length; i++) {
           for (var j = i + 1; j < ends.length; j++) {
-            if ((ends[i].$1 - ends[j].$1) *
-                    (ends[i].$2 - ends[j].$2) <
-                0) {
+            if ((ends[i].$1 - ends[j].$1) * (ends[i].$2 - ends[j].$2) < 0) {
               crossings++;
             }
           }
@@ -1064,7 +1201,10 @@ class _CrossingsCounter {
     List<LNode> rightLayerNodes,
   ) {
     // Assign port positions in counter-clockwise order.
-    final ports = _initPortPositionsCounterClockwise(leftLayerNodes, rightLayerNodes);
+    final ports = _initPortPositionsCounterClockwise(
+      leftLayerNodes,
+      rightLayerNodes,
+    );
     final tree = _BinaryIndexedTree(ports.length);
     return _countCrossingsOnPorts(ports, tree);
   }
@@ -1173,7 +1313,10 @@ class _CrossingsCounter {
   }
 
   /// Mirrors `CrossingsCounter.countInLayerCrossingsOnPorts`.
-  int _countInLayerCrossingsOnPorts(List<LPort> ports, _BinaryIndexedTree tree) {
+  int _countInLayerCrossingsOnPorts(
+    List<LPort> ports,
+    _BinaryIndexedTree tree,
+  ) {
     int crossings = 0;
     final ends = <int>[];
     for (final port in ports) {
@@ -1207,9 +1350,9 @@ class _CrossingsCounter {
 
 class _BinaryIndexedTree {
   _BinaryIndexedTree(int maxNum)
-      : _maxNum = maxNum,
-        _binarySums = List<int>.filled(maxNum + 1, 0),
-        _numsPerIndex = List<int>.filled(maxNum, 0);
+    : _maxNum = maxNum,
+      _binarySums = List<int>.filled(maxNum + 1, 0),
+      _numsPerIndex = List<int>.filled(maxNum, 0);
 
   final int _maxNum;
   final List<int> _binarySums;
@@ -1268,11 +1411,11 @@ class _BinaryIndexedTree {
 
 class _SweepCopy {
   _SweepCopy(List<List<LNode>> order)
-      : _nodeOrder = [for (final layer in order) List<LNode>.from(layer)],
-        _portOrders = [
-          for (final layer in order)
-            [for (final node in layer) List<LPort>.from(node.ports)],
-        ];
+    : _nodeOrder = [for (final layer in order) List<LNode>.from(layer)],
+      _portOrders = [
+        for (final layer in order)
+          [for (final node in layer) List<LPort>.from(node.ports)],
+      ];
 
   final List<List<LNode>> _nodeOrder;
   final List<List<List<LPort>>> _portOrders;

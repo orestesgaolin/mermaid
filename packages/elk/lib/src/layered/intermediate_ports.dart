@@ -9,6 +9,7 @@
 library;
 
 import 'lgraph.dart';
+import 'intermediate_edges.dart' show junctionPoints;
 import 'phase.dart';
 import 'property.dart';
 
@@ -19,8 +20,10 @@ import 'property.dart';
 
 /// Per-node port constraints.  Default: FREE (no constraint).
 /// Mirrors `LayeredOptions.PORT_CONSTRAINTS` / `CoreOptions.PORT_CONSTRAINTS`.
-const portConstraints =
-    Property<PortConstraints>('portConstraints', PortConstraints.free);
+const portConstraints = Property<PortConstraints>(
+  'portConstraints',
+  PortConstraints.free,
+);
 
 /// Per-port explicit sort index used when portConstraints == FIXED_ORDER.
 /// Mirrors `LayeredOptions.PORT_INDEX`.
@@ -30,7 +33,9 @@ const portIndex = Property<int?>('portIndex', null);
 /// Default: INPUT_ORDER (preserve input order; don't reorder by degree).
 /// Mirrors `LayeredOptions.PORT_SORTING_STRATEGY`.
 const portSortingStrategy = Property<PortSortingStrategy>(
-    'portSortingStrategy', PortSortingStrategy.inputOrder);
+  'portSortingStrategy',
+  PortSortingStrategy.inputOrder,
+);
 
 /// Set on dummy nodes created by InvertedPortProcessor to point back to the
 /// original edge.  Mirrors `InternalProperties.ORIGIN`.
@@ -217,8 +222,7 @@ class PortListSorter implements ILayoutProcessor {
   // -------------------------------------------------------------------------
 
   /// Sort only by PortSide ordinal (NORTH < EAST < SOUTH < WEST < UNDEFINED).
-  static int _cmpPortSide(LPort a, LPort b) =>
-      a.side.index - b.side.index;
+  static int _cmpPortSide(LPort a, LPort b) => a.side.index - b.side.index;
 
   /// Sort by side, then within a side by explicit index / position.
   static int _cmpCombined(LPort a, LPort b) {
@@ -409,8 +413,7 @@ class InvertedPortProcessor implements ILayoutProcessor {
 
         // --- Input ports on the EAST side ---
         final eastInputPorts = node.ports
-            .where((p) =>
-                p.side == PortSide.east && p.incomingEdges.isNotEmpty)
+            .where((p) => p.side == PortSide.east && p.incomingEdges.isNotEmpty)
             .toList();
 
         for (final port in eastInputPorts) {
@@ -424,8 +427,7 @@ class InvertedPortProcessor implements ILayoutProcessor {
 
         // --- Output ports on the WEST side ---
         final westOutputPorts = node.ports
-            .where((p) =>
-                p.side == PortSide.west && p.outgoingEdges.isNotEmpty)
+            .where((p) => p.side == PortSide.west && p.outgoingEdges.isNotEmpty)
             .toList();
 
         for (final port in westOutputPorts) {
@@ -574,8 +576,7 @@ class InvertedPortProcessor implements ILayoutProcessor {
     final copy = LEdge();
     copy.copyPropertiesFrom(edge);
     // Remove junction points — these will be recomputed by edge routing.
-    // TODO(elk-faithful): LayeredOptions.JUNCTION_POINTS reset not yet in
-    //   the data model (it's a KVectorChain property set during routing).
+    copy.setProperty(junctionPoints, null);
     return copy;
   }
 
@@ -600,7 +601,9 @@ class InvertedPortProcessor implements ILayoutProcessor {
     // LONG_EDGE_SOURCE
     if (sourceNode.type == NodeType.longEdge) {
       longEdgeDummy.setProperty(
-          longEdgeSource, sourceNode.getProperty(longEdgeSource));
+        longEdgeSource,
+        sourceNode.getProperty(longEdgeSource),
+      );
     } else {
       longEdgeDummy.setProperty(longEdgeSource, sourcePort);
     }
@@ -608,7 +611,9 @@ class InvertedPortProcessor implements ILayoutProcessor {
     // LONG_EDGE_TARGET
     if (targetNode.type == NodeType.longEdge) {
       longEdgeDummy.setProperty(
-          longEdgeTarget, targetNode.getProperty(longEdgeTarget));
+        longEdgeTarget,
+        targetNode.getProperty(longEdgeTarget),
+      );
     } else {
       longEdgeDummy.setProperty(longEdgeTarget, targetPort);
     }

@@ -14,8 +14,8 @@ class ElkPoint {
 }
 
 /// One routed section of an edge: a polyline from [startPoint] through the
-/// [bendPoints] to [endPoint]. For the `layered` algorithm an edge has a
-/// single section.
+/// [bendPoints] to [endPoint]. Simple edges have one section; multi-endpoint
+/// edges retain one section per source-target branch.
 class ElkEdgeSection {
   const ElkEdgeSection({
     required this.startPoint,
@@ -96,10 +96,14 @@ class ElkPositionedEdge {
     required this.id,
     required this.sections,
     this.labels = const [],
+    this.junctionPoints = const [],
   });
   final String id;
   final List<ElkEdgeSection> sections;
   final List<ElkPositionedLabel> labels;
+
+  /// Points where orthogonal branches join into a shared hyperedge trunk.
+  final List<ElkPoint> junctionPoints;
 }
 
 /// The full layout result. [width]/[height] are the root graph's computed

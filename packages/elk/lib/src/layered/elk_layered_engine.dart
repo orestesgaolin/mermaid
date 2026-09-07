@@ -16,6 +16,7 @@
 library;
 
 import 'attached_labels.dart';
+import 'hyperedge_adapter.dart';
 import '../api/graph.dart';
 import '../api/options.dart';
 import '../api/result.dart';
@@ -86,6 +87,8 @@ ElkResult layeredLayout(ElkGraph graph) {
         'elk: $unsupported is not yet implemented in the faithful ELK '
         'port (no dagre fallback by design). See lib/src/layered/PORTING.md.');
   }
+  final expansion = HyperedgeExpansion(graph);
+  graph = expansion.graph;
   final dir = graph.layoutOptions.direction;
   // Internal flow is always RIGHT; DOWN/UP transpose the axes, LEFT/UP mirror.
   final transpose = dir == ElkDirection.down || dir == ElkDirection.up;
@@ -97,7 +100,7 @@ ElkResult layeredLayout(ElkGraph graph) {
   engine.layoutHierarchy(root);
 
   // Extract the root graph into the result tree.
-  return engine.extractRoot(root);
+  return expansion.restore(engine.extractRoot(root));
 }
 
 /// Maps a declared [ElkPortSide] (in output space) to the internal [PortSide]
@@ -250,6 +253,7 @@ class _Engine {
 
   /// Positioned labels carried by cross-hierarchy segments.
   final Map<LEdge, List<ElkPositionedLabel>> _crossSegmentLabels = {};
+  final Map<LEdge, List<ElkPoint>> _crossSegmentJunctions = {};
 
   /// Deferred links: after a nested graph is laid out, copy each external-port
   /// dummy's resolved border position onto the cluster's external [LPort].
@@ -404,6 +408,21 @@ class _Engine {
       }
 
       lg.layerlessNodes.add(ln);
+    }
+
+    // Resolve the Dart API's node-ID references only after every node in this
+    // graph has been built. References outside the current layer scope are
+    // ignored by the crossing minimizer.
+    for (final node in nodes) {
+      final internal = byId[node.id]!;
+      internal.setProperty(inLayerSuccessors, [
+        for (final id in node.inLayerSuccessors)
+          if (byId[id] != null) byId[id]!,
+      ]);
+      internal.setProperty(barycenterAssociates, [
+        for (final id in node.barycenterAssociates)
+          if (byId[id] != null) byId[id]!,
+      ]);
     }
 
     // Resolve edges. An edge belongs to the graph that directly contains both
@@ -1231,7 +1250,9 @@ class _Engine {
       ];
       // Cross-hierarchy segment: accumulate its polyline for later stitching
       // rather than emitting it as a standalone edge.
+      final junctions = [for (final point in le.getProperty(junctionPoints)?.points ?? <KVector>[]) at(point.x, point.y)];
       if (_crossSegmentEdges.contains(le)) {
+        _crossSegmentJunctions[le] = junctions;
         _crossSegmentPoints[le] = pts;
         if (labels.isNotEmpty) _crossSegmentLabels[le] = labels;
         continue;
@@ -1246,6 +1267,7 @@ class _Engine {
           ),
         ],
         labels: labels,
+        junctionPoints: junctions,
       ));
     }
   }
@@ -1257,6 +1279,7 @@ class _Engine {
     for (final entry in _crossSegments.entries) {
       final pts = <ElkPoint>[];
       final labels = <ElkPositionedLabel>[];
+      final junctions = <ElkPoint>[];
       for (final seg in entry.value) {
         final segPts = _crossSegmentPoints[seg];
         if (segPts == null) continue;
@@ -1269,6 +1292,7 @@ class _Engine {
           pts.add(p);
         }
         labels.addAll(_crossSegmentLabels[seg] ?? const []);
+        junctions.addAll(_crossSegmentJunctions[seg] ?? const []);
       }
       if (pts.length < 2) continue;
       _edges.add(ElkPositionedEdge(
@@ -1281,6 +1305,7 @@ class _Engine {
           ),
         ],
         labels: labels,
+        junctionPoints: uniquePoints(junctions),
       ));
     }
   }

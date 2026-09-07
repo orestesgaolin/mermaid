@@ -9,8 +9,8 @@
 ///      WEST ports, grouping connected ports into one segment.
 ///   2. Build ordering dependencies between segments (critical = would overlap,
 ///      regular = weighted by crossings).
-///   3. Break critical dependency cycles (via segment splitting, simplified here
-///      to cycle-edge removal — see TODO below).
+///   3. Break critical dependency cycles by splitting a selected segment into
+///      two trunks joined through a free routing area.
 ///   4. Break non-critical cycles by reversing / removing the minimum-weight
 ///      dependency.
 ///   5. Topological slot assignment (BFS-based numbering).
@@ -19,19 +19,15 @@
 /// Faithfulness notes:
 ///   - The random tie-break in [_HyperEdgeCycleDetector] uses the first element
 ///     rather than a seeded RNG (same deviation as p1).
-///   - [_HyperEdgeSegmentSplitter] is stubbed: critical dependency cycles are
-///     broken by removing the cycle-back dependency rather than by splitting the
-///     segment. This produces correct routing in almost all practical cases; full
-///     splitting would be needed only when two hyper-segments genuinely overlap
-///     after slot assignment.
-///   - Junction points (ELK `JUNCTION_POINTS` property) are not emitted; a
-///     separate post-processor can add them if needed.
+///   - Hyperedge junction points are emitted through the `junctionPoints`
+///     property and propagated to the public layout result.
 ///
 /// Other directions (NORTH_TO_SOUTH, SOUTH_TO_NORTH) are stubbed out with a
 /// `TODO(elk-faithful)` comment.
 library;
 
 import 'lgraph.dart';
+import 'intermediate_edges.dart' show junctionPoints;
 import 'phase.dart';
 import 'property.dart';
 
@@ -106,9 +102,11 @@ class OrthogonalRoutingGenerator implements ILayoutProcessor {
       final startPos = leftLayer == null ? xpos : xpos + edgeNode;
       final slotsCount = generator.routeEdges(leftNodes, rightNodes, startPos);
 
-      final leftExternal = leftLayer == null ||
+      final leftExternal =
+          leftLayer == null ||
           leftNodes!.every((n) => n.type == NodeType.externalPort);
-      final rightExternal = rightLayer == null ||
+      final rightExternal =
+          rightLayer == null ||
           rightNodes!.every((n) => n.type == NodeType.externalPort);
 
       if (slotsCount > 0) {
@@ -139,7 +137,8 @@ class OrthogonalRoutingGenerator implements ILayoutProcessor {
     double maxLeftMargin = 0, maxRightMargin = 0;
     for (final node in layer.nodes) {
       if (node.margin.left > maxLeftMargin) maxLeftMargin = node.margin.left;
-      if (node.margin.right > maxRightMargin) maxRightMargin = node.margin.right;
+      if (node.margin.right > maxRightMargin)
+        maxRightMargin = node.margin.right;
     }
 
     final layerWidth = layer.size.x;
@@ -151,8 +150,9 @@ class OrthogonalRoutingGenerator implements ILayoutProcessor {
         if (port.incomingEdges.isNotEmpty) inports++;
         if (port.outgoingEdges.isNotEmpty) outports++;
       }
-      final double ratio =
-          (inports + outports == 0) ? 0.5 : outports / (inports + outports);
+      final double ratio = (inports + outports == 0)
+          ? 0.5
+          : outports / (inports + outports);
 
       final nodeSize = node.size.x;
       var xp = (layerWidth - nodeSize) * ratio;
@@ -205,16 +205,30 @@ class _OrthogonalRoutingGenerator {
     final portToSegment = <LPort, _HyperEdgeSegment>{};
     final segments = <_HyperEdgeSegment>[];
 
-    _createHyperEdgeSegments(sourceNodes, _strategy.sourcePortSide, segments, portToSegment);
-    _createHyperEdgeSegments(targetNodes, _strategy.targetPortSide, segments, portToSegment);
+    _createHyperEdgeSegments(
+      sourceNodes,
+      _strategy.sourcePortSide,
+      segments,
+      portToSegment,
+    );
+    _createHyperEdgeSegments(
+      targetNodes,
+      _strategy.targetPortSide,
+      segments,
+      portToSegment,
+    );
 
     _criticalConflictThreshold =
-        _criticalConflictThresholdFactor * _minimumHorizontalSegmentDistance(segments);
+        _criticalConflictThresholdFactor *
+        _minimumHorizontalSegmentDistance(segments);
 
     int criticalDependencyCount = 0;
     for (var i = 0; i < segments.length - 1; i++) {
       for (var j = i + 1; j < segments.length; j++) {
-        criticalDependencyCount += _createDependencyIfNecessary(segments[i], segments[j]);
+        criticalDependencyCount += _createDependencyIfNecessary(
+          segments[i],
+          segments[j],
+        );
       }
     }
 
@@ -228,7 +242,8 @@ class _OrthogonalRoutingGenerator {
 
     int rankCount = -1;
     for (final seg in segments) {
-      if ((seg.startCoordinate - seg.endCoordinate).abs() < _tolerance) continue;
+      if ((seg.startCoordinate - seg.endCoordinate).abs() < _tolerance)
+        continue;
       if (seg.routingSlot > rankCount) rankCount = seg.routingSlot;
       _strategy.calculateBendPoints(seg, startPos, _edgeSpacing);
     }
@@ -257,10 +272,9 @@ class _OrthogonalRoutingGenerator {
         // purpose: a port that has outgoing edges on the EAST side is a source
         // connection point; a port that has incoming edges on the WEST side is
         // a target connection point.
-        final hasEdgesForThisChannel =
-            portSide == PortSide.east
-                ? port.outgoingEdges.isNotEmpty
-                : port.incomingEdges.isNotEmpty;
+        final hasEdgesForThisChannel = portSide == PortSide.east
+            ? port.outgoingEdges.isNotEmpty
+            : port.incomingEdges.isNotEmpty;
         if (!hasEdgesForThisChannel) continue;
 
         if (!portToSegment.containsKey(port)) {
@@ -277,7 +291,10 @@ class _OrthogonalRoutingGenerator {
   // -------------------------------------------------------------------------
 
   /// Returns the number of critical dependencies added.
-  int _createDependencyIfNecessary(_HyperEdgeSegment he1, _HyperEdgeSegment he2) {
+  int _createDependencyIfNecessary(
+    _HyperEdgeSegment he1,
+    _HyperEdgeSegment he2,
+  ) {
     if ((he1.startCoordinate - he1.endCoordinate).abs() < _tolerance ||
         (he2.startCoordinate - he2.endCoordinate).abs() < _tolerance) {
       return 0;
@@ -287,7 +304,8 @@ class _OrthogonalRoutingGenerator {
     final conflicts2 = _countConflicts(he2.outgoingCoords, he1.incomingCoords);
 
     final criticalDetected =
-        conflicts1 == _criticalConflictsDetected || conflicts2 == _criticalConflictsDetected;
+        conflicts1 == _criticalConflictsDetected ||
+        conflicts2 == _criticalConflictsDetected;
     int criticalCount = 0;
 
     if (criticalDetected) {
@@ -300,13 +318,31 @@ class _OrthogonalRoutingGenerator {
         criticalCount++;
       }
     } else {
-      int crossings1 = _countCrossings(he1.outgoingCoords, he2.startCoordinate, he2.endCoordinate);
-      crossings1 += _countCrossings(he2.incomingCoords, he1.startCoordinate, he1.endCoordinate);
-      int crossings2 = _countCrossings(he2.outgoingCoords, he1.startCoordinate, he1.endCoordinate);
-      crossings2 += _countCrossings(he1.incomingCoords, he2.startCoordinate, he2.endCoordinate);
+      int crossings1 = _countCrossings(
+        he1.outgoingCoords,
+        he2.startCoordinate,
+        he2.endCoordinate,
+      );
+      crossings1 += _countCrossings(
+        he2.incomingCoords,
+        he1.startCoordinate,
+        he1.endCoordinate,
+      );
+      int crossings2 = _countCrossings(
+        he2.outgoingCoords,
+        he1.startCoordinate,
+        he1.endCoordinate,
+      );
+      crossings2 += _countCrossings(
+        he1.incomingCoords,
+        he2.startCoordinate,
+        he2.endCoordinate,
+      );
 
-      final val1 = _conflictPenalty * conflicts1 + _crossingPenalty * crossings1;
-      final val2 = _conflictPenalty * conflicts2 + _crossingPenalty * crossings2;
+      final val1 =
+          _conflictPenalty * conflicts1 + _crossingPenalty * crossings1;
+      final val2 =
+          _conflictPenalty * conflicts2 + _crossingPenalty * crossings2;
 
       if (val1 < val2) {
         _HyperEdgeSegmentDependency.createRegular(he1, he2, val2 - val1);
@@ -392,18 +428,155 @@ class _OrthogonalRoutingGenerator {
   // -------------------------------------------------------------------------
 
   void _breakCriticalCycles(List<_HyperEdgeSegment> segments) {
-    // TODO(elk-faithful): implement full HyperEdgeSegmentSplitter. For now, we
-    // simply remove the back-dependency in each critical cycle (same as the
-    // non-critical case). This avoids edge overlaps in the vast majority of
-    // diagrams; proper splitting would handle the rare residual overlap.
-    final cycleDeps = _HyperEdgeCycleDetector.detectCycles(segments, criticalOnly: true);
-    for (final dep in cycleDeps) {
-      dep.remove();
+    final cycleDeps = _HyperEdgeCycleDetector.detectCycles(
+      segments,
+      criticalOnly: true,
+    );
+    if (cycleDeps.isEmpty) return;
+    final freeAreas = _findFreeAreas(segments);
+    final selected = <_HyperEdgeSegment>{};
+    for (final dependency in cycleDeps) {
+      final source = dependency.source;
+      final target = dependency.target;
+      if (source == null || target == null) continue;
+      if (selected.contains(source) || selected.contains(target)) continue;
+      var split = source;
+      var causedBy = target;
+      if (source.representsHyperedge && !target.representsHyperedge) {
+        split = target;
+        causedBy = source;
+      }
+      split.splitBy = causedBy;
+      selected.add(split);
+    }
+    final ordered = selected.toList()
+      ..sort((a, b) => a.length.compareTo(b.length));
+    for (final segment in ordered) {
+      final splitPosition = _splitPosition(segment, freeAreas);
+      final partner = segment.splitAt(splitPosition);
+      segments.add(partner);
+      final causedBy = segment.splitBy!;
+      _HyperEdgeSegmentDependency.createCritical(segment, causedBy);
+      _HyperEdgeSegmentDependency.createCritical(causedBy, partner);
+      for (final other in segments.toList()) {
+        if (other != segment && other != partner && other != causedBy) {
+          _createDependencyIfNecessary(other, segment);
+          _createDependencyIfNecessary(other, partner);
+        }
+      }
     }
   }
 
+  List<_FreeArea> _findFreeAreas(List<_HyperEdgeSegment> segments) {
+    final coordinates = <double>[
+      for (final segment in segments) ...segment.incomingCoords,
+      for (final segment in segments) ...segment.outgoingCoords,
+    ]..sort();
+    final areas = <_FreeArea>[];
+    for (var index = 1; index < coordinates.length; index++) {
+      final previous = coordinates[index - 1];
+      final current = coordinates[index];
+      if (current - previous >= 2 * _criticalConflictThreshold) {
+        areas.add(
+          _FreeArea(
+            previous + _criticalConflictThreshold,
+            current - _criticalConflictThreshold,
+          ),
+        );
+      }
+    }
+    return areas;
+  }
+
+  double _splitPosition(_HyperEdgeSegment segment, List<_FreeArea> freeAreas) {
+    final candidates = <int>[];
+    for (var index = 0; index < freeAreas.length; index++) {
+      final area = freeAreas[index];
+      if (area.start > segment.endCoordinate) break;
+      if (area.end >= segment.startCoordinate) candidates.add(index);
+    }
+    if (candidates.isEmpty) {
+      return (segment.startCoordinate + segment.endCoordinate) / 2;
+    }
+    var best = candidates.first;
+    var bestRating = _rateArea(segment, freeAreas[best]);
+    for (final index in candidates.skip(1)) {
+      final rating = _rateArea(segment, freeAreas[index]);
+      if (rating.crossings < bestRating.crossings ||
+          (rating.crossings == bestRating.crossings &&
+              (rating.dependencies < bestRating.dependencies ||
+                  (rating.dependencies == bestRating.dependencies &&
+                      freeAreas[index].length > freeAreas[best].length)))) {
+        best = index;
+        bestRating = rating;
+      }
+    }
+    final area = freeAreas.removeAt(best);
+    final center = (area.start + area.end) / 2;
+    final firstEnd = center - _criticalConflictThreshold;
+    final secondStart = center + _criticalConflictThreshold;
+    if (area.start <= firstEnd) {
+      freeAreas.insert(best, _FreeArea(area.start, firstEnd));
+      best++;
+    }
+    if (secondStart <= area.end) {
+      freeAreas.insert(best, _FreeArea(secondStart, area.end));
+    }
+    return center;
+  }
+
+  _AreaRating _rateArea(_HyperEdgeSegment original, _FreeArea area) {
+    final split = original.simulateSplit();
+    final center = (area.start + area.end) / 2;
+    split.$1.outgoingCoords.add(center);
+    split.$1._recomputeExtent();
+    split.$2.incomingCoords.add(center);
+    split.$2._recomputeExtent();
+    var dependencies = 2;
+    var crossings =
+        _crossingsForOrdering(split.$1, original.splitBy!) +
+        _crossingsForOrdering(original.splitBy!, split.$2);
+    final neighbors = <_HyperEdgeSegment>{
+      for (final dependency in original.incomingDeps)
+        if (dependency.source != null) dependency.source!,
+      for (final dependency in original.outgoingDeps)
+        if (dependency.target != null) dependency.target!,
+    };
+    for (final neighbor in neighbors) {
+      for (final part in [split.$1, split.$2]) {
+        final first = _crossingsForOrdering(part, neighbor);
+        final second = _crossingsForOrdering(neighbor, part);
+        if (first == second) {
+          if (first > 0) {
+            dependencies += 2;
+            crossings += first;
+          }
+        } else {
+          dependencies++;
+          crossings += first < second ? first : second;
+        }
+      }
+    }
+    return _AreaRating(dependencies, crossings);
+  }
+
+  int _crossingsForOrdering(_HyperEdgeSegment left, _HyperEdgeSegment right) =>
+      _countCrossings(
+        left.outgoingCoords,
+        right.startCoordinate,
+        right.endCoordinate,
+      ) +
+      _countCrossings(
+        right.incomingCoords,
+        left.startCoordinate,
+        left.endCoordinate,
+      );
+
   static void _breakNonCriticalCycles(List<_HyperEdgeSegment> segments) {
-    final cycleDeps = _HyperEdgeCycleDetector.detectCycles(segments, criticalOnly: false);
+    final cycleDeps = _HyperEdgeCycleDetector.detectCycles(
+      segments,
+      criticalOnly: false,
+    );
     for (final dep in cycleDeps) {
       if (dep.weight == 0) {
         dep.remove();
@@ -426,7 +599,8 @@ class _OrthogonalRoutingGenerator {
       seg.outWeight = seg.outgoingDeps.length;
 
       if (seg.inWeight == 0) sources.add(seg);
-      if (seg.outWeight == 0 && seg.incomingCoords.isEmpty) rightwardTargets.add(seg);
+      if (seg.outWeight == 0 && seg.incomingCoords.isEmpty)
+        rightwardTargets.add(seg);
     }
 
     int maxRank = -1;
@@ -507,6 +681,42 @@ class _HyperEdgeSegment {
   double get endCoordinate => _endCoord;
 
   bool get isDummy => splitPartner != null && splitBy == null;
+  double get length => endCoordinate - startCoordinate;
+  bool get representsHyperedge =>
+      incomingCoords.length + outgoingCoords.length > 2;
+
+  (_HyperEdgeSegment, _HyperEdgeSegment) simulateSplit() {
+    final first = _HyperEdgeSegment(_strategy)
+      ..incomingCoords.addAll(incomingCoords)
+      ..splitBy = splitBy;
+    final second = _HyperEdgeSegment(_strategy)
+      ..outgoingCoords.addAll(outgoingCoords);
+    first.splitPartner = second;
+    second.splitPartner = first;
+    first._recomputeExtent();
+    second._recomputeExtent();
+    return (first, second);
+  }
+
+  _HyperEdgeSegment splitAt(double position) {
+    final partner = _HyperEdgeSegment(_strategy);
+    splitPartner = partner;
+    partner.splitPartner = this;
+    partner.outgoingCoords.addAll(outgoingCoords);
+    outgoingCoords
+      ..clear()
+      ..add(position);
+    partner.incomingCoords.add(position);
+    _recomputeExtent();
+    partner._recomputeExtent();
+    while (incomingDeps.isNotEmpty) {
+      incomingDeps.first.remove();
+    }
+    while (outgoingDeps.isNotEmpty) {
+      outgoingDeps.first.remove();
+    }
+    return partner;
+  }
 
   void addPortPositions(LPort port, Map<LPort, _HyperEdgeSegment> map) {
     map[port] = this;
@@ -563,6 +773,19 @@ class _HyperEdgeSegment {
   }
 }
 
+class _FreeArea {
+  const _FreeArea(this.start, this.end);
+  final double start;
+  final double end;
+  double get length => end - start;
+}
+
+class _AreaRating {
+  const _AreaRating(this.dependencies, this.crossings);
+  final int dependencies;
+  final int crossings;
+}
+
 // ---------------------------------------------------------------------------
 // _HyperEdgeSegmentDependency
 // ---------------------------------------------------------------------------
@@ -572,7 +795,12 @@ enum _DependencyType { regular, critical }
 class _HyperEdgeSegmentDependency {
   static const int _criticalWeight = 1;
 
-  _HyperEdgeSegmentDependency._(this.type, this.weight, _HyperEdgeSegment src, _HyperEdgeSegment tgt) {
+  _HyperEdgeSegmentDependency._(
+    this.type,
+    this.weight,
+    _HyperEdgeSegment src,
+    _HyperEdgeSegment tgt,
+  ) {
     _setSource(src);
     _setTarget(tgt);
   }
@@ -584,12 +812,20 @@ class _HyperEdgeSegmentDependency {
   _HyperEdgeSegment? target;
 
   static _HyperEdgeSegmentDependency createRegular(
-      _HyperEdgeSegment src, _HyperEdgeSegment tgt, int weight) =>
-      _HyperEdgeSegmentDependency._(_DependencyType.regular, weight, src, tgt);
+    _HyperEdgeSegment src,
+    _HyperEdgeSegment tgt,
+    int weight,
+  ) => _HyperEdgeSegmentDependency._(_DependencyType.regular, weight, src, tgt);
 
   static _HyperEdgeSegmentDependency createCritical(
-      _HyperEdgeSegment src, _HyperEdgeSegment tgt) =>
-      _HyperEdgeSegmentDependency._(_DependencyType.critical, _criticalWeight, src, tgt);
+    _HyperEdgeSegment src,
+    _HyperEdgeSegment tgt,
+  ) => _HyperEdgeSegmentDependency._(
+    _DependencyType.critical,
+    _criticalWeight,
+    src,
+    tgt,
+  );
 
   void remove() {
     _setSource(null);
@@ -720,14 +956,17 @@ class _HyperEdgeCycleDetector {
 
         for (final seg in unprocessed) {
           // If considering both types, ensure critical deps remain rightward.
-          if (!criticalOnly && seg.criticalOutWeight > 0 && seg.criticalInWeight <= 0) {
+          if (!criticalOnly &&
+              seg.criticalOutWeight > 0 &&
+              seg.criticalInWeight <= 0) {
             maxNode = seg;
             break;
           }
           final outflow = seg.outWeight - seg.inWeight;
           if (outflow >= maxOutflow) {
             maxOutflow = outflow;
-            maxNode = seg; // ELK: random tie-break; we take first for determinism
+            maxNode =
+                seg; // ELK: random tie-break; we take first for determinism
           }
         }
 
@@ -758,7 +997,8 @@ class _HyperEdgeCycleDetector {
       if (tgt == null || tgt.mark >= 0) continue;
       if (dep.weight > 0) {
         tgt.inWeight -= dep.weight;
-        if (dep.type == _DependencyType.critical) tgt.criticalInWeight -= dep.weight;
+        if (dep.type == _DependencyType.critical)
+          tgt.criticalInWeight -= dep.weight;
         if (tgt.inWeight <= 0 && tgt.outWeight > 0) sources.add(tgt);
       }
     }
@@ -769,7 +1009,8 @@ class _HyperEdgeCycleDetector {
       if (src == null || src.mark >= 0) continue;
       if (dep.weight > 0) {
         src.outWeight -= dep.weight;
-        if (dep.type == _DependencyType.critical) src.criticalOutWeight -= dep.weight;
+        if (dep.type == _DependencyType.critical)
+          src.criticalOutWeight -= dep.weight;
         if (src.outWeight <= 0 && src.inWeight > 0) sinks.add(src);
       }
     }
@@ -783,8 +1024,8 @@ class _HyperEdgeCycleDetector {
 class _WestToEastRoutingStrategy {
   static const double _tolerance = 1e-3;
 
-  /// Junction point deduplication (not emitted; reserved for future use).
-  final _junctionPoints = <KVector>{};
+  /// Junction point deduplication across every edge in the current channel.
+  final _junctionPoints = <(double, double)>{};
 
   PortSide get sourcePortSide => PortSide.east;
   PortSide get targetPortSide => PortSide.west;
@@ -826,7 +1067,9 @@ class _WestToEastRoutingStrategy {
         _HyperEdgeSegment currentSegment = segment;
 
         // First bend: horizontal exit from source port.
-        edge.bendPoints.add(KVector(currentX, sourceY));
+        var bend = KVector(currentX, sourceY);
+        edge.bendPoints.add(bend);
+        _addJunctionPointIfNecessary(edge, currentSegment, bend);
 
         // If this segment was split, add the detour through the split partner.
         final splitPartner = segment.splitPartner;
@@ -835,21 +1078,59 @@ class _WestToEastRoutingStrategy {
               ? splitPartner.incomingCoords.first
               : sourceY;
 
-          edge.bendPoints.add(KVector(currentX, splitY));
+          bend = KVector(currentX, splitY);
+          edge.bendPoints.add(bend);
+          _addJunctionPointIfNecessary(edge, currentSegment, bend);
 
           currentX = startPos + splitPartner.routingSlot * edgeSpacing;
           currentSegment = splitPartner; // suppress unused-variable lint
 
-          edge.bendPoints.add(KVector(currentX, splitY));
+          bend = KVector(currentX, splitY);
+          edge.bendPoints.add(bend);
+          _addJunctionPointIfNecessary(edge, currentSegment, bend);
         }
 
         // Final bend: horizontal entry to target port.
-        edge.bendPoints.add(KVector(currentX, targetY));
+        bend = KVector(currentX, targetY);
+        edge.bendPoints.add(bend);
+        _addJunctionPointIfNecessary(edge, currentSegment, bend);
 
         // Prevent currentSegment from being optimised away in future refactors.
         _ = currentSegment;
       }
     }
+  }
+
+  /// Mirrors ELK's BaseRoutingDirectionStrategy junction test: a bend is a
+  /// junction when it lies inside a shared trunk, or when both incoming and
+  /// outgoing branches meet at the same trunk boundary.
+  void _addJunctionPointIfNecessary(
+    LEdge edge,
+    _HyperEdgeSegment segment,
+    KVector position,
+  ) {
+    final key = (position.x, position.y);
+    if (_junctionPoints.contains(key)) return;
+    final axis = position.y;
+    final inside =
+        axis > segment.startCoordinate && axis < segment.endCoordinate;
+    var sharedBoundary = false;
+    if (segment.incomingCoords.isNotEmpty &&
+        segment.outgoingCoords.isNotEmpty) {
+      sharedBoundary =
+          ((axis - segment.incomingCoords.first).abs() <= _tolerance &&
+              (axis - segment.outgoingCoords.first).abs() <= _tolerance) ||
+          ((axis - segment.incomingCoords.last).abs() <= _tolerance &&
+              (axis - segment.outgoingCoords.last).abs() <= _tolerance);
+    }
+    if (!inside && !sharedBoundary) return;
+    var points = edge.getProperty(junctionPoints);
+    if (points == null) {
+      points = KVectorChain();
+      edge.setProperty(junctionPoints, points);
+    }
+    points.add(position.clone());
+    _junctionPoints.add(key);
   }
 }
 

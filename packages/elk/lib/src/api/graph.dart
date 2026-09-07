@@ -115,6 +115,8 @@ class ElkNode {
     this.ports = const [],
     this.layoutOptions,
     this.labelPlacement,
+    this.inLayerSuccessors = const [],
+    this.barycenterAssociates = const [],
   });
 
   factory ElkNode.fromJson(Map<String, dynamic> m) {
@@ -163,6 +165,14 @@ class ElkNode {
   /// Per-node option overrides (e.g. a subgraph with its own [ElkDirection]).
   final ElkLayoutOptions? layoutOptions;
   final ElkNodeLabelPlacement? labelPlacement;
+
+  /// Node IDs that must follow this node in the same layer. This is a Dart API
+  /// reference and is not parsed from ELK JSON layout options.
+  final List<String> inLayerSuccessors;
+
+  /// Same-layer node IDs whose edge weights contribute to this node's
+  /// barycenter. This is a Dart API reference, not an ELK JSON option.
+  final List<String> barycenterAssociates;
 
   bool get isCompound => children.isNotEmpty;
 }
