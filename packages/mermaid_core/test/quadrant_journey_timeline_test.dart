@@ -2,6 +2,8 @@
 /// indentation tolerance.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/detect.dart';
 import 'package:mermaid_core/src/diagrams/journey/journey.dart';
 import 'package:mermaid_core/src/diagrams/quadrant/quadrant.dart';
@@ -19,15 +21,8 @@ import 'package:test/test.dart';
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
-
 Iterable<String> texts(RenderScene s) =>
-    flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
+    flattenScene(s.nodes).whereType<SceneText>().map((t) => t.text);
 
 void main() {
   group('quadrant', () {
@@ -53,12 +48,11 @@ quadrantChart
     });
     test('layout places points by coordinates (y up)', () {
       final s = layoutQuadrantChart(
-        parseQuadrantChart(
-            'quadrantChart\nLow: [0.1, 0.1]\nHigh: [0.9, 0.9]'),
+        parseQuadrantChart('quadrantChart\nLow: [0.1, 0.1]\nHigh: [0.9, 0.9]'),
         measurer: measurer,
         theme: theme,
       );
-      CircleGeometry dot(String id) => flatten(s.nodes)
+      CircleGeometry dot(String id) => flattenScene(s.nodes)
           .whereType<SceneGroup>()
           .firstWhere((g) => g.id == 'point_$id')
           .children
@@ -69,8 +63,10 @@ quadrantChart
       expect(dot('High').center.x, greaterThan(dot('Low').center.x));
       expect(dot('High').center.y, lessThan(dot('Low').center.y));
     });
-    test('fixture config, trailing arrow, and axes match the fixed viewport', () {
-      const source = '''
+    test(
+      'fixture config, trailing arrow, and axes match the fixed viewport',
+      () {
+        const source = '''
 %%{init: {"quadrantChart": {"chartWidth": 600, "chartHeight": 600} } }%%
 quadrantChart
   title Analytics and Business Intelligence Platforms
@@ -85,70 +81,68 @@ quadrantChart
   IBM: [0.51, 0.40]
   Incorta: [0.20, 0.30]
 ''';
-      const renderer = Mermaid(measurer: ApproximateTextMeasurer());
-      final scene = renderer.render(source);
+        const renderer = Mermaid(measurer: ApproximateTextMeasurer());
+        final scene = renderer.render(source);
 
-      expect(scene.size, const Size(600, 600));
-      // Upstream's grammar appends `" \u27F6 "` (long right arrow, kept
-      // spaces) when an axis has a delimiter but no right-hand label.
-      expect(
-        texts(scene),
-        containsAll([
-          'Completeness of Vision ❤ ⟶ ',
-          'Ability to Execute',
-        ]),
-      );
-      expect(texts(scene).where((text) => text.contains('"')), isEmpty);
-      expect(texts(scene).where((text) => text.contains('-->')), isEmpty);
-      expect(
-        renderSceneToSvg(scene),
-        contains('width="600" height="600" viewBox="0 0 600 600"'),
-      );
+        expect(scene.size, const Size(600, 600));
+        // Upstream's grammar appends `" \u27F6 "` (long right arrow, kept
+        // spaces) when an axis has a delimiter but no right-hand label.
+        expect(
+          texts(scene),
+          containsAll(['Completeness of Vision ❤ ⟶ ', 'Ability to Execute']),
+        );
+        expect(texts(scene).where((text) => text.contains('"')), isEmpty);
+        expect(texts(scene).where((text) => text.contains('-->')), isEmpty);
+        expect(
+          renderSceneToSvg(scene),
+          contains('width="600" height="600" viewBox="0 0 600 600"'),
+        );
 
-      final regionBounds = flatten(scene.nodes)
-          .whereType<SceneShape>()
-          .map((shape) => shape.geometry)
-          .whereType<RectGeometry>()
-          .map((geometry) => geometry.rect)
-          .reduce((a, b) => a.union(b));
-      // Bands reserved by QuadrantBuilder around the quadrant region, from the
-      // upstream defaults: an axis label band on the left and (because the
-      // chart has points) below, plus a title band on top.
-      const chartWidth = 600.0;
-      const chartHeight = 600.0;
-      const quadrantPadding = 5.0; // quadrantChart.quadrantPadding
-      const axisBand = 2 * 5.0 + 16.0; // axisLabelPadding * 2 + fontSize
-      const titleBand = 20.0 + 2 * 10.0; // titleFontSize + titlePadding * 2
-      expect(regionBounds.left, quadrantPadding + axisBand);
-      expect(regionBounds.right, chartWidth - quadrantPadding);
-      expect(regionBounds.top, quadrantPadding + titleBand);
-      expect(regionBounds.bottom, chartHeight - quadrantPadding - axisBand);
+        final regionBounds = flattenScene(scene.nodes)
+            .whereType<SceneShape>()
+            .map((shape) => shape.geometry)
+            .whereType<RectGeometry>()
+            .map((geometry) => geometry.rect)
+            .reduce((a, b) => a.union(b));
+        // Bands reserved by QuadrantBuilder around the quadrant region, from the
+        // upstream defaults: an axis label band on the left and (because the
+        // chart has points) below, plus a title band on top.
+        const chartWidth = 600.0;
+        const chartHeight = 600.0;
+        const quadrantPadding = 5.0; // quadrantChart.quadrantPadding
+        const axisBand = 2 * 5.0 + 16.0; // axisLabelPadding * 2 + fontSize
+        const titleBand = 20.0 + 2 * 10.0; // titleFontSize + titlePadding * 2
+        expect(regionBounds.left, quadrantPadding + axisBand);
+        expect(regionBounds.right, chartWidth - quadrantPadding);
+        expect(regionBounds.top, quadrantPadding + titleBand);
+        expect(regionBounds.bottom, chartHeight - quadrantPadding - axisBand);
 
-      final yAxis = flatten(scene.nodes)
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == 'Ability to Execute');
-      final yBounds = sceneNodeBounds(yAxis)!;
-      expect(yBounds.right, lessThanOrEqualTo(regionBounds.left));
-      expect(yBounds.bottom, closeTo(regionBounds.bottom, 0.0001));
-      expect(yBounds.top, greaterThanOrEqualTo(0));
+        final yAxis = flattenScene(scene.nodes)
+            .whereType<SceneText>()
+            .singleWhere((text) => text.text == 'Ability to Execute');
+        final yBounds = sceneNodeBounds(yAxis)!;
+        expect(yBounds.right, lessThanOrEqualTo(regionBounds.left));
+        expect(yBounds.bottom, closeTo(regionBounds.bottom, 0.0001));
+        expect(yBounds.top, greaterThanOrEqualTo(0));
 
-      final microsoft = flatten(scene.nodes)
-          .whereType<SceneGroup>()
-          .singleWhere((group) => group.id == 'point_Microsoft')
-          .children
-          .whereType<SceneShape>()
-          .map((shape) => shape.geometry)
-          .whereType<CircleGeometry>()
-          .single;
-      expect(
-        microsoft.center.x,
-        closeTo(regionBounds.left + regionBounds.width * 0.75, 0.0001),
-      );
-      expect(
-        microsoft.center.y,
-        closeTo(regionBounds.bottom - regionBounds.height * 0.75, 0.0001),
-      );
-    });
+        final microsoft = flattenScene(scene.nodes)
+            .whereType<SceneGroup>()
+            .singleWhere((group) => group.id == 'point_Microsoft')
+            .children
+            .whereType<SceneShape>()
+            .map((shape) => shape.geometry)
+            .whereType<CircleGeometry>()
+            .single;
+        expect(
+          microsoft.center.x,
+          closeTo(regionBounds.left + regionBounds.width * 0.75, 0.0001),
+        );
+        expect(
+          microsoft.center.y,
+          closeTo(regionBounds.bottom - regionBounds.height * 0.75, 0.0001),
+        );
+      },
+    );
     test('frontmatter and all init directives merge quadrant config', () {
       const source = '''
 ---
@@ -212,7 +206,7 @@ quadrantChart
       ).render(source);
       expect(scene.size, const Size(20, 20));
 
-      final regions = flatten(scene.nodes)
+      final regions = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .map((shape) => shape.geometry)
           .whereType<RectGeometry>()
@@ -239,8 +233,10 @@ quadrantChart
       expect(QuadrantConfig.fromSource(source).chartWidth, 500);
     });
     test('garbage throws', () {
-      expect(() => parseQuadrantChart('quadrantChart\n???'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseQuadrantChart('quadrantChart\n???'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
@@ -270,7 +266,7 @@ journey
       expect(texts(s), containsAll(['S', 'A', 'B', 'Me', 'Cat']));
       // Upstream draws every smiley face with a uniform cornsilk fill
       // (#FFF8DC); the score is conveyed by the mouth shape, not the fill.
-      final fills = flatten(s.nodes)
+      final fills = flattenScene(s.nodes)
           .whereType<SceneShape>()
           .where((n) => n.geometry is CircleGeometry && n.fill != null)
           .map((n) => n.fill!.color.value)
@@ -278,8 +274,10 @@ journey
       expect(fills, contains(0xffFFF8DC));
     });
     test('invalid score throws', () {
-      expect(() => parseJourney('journey\nA: nope: Me'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parseJourney('journey\nA: nope: Me'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
@@ -306,32 +304,45 @@ timeline
         measurer: measurer,
         theme: theme,
       );
-      expect(texts(s),
-          containsAll(['2002', 'LinkedIn', '2004', 'Facebook', 'Google']));
+      expect(
+        texts(s),
+        containsAll(['2002', 'LinkedIn', '2004', 'Facebook', 'Google']),
+      );
       // Google stacks below Facebook in the same column.
-      final all = flatten(s.nodes).whereType<SceneText>().toList();
+      final all = flattenScene(s.nodes).whereType<SceneText>().toList();
       final fb = all.firstWhere((t) => t.text == 'Facebook');
       final gg = all.firstWhere((t) => t.text == 'Google');
       expect((fb.bounds.center.x - gg.bounds.center.x).abs(), lessThan(2));
       expect(gg.bounds.top, greaterThan(fb.bounds.bottom));
     });
     test('section headers span task columns and use palette label colors', () {
-      final s = layoutTimeline(parseTimeline('''
+      final s = layoutTimeline(
+        parseTimeline('''
 timeline
   section Planning
     First : A
     Second : B
-'''), measurer: measurer, theme: theme);
-      SceneGroup group(String label) => flatten(s.nodes).whereType<SceneGroup>()
-          .singleWhere((g) => g.children.whereType<SceneText>()
-              .any((text) => text.text == label));
-      Rect rect(String label) => (group(label).children.whereType<SceneShape>()
-          .first.geometry as RectGeometry).rect;
+'''),
+        measurer: measurer,
+        theme: theme,
+      );
+      SceneGroup group(String label) =>
+          flattenScene(s.nodes).whereType<SceneGroup>().singleWhere(
+            (g) => g.children.whereType<SceneText>().any(
+              (text) => text.text == label,
+            ),
+          );
+      Rect rect(String label) =>
+          (group(label).children.whereType<SceneShape>().first.geometry
+                  as RectGeometry)
+              .rect;
       final header = rect('Planning');
       expect(header.left, rect('First').left);
       expect(header.right, rect('Second').right);
-      expect(group('Planning').children.whereType<SceneText>().single.color,
-          theme.cScaleLabel0);
+      expect(
+        group('Planning').children.whereType<SceneText>().single.color,
+        theme.cScaleLabel0,
+      );
     });
   });
 

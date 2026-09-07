@@ -1,15 +1,10 @@
+import 'support/harness.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
-
-Widget _host(Widget child) => MaterialApp(
-  home: Scaffold(
-    body: Center(child: SizedBox(width: 600, height: 400, child: child)),
-  ),
-);
 
 double _scale(WidgetTester tester) {
   final iv = tester.widget<InteractiveViewer>(find.byType(InteractiveViewer));
@@ -29,7 +24,7 @@ void main() {
     addTearDown(controller.dispose);
     Future<bool>? focusResult;
     await tester.pumpWidget(
-      _host(
+      mermaidViewHost(
         MermaidView(
           source: 'graph LR\nA-->B',
           controller: controller,
@@ -108,7 +103,9 @@ void main() {
   testWidgets('fullscreen copy forwards scene changes', (tester) async {
     final scenes = <core.RenderScene>[];
     await tester.pumpWidget(
-      _host(MermaidView(source: 'graph TD\nA-->B', onSceneChanged: scenes.add)),
+      mermaidViewHost(
+        MermaidView(source: 'graph TD\nA-->B', onSceneChanged: scenes.add),
+      ),
     );
     await tester.pumpAndSettle();
     expect(scenes, hasLength(1));
@@ -127,7 +124,7 @@ void main() {
     String? tappedNode;
     addTearDown(controller.dispose);
     await tester.pumpWidget(
-      _host(
+      mermaidViewHost(
         MermaidView(
           source: source,
           controller: controller,
@@ -223,7 +220,9 @@ void main() {
       controller.addListener(() => notifications++);
       addTearDown(controller.dispose);
       await tester.pumpWidget(
-        _host(MermaidView(source: 'graph TD\nA-->B', controller: controller)),
+        mermaidViewHost(
+          MermaidView(source: 'graph TD\nA-->B', controller: controller),
+        ),
       );
       await tester.pumpAndSettle();
 
@@ -309,7 +308,7 @@ void main() {
 
   testWidgets('renders the diagram with interactive controls', (tester) async {
     await tester.pumpWidget(
-      _host(const MermaidView(source: 'graph TD\nA-->B')),
+      mermaidViewHost(const MermaidView(source: 'graph TD\nA-->B')),
     );
     await tester.pumpAndSettle();
 
@@ -325,7 +324,7 @@ void main() {
 
   testWidgets('zoom in increases scale, zoom out decreases it', (tester) async {
     await tester.pumpWidget(
-      _host(const MermaidView(source: 'graph TD\nA-->B')),
+      mermaidViewHost(const MermaidView(source: 'graph TD\nA-->B')),
     );
     await tester.pumpAndSettle();
 
@@ -344,7 +343,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      _host(const MermaidView(source: 'graph TD\nA-->B')),
+      mermaidViewHost(const MermaidView(source: 'graph TD\nA-->B')),
     );
     await tester.pumpAndSettle();
 
@@ -405,7 +404,7 @@ void main() {
 
   testWidgets('fullscreen popup opens a second viewer', (tester) async {
     await tester.pumpWidget(
-      _host(const MermaidView(source: 'graph TD\nA-->B')),
+      mermaidViewHost(const MermaidView(source: 'graph TD\nA-->B')),
     );
     await tester.pumpAndSettle();
 
@@ -423,7 +422,7 @@ void main() {
     const padding = 60.0;
     const zoomStep = 2.0;
     await tester.pumpWidget(
-      _host(
+      mermaidViewHost(
         const MermaidView(
           source: 'graph TD\nA-->B',
           padding: padding,
@@ -472,7 +471,9 @@ void main() {
 
   testWidgets('hides controls when showControls is false', (tester) async {
     await tester.pumpWidget(
-      _host(const MermaidView(source: 'graph TD\nA-->B', showControls: false)),
+      mermaidViewHost(
+        const MermaidView(source: 'graph TD\nA-->B', showControls: false),
+      ),
     );
     await tester.pumpAndSettle();
     expect(find.byIcon(Icons.add), findsNothing);

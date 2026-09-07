@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/mermaid_core.dart';
 import 'package:test/test.dart';
 
@@ -43,17 +44,10 @@ journey
 
 List<Object?> _paintSignature(RenderScene scene) => [
   scene.background,
-  for (final node in _flatten(scene.nodes))
+  for (final node in flattenScene(scene.nodes))
     switch (node) {
       SceneShape(:final fill, :final stroke) => (fill?.color, stroke?.color),
       SceneText(:final color) => color,
       _ => null,
     },
 ];
-
-Iterable<SceneNode> _flatten(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    yield node;
-    if (node is SceneGroup) yield* _flatten(node.children);
-  }
-}

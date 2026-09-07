@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -15,13 +16,6 @@ import 'package:test/test.dart';
 const _measurer = ApproximateTextMeasurer();
 const _theme = MermaidTheme.defaultTheme;
 const _renderer = Mermaid(measurer: _measurer, theme: _theme);
-
-List<SceneNode> _flatten(Iterable<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ..._flatten(node.children),
-  ],
-];
 
 Rect _largestRect(SceneGroup group) => group.children
     .whereType<SceneShape>()
@@ -125,7 +119,7 @@ Rel(db, external, "reads")
           const Color(0xffabcdef),
         );
         expect(
-          _flatten(scene.nodes)
+          flattenScene(scene.nodes)
               .whereType<SceneText>()
               .singleWhere((text) => text.text == 'Boundary')
               .style
@@ -133,7 +127,7 @@ Rel(db, external, "reads")
           20,
         );
         expect(
-          _flatten(scene.nodes)
+          flattenScene(scene.nodes)
               .whereType<SceneText>()
               .singleWhere((text) => text.text == 'reads')
               .style
@@ -282,18 +276,18 @@ erDiagram
 %%{init: {"er":{"nodeSpacing":260,"rankSpacing":190,"titleTopMargin":70}}}%%
 $diagram''');
       expect(spaced.size.height, greaterThan(normal.size.height));
-      final normalTitle = _flatten(
+      final normalTitle = flattenScene(
         normal.nodes,
       ).whereType<SceneText>().singleWhere((text) => text.text == 'Accounts');
-      final spacedTitle = _flatten(
+      final spacedTitle = flattenScene(
         spaced.nodes,
       ).whereType<SceneText>().singleWhere((text) => text.text == 'Accounts');
-      final normalEntityTop = _flatten(normal.nodes)
+      final normalEntityTop = flattenScene(normal.nodes)
           .whereType<SceneGroup>()
           .where((group) => group.id == 'CUSTOMER' || group.id == 'ORDER')
           .map((group) => _largestRect(group).top)
           .reduce(math.min);
-      final spacedEntityTop = _flatten(spaced.nodes)
+      final spacedEntityTop = flattenScene(spaced.nodes)
           .whereType<SceneGroup>()
           .where((group) => group.id == 'CUSTOMER' || group.id == 'ORDER')
           .map((group) => _largestRect(group).top)
@@ -338,7 +332,7 @@ $body''',
           measurer: _measurer,
           theme: _theme,
         );
-        final nodes = _flatten(scene.nodes);
+        final nodes = flattenScene(scene.nodes);
         final texts = nodes.whereType<SceneText>().toList();
         expect(texts.map((text) => text.text), isNot(contains('Sales')));
         expect(texts.map((text) => text.text), isNot(contains('Quarter')));
@@ -359,7 +353,7 @@ $body''',
         measurer: _measurer,
         theme: _theme,
       );
-      SceneText q1(RenderScene scene) => _flatten(
+      SceneText q1(RenderScene scene) => flattenScene(
         scene.nodes,
       ).whereType<SceneText>().singleWhere((text) => text.text == 'Q1');
       expect(q1(render(-45)).rotation, -45);

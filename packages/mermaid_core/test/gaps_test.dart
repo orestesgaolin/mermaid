@@ -3,6 +3,8 @@
 /// C4 boundary style, frontmatter themeVariables, and link/tooltip interactivity.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/diagrams/block/block.dart';
 import 'package:mermaid_core/src/diagrams/gantt/gantt_parser.dart';
@@ -17,9 +19,6 @@ import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
 
 const _m = Mermaid(measurer: ApproximateTextMeasurer());
-
-List<SceneNode> _flat(List<SceneNode> n) =>
-    [for (final x in n) ...[x, if (x is SceneGroup) ..._flat(x.children)]];
 
 void main() {
   test('gantt: excluded days extend a duration past weekends', () {
@@ -48,8 +47,8 @@ gantt
     final items = (seq as RailroadSequence).items;
     expect(items.any((e) => e is RailroadRepetition), isTrue);
     expect(items.any((e) => e is RailroadOptional), isTrue);
-    final rep = items.firstWhere((e) => e is RailroadRepetition)
-        as RailroadRepetition;
+    final rep =
+        items.firstWhere((e) => e is RailroadRepetition) as RailroadRepetition;
     expect(rep.child, isA<RailroadChoice>());
   });
 
@@ -59,9 +58,9 @@ block-beta
   A arrow1<["go"]>(right) B
   A -- "yes" --> B
 ''');
-    final hasArrow = d.root
-        .whereType<BlockNode>()
-        .any((n) => n.shape == BlockShape.blockArrow);
+    final hasArrow = d.root.whereType<BlockNode>().any(
+      (n) => n.shape == BlockShape.blockArrow,
+    );
     expect(hasArrow, isTrue);
     expect(d.edges.single.label, 'yes');
   });
@@ -73,7 +72,9 @@ treemap-beta
   "x": 10
   "y": 20
 ''');
-    final texts = _flat(s.nodes).whereType<SceneText>().map((t) => t.text);
+    final texts = flattenScene(
+      s.nodes,
+    ).whereType<SceneText>().map((t) => t.text);
     expect(texts.any((t) => t.contains('x')), isTrue);
     expect(texts.any((t) => t.contains('y')), isTrue);
   });
@@ -98,8 +99,11 @@ C4Context
   }
   UpdateBoundaryStyle(b0, \$bgColor="#112233")
 ''');
-    final shapes = _flat(s.nodes).whereType<SceneShape>();
-    expect(shapes.any((sh) => sh.fill?.color == const Color(0xff112233)), isTrue);
+    final shapes = flattenScene(s.nodes).whereType<SceneShape>();
+    expect(
+      shapes.any((sh) => sh.fill?.color == const Color(0xff112233)),
+      isTrue,
+    );
   });
 
   test('frontmatter config.themeVariables (nested YAML) applies', () {
@@ -119,17 +123,22 @@ A-->B
   });
 
   group('interactivity', () {
-    test('flowchart click sets a link on the node group, emitted as <a> in SVG',
-        () {
-      final s = _m.render('graph TD\n A[Home]-->B\n click A "https://x.test" "tip"');
-      final linked =
-          _flat(s.nodes).whereType<SceneGroup>().where((g) => g.link != null);
-      expect(linked, isNotEmpty);
-      expect(linked.first.link, 'https://x.test');
-      expect(linked.first.tooltip, 'tip');
-      final svg = renderSceneToSvg(s);
-      expect(svg.contains('<a href="https://x.test"'), isTrue);
-      expect(svg.contains('<title>tip</title>'), isTrue);
-    });
+    test(
+      'flowchart click sets a link on the node group, emitted as <a> in SVG',
+      () {
+        final s = _m.render(
+          'graph TD\n A[Home]-->B\n click A "https://x.test" "tip"',
+        );
+        final linked = flattenScene(
+          s.nodes,
+        ).whereType<SceneGroup>().where((g) => g.link != null);
+        expect(linked, isNotEmpty);
+        expect(linked.first.link, 'https://x.test');
+        expect(linked.first.tooltip, 'tip');
+        final svg = renderSceneToSvg(s);
+        expect(svg.contains('<a href="https://x.test"'), isTrue);
+        expect(svg.contains('<title>tip</title>'), isTrue);
+      },
+    );
   });
 }

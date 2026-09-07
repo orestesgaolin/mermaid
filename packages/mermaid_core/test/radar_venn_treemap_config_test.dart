@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'dart:convert';
 
 import 'package:mermaid_core/src/diagrams/radar/radar.dart';
@@ -30,13 +31,6 @@ Iterable<({String form, String source})> _configuredSources(
   );
 }
 
-List<SceneNode> _flatten(Iterable<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ..._flatten(node.children),
-  ],
-];
-
 void main() {
   group('radar config', () {
     const body = '''
@@ -68,7 +62,9 @@ radar-beta
           theme: _theme,
           config: config,
         );
-        final shapes = _flatten(scene.nodes).whereType<SceneShape>().toList();
+        final shapes = flattenScene(
+          scene.nodes,
+        ).whereType<SceneShape>().toList();
         final graticules = shapes
             .map((shape) => shape.geometry)
             .whereType<CircleGeometry>()
@@ -119,7 +115,7 @@ radar-beta
         theme: _theme,
         config: RadarConfig.fromSource(source),
       );
-      final outer = _flatten(scene.nodes)
+      final outer = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .map((shape) => shape.geometry)
           .whereType<CircleGeometry>()
@@ -157,7 +153,9 @@ venn-beta
           );
           expect(scene.size, const Size(400, 300), reason: configured.form);
 
-          final shapes = _flatten(scene.nodes).whereType<SceneShape>().toList();
+          final shapes = flattenScene(
+            scene.nodes,
+          ).whereType<SceneShape>().toList();
           final setCircles = shapes
               .where(
                 (shape) =>
@@ -222,12 +220,12 @@ treemap-beta
           config: TreemapConfig.fromSource(configured.source),
         );
         expect(scene.size, const Size(640, 340), reason: configured.form);
-        final texts = _flatten(
+        final texts = flattenScene(
           scene.nodes,
         ).whereType<SceneText>().map((node) => node.text).toList();
         expect(texts, contains(r'$1,200'), reason: configured.form);
 
-        final rectangles = _flatten(scene.nodes)
+        final rectangles = flattenScene(scene.nodes)
             .whereType<SceneShape>()
             .map((shape) => shape.geometry)
             .whereType<RectGeometry>()
@@ -251,7 +249,7 @@ treemap-beta
         theme: _theme,
         config: TreemapConfig.fromSource(source),
       );
-      final texts = _flatten(
+      final texts = flattenScene(
         scene.nodes,
       ).whereType<SceneText>().map((node) => node.text).toList();
       expect(texts, containsAll(['Products', 'Editor', 'Viewer']));
@@ -281,7 +279,7 @@ treemap-beta
         );
       }
 
-      List<String> labels(RenderScene scene) => _flatten(
+      List<String> labels(RenderScene scene) => flattenScene(
         scene.nodes,
       ).whereType<SceneText>().map((node) => node.text).toList();
 

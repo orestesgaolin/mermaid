@@ -1,6 +1,8 @@
 /// Per-diagram configuration tests for journey and timeline.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/diagrams/journey/journey.dart';
 import 'package:mermaid_core/src/diagrams/timeline/timeline.dart';
@@ -12,13 +14,6 @@ import 'package:test/test.dart';
 
 const _measurer = ApproximateTextMeasurer();
 const _theme = MermaidTheme.defaultTheme;
-
-Iterable<SceneNode> _flatten(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    yield node;
-    if (node is SceneGroup) yield* _flatten(node.children);
-  }
-}
 
 SceneGroup _group(RenderScene scene, String id) =>
     scene.nodes.whereType<SceneGroup>().singleWhere((node) => node.id == id);
@@ -32,7 +27,7 @@ Rect _box(SceneGroup group) =>
         .rect;
 
 SceneGroup _timelineNode(RenderScene scene, String label) =>
-    _flatten(scene.nodes).whereType<SceneGroup>().singleWhere(
+    flattenScene(scene.nodes).whereType<SceneGroup>().singleWhere(
       (group) => group.children.whereType<SceneText>().any(
         (text) => text.text == label,
       ),
@@ -79,7 +74,7 @@ journey
       );
       expect(firstLabel.color, const Color(0xff102030));
       expect(
-        _flatten(scene.nodes)
+        flattenScene(scene.nodes)
             .whereType<SceneShape>()
             .where((shape) => shape.geometry is CircleGeometry)
             .map((shape) => shape.fill?.color),

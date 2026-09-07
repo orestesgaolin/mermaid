@@ -1,6 +1,8 @@
 /// Parser + layout tests for the ER, pie and gantt diagrams.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/diagrams/er/er_layout.dart';
 import 'package:mermaid_core/src/diagrams/er/er_model.dart';
 import 'package:mermaid_core/src/diagrams/er/er_parser.dart';
@@ -19,10 +21,6 @@ import 'package:test/test.dart';
 
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
-
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
-];
 
 void main() {
   group('ER parser', () {
@@ -102,7 +100,7 @@ void main() {
         measurer: measurer,
         theme: theme,
       );
-      final texts = flatten(
+      final texts = flattenScene(
         scene.nodes,
       ).whereType<SceneText>().map((t) => t.text);
       expect(
@@ -111,7 +109,7 @@ void main() {
       );
       // Crow's foot: at least one circle marker (zero side) present.
       expect(
-        flatten(
+        flattenScene(
           scene.nodes,
         ).whereType<SceneShape>().any((s) => s.geometry is CircleGeometry),
         isTrue,
@@ -125,7 +123,7 @@ void main() {
         theme: theme,
       );
       expect(
-        flatten(scene.nodes).whereType<SceneShape>().any(
+        flattenScene(scene.nodes).whereType<SceneShape>().any(
           (s) => s.geometry is PathGeometry && s.stroke?.dash != null,
         ),
         isTrue,
@@ -297,12 +295,12 @@ erDiagram
         measurer: measurer,
         theme: theme,
       );
-      final texts = flatten(
+      final texts = flattenScene(
         scene.nodes,
       ).whereType<SceneText>().map((t) => t.text).toList();
       expect(texts, containsAll(['A', 'B', '75%', '25%', 'P']));
       expect(
-        flatten(scene.nodes).whereType<SceneGroup>().where(
+        flattenScene(scene.nodes).whereType<SceneGroup>().where(
           (g) => (g.id ?? '').startsWith('slice_'),
         ),
         hasLength(2),
@@ -385,10 +383,10 @@ gantt
         theme: theme,
       );
       Rect barOf(String id) {
-        final g = flatten(
+        final g = flattenScene(
           scene.nodes,
         ).whereType<SceneGroup>().firstWhere((g) => g.id == id);
-        final shape = flatten(
+        final shape = flattenScene(
           g.children,
         ).whereType<SceneShape>().firstWhere((s) => s.geometry is RectGeometry);
         return (shape.geometry as RectGeometry).rect;
@@ -400,7 +398,7 @@ gantt
       expect(b.top, greaterThan(a.top));
       // Axis tick labels exist (upstream default %Y-%m-%d format).
       expect(
-        flatten(scene.nodes).whereType<SceneText>().any(
+        flattenScene(scene.nodes).whereType<SceneText>().any(
           (t) => RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(t.text),
         ),
         isTrue,
@@ -416,7 +414,7 @@ gantt
         theme: theme,
       );
       expect(
-        flatten(
+        flattenScene(
           scene.nodes,
         ).whereType<SceneShape>().any((s) => s.geometry is PolygonGeometry),
         isTrue,

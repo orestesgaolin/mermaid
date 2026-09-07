@@ -1,3 +1,4 @@
+import 'support/rendering.dart';
 import 'dart:io';
 import 'dart:math' as math;
 
@@ -202,7 +203,7 @@ sequenceDiagram
   S-->>A: Response
 ''',
       };
-      final evidenceDir = Platform.environment['MERMAID_THEME_EVIDENCE_DIR'];
+      final directory = evidenceDir();
 
       for (final MapEntry(key: name, value: source) in sources.entries) {
         final lightPng = await renderToPng(source, theme: light);
@@ -210,8 +211,7 @@ sequenceDiagram
         expect(lightPng, isNot(equals(darkPng)));
         expect(lightPng.take(8), <int>[137, 80, 78, 71, 13, 10, 26, 10]);
         expect(darkPng.take(8), <int>[137, 80, 78, 71, 13, 10, 26, 10]);
-        if (evidenceDir != null) {
-          final directory = Directory(evidenceDir)..createSync(recursive: true);
+        {
           File('${directory.path}/$name-light.png').writeAsBytesSync(lightPng);
           File('${directory.path}/$name-dark.png').writeAsBytesSync(darkPng);
         }

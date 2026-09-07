@@ -1,3 +1,4 @@
+import 'support/rendering.dart';
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
@@ -21,7 +22,7 @@ void main() {
       final png = await renderToPng(source, pixelRatio: pixelRatio);
       expect(png.sublist(0, 8), <int>[137, 80, 78, 71, 13, 10, 26, 10]);
 
-      final image = await _decodePng(png);
+      final image = await decodePng(png);
       addTearDown(image.dispose);
       expect(image.width, (scene.size.width * pixelRatio).ceil());
       expect(image.height, (scene.size.height * pixelRatio).ceil());
@@ -116,7 +117,7 @@ void main() {
       ),
     };
     final headlessImage = (await tester.runAsync(
-      () async => _decodePng(
+      () async => decodePng(
         await renderToPng(
           source,
           pixelRatio: pixelRatio,
@@ -152,15 +153,6 @@ void main() {
       matchesReferenceImage(headlessImage),
     );
   });
-}
-
-Future<ui.Image> _decodePng(Uint8List png) async {
-  final codec = await ui.instantiateImageCodec(png);
-  try {
-    return (await codec.getNextFrame()).image;
-  } finally {
-    codec.dispose();
-  }
 }
 
 bool _hasMoreThanOneVisibleColor(Uint8List rgba) {

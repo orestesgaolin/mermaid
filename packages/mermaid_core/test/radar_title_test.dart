@@ -5,6 +5,8 @@
 /// package follows. The radar parser used `??=` and kept the frontmatter one.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/mermaid.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
@@ -12,14 +14,7 @@ import 'package:test/test.dart';
 
 const _renderer = Mermaid(measurer: ApproximateTextMeasurer());
 
-List<SceneNode> _flatten(List<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ..._flatten(node.children),
-  ],
-];
-
-Iterable<String> _texts(String source) => _flatten(
+Iterable<String> _texts(String source) => flattenScene(
   _renderer.render(source).nodes,
 ).whereType<SceneText>().map((text) => text.text);
 

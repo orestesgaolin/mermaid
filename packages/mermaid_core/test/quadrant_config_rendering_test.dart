@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'dart:convert';
 
 import 'package:mermaid_core/mermaid_core.dart';
@@ -18,13 +19,6 @@ Item: [0.25, 0.75]
 Iterable<String> _sources(Map<String, Object?> values, String body) sync* {
   yield '%%{init: ${jsonEncode({'quadrantChart': values})}}%%\n$body';
   yield '---\nconfig:\n  quadrantChart:\n${values.entries.map((e) => '    ${e.key}: ${jsonEncode(e.value)}').join('\n')}\n---\n$body';
-}
-
-Iterable<SceneNode> _flatten(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    yield node;
-    if (node is SceneGroup) yield* _flatten(node.children);
-  }
 }
 
 void main() {
@@ -71,7 +65,7 @@ void main() {
         'pointRadius': 12,
       }, _body)) {
         final scene = _renderer.render(source);
-        final nodes = _flatten(scene.nodes).toList();
+        final nodes = flattenScene(scene.nodes).toList();
         final axis = nodes.whereType<SceneText>().firstWhere(
           (n) => n.text == 'High effort',
         );

@@ -1,3 +1,5 @@
+import 'support/harness.dart';
+import 'support/scene.dart';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -85,20 +87,13 @@ flowchart LR
     final controller = MermaidViewController();
     addTearDown(controller.dispose);
     (String, String, int)? tapped;
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 600,
-            height: 400,
-            child: MermaidView(
-              source: source,
-              controller: controller,
-              showControls: false,
-              onEdgeTap: (a, b, i) => tapped = (a, b, i),
-            ),
-          ),
-        ),
+    await pumpMermaidView(
+      tester,
+      MermaidView(
+        source: source,
+        controller: controller,
+        showControls: false,
+        onEdgeTap: (a, b, i) => tapped = (a, b, i),
       ),
     );
     await tester.pumpAndSettle();
@@ -115,32 +110,25 @@ flowchart LR
   });
 }
 
-core.RenderScene _render(String source) => core.Mermaid(
-      measurer: const FlutterTextMeasurer(),
-    ).render(source);
+core.RenderScene _render(String source) =>
+    core.Mermaid(measurer: const FlutterTextMeasurer()).render(source);
 
 Future<void> _pumpDiagram(
   WidgetTester tester,
   String source,
   void Function(String, String, int) onEdgeTap,
-) => tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: MermaidDiagram(source: source, onEdgeTap: onEdgeTap),
-          ),
-        ),
-      ),
-    );
+) => pumpDiagram(
+  tester,
+  MermaidDiagram(source: source, onEdgeTap: onEdgeTap),
+);
 
 core.SceneGroup _edgeGroup(
   core.RenderScene scene,
   core.SceneGroupRole role,
   int index,
-) => _groups(scene.nodes).firstWhere(
-      (group) => group.role == role && group.edge?.linkIndex == index,
-    );
+) => groupsOf(
+  scene.nodes,
+).firstWhere((group) => group.role == role && group.edge?.linkIndex == index);
 
 core.PathGeometry _edgePath(core.RenderScene scene, int index) {
   final group = _edgeGroup(scene, core.SceneGroupRole.edge, index);
@@ -150,7 +138,7 @@ core.PathGeometry _edgePath(core.RenderScene scene, int index) {
 core.Point _distinctStrokePoint(core.RenderScene scene, int index) {
   final target = _samplePath(_edgePath(scene, index));
   final other = <core.Point>[
-    for (final group in _groups(scene.nodes))
+    for (final group in groupsOf(scene.nodes))
       if (group.role == core.SceneGroupRole.edge &&
           group.edge?.linkIndex != index &&
           group.children.isNotEmpty)
@@ -158,7 +146,7 @@ core.Point _distinctStrokePoint(core.RenderScene scene, int index) {
   ];
   final obstacles = <core.Rect>[
     ...scene.nodeBounds.values,
-    for (final group in _groups(scene.nodes))
+    for (final group in groupsOf(scene.nodes))
       if (group.role == core.SceneGroupRole.edgeLabel)
         core.sceneBounds(group.children)!,
   ];
@@ -168,24 +156,13 @@ core.Point _distinctStrokePoint(core.RenderScene scene, int index) {
     if (obstacles.any((rect) => rect.contains(candidate))) continue;
     final score = other.isEmpty
         ? 1000.0
-        : other
-            .map((point) => point.distanceTo(candidate))
-            .reduce(math.min);
+        : other.map((point) => point.distanceTo(candidate)).reduce(math.min);
     if (score > bestScore) {
       best = candidate;
       bestScore = score;
     }
   }
   return best;
-}
-
-Iterable<core.SceneGroup> _groups(Iterable<core.SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    if (node is core.SceneGroup) {
-      yield node;
-      yield* _groups(node.children);
-    }
-  }
 }
 
 Iterable<core.PathGeometry> _paths(Iterable<core.SceneNode> nodes) sync* {
@@ -223,10 +200,12 @@ List<core.Point> _samplePath(core.PathGeometry path) {
           for (var i = 1; i <= 20; i++) {
             final t = i / 20;
             final u = 1 - t;
-            points.add(core.Point(
-              u * u * start.x + 2 * u * t * c.x + t * t * p.x,
-              u * u * start.y + 2 * u * t * c.y + t * t * p.y,
-            ));
+            points.add(
+              core.Point(
+                u * u * start.x + 2 * u * t * c.x + t * t * p.x,
+                u * u * start.y + 2 * u * t * c.y + t * t * p.y,
+              ),
+            );
           }
         }
         current = p;
@@ -236,16 +215,18 @@ List<core.Point> _samplePath(core.PathGeometry path) {
           for (var i = 1; i <= 20; i++) {
             final t = i / 20;
             final u = 1 - t;
-            points.add(core.Point(
-              u * u * u * start.x +
-                  3 * u * u * t * c1.x +
-                  3 * u * t * t * c2.x +
-                  t * t * t * p.x,
-              u * u * u * start.y +
-                  3 * u * u * t * c1.y +
-                  3 * u * t * t * c2.y +
-                  t * t * t * p.y,
-            ));
+            points.add(
+              core.Point(
+                u * u * u * start.x +
+                    3 * u * u * t * c1.x +
+                    3 * u * t * t * c2.x +
+                    t * t * t * p.x,
+                u * u * u * start.y +
+                    3 * u * u * t * c1.y +
+                    3 * u * t * t * c2.y +
+                    t * t * t * p.y,
+              ),
+            );
           }
         }
         current = p;
@@ -255,10 +236,8 @@ List<core.Point> _samplePath(core.PathGeometry path) {
   return points;
 }
 
-core.Point _lerp(core.Point a, core.Point b, double t) => core.Point(
-      a.x + (b.x - a.x) * t,
-      a.y + (b.y - a.y) * t,
-    );
+core.Point _lerp(core.Point a, core.Point b, double t) =>
+    core.Point(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t);
 
 core.Point _midpoint(core.Point a, core.Point b) =>
     core.Point((a.x + b.x) / 2, (a.y + b.y) / 2);

@@ -1,6 +1,8 @@
 /// Structural tests for the sequence diagram layout.
 library;
 
+import 'support/scene.dart';
+
 import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/diagrams/sequence/sequence_layout.dart';
@@ -18,11 +20,7 @@ RenderScene layout(String body) => layoutSequence(
   theme: MermaidTheme.defaultTheme,
 );
 
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
-];
-
-Iterable<SceneGroup> groups(RenderScene s, String prefix) => flatten(
+Iterable<SceneGroup> groups(RenderScene s, String prefix) => flattenScene(
   s.nodes,
 ).whereType<SceneGroup>().where((g) => (g.id ?? '').startsWith(prefix));
 
@@ -63,7 +61,7 @@ Rect geometryBounds(ShapeGeometry g) {
 
 Rect groupBounds(SceneGroup g) {
   Rect? acc;
-  for (final n in flatten(g.children)) {
+  for (final n in flattenScene(g.children)) {
     final b = switch (n) {
       SceneShape(:final geometry) => geometryBounds(geometry),
       SceneText(:final bounds) => bounds,
@@ -82,7 +80,7 @@ void main() {
       measurer: const ApproximateTextMeasurer(),
       theme: MermaidTheme.defaultTheme,
     );
-    final texts = flatten(scene.nodes).whereType<SceneText>().toList();
+    final texts = flattenScene(scene.nodes).whereType<SceneText>().toList();
 
     expect(texts.any((text) => text.text.startsWith('wrap:')), isFalse);
     expect(texts.any((text) => text.text.startsWith('nowrap:')), isFalse);
@@ -102,8 +100,8 @@ void main() {
       groups(scene, 'actor_$id').firstWhere((g) => g.id == 'actor_$id'),
     ).center.x;
     const wrapPadding = 10.0;
-    final wrapBudget = (centerX('John') - centerX('Bob')).abs() +
-        2 * wrapPadding;
+    final wrapBudget =
+        (centerX('John') - centerX('Bob')).abs() + 2 * wrapPadding;
     expect(wrappedMessage.bounds.width, lessThanOrEqualTo(wrapBudget));
     final unwrappedWidth = const ApproximateTextMeasurer()
         .measure(
@@ -147,7 +145,7 @@ void main() {
   test('activation bar spans the +/- pair', () {
     final s = layout('A->>+B: go\nB-->>-A: done');
     // The activation rect is a 10px-wide standalone shape.
-    final bars = flatten(s.nodes).whereType<SceneShape>().where(
+    final bars = flattenScene(s.nodes).whereType<SceneShape>().where(
       (n) =>
           n.geometry is RectGeometry &&
           ((n.geometry as RectGeometry).rect.width - 10).abs() < 0.1,
@@ -181,7 +179,7 @@ end
       groups(s, 'actor_$id').firstWhere((group) => group.id == 'actor_$id'),
     ).center.x;
 
-    final bars = flatten(s.nodes)
+    final bars = flattenScene(s.nodes)
         .whereType<SceneShape>()
         .map((shape) => shape.geometry)
         .whereType<RectGeometry>()
@@ -197,7 +195,7 @@ end
     expect(webBar.center.x, closeTo(actorCenter('W'), 1e-9));
     expect(authBar.center.x, closeTo(actorCenter('S'), 1e-9));
 
-    Rect badge(String number) => flatten(
+    Rect badge(String number) => flattenScene(
       s.nodes,
     ).whereType<SceneText>().singleWhere((text) => text.text == number).bounds;
     expect(badge('2').center.x, closeTo(webBar.center.x, 1e-9));
@@ -222,7 +220,7 @@ end
       'create participant C\n'
       'B->>C: made you\n',
     );
-    final ids = flatten(s.nodes)
+    final ids = flattenScene(s.nodes)
         .whereType<SceneGroup>()
         .map((group) => group.id)
         .whereType<String>()
@@ -294,7 +292,7 @@ end
     }
     // Keyword tab text present.
     expect(
-      flatten(s.nodes).whereType<SceneText>().any((t) => t.text == 'loop'),
+      flattenScene(s.nodes).whereType<SceneText>().any((t) => t.text == 'loop'),
       isTrue,
     );
   });
@@ -354,7 +352,9 @@ end
   test('alt divider renders bracketed label', () {
     final s = layout('alt ok\nA->>B: a\nelse failed\nA->>B: b\nend');
     expect(
-      flatten(s.nodes).whereType<SceneText>().any((t) => t.text == '[failed]'),
+      flattenScene(
+        s.nodes,
+      ).whereType<SceneText>().any((t) => t.text == '[failed]'),
       isTrue,
     );
   });
@@ -368,7 +368,9 @@ end
 
   test('autonumber emits number badges', () {
     final s = layout('autonumber\nA->>B: one\nB->>A: two');
-    final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
+    final texts = flattenScene(
+      s.nodes,
+    ).whereType<SceneText>().map((t) => t.text);
     expect(texts, containsAll(['1', '2']));
   });
 
@@ -376,7 +378,7 @@ end
     final s = layout(
       'A->>B: x\nNote left of A: way left\nloop l\nA->>B: y\nend',
     );
-    for (final n in flatten(s.nodes)) {
+    for (final n in flattenScene(s.nodes)) {
       final b = switch (n) {
         SceneShape(geometry: RectGeometry(:final rect)) => rect,
         SceneText(:final bounds) => bounds,
@@ -394,7 +396,7 @@ end
     final s = layout('actor A\nA->>B: x');
     final actorGroup = groups(s, 'actor_A').first;
     expect(
-      flatten(
+      flattenScene(
         actorGroup.children,
       ).whereType<SceneShape>().any((n) => n.geometry is CircleGeometry),
       isTrue,

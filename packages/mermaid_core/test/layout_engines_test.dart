@@ -1,6 +1,8 @@
 /// Tests for the layout-engine selection and the tidy-tree / elk engines.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_parser.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/layout_engines.dart';
@@ -105,7 +107,7 @@ void main() {
           engine: engine,
         );
         expect(scene.nodes, isNotEmpty, reason: engine);
-        final texts = _flat(
+        final texts = flattenScene(
           scene.nodes,
         ).whereType<SceneText>().map((t) => t.text).toSet();
         expect(
@@ -125,7 +127,7 @@ void main() {
           theme: theme,
           engine: engine,
         );
-        return _flat(scene.nodes)
+        return flattenScene(scene.nodes)
             .whereType<SceneGroup>()
             .where((g) => (g.id ?? '').startsWith('edge_'))
             .expand((g) => g.children.whereType<SceneShape>())
@@ -151,9 +153,9 @@ void main() {
       );
       // Centroid of an edge group's path (its bow direction).
       Point centroid(String idPrefix) {
-        final group = _flat(scene.nodes).whereType<SceneGroup>().firstWhere(
-          (g) => (g.id ?? '').startsWith(idPrefix),
-        );
+        final group = flattenScene(scene.nodes)
+            .whereType<SceneGroup>()
+            .firstWhere((g) => (g.id ?? '').startsWith(idPrefix));
         final geo =
             group.children.whereType<SceneShape>().first.geometry
                 as PathGeometry;
@@ -214,13 +216,13 @@ flowchart TB
           theme: theme,
           engine: 'elk',
         );
-        final groups = _flat(scene.nodes).whereType<SceneGroup>();
+        final groups = flattenScene(scene.nodes).whereType<SceneGroup>();
         expect(
           groups.any((g) => g.id == 'S1'),
           isTrue,
           reason: 'cluster S1 should be laid out under elk',
         );
-        final anyCubic = _flat(scene.nodes)
+        final anyCubic = flattenScene(scene.nodes)
             .whereType<SceneGroup>()
             .where((g) => (g.id ?? '').startsWith('edge_'))
             .expand((g) => g.children.whereType<SceneShape>())
@@ -242,7 +244,7 @@ flowchart TB
           engine: engine,
         );
         final out = <String, Point>{};
-        for (final t in _flat(scene.nodes).whereType<SceneText>()) {
+        for (final t in flattenScene(scene.nodes).whereType<SceneText>()) {
           out[t.text] = Point(t.bounds.center.x, t.bounds.center.y);
         }
         return out;
@@ -260,7 +262,3 @@ flowchart TB
     });
   });
 }
-
-List<SceneNode> _flat(List<SceneNode> n) => [
-  for (final x in n) ...[x, if (x is SceneGroup) ..._flat(x.children)],
-];

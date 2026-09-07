@@ -1,11 +1,11 @@
+import 'support/rendering.dart';
+import 'support/scene.dart';
 import 'dart:io';
 import 'dart:ui' as ui;
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
 import 'package:mermaid_flutter/mermaid_flutter.dart';
-
-const _evidenceDirectory = String.fromEnvironment('MERMAID_EVIDENCE_DIR');
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -46,20 +46,19 @@ void main() {
     final bounds = highlighted.boundsOfNode('B')!;
     final fillPixel = await after.pixelAt(bounds.left + 10, bounds.top + 10);
     expect(fillPixel, const ui.Color(0xffffcc00));
-    final edge = _groups(highlighted.nodes).firstWhere(
+    final edge = groupsOf(highlighted.nodes).firstWhere(
       (group) =>
           group.role == core.SceneGroupRole.edge && group.edge?.linkIndex == 1,
     );
-    final edgeStroke = _shapes(
+    final edgeStroke = shapesOf(
       edge.children,
     ).firstWhere((shape) => shape.paintRole == core.ScenePaintRole.edgeStroke);
     final edgePoint = _pathInteriorPoint(edgeStroke.geometry);
     final edgePixel = await after.pixelAt(edgePoint.x, edgePoint.y);
     expect(edgePixel, const ui.Color(0xff0066ff));
 
-    if (_evidenceDirectory.isNotEmpty) {
-      final directory = Directory(_evidenceDirectory)
-        ..createSync(recursive: true);
+    {
+      final directory = evidenceDir();
       File('${directory.path}/before.png').writeAsBytesSync(before.png);
       File('${directory.path}/after.png').writeAsBytesSync(after.png);
     }
@@ -120,27 +119,6 @@ core.Point _pathInteriorPoint(core.ShapeGeometry geometry) {
     }
   }
   return longestPoint ?? (throw StateError('Edge path has no segment'));
-}
-
-Iterable<core.SceneGroup> _groups(Iterable<core.SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    if (node is core.SceneGroup) {
-      yield node;
-      yield* _groups(node.children);
-    }
-  }
-}
-
-Iterable<core.SceneShape> _shapes(Iterable<core.SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    switch (node) {
-      case core.SceneGroup(:final children):
-        yield* _shapes(children);
-      case core.SceneShape():
-        yield node;
-      case core.SceneText():
-    }
-  }
 }
 
 Future<_RenderedScene> _render(core.RenderScene scene) async {

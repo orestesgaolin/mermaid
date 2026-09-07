@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/src/diagrams/block/block.dart';
 import 'package:mermaid_core/src/diagrams/packet/packet.dart';
 import 'package:mermaid_core/src/diagrams/requirement/requirement.dart';
@@ -9,13 +10,6 @@ import 'package:test/test.dart';
 
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
-
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ...flatten(node.children),
-  ],
-];
 
 void main() {
   test('block padding config changes node geometry', () {
@@ -52,7 +46,7 @@ A
         textColor: Color(0xff0000ff),
       ),
     );
-    final group = flatten(
+    final group = flattenScene(
       scene.nodes,
     ).whereType<SceneGroup>().singleWhere((node) => node.id == 'R');
     final rect =
@@ -90,7 +84,9 @@ A
     expect(compact.size.height, greaterThan(normal.size.height));
     expect(compact.size.width, lessThan(normal.size.width));
     expect(
-      flatten(compact.nodes).whereType<SceneText>().map((text) => text.text),
+      flattenScene(
+        compact.nodes,
+      ).whereType<SceneText>().map((text) => text.text),
       isNot(contains('0')),
     );
     final values = PacketConfig.fromSource('''

@@ -1,6 +1,8 @@
 /// Parse + layout smoke tests for block, radar, treemap, kanban, architecture.
 library;
 
+import 'support/scene.dart';
+
 import 'dart:math' as math;
 
 import 'package:mermaid_core/src/detect.dart';
@@ -18,12 +20,8 @@ import 'package:test/test.dart';
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
-List<SceneNode> flatten(List<SceneNode> n) => [
-  for (final x in n) ...[x, if (x is SceneGroup) ...flatten(x.children)],
-];
-
 Iterable<String> texts(RenderScene s) =>
-    flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
+    flattenScene(s.nodes).whereType<SceneText>().map((t) => t.text);
 
 void main() {
   group('detect', () {
@@ -73,7 +71,7 @@ block-beta
     );
 
     Rect nodeRect(String id) {
-      final group = flatten(
+      final group = flattenScene(
         scene.nodes,
       ).whereType<SceneGroup>().firstWhere((node) => node.id == id);
       return (group.children.whereType<SceneShape>().first.geometry
@@ -111,7 +109,7 @@ block-beta
     );
 
     Rect nodeRect(String id) {
-      final group = flatten(
+      final group = flattenScene(
         scene.nodes,
       ).whereType<SceneGroup>().firstWhere((node) => node.id == id);
       return (group.children.whereType<SceneShape>().first.geometry
@@ -121,7 +119,7 @@ block-beta
 
     final source = nodeRect('A');
     final target = nodeRect('B');
-    final marker = flatten(scene.nodes)
+    final marker = flattenScene(scene.nodes)
         .whereType<SceneShape>()
         .map((shape) => shape.geometry)
         .whereType<PolygonGeometry>()
@@ -150,7 +148,7 @@ block-beta
     );
 
     Rect nodeRect(String id) {
-      final group = flatten(
+      final group = flattenScene(
         scene.nodes,
       ).whereType<SceneGroup>().firstWhere((node) => node.id == id);
       return (group.children.whereType<SceneShape>().first.geometry
@@ -191,7 +189,7 @@ block-beta
     final groupRect =
         (scene.nodes.whereType<SceneShape>().single.geometry as RectGeometry)
             .rect;
-    final circle = flatten(scene.nodes)
+    final circle = flattenScene(scene.nodes)
         .whereType<SceneGroup>()
         .firstWhere((node) => node.id == 'a')
         .children
@@ -200,12 +198,18 @@ block-beta
         .whereType<CircleGeometry>()
         .single;
 
-    expect(circle.center.y - circle.radius, greaterThanOrEqualTo(groupRect.top));
+    expect(
+      circle.center.y - circle.radius,
+      greaterThanOrEqualTo(groupRect.top),
+    );
     expect(
       circle.center.y + circle.radius,
       lessThanOrEqualTo(groupRect.bottom),
     );
-    expect(circle.center.x - circle.radius, greaterThanOrEqualTo(groupRect.left));
+    expect(
+      circle.center.x - circle.radius,
+      greaterThanOrEqualTo(groupRect.left),
+    );
     expect(circle.center.x + circle.radius, lessThanOrEqualTo(groupRect.right));
   });
 
@@ -253,7 +257,7 @@ treemap-beta
       measurer: measurer,
       theme: theme,
     );
-    final sections = flatten(scene.nodes)
+    final sections = flattenScene(scene.nodes)
         .whereType<SceneShape>()
         .where((shape) => shape.stroke?.width == 2)
         .map((shape) => (shape.geometry as RectGeometry).rect)
@@ -263,7 +267,7 @@ treemap-beta
     expect(sections.first.top, greaterThanOrEqualTo(8 + 35));
     expect(sections.first.left, greaterThanOrEqualTo(8 + 10));
 
-    final leaves = flatten(scene.nodes)
+    final leaves = flattenScene(scene.nodes)
         .whereType<SceneShape>()
         .where((shape) => shape.stroke?.width == 3)
         .map((shape) => (shape.geometry as RectGeometry).rect)
@@ -312,7 +316,7 @@ kanban
     final scene = layoutKanban(b, measurer: measurer, theme: theme);
     expect(texts(scene), containsAll(['To Do', 'Design API', 'Done']));
 
-    final rects = flatten(scene.nodes)
+    final rects = flattenScene(scene.nodes)
         .whereType<SceneShape>()
         .where((shape) => shape.geometry is RectGeometry)
         .toList();
@@ -321,7 +325,7 @@ kanban
         .where((shape) => shape.fill?.color.value == theme.background.value)
         .map((shape) => (shape.geometry as RectGeometry).rect)
         .toList();
-    final title = flatten(
+    final title = flattenScene(
       scene.nodes,
     ).whereType<SceneText>().singleWhere((text) => text.text == 'To Do');
 

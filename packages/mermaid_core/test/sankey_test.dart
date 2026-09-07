@@ -1,6 +1,8 @@
 /// Tests for the sankey diagram.
 library;
 
+import 'support/scene.dart';
+
 import 'support/fixtures.dart';
 import 'dart:math' as math;
 
@@ -17,10 +19,6 @@ import 'package:test/test.dart';
 
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
-
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
-];
 
 bool pathsCross(PathGeometry a, PathGeometry b) {
   final aStart = (a.commands.first as MoveTo).p;
@@ -67,7 +65,7 @@ double pathYAt(PathGeometry path, double x) {
       t * t * t * curve.p.y;
 }
 
-String pathSignature(RenderScene scene) => flatten(scene.nodes)
+String pathSignature(RenderScene scene) => flattenScene(scene.nodes)
     .whereType<SceneShape>()
     .where((shape) => shape.geometry is PathGeometry)
     .map((shape) {
@@ -138,7 +136,7 @@ A,C,2
         measurer: measurer,
         theme: theme,
       );
-      final rects = flatten(scene.nodes)
+      final rects = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .where((s) => s.geometry is RectGeometry)
           .toList();
@@ -148,13 +146,13 @@ A,C,2
           .toSet();
       expect(xs.length, 3);
       // Ribbons are filled bezier paths.
-      final ribbons = flatten(scene.nodes).whereType<SceneShape>().where(
+      final ribbons = flattenScene(scene.nodes).whereType<SceneShape>().where(
         (s) => s.geometry is PathGeometry && s.stroke != null,
       );
       expect(ribbons.length, 2);
       // Labels present. showValues defaults true upstream, so each node label
       // is "<name>\n<value>"; check the name on the first line.
-      final names = flatten(
+      final names = flattenScene(
         scene.nodes,
       ).whereType<SceneText>().map((t) => t.text.split('\n').first);
       expect(names, containsAll(['A', 'B', 'C']));
@@ -167,7 +165,7 @@ A,C,2
         theme: theme,
         config: const SankeyConfig(width: 300, height: 200, showValues: false),
       );
-      final rects = flatten(scene.nodes)
+      final rects = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .map((shape) => shape.geometry)
           .whereType<RectGeometry>()
@@ -177,7 +175,7 @@ A,C,2
       expect(bounds.width, closeTo(300, 1e-6));
       expect(bounds.height, lessThanOrEqualTo(200 + 1e-6));
       expect(
-        flatten(scene.nodes).whereType<SceneText>().map((t) => t.text),
+        flattenScene(scene.nodes).whereType<SceneText>().map((t) => t.text),
         ['A', 'B'],
       );
     });
@@ -186,7 +184,7 @@ A,C,2
       // d3 keys its ordinal scale by node id and only pulls the next palette
       // entry for a node it has to color itself, so B — the first node without
       // an explicit color — must still get the first palette entry.
-      Color fillOf(RenderScene scene, int index) => flatten(scene.nodes)
+      Color fillOf(RenderScene scene, int index) => flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is RectGeometry)
           .elementAt(index)
@@ -220,12 +218,12 @@ A,C,2
         theme: theme,
         config: const SankeyConfig(showValues: false),
       );
-      final rects = flatten(scene.nodes)
+      final rects = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is RectGeometry)
           .map((shape) => (shape.geometry as RectGeometry).rect)
           .toList();
-      final labels = flatten(scene.nodes).whereType<SceneText>().toList();
+      final labels = flattenScene(scene.nodes).whereType<SceneText>().toList();
       expect(labels, hasLength(rects.length));
       for (var i = 0; i < rects.length; i++) {
         expect(
@@ -244,7 +242,7 @@ A,C,2
       final source = readFixture('upstream_sankey/03.mmd');
       final sankey = parseSankey(source);
       final scene = renderer.render(source);
-      final nodes = flatten(scene.nodes);
+      final nodes = flattenScene(scene.nodes);
       final shapes = nodes
           .whereType<SceneShape>()
           .where(
@@ -329,7 +327,7 @@ A,C,2
       final compressed = renderer.render(
         source.replaceFirst('height: 600', 'height: 30\n    nodePadding: 100'),
       );
-      final compressedRibbons = flatten(compressed.nodes)
+      final compressedRibbons = flattenScene(compressed.nodes)
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is PathGeometry)
           .toList();
@@ -390,8 +388,8 @@ config:
 ---
 $data''';
 
-      final left = flatten(renderer.render(leftSource).nodes);
-      final justify = flatten(renderer.render(justifyTarget).nodes);
+      final left = flattenScene(renderer.render(leftSource).nodes);
+      final justify = flattenScene(renderer.render(justifyTarget).nodes);
       final leftRects = left
           .whereType<SceneShape>()
           .where((s) => s.geometry is RectGeometry)
@@ -473,9 +471,10 @@ sankey
 A,B,1
 ''';
 
-      SceneShape ribbon(String source) => flatten(renderer.render(source).nodes)
-          .whereType<SceneShape>()
-          .firstWhere((shape) => shape.geometry is PathGeometry);
+      SceneShape ribbon(String source) =>
+          flattenScene(renderer.render(source).nodes)
+              .whereType<SceneShape>()
+              .firstWhere((shape) => shape.geometry is PathGeometry);
 
       expect(ribbon(semiTransparent).stroke?.color, const Color(0x40ff0000));
       expect(ribbon(transparent).stroke?.color, const Color(0x00000000));
@@ -501,7 +500,7 @@ C,Z,1
 ''';
 
       final scene = renderer.render(source);
-      final rects = flatten(scene.nodes)
+      final rects = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is RectGeometry)
           .toList();
@@ -527,7 +526,7 @@ B,Y,10
 C,Z,0.1
 ''';
 
-      final nodes = flatten(renderer.render(source).nodes);
+      final nodes = flattenScene(renderer.render(source).nodes);
       final rects = nodes
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is RectGeometry)
@@ -562,7 +561,7 @@ C,Z,0.1
       final tiny = renderer.render(
         source.replaceFirst('height: 100', 'height: 6'),
       );
-      final tinyRects = flatten(tiny.nodes)
+      final tinyRects = flattenScene(tiny.nodes)
           .whereType<SceneShape>()
           .where((shape) => shape.geometry is RectGeometry)
           .toList();
@@ -586,7 +585,7 @@ A,B,1
 B,C,1
 ''';
 
-      final nodes = flatten(renderer.render(source).nodes);
+      final nodes = flattenScene(renderer.render(source).nodes);
       final rects = nodes
           .whereType<SceneShape>()
           .where((s) => s.geometry is RectGeometry)

@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/mermaid_core.dart';
 import 'package:test/test.dart';
 
@@ -16,7 +17,7 @@ kanban
     final scene = const Mermaid(
       measurer: ApproximateTextMeasurer(),
     ).render(source);
-    final nodes = _flatten(scene.nodes).toList();
+    final nodes = flattenScene(scene.nodes).toList();
     final title = nodes.whereType<SceneText>().singleWhere(
       (text) => text.text == 'Design API',
     );
@@ -47,11 +48,4 @@ kanban
     expect(link.role, SceneGroupRole.node);
     expect(link.link, 'https://example.test/t/ABC-1');
   });
-}
-
-Iterable<SceneNode> _flatten(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    yield node;
-    if (node is SceneGroup) yield* _flatten(node.children);
-  }
 }

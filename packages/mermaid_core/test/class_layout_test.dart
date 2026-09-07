@@ -1,6 +1,8 @@
 /// Structural tests for the class diagram layout.
 library;
 
+import 'support/scene.dart';
+
 import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/diagrams/class_diagram/class_layout.dart';
@@ -19,29 +21,24 @@ RenderScene layoutSource(String source) => layoutClassDiagram(
 
 RenderScene layout(String body) => layoutSource('classDiagram\n$body');
 
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
-];
-
 SceneGroup group(RenderScene s, String id) =>
-    flatten(s.nodes).whereType<SceneGroup>().firstWhere((g) => g.id == id);
+    flattenScene(s.nodes).whereType<SceneGroup>().firstWhere((g) => g.id == id);
 
 /// The edge group for the `from --> to` relation. Relation ids carry the
 /// parse index as a suffix, so looking one up by endpoints keeps the test
 /// stable when statements are added or reordered in a fixture.
-SceneGroup relationGroup(RenderScene s, String from, String to) => flatten(
-  s.nodes,
-).whereType<SceneGroup>().singleWhere(
-  (g) =>
-      g.role == SceneGroupRole.edge &&
-      (g.id?.startsWith('rel_${from}_${to}_') ?? false),
-);
+SceneGroup relationGroup(RenderScene s, String from, String to) =>
+    flattenScene(s.nodes).whereType<SceneGroup>().singleWhere(
+      (g) =>
+          g.role == SceneGroupRole.edge &&
+          (g.id?.startsWith('rel_${from}_${to}_') ?? false),
+    );
 
 /// The label group that belongs to [edge] (same parse index).
 SceneGroup relationLabel(RenderScene s, SceneGroup edge) =>
     group(s, 'rellabel_${edge.id!.split('_').last}');
 
-PathGeometry edgePath(SceneGroup edge) => flatten(edge.children)
+PathGeometry edgePath(SceneGroup edge) => flattenScene(edge.children)
     .whereType<SceneShape>()
     .map((shape) => shape.geometry)
     .whereType<PathGeometry>()
@@ -50,7 +47,7 @@ PathGeometry edgePath(SceneGroup edge) => flatten(edge.children)
 void main() {
   test('box contains name, attributes and methods in order', () {
     final s = layout('class Animal {\n+String name\n+eat() : bool\n}');
-    final texts = flatten(
+    final texts = flattenScene(
       group(s, 'Animal').children,
     ).whereType<SceneText>().toList();
     expect(texts.map((t) => t.text).toList(), [
@@ -64,15 +61,15 @@ void main() {
 
   test('separator lines split the compartments', () {
     final s = layout('class A {\n+x\n+f()\n}');
-    final seps = flatten(group(s, 'A').children).whereType<SceneShape>().where(
-      (n) => n.geometry is PathGeometry && n.fill == null,
-    );
+    final seps = flattenScene(group(s, 'A').children)
+        .whereType<SceneShape>()
+        .where((n) => n.geometry is PathGeometry && n.fill == null);
     expect(seps.length, 2);
   });
 
   test('annotation renders in guillemets above the name', () {
     final s = layout('class Shape {\n<<interface>>\n}');
-    final texts = flatten(
+    final texts = flattenScene(
       group(s, 'Shape').children,
     ).whereType<SceneText>().toList();
     expect(texts.first.text, '«interface»');
@@ -85,11 +82,13 @@ void main() {
   test('inheritance emits a hollow triangle near the parent box', () {
     final s = layout('Animal <|-- Duck');
     final rel = group(s, 'rel_Animal_Duck_0');
-    final triangle = flatten(rel.children).whereType<SceneShape>().firstWhere(
-      (n) =>
-          n.geometry is PolygonGeometry &&
-          (n.geometry as PolygonGeometry).points.length == 3,
-    );
+    final triangle = flattenScene(rel.children)
+        .whereType<SceneShape>()
+        .firstWhere(
+          (n) =>
+              n.geometry is PolygonGeometry &&
+              (n.geometry as PolygonGeometry).points.length == 3,
+        );
     expect(triangle.fill!.color, MermaidTheme.defaultTheme.background);
     final triBounds = geometryBounds(triangle.geometry);
     final parent = sceneNodeBounds(group(s, 'Animal'))!;
@@ -102,7 +101,7 @@ void main() {
   test('dashed dependency has a dash pattern', () {
     final s = layout('A ..> B');
     final rel = group(s, 'rel_A_B_0');
-    final line = flatten(rel.children).whereType<SceneShape>().firstWhere(
+    final line = flattenScene(rel.children).whereType<SceneShape>().firstWhere(
       (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
     );
     expect(line.stroke!.dash, isNotEmpty);
@@ -110,13 +109,17 @@ void main() {
 
   test('cardinalities render near both ends', () {
     final s = layout('Customer "1" --> "many" Ticket');
-    final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
+    final texts = flattenScene(
+      s.nodes,
+    ).whereType<SceneText>().map((t) => t.text);
     expect(texts, containsAll(['1', 'many']));
   });
 
   test('relation label has a background', () {
     final s = layout('A --> B : uses');
-    final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
+    final texts = flattenScene(
+      s.nodes,
+    ).whereType<SceneText>().map((t) => t.text);
     expect(texts, contains('uses'));
     final label = group(s, 'rellabel_0');
     final background = label.children.whereType<SceneShape>().single;
@@ -245,7 +248,7 @@ Bike --> Square : Logo Shape
 
     final vehicle = sceneNodeBounds(group(s, 'Vehicle'))!;
     for (final child in ['Car', 'Bike']) {
-      final triangle = flatten(relationGroup(s, 'Vehicle', child).children)
+      final triangle = flattenScene(relationGroup(s, 'Vehicle', child).children)
           .whereType<SceneShape>()
           .map((shape) => shape.geometry)
           .whereType<PolygonGeometry>()
@@ -260,7 +263,7 @@ Bike --> Square : Logo Shape
       ('Vehicle', ['Car', 'Bike']),
     ]) {
       final edgeGeometry = inheritance.$2.map((child) {
-        final geometry = flatten(
+        final geometry = flattenScene(
           relationGroup(s, inheritance.$1, child).children,
         ).whereType<SceneShape>().map((shape) => shape.geometry);
         final triangle = geometry.whereType<PolygonGeometry>().single;
@@ -294,9 +297,11 @@ Bike --> Square : Logo Shape
 
   test('note for class renders yellow box with dashed connector', () {
     final s = layout('class A\nnote for A "remember"');
-    final texts = flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
+    final texts = flattenScene(
+      s.nodes,
+    ).whereType<SceneText>().map((t) => t.text);
     expect(texts, contains('remember'));
-    final dashed = flatten(s.nodes).whereType<SceneShape>().where(
+    final dashed = flattenScene(s.nodes).whereType<SceneShape>().where(
       (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
     );
     expect(dashed, isNotEmpty);
@@ -307,7 +312,7 @@ Bike --> Square : Logo Shape
       'Animal <|-- Duck : isa\nAnimal : +int age\n'
       'namespace N {\nclass X\n}\nnote for X "hi"',
     );
-    for (final n in flatten(s.nodes)) {
+    for (final n in flattenScene(s.nodes)) {
       final b = sceneNodeBounds(n);
       if (b == null) continue;
       expect(b.left, greaterThanOrEqualTo(-0.5));

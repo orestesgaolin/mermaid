@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'dart:convert';
 import 'dart:math' as math;
 
@@ -45,21 +46,14 @@ Iterable<({String form, String source})> _configuredElkSources(
   }
 }
 
-List<SceneNode> _flatten(Iterable<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ..._flatten(node.children),
-  ],
-];
-
-SceneGroup _group(RenderScene scene, String id) => _flatten(
+SceneGroup _group(RenderScene scene, String id) => flattenScene(
   scene.nodes,
 ).whereType<SceneGroup>().singleWhere((group) => group.id == id);
 
 Rect _groupBounds(RenderScene scene, String id) {
   final group = _group(scene, id);
   Rect? bounds;
-  for (final node in _flatten(group.children)) {
+  for (final node in flattenScene(group.children)) {
     final nodeBounds = switch (node) {
       SceneText(:final bounds) => bounds,
       SceneShape(:final geometry) => geometryBounds(geometry),
@@ -72,7 +66,7 @@ Rect _groupBounds(RenderScene scene, String id) {
   return bounds!;
 }
 
-SceneText _text(RenderScene scene, String text) => _flatten(
+SceneText _text(RenderScene scene, String text) => flattenScene(
   scene.nodes,
 ).whereType<SceneText>().singleWhere((node) => node.text == text);
 
@@ -110,7 +104,7 @@ deactivate B
       for (final configured in _configuredSources('sequence', values, body)) {
         final scene = _renderer.render(configured.source);
         expect(
-          _flatten(scene.nodes).whereType<SceneGroup>().where(
+          flattenScene(scene.nodes).whereType<SceneGroup>().where(
             (group) => group.id == 'actor_A_bottom',
           ),
           isEmpty,
@@ -122,21 +116,21 @@ deactivate B
           reason: configured.form,
         );
         expect(
-          _flatten(
+          flattenScene(
             scene.nodes,
           ).whereType<SceneText>().any((text) => text.text == '1'),
           isTrue,
           reason: configured.form,
         );
         expect(
-          _flatten(scene.nodes)
+          flattenScene(scene.nodes)
               .whereType<SceneText>()
               .singleWhere((text) => text.text.startsWith('This is a long'))
               .text,
           contains('\n'),
           reason: configured.form,
         );
-        final activation = _flatten(scene.nodes)
+        final activation = flattenScene(scene.nodes)
             .whereType<SceneShape>()
             .map((shape) => shape.geometry)
             .whereType<RectGeometry>()
@@ -144,10 +138,10 @@ deactivate B
         expect(activation, isNotEmpty, reason: configured.form);
 
         final messageGroup = _group(scene, 'msg_A_B');
-        final messageText = _flatten(messageGroup.children)
+        final messageText = flattenScene(messageGroup.children)
             .whereType<SceneText>()
             .singleWhere((text) => text.text.startsWith('This is a'));
-        final messagePath = _flatten(messageGroup.children)
+        final messagePath = flattenScene(messageGroup.children)
             .whereType<SceneShape>()
             .map((shape) => shape.geometry)
             .whereType<PathGeometry>()
@@ -166,13 +160,15 @@ deactivate B
         );
 
         final note = _group(scene, 'note');
-        final noteRect = _flatten(note.children)
+        final noteRect = flattenScene(note.children)
             .whereType<SceneShape>()
             .map((shape) => shape.geometry)
             .whereType<RectGeometry>()
             .single
             .rect;
-        final noteText = _flatten(note.children).whereType<SceneText>().single;
+        final noteText = flattenScene(
+          note.children,
+        ).whereType<SceneText>().single;
         expect(
           noteText.bounds.right,
           closeTo(noteRect.right - 4, 0.01),
@@ -190,7 +186,7 @@ A->>B: nowrap: This long message stays on one line despite global wrapping
         'wrap': true,
         'width': 80,
       }, body)) {
-        final message = _flatten(_renderer.render(configured.source).nodes)
+        final message = flattenScene(_renderer.render(configured.source).nodes)
             .whereType<SceneText>()
             .singleWhere((text) => text.text.startsWith('This long message'));
         expect(message.text, isNot(contains('\n')), reason: configured.form);
@@ -207,7 +203,7 @@ A->>B: second
       for (final configured in _configuredSources('sequence', const {
         'showSequenceNumbers': true,
       }, body)) {
-        final numbers = _flatten(
+        final numbers = flattenScene(
           _renderer.render(configured.source).nodes,
         ).whereType<SceneText>().map((text) => text.text);
         expect(numbers, containsAll(['1', '2']), reason: configured.form);
@@ -251,10 +247,10 @@ flowchart TB
           ),
           reason: configured.form,
         );
-        final wrapped = _flatten(scene.nodes)
+        final wrapped = flattenScene(scene.nodes)
             .whereType<SceneText>()
             .singleWhere((text) => text.text.contains('deliberately'));
-        final baselineLabel = _flatten(baseline.nodes)
+        final baselineLabel = flattenScene(baseline.nodes)
             .whereType<SceneText>()
             .singleWhere((text) => text.text.contains('deliberately'));
         expect(
@@ -267,10 +263,10 @@ flowchart TB
           lessThan(_groupBounds(baseline, 'B').height),
           reason: configured.form,
         );
-        final edgePaths = _flatten(scene.nodes)
+        final edgePaths = flattenScene(scene.nodes)
             .whereType<SceneGroup>()
             .where((group) => group.role == SceneGroupRole.edge)
-            .expand((group) => _flatten(group.children))
+            .expand((group) => flattenScene(group.children))
             .whereType<SceneShape>()
             .map((shape) => shape.geometry)
             .whereType<PathGeometry>();
@@ -410,7 +406,7 @@ Second : b, after a, 4d
         'topAxis': true,
       }, body)) {
         final scene = _renderer.render(configured.source);
-        Rect bar(String id) => _flatten(_group(scene, id).children)
+        Rect bar(String id) => flattenScene(_group(scene, id).children)
             .whereType<SceneShape>()
             .map((shape) => shape.geometry)
             .whereType<RectGeometry>()
@@ -418,7 +414,7 @@ Second : b, after a, 4d
             .rect;
         expect(bar('a').height, 30, reason: configured.form);
         expect(bar('b').top - bar('a').top, 39, reason: configured.form);
-        final labels = _flatten(scene.nodes)
+        final labels = flattenScene(scene.nodes)
             .whereType<SceneText>()
             .map((text) => text.text)
             .where((text) => RegExp(r'^\d{2}/\d{2}$').hasMatch(text))
@@ -444,7 +440,7 @@ Second : b, after a, 4d
           reason: configured.form,
         );
         final title = _text(scene, 'Plan');
-        final topAxisLabel = _flatten(scene.nodes)
+        final topAxisLabel = flattenScene(scene.nodes)
             .whereType<SceneText>()
             .where((text) => RegExp(r'^\d{2}/\d{2}$').hasMatch(text.text))
             .reduce((a, b) => a.bounds.top < b.bounds.top ? a : b);
@@ -466,7 +462,7 @@ Start : a, 2024-01-31, 60d
         'axisFormat': '%m/%d',
         'tickInterval': '1month',
       }, body)) {
-        final labels = _flatten(
+        final labels = flattenScene(
           _renderer.render(configured.source).nodes,
         ).whereType<SceneText>().map((text) => text.text);
         expect(
@@ -486,7 +482,7 @@ Start : a, 2024-01-31, 60d
         'legendPosition': 'bottom',
       }, body)) {
         final scene = _renderer.render(configured.source);
-        final outer = _flatten(scene.nodes)
+        final outer = flattenScene(scene.nodes)
             .whereType<SceneShape>()
             .map((shape) => shape.geometry)
             .whereType<CircleGeometry>()
@@ -497,7 +493,7 @@ Start : a, 2024-01-31, 60d
               math.pow(label.bounds.center.y - outer.center.y, 2),
         );
         expect(distance, closeTo(37, 0.01), reason: configured.form);
-        final slice = _flatten(
+        final slice = flattenScene(
           _group(scene, 'slice_0').children,
         ).whereType<SceneShape>().single;
         final path = slice.geometry as PathGeometry;
@@ -539,7 +535,9 @@ commit id: right1
           'mainBranchName': 'trunk',
         }, body)) {
           final scene = _renderer.render(configured.source);
-          final texts = _flatten(scene.nodes).whereType<SceneText>().toList();
+          final texts = flattenScene(
+            scene.nodes,
+          ).whereType<SceneText>().toList();
           expect(
             texts.any((text) => text.text == 'trunk'),
             isTrue,
@@ -567,10 +565,10 @@ commit id: right1
         'showCommitLabel': false,
       }, body)) {
         final scene = _renderer.render(configured.source);
-        final texts = _flatten(scene.nodes).whereType<SceneText>();
+        final texts = flattenScene(scene.nodes).whereType<SceneText>();
         expect(texts, isEmpty, reason: configured.form);
         expect(
-          _flatten(scene.nodes).whereType<SceneShape>().where(
+          flattenScene(scene.nodes).whereType<SceneShape>().where(
             (shape) => shape.geometry is PathGeometry,
           ),
           isEmpty,

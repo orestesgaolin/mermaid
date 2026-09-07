@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/mermaid.dart';
@@ -5,13 +6,6 @@ import 'package:mermaid_core/src/render/svg_renderer.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
-
-List<SceneNode> _flatten(List<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ..._flatten(node.children),
-  ],
-];
 
 void main() {
   test('journey labels contrast with their boxes in scene and SVG', () {
@@ -28,7 +22,7 @@ journey
       measurer: ApproximateTextMeasurer(),
     ).render(source);
 
-    SceneGroup group(String id) => _flatten(
+    SceneGroup group(String id) => flattenScene(
       scene.nodes,
     ).whereType<SceneGroup>().singleWhere((node) => node.id == id);
 
@@ -78,7 +72,7 @@ journey
       ),
     ).render(source);
     Iterable<SceneText> labelsWithPrefix(String prefix) =>
-        _flatten(customScene.nodes)
+        flattenScene(customScene.nodes)
             .whereType<SceneGroup>()
             .where((node) => node.id?.startsWith(prefix) == true)
             .expand((node) => node.children.whereType<SceneText>());

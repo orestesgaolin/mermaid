@@ -2,6 +2,8 @@
 /// eventmodeling and railroad.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/detect.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/mermaid.dart';
@@ -21,23 +23,19 @@ class _TallLineMeasurer implements TextMeasurer {
 
   @override
   Size measure(String text, TextStyleSpec style, {double? maxWidth}) {
-    final s =
-        const ApproximateTextMeasurer().measure(text, style, maxWidth: maxWidth);
+    final s = const ApproximateTextMeasurer().measure(
+      text,
+      style,
+      maxWidth: maxWidth,
+    );
     return Size(s.width, s.height * 1.35);
   }
 }
 
 const _tall = Mermaid(measurer: _TallLineMeasurer());
 
-List<SceneNode> _flat(List<SceneNode> n) => [
-      for (final x in n) ...[
-        x,
-        if (x is SceneGroup) ..._flat(x.children),
-      ],
-    ];
-
 Iterable<String> _texts(RenderScene s) =>
-    _flat(s.nodes).whereType<SceneText>().map((t) => t.text);
+    flattenScene(s.nodes).whereType<SceneText>().map((t) => t.text);
 
 void main() {
   test('detect recognizes all six headers', () {
@@ -45,10 +43,14 @@ void main() {
     expect(detectDiagramType('venn-beta\n set A'), DiagramType.venn);
     expect(detectDiagramType('ishikawa-beta\n P'), DiagramType.ishikawa);
     expect(detectDiagramType('wardley-beta\n title X'), DiagramType.wardley);
-    expect(detectDiagramType('eventmodeling\n tf 01 ui A'),
-        DiagramType.eventModeling);
-    expect(detectDiagramType('railroad-diagram\n a = "x" ;'),
-        DiagramType.railroad);
+    expect(
+      detectDiagramType('eventmodeling\n tf 01 ui A'),
+      DiagramType.eventModeling,
+    );
+    expect(
+      detectDiagramType('railroad-diagram\n a = "x" ;'),
+      DiagramType.railroad,
+    );
   });
 
   test('cynefin renders domains and items', () {
@@ -81,7 +83,7 @@ venn-beta
   union Frontend,Backend["Full-stack"]
 ''');
     final labels = {
-      for (final text in _flat(s.nodes).whereType<SceneText>())
+      for (final text in flattenScene(s.nodes).whereType<SceneText>())
         if (const {'Frontend', 'Backend', 'Full-stack'}.contains(text.text))
           text.text: text.bounds.center.y,
     };
@@ -98,7 +100,7 @@ venn-beta
   set Frontend
   set Backend
 ''');
-    final texts = _flat(s.nodes).whereType<SceneText>();
+    final texts = flattenScene(s.nodes).whereType<SceneText>();
     final title = texts.singleWhere((text) => text.text == 'Skills overlap');
     final setLabel = texts.singleWhere((text) => text.text == 'Frontend');
 
@@ -132,10 +134,10 @@ venn-beta
       expect(s.size.width, 800, reason: entry.key);
       expect(s.size.height, 450, reason: entry.key);
 
-      final nodes = _flat(s.nodes);
-      final title = nodes
-          .whereType<SceneText>()
-          .singleWhere((text) => text.text == 'Three overlapping sets');
+      final nodes = flattenScene(s.nodes);
+      final title = nodes.whereType<SceneText>().singleWhere(
+        (text) => text.text == 'Three overlapping sets',
+      );
       final circles = nodes
           .whereType<SceneShape>()
           .map((shape) => shape.geometry)
@@ -146,12 +148,16 @@ venn-beta
       expect(title.bounds.top, greaterThanOrEqualTo(0), reason: entry.key);
       for (final c in circles) {
         final box = Rect.fromCenter(c.center, c.radius * 2, c.radius * 2);
-        final overlaps = title.bounds.left < box.right &&
+        final overlaps =
+            title.bounds.left < box.right &&
             box.left < title.bounds.right &&
             title.bounds.top < box.bottom &&
             box.top < title.bounds.bottom;
-        expect(overlaps, isFalse,
-            reason: '${entry.key}: title ${title.bounds} overlaps circle $box');
+        expect(
+          overlaps,
+          isFalse,
+          reason: '${entry.key}: title ${title.bounds} overlaps circle $box',
+        );
       }
     }
   });
@@ -175,18 +181,23 @@ ishikawa-beta
     Technology
       Old servers
 ''');
-    final nodes = _flat(s.nodes);
-    final label = nodes.whereType<SceneText>()
-        .singleWhere((text) => text.text == 'Old servers');
+    final nodes = flattenScene(s.nodes);
+    final label = nodes.whereType<SceneText>().singleWhere(
+      (text) => text.text == 'Old servers',
+    );
     // The only thin horizontal segment is the sub-bone: the spine is 2px wide
     // and the cause branch is diagonal.
-    final bone = nodes.whereType<SceneShape>()
+    final bone = nodes
+        .whereType<SceneShape>()
         .where((shape) => shape.stroke?.width == 1)
-        .map((shape) => shape.geometry).whereType<PathGeometry>()
+        .map((shape) => shape.geometry)
+        .whereType<PathGeometry>()
         .where((path) => path.commands.length == 2)
-        .singleWhere((path) =>
-            (path.commands.first as MoveTo).p.y ==
-            (path.commands.last as LineTo).p.y);
+        .singleWhere(
+          (path) =>
+              (path.commands.first as MoveTo).p.y ==
+              (path.commands.last as LineTo).p.y,
+        );
     final boneEnd = (bone.commands.last as LineTo).p;
     // End-anchored with a middle dominant baseline: the label hangs to the left
     // of the bone tip and is vertically centred on it.
@@ -205,20 +216,31 @@ ishikawa-beta
     Equipment
       Dirty lens
 ''');
-    final nodes = _flat(s.nodes);
+    final nodes = flattenScene(s.nodes);
     for (final name in ['Process', 'Equipment']) {
-      final label =
-          nodes.whereType<SceneText>().singleWhere((text) => text.text == name);
-      final box = nodes.whereType<SceneShape>()
-          .map((shape) => shape.geometry).whereType<RectGeometry>()
+      final label = nodes.whereType<SceneText>().singleWhere(
+        (text) => text.text == name,
+      );
+      final box = nodes
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<RectGeometry>()
           .map((geometry) => geometry.rect)
-          .singleWhere((rect) =>
-              rect.top < label.bounds.center.y &&
-              rect.bottom > label.bounds.center.y);
-      expect(label.bounds.center.x, closeTo(box.center.x, 0.001),
-          reason: '$name label is off-centre horizontally');
-      expect(label.bounds.center.y, closeTo(box.center.y, 0.001),
-          reason: '$name label is off-centre vertically');
+          .singleWhere(
+            (rect) =>
+                rect.top < label.bounds.center.y &&
+                rect.bottom > label.bounds.center.y,
+          );
+      expect(
+        label.bounds.center.x,
+        closeTo(box.center.x, 0.001),
+        reason: '$name label is off-centre horizontally',
+      );
+      expect(
+        label.bounds.center.y,
+        closeTo(box.center.y, 0.001),
+        reason: '$name label is off-centre vertically',
+      );
     }
   });
 
@@ -230,11 +252,13 @@ ishikawa-beta
       Camera was not focused correctly
       Subject moved during exposure
 ''');
-    final texts = _flat(s.nodes).whereType<SceneText>();
-    final wrapped =
-        texts.singleWhere((text) => text.text.startsWith('Camera was not'));
-    final next =
-        texts.singleWhere((text) => text.text.startsWith('Subject moved'));
+    final texts = flattenScene(s.nodes).whereType<SceneText>();
+    final wrapped = texts.singleWhere(
+      (text) => text.text.startsWith('Camera was not'),
+    );
+    final next = texts.singleWhere(
+      (text) => text.text.startsWith('Subject moved'),
+    );
     final oneLine = texts.singleWhere((text) => text.text == 'Process');
 
     // A wrapped label is taller than a single line and must not run into the
@@ -267,22 +291,27 @@ tf 04 rmo CartSummary
     // Upstream conceptual swimlanes: UI/Automation, Command/Read Model, Events.
     expect(
       _texts(s),
-      containsAll(
-        ['CartUI', 'AddItem', 'UI/Automation', 'Command/Read Model'],
-      ),
+      containsAll(['CartUI', 'AddItem', 'UI/Automation', 'Command/Read Model']),
     );
 
-    Rect entityRect(int fill) => (_flat(s.nodes)
-            .whereType<SceneShape>()
-            .singleWhere((shape) =>
-                shape.fill?.color.value == fill &&
-                shape.geometry is RectGeometry)
-            .geometry as RectGeometry)
-        .rect;
+    Rect entityRect(int fill) =>
+        (flattenScene(s.nodes)
+                    .whereType<SceneShape>()
+                    .singleWhere(
+                      (shape) =>
+                          shape.fill?.color.value == fill &&
+                          shape.geometry is RectGeometry,
+                    )
+                    .geometry
+                as RectGeometry)
+            .rect;
     final command = entityRect(0xffbcd6fe);
     final readModel = entityRect(0xffd3f1a2);
-    expect(command.right, lessThan(readModel.left),
-        reason: 'returning to a populated lane should append after its boxes');
+    expect(
+      command.right,
+      lessThan(readModel.left),
+      reason: 'returning to a populated lane should append after its boxes',
+    );
   });
 
   test('railroad renders rule alternatives', () {

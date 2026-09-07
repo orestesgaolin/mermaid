@@ -1,6 +1,8 @@
 /// Tests for xychart, mindmap, requirement and C4 diagrams.
 library;
 
+import 'support/scene.dart';
+
 import 'support/fixtures.dart';
 import 'dart:math' as math;
 
@@ -19,12 +21,8 @@ import 'package:test/test.dart';
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
-];
-
 Iterable<String> texts(RenderScene s) =>
-    flatten(s.nodes).whereType<SceneText>().map((t) => t.text);
+    flattenScene(s.nodes).whereType<SceneText>().map((t) => t.text);
 
 void main() {
   group('xychart', () {
@@ -55,7 +53,7 @@ xychart-beta
         measurer: measurer,
         theme: theme,
       );
-      final bars = flatten(s.nodes)
+      final bars = flattenScene(s.nodes)
           .whereType<SceneShape>()
           .where((n) => n.geometry is RectGeometry && n.fill != null)
           .map((n) => (n.geometry as RectGeometry).rect)
@@ -71,7 +69,7 @@ xychart-beta
         String firstTick,
         String lastTick,
       ) {
-        final allText = flatten(scene.nodes).whereType<SceneText>();
+        final allText = flattenScene(scene.nodes).whereType<SceneText>();
         final titleNode = allText.singleWhere((text) => text.text == title);
         final first = allText
             .singleWhere((text) => text.text == firstTick)
@@ -130,7 +128,7 @@ xychart-beta horizontal
       expect(chart.horizontal, isTrue);
       expect(scene.size, const Size(1000, 600));
       expect(chart.config.xAxis.labelFontSize, 20);
-      final nodes = flatten(scene.nodes);
+      final nodes = flattenScene(scene.nodes);
       final bars = nodes
           .whereType<SceneShape>()
           .where(
@@ -183,7 +181,7 @@ mindmap
         measurer: measurer,
         theme: theme,
       );
-      final groups = flatten(s.nodes)
+      final groups = flattenScene(s.nodes)
           .whereType<SceneGroup>()
           .where((g) => (g.id ?? '').startsWith('mind_'))
           .toList();
@@ -192,7 +190,7 @@ mindmap
     });
     test('layout: elk relayouts as a top-down tree (P10)', () {
       final src = 'mindmap\n  root((R))\n    A\n    B\n    C\n    D';
-      double yOf(RenderScene s, String label) => flatten(s.nodes)
+      double yOf(RenderScene s, String label) => flattenScene(s.nodes)
           .whereType<SceneText>()
           .firstWhere((t) => t.text == label)
           .bounds
@@ -271,7 +269,7 @@ requirementDiagram
         containsAll(['«Requirement»', 'r1', '«satisfies»', 'e1']),
       );
       expect(
-        flatten(s.nodes).whereType<SceneShape>().any(
+        flattenScene(s.nodes).whereType<SceneShape>().any(
           (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
         ),
         isTrue,
@@ -326,7 +324,7 @@ requirementDiagram
           theme: theme,
         );
         final boxes = <String, Rect>{};
-        for (final node in flatten(scene.nodes).whereType<SceneGroup>()) {
+        for (final node in flattenScene(scene.nodes).whereType<SceneGroup>()) {
           if (node.role != SceneGroupRole.node) continue;
           final rect = node.children
               .whereType<SceneShape>()
@@ -370,7 +368,7 @@ requirementDiagram
         measurer: measurer,
         theme: theme,
       );
-      SceneGroup group(String id) => flatten(
+      SceneGroup group(String id) => flattenScene(
         scene.nodes,
       ).whereType<SceneGroup>().singleWhere((node) => node.id == id);
       Rect nodeRect(String id) =>
@@ -478,14 +476,14 @@ C4Context
       expect(texts(s), containsAll(['User', 'System', 'Uses', 'Org']));
       // Person head circle present.
       expect(
-        flatten(
+        flattenScene(
           s.nodes,
         ).whereType<SceneShape>().any((n) => n.geometry is CircleGeometry),
         isTrue,
       );
       // Dashed boundary rect.
       expect(
-        flatten(s.nodes).whereType<SceneShape>().any(
+        flattenScene(s.nodes).whereType<SceneShape>().any(
           (n) => n.geometry is RectGeometry && n.stroke?.dash != null,
         ),
         isTrue,
@@ -502,7 +500,7 @@ C4Context
         measurer: measurer,
         theme: theme,
       );
-      final database = flatten(
+      final database = flattenScene(
         s.nodes,
       ).whereType<SceneGroup>().singleWhere((group) => group.id == 'mainframe');
       final paths = database.children
@@ -527,10 +525,10 @@ C4Deployment
         measurer: measurer,
         theme: theme,
       );
-      final boundary = flatten(s.nodes).whereType<SceneGroup>().singleWhere(
-        (group) => group.id == 'boundary_mob',
-      );
-      final mobile = flatten(
+      final boundary = flattenScene(s.nodes)
+          .whereType<SceneGroup>()
+          .singleWhere((group) => group.id == 'boundary_mob');
+      final mobile = flattenScene(
         s.nodes,
       ).whereType<SceneGroup>().singleWhere((group) => group.id == 'mobile');
       final boundaryRect =
@@ -564,7 +562,7 @@ C4Context
         measurer: measurer,
         theme: theme,
       );
-      final nodes = flatten(s.nodes);
+      final nodes = flattenScene(s.nodes);
       final description = nodes.whereType<SceneText>().singleWhere(
         (text) => text.text.startsWith('Everything the retail bank'),
       );
@@ -604,7 +602,7 @@ C4Context
         measurer: measurer,
         theme: theme,
       );
-      final nodes = flatten(s.nodes);
+      final nodes = flattenScene(s.nodes);
       final boundary = nodes.whereType<SceneGroup>().singleWhere(
         (group) => group.id == 'boundary_b',
       );
@@ -647,13 +645,14 @@ C4Context
           measurer: measurer,
           theme: theme,
         );
-        Point center(RenderScene scene, String value) => flatten(scene.nodes)
-            .whereType<SceneText>()
-            .singleWhere((text) => text.text == value)
-            .bounds
-            .center;
+        Point center(RenderScene scene, String value) =>
+            flattenScene(scene.nodes)
+                .whereType<SceneText>()
+                .singleWhere((text) => text.text == value)
+                .bounds
+                .center;
         Point relationMidpoint(RenderScene scene) {
-          final relation = flatten(scene.nodes)
+          final relation = flattenScene(scene.nodes)
               .whereType<SceneGroup>()
               .singleWhere((node) => node.id == 'rel_a_b_0');
           final points =
@@ -698,7 +697,7 @@ C4Context
         measurer: measurer,
         theme: theme,
       );
-      final nodes = flatten(scene.nodes);
+      final nodes = flattenScene(scene.nodes);
       SceneGroup group(String id) =>
           nodes.whereType<SceneGroup>().singleWhere((node) => node.id == id);
       bool overlaps(Rect a, Rect b) =>
@@ -895,7 +894,7 @@ C4Context
           measurer: measurer,
           theme: theme,
         );
-        final nodes = flatten(scene.nodes);
+        final nodes = flattenScene(scene.nodes);
         final relation = nodes.whereType<SceneGroup>().singleWhere(
           (node) => node.id == 'rel_db_db2_5',
         );

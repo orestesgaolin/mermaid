@@ -1,6 +1,8 @@
 /// Tests for the packet diagram.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/detect.dart';
 import 'package:mermaid_core/src/diagrams/packet/packet.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
@@ -11,13 +13,6 @@ import 'package:test/test.dart';
 
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
-
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
 
 void main() {
   test('detects packet / packet-beta', () {
@@ -49,8 +44,10 @@ packet
     });
 
     test('rejects malformed field', () {
-      expect(() => parsePacket('packet\nnonsense'),
-          throwsA(isA<MermaidParseException>()));
+      expect(
+        () => parsePacket('packet\nnonsense'),
+        throwsA(isA<MermaidParseException>()),
+      );
     });
   });
 
@@ -68,8 +65,9 @@ packet
           .toList();
       expect(blocks.length, 2);
       // Both segments are labelled.
-      final texts =
-          flatten(scene.nodes).whereType<SceneText>().map((t) => t.text);
+      final texts = flattenScene(
+        scene.nodes,
+      ).whereType<SceneText>().map((t) => t.text);
       expect(texts.where((t) => t == 'Wide').length, 2);
       // Bit markers 0, 31, 32, 63 present.
       expect(texts.toSet().containsAll({'0', '31', '32', '63'}), isTrue);

@@ -35,9 +35,8 @@ const _budgetReviewSource = '''flowchart TD
   br_confirmation -->|"done"| br_done''';
 
 void main() {
-  testWidgets('long consumer edge label uses painted path arc midpoint', (
-    tester,
-  ) async {
+  TestWidgetsFlutterBinding.ensureInitialized();
+  test('long consumer edge label uses painted path arc midpoint', () {
     final scene = core.Mermaid(
       measurer: const FlutterTextMeasurer(),
     ).render(_budgetReviewSource);
@@ -64,9 +63,7 @@ void main() {
     );
   });
 
-  testWidgets('midpoint collision adjustment stays clear of nodes', (
-    tester,
-  ) async {
+  test('midpoint collision adjustment stays clear of nodes', () {
     final scene = core.Mermaid(
       measurer: const FlutterTextMeasurer(),
     ).render(_budgetReviewSource);

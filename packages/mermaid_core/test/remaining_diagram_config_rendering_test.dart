@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'dart:convert';
 
 import 'package:mermaid_core/mermaid_core.dart';
@@ -16,13 +17,6 @@ Iterable<String> _configuredSources(
       .join('\n');
   yield '---\nconfig:\n  $diagramKey:\n$yaml\n---\n$body';
 }
-
-List<SceneNode> _flatten(Iterable<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ..._flatten(node.children),
-  ],
-];
 
 void main() {
   group(
@@ -46,7 +40,7 @@ Kettle -> Power
           'showGrid': true,
         }, body)) {
           final scene = _renderer.render(source);
-          final nodes = _flatten(scene.nodes);
+          final nodes = flattenScene(scene.nodes);
           expect(scene.size, const Size(720, 480));
           expect(
             nodes
@@ -89,13 +83,13 @@ cynefin-beta
           'seed': 42,
         }, body)) {
           final scene = _renderer.render(source);
-          final texts = _flatten(scene.nodes).whereType<SceneText>();
+          final texts = flattenScene(scene.nodes).whereType<SceneText>();
           expect(scene.size, const Size(664, 444));
           expect(
             texts.map((text) => text.text),
             isNot(contains('Best Practices')),
           );
-          final fold = _flatten(scene.nodes)
+          final fold = flattenScene(scene.nodes)
               .whereType<SceneShape>()
               .where((shape) => shape.stroke?.dash?.join(',') == '6.0,3.0')
               .map((shape) => shape.geometry)

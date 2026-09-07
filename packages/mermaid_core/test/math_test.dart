@@ -4,6 +4,8 @@
 /// here we check the adaptation + the flowchart integration.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_parser.dart';
@@ -19,15 +21,8 @@ const measurer = ApproximateTextMeasurer();
 const style = TextStyleSpec(fontFamily: 'arial', fontSize: 16);
 const black = Color(0xff000000);
 
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
-
 List<SceneShape> shapes(MathLayout ml) =>
-    flatten(ml.render(const Point(0, 0))).whereType<SceneShape>().toList();
+    flattenScene(ml.render(const Point(0, 0))).whereType<SceneShape>().toList();
 
 void main() {
   group('detection', () {
@@ -48,7 +43,9 @@ void main() {
       expect(s.every((n) => n.fill != null), isTrue);
       expect(s.any((n) => n.geometry is PathGeometry), isTrue);
       expect(
-          flatten(ml.render(const Point(0, 0))).whereType<SceneText>(), isEmpty);
+        flattenScene(ml.render(const Point(0, 0))).whereType<SceneText>(),
+        isEmpty,
+      );
     });
 
     test('superscript raises and widens vs the base', () {
@@ -60,8 +57,9 @@ void main() {
 
     test(r'\frac emits a filled rule rect (the bar)', () {
       final ml = layoutMath(r'\frac{1}{2}', style, measurer, black);
-      final rects =
-          shapes(ml).where((s) => s.geometry is RectGeometry && s.fill != null);
+      final rects = shapes(
+        ml,
+      ).where((s) => s.geometry is RectGeometry && s.fill != null);
       expect(rects, isNotEmpty);
     });
 
@@ -84,26 +82,33 @@ void main() {
     });
 
     test('a bigger expression produces more shapes than a single glyph', () {
-      expect(shapes(layoutMath(r'\frac{a+b}{c+d}', style, measurer, black)).length,
-          greaterThan(shapes(layoutMath('a', style, measurer, black)).length));
+      expect(
+        shapes(layoutMath(r'\frac{a+b}{c+d}', style, measurer, black)).length,
+        greaterThan(shapes(layoutMath('a', style, measurer, black)).length),
+      );
     });
   });
 
   group('flowchart integration', () {
     test('a math node label renders as math shapes, not literal text', () {
       final scene = layoutFlowchart(
-        parseFlowchart(r'graph LR' '\n' r'  A["$$x^2$$"]'),
+        parseFlowchart(
+          r'graph LR'
+          '\n'
+          r'  A["$$x^2$$"]',
+        ),
         measurer: measurer,
         theme: MermaidTheme.defaultTheme,
       );
-      final texts =
-          flatten(scene.nodes).whereType<SceneText>().map((t) => t.text);
+      final texts = flattenScene(
+        scene.nodes,
+      ).whereType<SceneText>().map((t) => t.text);
       // The math is rendered (as paths) — the raw source never reaches the
       // scene as literal text.
       expect(texts.any((t) => t.contains(r'$$')), isFalse);
       expect(texts.any((t) => t.contains('x^2')), isFalse);
       // Filled outline paths from the math are present.
-      expect(flatten(scene.nodes).whereType<SceneShape>(), isNotEmpty);
+      expect(flattenScene(scene.nodes).whereType<SceneShape>(), isNotEmpty);
     });
   });
 }

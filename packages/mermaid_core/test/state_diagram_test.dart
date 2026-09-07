@@ -2,6 +2,8 @@
 /// stateDiagram.spec.js.
 library;
 
+import 'support/scene.dart';
+
 import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart'
@@ -27,22 +29,18 @@ RenderScene layout(String body) => layoutStateDiagram(
 
 String stateFixture(String name) => readFixture('upstream_state/$name.mmd');
 
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-  for (final n in nodes) ...[n, if (n is SceneGroup) ...flatten(n.children)],
-];
-
 SceneGroup sceneGroup(RenderScene s, String id) =>
-    flatten(s.nodes).whereType<SceneGroup>().firstWhere((g) => g.id == id);
+    flattenScene(s.nodes).whereType<SceneGroup>().firstWhere((g) => g.id == id);
 
 PathGeometry transitionPath(RenderScene scene, String id) =>
-    flatten(sceneGroup(scene, id).children)
+    flattenScene(sceneGroup(scene, id).children)
         .whereType<SceneShape>()
         .map((shape) => shape.geometry)
         .whereType<PathGeometry>()
         .single;
 
 PolygonGeometry transitionArrow(RenderScene scene, String id) =>
-    flatten(sceneGroup(scene, id).children)
+    flattenScene(sceneGroup(scene, id).children)
         .whereType<SceneShape>()
         .map((shape) => shape.geometry)
         .whereType<PolygonGeometry>()
@@ -292,12 +290,12 @@ state Other {
   group('layout', () {
     test('start is filled circle, end is double circle', () {
       final s = layout('[*] --> A\nA --> [*]');
-      final start = flatten(
+      final start = flattenScene(
         sceneGroup(s, '__start_').children,
       ).whereType<SceneShape>().toList();
       expect(start.single.geometry, isA<CircleGeometry>());
       expect(start.single.fill, isNotNull);
-      final end = flatten(
+      final end = flattenScene(
         sceneGroup(s, '__end_').children,
       ).whereType<SceneShape>().toList();
       expect(end.length, 2);
@@ -310,14 +308,14 @@ state Other {
     });
     test('choice renders a diamond', () {
       final s = layout('state c <<choice>>\nA --> c\nc --> B : yes');
-      final shapes = flatten(
+      final shapes = flattenScene(
         sceneGroup(s, 'c').children,
       ).whereType<SceneShape>();
       expect(shapes.single.geometry, isA<PolygonGeometry>());
     });
     test('fork renders a filled bar', () {
       final s = layout('state f <<fork>>\n[*] --> f\nf --> A\nf --> B');
-      final bar = flatten(
+      final bar = flattenScene(
         sceneGroup(s, 'f').children,
       ).whereType<SceneShape>().single;
       final rect = (bar.geometry as RectGeometry).rect;
@@ -334,7 +332,9 @@ state Other {
         );
       }
       expect(
-        flatten(s.nodes).whereType<SceneText>().any((t) => t.text == 'Active'),
+        flattenScene(
+          s.nodes,
+        ).whereType<SceneText>().any((t) => t.text == 'Active'),
         isTrue,
       );
     });
@@ -344,7 +344,7 @@ state Other {
       expect(box.width, greaterThan(0));
       expect(box.height, greaterThan(0));
       expect(
-        flatten(s.nodes).whereType<SceneText>().map((t) => t.text),
+        flattenScene(s.nodes).whereType<SceneText>().map((t) => t.text),
         contains('B'),
       );
 
@@ -368,7 +368,7 @@ state Other {
       );
       final first = sceneNodeBounds(sceneGroup(s, 'First'))!;
       final second = sceneNodeBounds(sceneGroup(s, 'Second'))!;
-      final adoptedGroups = flatten(
+      final adoptedGroups = flattenScene(
         s.nodes,
       ).whereType<SceneGroup>().where((group) => group.id == '2nd').toList();
       expect(adoptedGroups, hasLength(1));
@@ -417,7 +417,7 @@ state Other {
         expect(nestedBody.green, nestedBody.blue);
 
         final rootBranch =
-            flatten(sceneGroup(s, 'trans_First_Third_2').children)
+            flattenScene(sceneGroup(s, 'trans_First_Third_2').children)
                 .whereType<SceneShape>()
                 .map((shape) => shape.geometry)
                 .whereType<PathGeometry>()
@@ -431,7 +431,7 @@ state Other {
           'trans___start_innerFirst_1st1st_4',
           'trans_1st1st_1st2nd_5',
         ]) {
-          final path = flatten(sceneGroup(s, id).children)
+          final path = flattenScene(sceneGroup(s, id).children)
               .whereType<SceneShape>()
               .map((shape) => shape.geometry)
               .whereType<PathGeometry>()
@@ -508,7 +508,9 @@ state Root {
         engine: 'dagre',
       );
       final path =
-          flatten(sceneGroup(s, 'trans___start_innerFirst_1st1st_4').children)
+          flattenScene(
+                sceneGroup(s, 'trans___start_innerFirst_1st1st_4').children,
+              )
               .whereType<SceneShape>()
               .map((shape) => shape.geometry)
               .whereType<PathGeometry>()
@@ -518,29 +520,31 @@ state Root {
     test('self-transition on composite renders a loop', () {
       final s = layout('state Active {\nIdle\n}\nActive --> Active : LOG');
       final loop = sceneGroup(s, 'trans_Active_Active_0');
-      expect(flatten(loop.children).whereType<SceneShape>(), isNotEmpty);
+      expect(flattenScene(loop.children).whereType<SceneShape>(), isNotEmpty);
       expect(
-        flatten(s.nodes).whereType<SceneText>().any((t) => t.text == 'LOG'),
+        flattenScene(
+          s.nodes,
+        ).whereType<SceneText>().any((t) => t.text == 'LOG'),
         isTrue,
       );
     });
     test('transition label has background', () {
       final s = layout('A --> B : go');
       expect(
-        flatten(s.nodes).whereType<SceneText>().any((t) => t.text == 'go'),
+        flattenScene(s.nodes).whereType<SceneText>().any((t) => t.text == 'go'),
         isTrue,
       );
     });
     test('note renders beside the state with dashed connector', () {
       final s = layout('A --> B\nnote right of A : check this');
       expect(
-        flatten(
+        flattenScene(
           s.nodes,
         ).whereType<SceneText>().any((t) => t.text == 'check this'),
         isTrue,
       );
       expect(
-        flatten(s.nodes).whereType<SceneShape>().any(
+        flattenScene(s.nodes).whereType<SceneShape>().any(
           (n) => n.geometry is PathGeometry && n.stroke?.dash != null,
         ),
         isTrue,
@@ -551,7 +555,7 @@ state Root {
         '[*] --> A\nstate A {\nx --> y\n}\nA --> A : again\n'
         'note right of A : hi',
       );
-      for (final n in flatten(s.nodes)) {
+      for (final n in flattenScene(s.nodes)) {
         final b = sceneNodeBounds(n);
         if (b == null) continue;
         expect(b.left, greaterThanOrEqualTo(-0.5));

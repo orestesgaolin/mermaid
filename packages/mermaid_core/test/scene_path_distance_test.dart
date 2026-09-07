@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/mermaid_core.dart';
 import 'package:test/test.dart';
 
@@ -51,10 +52,14 @@ void main() {
 
     test('rejects invalid curve flatness', () {
       const path = PathGeometry([MoveTo(Point.zero), LineTo(Point(1, 1))]);
-      expect(() => distanceToPath(path, Point.zero, flatness: 0),
-          throwsArgumentError);
-      expect(() => distanceToPath(path, Point.zero, flatness: double.nan),
-          throwsArgumentError);
+      expect(
+        () => distanceToPath(path, Point.zero, flatness: 0),
+        throwsArgumentError,
+      );
+      expect(
+        () => distanceToPath(path, Point.zero, flatness: double.nan),
+        throwsArgumentError,
+      );
     });
   });
 
@@ -71,9 +76,9 @@ void main() {
     final scene = const Mermaid(
       measurer: ApproximateTextMeasurer(),
     ).render(source);
-    final edges = _groups(scene.nodes)
-        .where((group) => group.role == SceneGroupRole.edge)
-        .toList();
+    final edges = groupsOf(
+      scene.nodes,
+    ).where((group) => group.role == SceneGroupRole.edge).toList();
 
     expect(
       edges.map((group) => group.edge?.linkIndex),
@@ -85,32 +90,23 @@ void main() {
     final hidden = edges.firstWhere((group) => group.edge?.linkIndex == 4);
     expect(hidden.children, isEmpty);
 
-    final labels = _groups(scene.nodes)
-        .where((group) => group.role == SceneGroupRole.edgeLabel)
-        .toList();
+    final labels = groupsOf(
+      scene.nodes,
+    ).where((group) => group.role == SceneGroupRole.edgeLabel).toList();
     expect(labels.map((group) => group.edge?.linkIndex), containsAll([1, 2]));
   });
 
   test('hand-drawn rendering preserves edge metadata', () {
-    final scene = const Mermaid(
-      measurer: ApproximateTextMeasurer(),
-    ).render("%%{init: {'look':'handDrawn','handDrawnSeed':7}}%%\n"
-        'flowchart LR\nfrom_id --> to_id');
-    final edge = _groups(scene.nodes).firstWhere(
-      (group) => group.role == SceneGroupRole.edge,
+    final scene = const Mermaid(measurer: ApproximateTextMeasurer()).render(
+      "%%{init: {'look':'handDrawn','handDrawnSeed':7}}%%\n"
+      'flowchart LR\nfrom_id --> to_id',
     );
+    final edge = groupsOf(
+      scene.nodes,
+    ).firstWhere((group) => group.role == SceneGroupRole.edge);
 
     expect(edge.edge?.fromId, 'from_id');
     expect(edge.edge?.toId, 'to_id');
     expect(edge.edge?.linkIndex, 0);
   });
-}
-
-Iterable<SceneGroup> _groups(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    if (node is SceneGroup) {
-      yield node;
-      yield* _groups(node.children);
-    }
-  }
 }

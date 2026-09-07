@@ -1,6 +1,8 @@
 /// Tests for hand-drawn (`look: 'handDrawn'`) rendering and look config.
 library;
 
+import 'support/scene.dart';
+
 import 'support/fixtures.dart';
 
 import 'package:mermaid_core/src/color.dart';
@@ -13,13 +15,6 @@ import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/text/text_style.dart';
 import 'package:test/test.dart';
 
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
-
 void main() {
   group('resolveLook', () {
     test('defaults to classic', () {
@@ -30,8 +25,9 @@ void main() {
 
     test('reads look + seed from init directive', () {
       final l = resolveLook(
-          "%%{init: {'look': 'handDrawn', 'handDrawnSeed': 42}}%%\n"
-          'graph TD\nA-->B');
+        "%%{init: {'look': 'handDrawn', 'handDrawnSeed': 42}}%%\n"
+        'graph TD\nA-->B',
+      );
       expect(l.isHandDrawn, isTrue);
       expect(l.handDrawnSeed, 42);
     });
@@ -62,7 +58,7 @@ void main() {
 
     test('keeps text untouched and expands the shape into strokes', () {
       final r = roughenScene(base, seed: 1);
-      final flat = flatten(r.nodes);
+      final flat = flattenScene(r.nodes);
       // Text survives verbatim.
       expect(flat.whereType<SceneText>().map((t) => t.text), contains('A'));
       // The single rect became multiple sketchy stroked paths (hachure + 2
@@ -75,7 +71,10 @@ void main() {
       expect(paths.length, greaterThanOrEqualTo(2));
       expect(paths.every((s) => s.stroke != null), isTrue);
       // No plain Fill rects survive — everything is stroked sketch.
-      expect(flat.whereType<SceneShape>().where((s) => s.fill != null), isEmpty);
+      expect(
+        flat.whereType<SceneShape>().where((s) => s.fill != null),
+        isEmpty,
+      );
     });
 
     test('fills a closed PathGeometry (pie wedge / radar area)', () {
@@ -96,11 +95,12 @@ void main() {
         ],
       );
       final r = roughenScene(wedge, seed: 1);
-      final paths =
-          flatten(r.nodes).whereType<SceneShape>().toList();
+      final paths = flattenScene(r.nodes).whereType<SceneShape>().toList();
       // At least one stroke path painted in the fill color (the hachure pass).
       expect(
-          paths.any((s) => s.stroke?.color == const Color(0xff3366cc)), isTrue);
+        paths.any((s) => s.stroke?.color == const Color(0xff3366cc)),
+        isTrue,
+      );
     });
 
     test('leaves a math group untouched (crisp math in hand-drawn mode)', () {
@@ -125,22 +125,24 @@ void main() {
         ],
       );
       final r = roughenScene(scene, seed: 1);
-      final mathGroup = r.nodes
-          .whereType<SceneGroup>()
-          .firstWhere((g) => g.id == mathSceneGroupId);
+      final mathGroup = r.nodes.whereType<SceneGroup>().firstWhere(
+        (g) => g.id == mathSceneGroupId,
+      );
       // Same single child, identical geometry — not exploded into sketch strokes.
       expect(mathGroup.children, hasLength(1));
       expect(identical(mathGroup.children.single, mathChild), isTrue);
     });
 
     test('is deterministic for a given seed', () {
-      String dump(RenderScene s) => flatten(s.nodes)
+      String dump(RenderScene s) => flattenScene(s.nodes)
           .whereType<SceneShape>()
           .whereType<SceneShape>()
           .map((s) => (s.geometry as PathGeometry?)?.commands.length ?? 0)
           .join(',');
-      expect(dump(roughenScene(base, seed: 7)),
-          dump(roughenScene(base, seed: 7)));
+      expect(
+        dump(roughenScene(base, seed: 7)),
+        dump(roughenScene(base, seed: 7)),
+      );
     });
   });
 
@@ -148,12 +150,15 @@ void main() {
     test('handDrawn directive routes render through the rough pass', () {
       const m = Mermaid(measurer: ApproximateTextMeasurer());
       final classic = m.render('graph TD\nA[Hi]-->B[Yo]');
-      final hand =
-          m.render("%%{init: {'look':'handDrawn'}}%%\ngraph TD\nA[Hi]-->B[Yo]");
+      final hand = m.render(
+        "%%{init: {'look':'handDrawn'}}%%\ngraph TD\nA[Hi]-->B[Yo]",
+      );
       // Hand-drawn explodes each shape into many sketchy strokes, so the node
       // count is strictly higher than the classic render.
-      expect(flatten(hand.nodes).length,
-          greaterThan(flatten(classic.nodes).length));
+      expect(
+        flattenScene(hand.nodes).length,
+        greaterThan(flattenScene(classic.nodes).length),
+      );
     });
 
     test('sketching sankey lanes keeps their gradient and multiply blend', () {
@@ -163,18 +168,22 @@ void main() {
       // flat fallback colour and crossings paint over each other.
       const renderer = Mermaid(measurer: ApproximateTextMeasurer());
       final classic = renderer.render(readFixture('upstream_sankey/03.mmd'));
-      final classicRibbons = flatten(classic.nodes)
+      final classicRibbons = flattenScene(classic.nodes)
           .whereType<SceneShape>()
           .where((s) => s.stroke?.gradient != null)
           .toList();
-      expect(classicRibbons, isNotEmpty,
-          reason: 'fixture must produce gradient lanes to begin with');
+      expect(
+        classicRibbons,
+        isNotEmpty,
+        reason: 'fixture must produce gradient lanes to begin with',
+      );
 
-      final sketched = flatten(roughenScene(classic, seed: 3).nodes)
-          .whereType<SceneShape>()
+      final sketched = flattenScene(
+        roughenScene(classic, seed: 3).nodes,
+      ).whereType<SceneShape>().toList();
+      final sketchedRibbons = sketched
+          .where((s) => s.stroke?.gradient != null)
           .toList();
-      final sketchedRibbons =
-          sketched.where((s) => s.stroke?.gradient != null).toList();
 
       expect(sketchedRibbons, hasLength(classicRibbons.length));
       expect(
@@ -203,9 +212,9 @@ graph TD
   B --> D[Debug]
   D --> B
 ''');
-      final returnEdge = flatten(hand.nodes)
-          .whereType<SceneGroup>()
-          .firstWhere((group) => group.id == 'edge_D_B_2');
+      final returnEdge = flattenScene(
+        hand.nodes,
+      ).whereType<SceneGroup>().firstWhere((group) => group.id == 'edge_D_B_2');
 
       expect(returnEdge.children, hasLength(2));
       expect(returnEdge.children.first, isA<SceneGroup>());

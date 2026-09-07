@@ -1,3 +1,4 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/mermaid_core.dart';
 import 'package:test/test.dart';
 
@@ -31,13 +32,13 @@ void main() {
 
     expect(restyled.size, base.size);
     expect(restyled.nodeBounds, base.nodeBounds);
-    expect(_geometry(restyled.nodes), _geometry(base.nodes));
+    expect(sceneGeometry(restyled), sceneGeometry(base));
 
-    final node = _groups(restyled.nodes).firstWhere((g) => g.id == 'B');
-    final body = _shapes(
+    final node = groupsOf(restyled.nodes).firstWhere((g) => g.id == 'B');
+    final body = shapesOf(
       node.children,
     ).firstWhere((shape) => shape.paintRole == ScenePaintRole.nodeBody);
-    final label = _texts(
+    final label = textsOf(
       node.children,
     ).firstWhere((text) => text.paintRole == ScenePaintRole.nodeLabel);
     expect(body.fill?.color, const Color(0xffffcc00));
@@ -45,10 +46,10 @@ void main() {
     expect(body.stroke?.width, 5);
     expect(label.color, const Color(0xff112233));
 
-    final edge = _groups(restyled.nodes).firstWhere(
+    final edge = groupsOf(restyled.nodes).firstWhere(
       (g) => g.role == SceneGroupRole.edge && g.edge?.linkIndex == 2,
     );
-    final stroke = _shapes(edge.children)
+    final stroke = shapesOf(edge.children)
         .firstWhere((shape) => shape.paintRole == ScenePaintRole.edgeStroke)
         .stroke!;
     expect(stroke.color, const Color(0xff0066ff));
@@ -82,8 +83,10 @@ flowchart LR
       },
     );
 
-    final node = _groups(restyled.nodes).firstWhere((group) => group.id == 'A');
-    final shapes = _shapes(node.children).toList();
+    final node = groupsOf(
+      restyled.nodes,
+    ).firstWhere((group) => group.id == 'A');
+    final shapes = shapesOf(node.children).toList();
     final fillStrokes = shapes.where(
       (shape) => shape.paintRole == ScenePaintRole.nodeFill,
     );
@@ -130,7 +133,7 @@ flowchart LR
       base,
       nodes: const {'A': FlowNodePaintOverride(textColor: Color(0xff112233))},
     );
-    final shape = _shapes(restyled.nodes).single;
+    final shape = shapesOf(restyled.nodes).single;
     expect(shape.fill, isNull);
     expect(shape.stroke?.color, const Color(0xff112233));
   });
@@ -168,96 +171,9 @@ flowchart LR
       base,
       links: const {0: FlowLinkPaintOverride(strokeWidth: 6)},
     );
-    final shape = _shapes(restyled.nodes).single;
+    final shape = shapesOf(restyled.nodes).single;
     expect(shape.blendMode, SceneBlendMode.multiply);
     expect(shape.stroke?.width, 6);
     expect(shape.stroke?.gradient, same(gradient));
   });
-}
-
-String _geometry(Iterable<SceneNode> nodes) {
-  final out = StringBuffer();
-
-  void writeNodes(Iterable<SceneNode> values) {
-    for (final node in values) {
-      switch (node) {
-        case SceneGroup(:final id, :final role, :final children):
-          out.write('group($id,$role)[');
-          writeNodes(children);
-          out.write(']');
-        case SceneShape(:final geometry):
-          out.write('shape(');
-          writeGeometry(geometry, out);
-          out.write(')');
-        case SceneText(:final text, :final bounds, :final rotation):
-          out.write('text($text,$bounds,$rotation)');
-      }
-    }
-  }
-
-  writeNodes(nodes);
-  return out.toString();
-}
-
-void writeGeometry(ShapeGeometry geometry, StringBuffer out) {
-  switch (geometry) {
-    case RectGeometry(:final rect, :final rx, :final ry):
-      out.write('rect($rect,$rx,$ry)');
-    case CircleGeometry(:final center, :final radius):
-      out.write('circle($center,$radius)');
-    case EllipseGeometry(:final center, :final rx, :final ry):
-      out.write('ellipse($center,$rx,$ry)');
-    case PolygonGeometry(:final points):
-      out.write('polygon($points)');
-    case PathGeometry(:final commands):
-      out.write('path(');
-      for (final command in commands) {
-        switch (command) {
-          case MoveTo(:final p):
-            out.write('M$p');
-          case LineTo(:final p):
-            out.write('L$p');
-          case QuadTo(:final c, :final p):
-            out.write('Q$c,$p');
-          case CubicTo(:final c1, :final c2, :final p):
-            out.write('C$c1,$c2,$p');
-          case ClosePath():
-            out.write('Z');
-        }
-      }
-      out.write(')');
-  }
-}
-
-Iterable<SceneGroup> _groups(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    if (node is SceneGroup) {
-      yield node;
-      yield* _groups(node.children);
-    }
-  }
-}
-
-Iterable<SceneShape> _shapes(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    switch (node) {
-      case SceneGroup(:final children):
-        yield* _shapes(children);
-      case SceneShape():
-        yield node;
-      case SceneText():
-    }
-  }
-}
-
-Iterable<SceneText> _texts(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    switch (node) {
-      case SceneGroup(:final children):
-        yield* _texts(children);
-      case SceneText():
-        yield node;
-      case SceneShape():
-    }
-  }
 }

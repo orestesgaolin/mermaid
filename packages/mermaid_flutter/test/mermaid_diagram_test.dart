@@ -1,3 +1,5 @@
+import 'support/harness.dart';
+import 'support/scene.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mermaid_core/mermaid_core.dart' as core;
@@ -13,18 +15,9 @@ void main() {
     ).render(source);
     String? tapped;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: MermaidDiagram(
-              source: source,
-              onNodeTap: (id, link) => tapped = id,
-            ),
-          ),
-        ),
-      ),
+    await pumpDiagram(
+      tester,
+      MermaidDiagram(source: source, onNodeTap: (id, link) => tapped = id),
     );
     await tester.pump();
 
@@ -38,9 +31,7 @@ void main() {
 
   testWidgets('paint overrides reuse a 50-node base scene', (tester) async {
     var source = StringBuffer('flowchart LR\n  N0[Step 0]')
-      ..writeAll([
-        for (var i = 1; i < 50; i++) ' --> N$i[Step $i]',
-      ]);
+      ..writeAll([for (var i = 1; i < 50; i++) ' --> N$i[Step $i]']);
     var fullRenders = 0;
     var theme = core.MermaidTheme.defaultTheme;
     var nodeOverrides = const <String, core.FlowNodePaintOverride>{};
@@ -107,19 +98,18 @@ void main() {
     expect(highlighted, isNot(same(base)));
     expect(highlighted.size, base.size);
     expect(highlighted.nodeBounds, base.nodeBounds);
-    final node = _groups(highlighted.nodes).firstWhere((g) => g.id == 'N25');
-    final nodeBody = _shapes(node.children).firstWhere(
-      (shape) => shape.paintRole == core.ScenePaintRole.nodeBody,
-    );
+    final node = groupsOf(highlighted.nodes).firstWhere((g) => g.id == 'N25');
+    final nodeBody = shapesOf(
+      node.children,
+    ).firstWhere((shape) => shape.paintRole == core.ScenePaintRole.nodeBody);
     expect(nodeBody.fill?.color, const core.Color(0xffffcc00));
     expect(nodeBody.stroke?.color, const core.Color(0xffcc3300));
-    final edge = _groups(highlighted.nodes).firstWhere(
-      (g) =>
-          g.role == core.SceneGroupRole.edge && g.edge?.linkIndex == 24,
+    final edge = groupsOf(highlighted.nodes).firstWhere(
+      (g) => g.role == core.SceneGroupRole.edge && g.edge?.linkIndex == 24,
     );
-    final edgeStroke = _shapes(edge.children).firstWhere(
-      (shape) => shape.paintRole == core.ScenePaintRole.edgeStroke,
-    );
+    final edgeStroke = shapesOf(
+      edge.children,
+    ).firstWhere((shape) => shape.paintRole == core.ScenePaintRole.edgeStroke);
     expect(edgeStroke.stroke?.color, const core.Color(0xff0066ff));
     expect(edgeStroke.stroke?.width, 6);
 
@@ -143,7 +133,11 @@ void main() {
       source = StringBuffer('${source.toString()} --> N50[Step 50]');
     });
     await tester.pump();
-    expect(fullRenders, 3, reason: 'structural source changes require a complete render');
+    expect(
+      fullRenders,
+      3,
+      reason: 'structural source changes require a complete render',
+    );
     expect(deliveredScenes, hasLength(3));
   });
 }
@@ -157,25 +151,4 @@ core.RenderScene _paintedScene(WidgetTester tester) {
   );
   final paint = paints.singleWhere((value) => value.painter is ScenePainter);
   return (paint.painter! as ScenePainter).scene;
-}
-
-Iterable<core.SceneGroup> _groups(Iterable<core.SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    if (node is core.SceneGroup) {
-      yield node;
-      yield* _groups(node.children);
-    }
-  }
-}
-
-Iterable<core.SceneShape> _shapes(Iterable<core.SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    switch (node) {
-      case core.SceneGroup(:final children):
-        yield* _shapes(children);
-      case core.SceneShape():
-        yield node;
-      case core.SceneText():
-    }
-  }
 }

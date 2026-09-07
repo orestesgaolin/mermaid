@@ -1,6 +1,8 @@
 /// Tests for SVG-path parsing, the icon registry, and flowchart `@{ icon: }`.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/color.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_parser.dart';
@@ -11,13 +13,6 @@ import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
-
-List<SceneNode> flatten(List<SceneNode> nodes) => [
-      for (final n in nodes) ...[
-        n,
-        if (n is SceneGroup) ...flatten(n.children),
-      ],
-    ];
 
 void main() {
   group('parseSvgPath', () {
@@ -47,18 +42,30 @@ void main() {
       expect(lookupIcon('icon:cog'), isNotNull);
       expect(lookupIcon('icon:nope'), isNull);
       expect(lookupIcon('bogus:cog'), isNull);
-      final shapes = renderIcon('icon:cog',
-          const Rect.fromLTWH(0, 0, 40, 40), const Color(0xff000000));
+      final shapes = renderIcon(
+        'icon:cog',
+        const Rect.fromLTWH(0, 0, 40, 40),
+        const Color(0xff000000),
+      );
       expect(shapes, isNotEmpty);
-      expect(shapes.whereType<SceneShape>().every((s) => s.fill != null), isTrue);
+      expect(
+        shapes.whereType<SceneShape>().every((s) => s.fill != null),
+        isTrue,
+      );
     });
 
     test('custom pack registration', () {
-      registerIconPack(const IconPack(prefix: 'demo', icons: {
-        'box': IconDef('<path d="M0 0 H10 V10 H0 Z"/>'),
-      }));
-      final shapes = renderIcon('demo:box',
-          const Rect.fromLTWH(0, 0, 20, 20), const Color(0xff112233));
+      registerIconPack(
+        const IconPack(
+          prefix: 'demo',
+          icons: {'box': IconDef('<path d="M0 0 H10 V10 H0 Z"/>')},
+        ),
+      );
+      final shapes = renderIcon(
+        'demo:box',
+        const Rect.fromLTWH(0, 0, 20, 20),
+        const Color(0xff112233),
+      );
       expect(shapes, isNotEmpty);
     });
   });
@@ -66,7 +73,8 @@ void main() {
   group('flowchart @{ icon: }', () {
     test('parses icon attribute onto the node', () {
       final g = parseFlowchart(
-          'flowchart LR\n  A@{ icon: "icon:cloud", label: "Cloud" } --> B');
+        'flowchart LR\n  A@{ icon: "icon:cloud", label: "Cloud" } --> B',
+      );
       expect(g.nodes['A']!.icon, 'icon:cloud');
       expect(g.nodes['A']!.label, 'Cloud');
     });
@@ -77,11 +85,12 @@ void main() {
         measurer: const ApproximateTextMeasurer(),
         theme: MermaidTheme.defaultTheme,
       );
-      final texts =
-          flatten(scene.nodes).whereType<SceneText>().map((t) => t.text);
+      final texts = flattenScene(
+        scene.nodes,
+      ).whereType<SceneText>().map((t) => t.text);
       expect(texts, contains('Win'));
       // The star glyph contributes filled path shapes beyond the node body.
-      final filledPaths = flatten(scene.nodes)
+      final filledPaths = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .where((s) => s.geometry is PathGeometry && s.fill != null);
       expect(filledPaths, isNotEmpty);

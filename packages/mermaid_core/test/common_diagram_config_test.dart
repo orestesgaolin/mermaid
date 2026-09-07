@@ -1,15 +1,9 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/mermaid_core.dart';
 import 'package:mermaid_core/src/diagrams/git/git_graph.dart';
 import 'package:test/test.dart';
 
 const _renderer = Mermaid(measurer: ApproximateTextMeasurer());
-
-Iterable<SceneNode> _flatten(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    yield node;
-    if (node is SceneGroup) yield* _flatten(node.children);
-  }
-}
 
 Rect _largestRect(SceneGroup group) => group.children
     .whereType<SceneShape>()
@@ -63,10 +57,10 @@ subgraph Group
   A
 end
 ''');
-    final normalGroup = _flatten(
+    final normalGroup = flattenScene(
       normal.nodes,
     ).whereType<SceneGroup>().singleWhere((group) => group.id == 'Group');
-    final configuredGroup = _flatten(
+    final configuredGroup = flattenScene(
       configured.nodes,
     ).whereType<SceneGroup>().singleWhere((group) => group.id == 'Group');
     expect(
@@ -105,7 +99,7 @@ namespace A.B.C {
   class Item
 }
 ''');
-    final ids = _flatten(
+    final ids = flattenScene(
       hierarchical.nodes,
     ).whereType<SceneGroup>().map((group) => group.id);
     expect(
@@ -120,7 +114,7 @@ namespace A.B.C {
   class Item
 }
 ''');
-    final compactIds = _flatten(
+    final compactIds = flattenScene(
       compact.nodes,
     ).whereType<SceneGroup>().map((group) => group.id);
     expect(compactIds, contains('namespace_A.B.C'));
@@ -170,7 +164,7 @@ participant A
 A->>A: message
 Note over A: note
 ''');
-    final texts = _flatten(scene.nodes).whereType<SceneText>().toList();
+    final texts = flattenScene(scene.nodes).whereType<SceneText>().toList();
     final actorTexts = texts.where((text) => text.text == 'A');
     expect(actorTexts.every((text) => text.style.fontSize == 19), isTrue);
     expect(actorTexts.every((text) => text.style.fontWeight == 700), isTrue);
@@ -179,7 +173,7 @@ Note over A: note
       15,
     );
     expect(texts.singleWhere((text) => text.text == 'note').style.fontSize, 17);
-    final commands = _flatten(scene.nodes)
+    final commands = flattenScene(scene.nodes)
         .whereType<SceneShape>()
         .map((shape) => shape.geometry)
         .whereType<PathGeometry>()
@@ -294,7 +288,7 @@ Later: later, 2026-01-05, 2d
 $body''');
 
     double taskTop(RenderScene scene, String id) {
-      final group = _flatten(
+      final group = flattenScene(
         scene.nodes,
       ).whereType<SceneGroup>().singleWhere((group) => group.id == id);
       return (group.children.whereType<SceneShape>().first.geometry
@@ -326,7 +320,7 @@ dateFormat YYYY-MM-DD
 First: first, 2026-01-05, 2d
 Last: last, 2026-01-25, 1d
 ''');
-    final labels = _flatten(
+    final labels = flattenScene(
       scene.nodes,
     ).whereType<SceneText>().map((text) => text.text).toList();
     expect(labels.where((label) => label == 'Mon'), isNotEmpty);

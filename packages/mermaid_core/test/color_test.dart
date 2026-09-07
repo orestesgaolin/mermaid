@@ -1,12 +1,6 @@
+import 'support/scene.dart';
 import 'package:mermaid_core/mermaid_core.dart';
 import 'package:test/test.dart';
-
-Iterable<SceneNode> _flatten(Iterable<SceneNode> nodes) sync* {
-  for (final node in nodes) {
-    yield node;
-    if (node is SceneGroup) yield* _flatten(node.children);
-  }
-}
 
 void main() {
   group('Color.tryParse', () {
@@ -56,7 +50,7 @@ void main() {
       'flowchart LR\nA[Styled]\nstyle A fill:hsl(120 100% 25%)',
     );
     expect(
-      _flatten(
+      flattenScene(
         flow.nodes,
       ).whereType<SceneShape>().map((shape) => shape.fill?.color),
       contains(const Color(0xff008000)),
@@ -72,7 +66,7 @@ sankey-beta
 A,B,1
 ''');
     expect(
-      _flatten(
+      flattenScene(
         sankey.nodes,
       ).whereType<SceneShape>().map((shape) => shape.fill?.color),
       contains(const Color(0xff663399)),
@@ -84,7 +78,7 @@ flowchart TD
 A''',
     );
     expect(
-      _flatten(
+      flattenScene(
         themed.nodes,
       ).whereType<SceneShape>().map((shape) => shape.fill?.color),
       contains(const Color(0xffffff00)),

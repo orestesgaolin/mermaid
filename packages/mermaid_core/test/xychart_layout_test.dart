@@ -1,6 +1,8 @@
 /// xychart config validation and d3 scale parity.
 library;
 
+import 'support/scene.dart';
+
 import 'package:mermaid_core/src/diagrams/xychart/xychart.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
@@ -10,18 +12,11 @@ import 'package:test/test.dart';
 
 const _renderer = Mermaid(measurer: ApproximateTextMeasurer());
 
-List<SceneNode> _flatten(List<SceneNode> nodes) => [
-  for (final node in nodes) ...[
-    node,
-    if (node is SceneGroup) ..._flatten(node.children),
-  ],
-];
-
 /// The two straight axis lines a chart draws: a vertical one for the value
 /// axis and a horizontal one for the category axis. Both span their axis'
 /// scale range, so their endpoints are the range the scales map into.
 ({Point a, Point b}) _axisLine(RenderScene scene, {required bool vertical}) {
-  final lines = _flatten(scene.nodes)
+  final lines = flattenScene(scene.nodes)
       .whereType<SceneShape>()
       .map((shape) => shape.geometry)
       .whereType<PathGeometry>()
@@ -50,7 +45,7 @@ List<SceneNode> _flatten(List<SceneNode> nodes) => [
   return lines.first;
 }
 
-List<Rect> _bars(RenderScene scene) => _flatten(scene.nodes)
+List<Rect> _bars(RenderScene scene) => flattenScene(scene.nodes)
     .whereType<SceneShape>()
     .where((shape) => shape.fill != null && shape.stroke == null)
     .map((shape) => shape.geometry)
@@ -123,7 +118,7 @@ xychart-beta
       final scene = _renderer.render(
         withConfig('    xAxis:\n      tickWidth: -3\n'),
       );
-      final strokes = _flatten(scene.nodes)
+      final strokes = flattenScene(scene.nodes)
           .whereType<SceneShape>()
           .map((shape) => shape.stroke?.width)
           .whereType<double>();

@@ -1,3 +1,4 @@
+import 'support/harness.dart';
 import 'dart:ui' show PointerDeviceKind;
 
 import 'package:flutter/material.dart';
@@ -15,21 +16,15 @@ void main() {
     final hovered = <String?>[];
     String? tapped;
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: MermaidDiagram(
-              source: source,
-              hoverCursor: SystemMouseCursors.help,
-              onNodeHover: hovered.add,
-              onNodeTap: (id, _) => tapped = id,
-              nodeTooltipBuilder: (context, id) =>
-                  Material(child: Text('Tooltip $id')),
-            ),
-          ),
-        ),
+    await pumpDiagram(
+      tester,
+      MermaidDiagram(
+        source: source,
+        hoverCursor: SystemMouseCursors.help,
+        onNodeHover: hovered.add,
+        onNodeTap: (id, _) => tapped = id,
+        nodeTooltipBuilder: (context, id) =>
+            Material(child: Text('Tooltip $id')),
       ),
     );
     await tester.pump();
@@ -102,15 +97,9 @@ void main() {
     final scene = _render(source);
     final hovered = <String?>[];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: Align(
-            alignment: Alignment.topLeft,
-            child: MermaidDiagram(source: source, onNodeHover: hovered.add),
-          ),
-        ),
-      ),
+    await pumpDiagram(
+      tester,
+      MermaidDiagram(source: source, onNodeHover: hovered.add),
     );
     await tester.pump();
     final origin = tester.getTopLeft(find.byType(MermaidDiagram));
@@ -309,20 +298,13 @@ void main() {
     final scene = _render(source);
     final hovered = <String?>[];
 
-    await tester.pumpWidget(
-      MaterialApp(
-        home: Scaffold(
-          body: SizedBox(
-            width: 600,
-            height: 400,
-            child: MermaidView(
-              source: source,
-              onNodeHover: hovered.add,
-              hoverCursor: SystemMouseCursors.help,
-              nodeTooltipBuilder: (context, id) => Text('Fullscreen $id'),
-            ),
-          ),
-        ),
+    await pumpMermaidView(
+      tester,
+      MermaidView(
+        source: source,
+        onNodeHover: hovered.add,
+        hoverCursor: SystemMouseCursors.help,
+        nodeTooltipBuilder: (context, id) => Text('Fullscreen $id'),
       ),
     );
     await tester.pumpAndSettle();
