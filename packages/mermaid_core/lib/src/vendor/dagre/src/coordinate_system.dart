@@ -46,7 +46,7 @@ void _reverseY(Graph g) {
   }
   for (var e in g.edgesIterable) {
     var edge = g.edge2(e);
-    for (var p in edge.get<List<GraphPoint>>(pointsK)) {
+    for (var p in edge.get2<List<GraphPoint>>(pointsK) ?? const []) {
       p.y=-p.y;
     }
     var vv=edge.getD2(yK);
@@ -64,7 +64,10 @@ void _swapXY(Graph g) {
   for (var e in g.edgesIterable) {
     var edge = g.edge2(e);
     // Vendored fix: keep the points list typed as List<GraphPoint>.
-    edge[pointsK]=List<GraphPoint>.from(edge.get<List<GraphPoint>>(pointsK).map((e) => GraphPoint(e.y, e.x)));
+    final points = edge.get2<List<GraphPoint>>(pointsK);
+    if (points != null) {
+      edge[pointsK]=List<GraphPoint>.from(points.map((e) => GraphPoint(e.y, e.x)));
+    }
     // An edge label centered on the unrotated layout can legitimately have
     // x == 0. Presence, rather than a non-zero value, determines whether the
     // edge has label coordinates to rotate (matching dagre.js).

@@ -217,9 +217,10 @@ class _ClassLayout {
     for (var i = 0; i < diagram.notes.length; i++) {
       final target = diagram.notes[i].forClass;
       if (target != null && boxes.containsKey(target)) {
-        // minLen 0 would keep the note beside its class like upstream, but
-        // the vendored dagre crashes on zero-length edges; known delta.
-        g.addEdge(dagre.DagreEdge('__note$i', target, id: 'n$i', minLen: 1));
+        // A zero-length constraint keeps the note on the class's rank. Dagre
+        // emits no route points for this constraint; the connector is drawn
+        // directly between the two boxes below.
+        g.addEdge(dagre.DagreEdge('__note$i', target, id: 'n$i', minLen: 0));
       }
     }
 

@@ -156,7 +156,10 @@ void _updateInputGraph(Graph inputGraph, Graph layoutGraph) {
     var inputLabel = inputGraph.edge2(e);
     var layoutLabel = layoutGraph.edge2(e);
 
-    inputLabel[pointsK] = layoutLabel[pointsK];
+    final points = layoutLabel.get2<List<GraphPoint>>(pointsK);
+    if (points != null) {
+      inputLabel[pointsK] = points;
+    }
     if (layoutLabel.get2(xK) != null) {
       inputLabel[xK] = layoutLabel[xK];
       inputLabel[yK] = layoutLabel[yK];
@@ -263,10 +266,13 @@ void _translateGraph(Graph g) {
 
   for (var e in g.edgesIterable) {
     var edge = g.edge2(e);
-    edge.getL<GraphPoint>(pointsK).each((p, p1) {
-      p.x -= minX;
-      p.y -= minY;
-    });
+    final points = edge.get2<List<GraphPoint>>(pointsK);
+    if (points != null) {
+      points.each((p, p1) {
+        p.x -= minX;
+        p.y -= minY;
+      });
+    }
     if (edge.hasOwn(xK)) {
       edge[xK] = edge.getD(xK) - minX;
     }
@@ -322,7 +328,10 @@ void _reversePointsForReversedEdges(Graph g) {
   for (var e in g.edgesIterable) {
     var edge = g.edge2(e);
     if (edge[reversedK] == true) {
-      edge[pointsK] = edge.getL<GraphPoint>(pointsK).reverse2();
+      final points = edge.get2<List<GraphPoint>>(pointsK);
+      if (points != null) {
+        edge[pointsK] = points.reverse2();
+      }
     }
   }
 }

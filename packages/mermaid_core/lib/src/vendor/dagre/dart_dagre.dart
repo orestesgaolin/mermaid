@@ -91,7 +91,7 @@ DagreResult layout(DagreGraph inputGraph,
     var edge = layoutGraph.edge2(v);
     var resultEdge = inputGraph.findEdgeById(v.id!)!;
     List<Point> points = [];
-    for (var ep in edge.get(pointsK) as List<GraphPoint>) {
+    for (var ep in edge.get2<List<GraphPoint>>(pointsK) ?? const []) {
       points.add(Point(ep.x, ep.y));
     }
     resultEdge.points = points;
