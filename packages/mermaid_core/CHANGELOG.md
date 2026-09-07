@@ -1,3 +1,8 @@
+## Unreleased
+
+- Parse CSS named colors, HSL/HSLA, percentage RGB and alpha forms, with finite
+  numeric validation and channel clamping.
+
 ## 0.2.1
 
 - Version alignment with `mermaid_flutter` 0.2.1. No code changes.
