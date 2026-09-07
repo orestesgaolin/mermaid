@@ -28,6 +28,10 @@ class KanbanTask {
   String? priority;
   String? assigned;
   String? icon;
+  final classes = <String>[];
+  final styles = <String, String>{};
+  String? link;
+  String? tooltip;
 }
 
 class KanbanColumn {
@@ -42,8 +46,9 @@ class KanbanColumn {
 }
 
 class KanbanBoard {
-  const KanbanBoard(this.columns);
+  const KanbanBoard(this.columns, {this.classDefs = const {}});
   final List<KanbanColumn> columns;
+  final Map<String, Map<String, String>> classDefs;
 }
 
 /// The node id and visible label parsed from a node line.
@@ -160,6 +165,7 @@ KanbanBoard parseKanban(String source) {
   // Task ids → task, so an `id@{ ... }` block attaches to the named task even
   // when other lines intervene (upstream attaches by id).
   final tasksById = <String, KanbanTask>{};
+  final classDefs = <String, Map<String, String>>{};
 
   for (var i = 0; i < lines.length; i++) {
     final raw = lines[i];
@@ -177,9 +183,53 @@ KanbanBoard parseKanban(String source) {
 
     final trimmed = line.trim();
 
-    // `style ...` / `class ...` directives are not yet honored; skip them so
-    // they are never treated as nodes.
-    if (RegExp(r'^(style|class|click|linkStyle)\b').hasMatch(trimmed)) {
+    final classDef = RegExp(
+      r'^classDef\s+([^\s]+)\s+(.+)$',
+    ).firstMatch(trimmed);
+    if (classDef != null) {
+      final styles = _parseStyles(classDef.group(2)!);
+      for (final name in classDef.group(1)!.split(',')) {
+        classDefs[name.trim()] = styles;
+      }
+      lastTask = null;
+      continue;
+    }
+    final classStatement = RegExp(
+      r'^class\s+([^\s]+)\s+([^\s]+)\s*$',
+    ).firstMatch(trimmed);
+    if (classStatement != null) {
+      for (final id in classStatement.group(1)!.split(',')) {
+        final task = tasksById[id.trim()];
+        if (task != null) task.classes.add(classStatement.group(2)!);
+      }
+      lastTask = null;
+      continue;
+    }
+    final style = RegExp(r'^style\s+([^\s]+)\s+(.+)$').firstMatch(trimmed);
+    if (style != null) {
+      tasksById[style.group(1)!]?.styles.addAll(_parseStyles(style.group(2)!));
+      lastTask = null;
+      continue;
+    }
+    final click = RegExp(r'^click\s+(\S+)\s+([\s\S]*)$').firstMatch(trimmed);
+    if (click != null) {
+      var interaction = click.group(2)!.trim();
+      interaction = interaction.replaceFirst(RegExp(r'^href\s+'), '');
+      final url = RegExp(
+        r'^"([^"]*)"\s*(?:"([^"]*)")?',
+      ).firstMatch(interaction);
+      final task = tasksById[click.group(1)!];
+      if (task != null && url != null) {
+        task.link = url.group(1);
+        task.tooltip = url.group(2);
+      }
+      // JavaScript callbacks are not executed. Dart consumers handle task
+      // taps through MermaidDiagram.onNodeTap.
+      lastTask = null;
+      continue;
+    }
+    // Kanban has no edges, so linkStyle has no applicable target.
+    if (RegExp(r'^linkStyle\b').hasMatch(trimmed)) {
       lastTask = null;
       continue;
     }
@@ -231,7 +281,67 @@ KanbanBoard parseKanban(String source) {
     }
   }
   if (!seenHeader) throw const MermaidParseException('empty kanban source');
-  return KanbanBoard(columns);
+  return KanbanBoard(columns, classDefs: classDefs);
+}
+
+Map<String, String> _parseStyles(String text) {
+  final styles = <String, String>{};
+  var depth = 0;
+  final part = StringBuffer();
+  void addPart() {
+    final value = part.toString().trim();
+    part.clear();
+    final colon = value.indexOf(':');
+    if (colon > 0) {
+      styles[value.substring(0, colon).trim()] = value
+          .substring(colon + 1)
+          .trim();
+    }
+  }
+
+  for (final codeUnit in text.codeUnits) {
+    final char = String.fromCharCode(codeUnit);
+    if (char == '(') depth++;
+    if (char == ')') depth--;
+    if (char == ',' && depth == 0) {
+      addPart();
+    } else {
+      part.write(char);
+    }
+  }
+  addPart();
+  return styles;
+}
+
+Map<String, String> _taskStyles(KanbanBoard board, KanbanTask task) {
+  final styles = <String, String>{};
+  styles.addAll(board.classDefs['default'] ?? const {});
+  for (final className in task.classes) {
+    styles.addAll(board.classDefs[className] ?? const {});
+  }
+  styles.addAll(task.styles);
+  return styles;
+}
+
+double? _styleWidth(String? value) {
+  if (value == null) return null;
+  return double.tryParse(
+    RegExp(r'[-+]?\d*\.?\d+').firstMatch(value)?.group(0) ?? '',
+  );
+}
+
+Color? _styleColor(String? value) =>
+    value == null ? null : Color.tryParse(value);
+
+List<double>? _styleDash(String? value) {
+  if (value == null) return null;
+  final values = RegExp(r'\d*\.?\d+')
+      .allMatches(value)
+      .map((match) => double.tryParse(match.group(0)!))
+      .whereType<double>()
+      .where((number) => number >= 0)
+      .toList();
+  return values.isEmpty ? null : values;
 }
 
 /// Applies the `key: value` pairs found inside a `@{ ... }` block body.
@@ -396,12 +506,13 @@ RenderScene layoutKanban(
     final cardLayout = <_CardLayout>[];
     var y = labelTop; // top of the section box content (== upstream `top`)
     for (final task in col.cards) {
+      final styles = _taskStyles(board, task);
       final hasIcon = task.icon != null && lookupIcon(task.icon!) != null;
       final titleInset = hasIcon ? _iconSize + _iconGap : 0.0;
       final measuredTitle = measurer.measure(
         task.title,
         baseStyle,
-        maxWidth: math.max(0, cardW - titleInset),
+        maxWidth: math.max(0, cardW - 2 * _labelPadX - titleInset),
       );
       final titleSz = Size(
         measuredTitle.width + titleInset,
@@ -430,6 +541,7 @@ RenderScene layoutKanban(
           totalHeight,
           metadataGap,
           hasIcon,
+          styles,
         ),
       );
       // Advance cursor: upstream `y = item.y + bbox.height/2 + padding/2`,
@@ -472,11 +584,20 @@ RenderScene layoutKanban(
       // therefore inset equally on both sides.
       final cardX = x + (width - cardW) / 2;
       final cardRect = Rect.fromLTWH(cardX, card.y, cardW, card.totalHeight);
-      nodes.add(
+      final cardChildren = <SceneNode>[];
+      final fillColor = _styleColor(card.styles['fill']) ?? theme.background;
+      final strokeColor =
+          _styleColor(card.styles['stroke']) ?? theme.nodeBorder;
+      final textColor = _styleColor(card.styles['color']) ?? theme.textColor;
+      cardChildren.add(
         SceneShape(
           geometry: RectGeometry(cardRect, rx: 5, ry: 5),
-          fill: Fill(theme.background),
-          stroke: Stroke(color: theme.nodeBorder, width: 1),
+          fill: Fill(fillColor),
+          stroke: Stroke(
+            color: strokeColor,
+            width: _styleWidth(card.styles['stroke-width']) ?? 1,
+            dash: _styleDash(card.styles['stroke-dasharray']),
+          ),
         ),
       );
 
@@ -486,7 +607,7 @@ RenderScene layoutKanban(
         final lineX = cardRect.left + 2;
         final y1 = cardRect.top + (5 ~/ 2); // floor(rx/2), rx = 5
         final y2 = cardRect.bottom - (5 ~/ 2);
-        nodes.add(
+        cardChildren.add(
           SceneShape(
             geometry: RectGeometry(Rect.fromLTWH(lineX - 2, y1, 4, y2 - y1)),
             fill: Fill(priColor),
@@ -498,7 +619,7 @@ RenderScene layoutKanban(
       // inset of `labelPadX`). Sits in the upper band of the card.
       final titleY = cardRect.top + padding;
       if (card.hasIcon) {
-        nodes.addAll(
+        cardChildren.addAll(
           renderIcon(
             card.task.icon!,
             Rect.fromLTWH(
@@ -507,11 +628,11 @@ RenderScene layoutKanban(
               _iconSize,
               _iconSize,
             ),
-            theme.textColor,
+            textColor,
           ),
         );
       }
-      nodes.add(
+      cardChildren.add(
         SceneText(
           text: card.task.title,
           bounds: Rect.fromLTWH(
@@ -523,7 +644,7 @@ RenderScene layoutKanban(
             card.titleSize.height,
           ),
           style: baseStyle,
-          color: theme.textColor,
+          color: textColor,
           align: TextAlignH.left,
         ),
       );
@@ -540,15 +661,15 @@ RenderScene layoutKanban(
             card.ticketSize!.height,
           ),
           style: baseStyle,
-          color: theme.textColor,
+          color: textColor,
           align: TextAlignH.left,
           underline: config.ticketBaseUrl.isNotEmpty,
         );
-        nodes.add(
+        cardChildren.add(
           config.ticketBaseUrl.isEmpty
               ? ticket
               : SceneGroup(
-                  id: card.task.id,
+                  id: card.task.link == null ? card.task.id : null,
                   role: SceneGroupRole.node,
                   link: config.ticketBaseUrl.replaceFirst(
                     '#TICKET#',
@@ -562,7 +683,7 @@ RenderScene layoutKanban(
       // Assigned label (right-aligned, on the same row as the ticket).
       if (card.assignedSize != null) {
         final assignedY = titleY + card.titleSize.height + card.metadataGap;
-        nodes.add(
+        cardChildren.add(
           SceneText(
             text: card.task.assigned!,
             bounds: Rect.fromLTWH(
@@ -572,10 +693,24 @@ RenderScene layoutKanban(
               card.assignedSize!.height,
             ),
             style: baseStyle,
-            color: theme.textColor,
+            color: textColor,
             align: TextAlignH.right,
           ),
         );
+      }
+      if (card.task.link != null || card.task.tooltip != null) {
+        nodes.add(
+          SceneGroup(
+            id: card.task.id,
+            role: SceneGroupRole.node,
+            semanticLabel: card.task.title,
+            link: card.task.link,
+            tooltip: card.task.tooltip,
+            children: cardChildren,
+          ),
+        );
+      } else {
+        nodes.addAll(cardChildren);
       }
     }
   }
@@ -602,6 +737,7 @@ class _CardLayout {
     this.totalHeight,
     this.metadataGap,
     this.hasIcon,
+    this.styles,
   );
   final KanbanTask task;
   final Size titleSize;
@@ -611,4 +747,5 @@ class _CardLayout {
   final double totalHeight;
   final double metadataGap;
   final bool hasIcon;
+  final Map<String, String> styles;
 }
