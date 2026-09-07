@@ -5,20 +5,47 @@ library;
 
 import 'options.dart';
 
-/// A label attached to a node or edge. Only its measured size matters to the
-/// layout; [text] is carried through for the caller's convenience.
-class ElkLabel {
-  const ElkLabel({this.text = '', this.width = 0, this.height = 0});
+/// Position of an edge label along its directed route.
+enum ElkEdgeLabelPlacement { center, head, tail }
 
-  factory ElkLabel.fromJson(Map<String, dynamic> m) => ElkLabel(
-        text: (m['text'] ?? '').toString(),
-        width: (m['width'] as num?)?.toDouble() ?? 0,
-        height: (m['height'] as num?)?.toDouble() ?? 0,
-      );
+/// Side of the edge in its internal flow coordinate system.
+enum ElkLabelSide { above, below }
+
+/// Measured label content. Edge placement and side follow elkjs label options.
+class ElkLabel {
+  const ElkLabel({
+    this.text = '',
+    this.width = 0,
+    this.height = 0,
+    this.placement = ElkEdgeLabelPlacement.center,
+    this.side = ElkLabelSide.above,
+  });
+
+  factory ElkLabel.fromJson(Map<String, dynamic> m) {
+    final options = (m['layoutOptions'] as Map?) ?? const {};
+    Object? option(String key) => options['elk.$key'] ?? options[key];
+    return ElkLabel(
+      text: (m['text'] ?? '').toString(),
+      width: (m['width'] as num?)?.toDouble() ?? 0,
+      height: (m['height'] as num?)?.toDouble() ?? 0,
+      placement: switch ('${option('edgeLabels.placement')}'.toUpperCase()) {
+        'HEAD' => ElkEdgeLabelPlacement.head,
+        'TAIL' => ElkEdgeLabelPlacement.tail,
+        _ => ElkEdgeLabelPlacement.center,
+      },
+      side:
+          '${option('layered.edgeLabels.sideSelection')}'.toUpperCase() ==
+              'ALWAYS_DOWN'
+          ? ElkLabelSide.below
+          : ElkLabelSide.above,
+    );
+  }
 
   final String text;
   final double width;
   final double height;
+  final ElkEdgeLabelPlacement placement;
+  final ElkLabelSide side;
 }
 
 /// Which border of its node a port sits on. When null, the engine infers it
@@ -31,12 +58,20 @@ enum ElkPortSide { north, south, east, west }
 /// along the [side], ordered to reduce crossings). When a node declares no
 /// ports, edges attach to computed node sides instead.
 class ElkPort {
-  const ElkPort({required this.id, this.side, this.width = 0, this.height = 0});
+  const ElkPort({
+    required this.id,
+    this.side,
+    this.width = 0,
+    this.height = 0,
+    this.labels = const [],
+  });
 
   factory ElkPort.fromJson(Map<String, dynamic> m) {
     ElkPortSide? side;
-    final s = (m['layoutOptions'] as Map?)?['elk.port.side'] ??
-        (m['layoutOptions'] as Map?)?['port.side'] ?? m['side'];
+    final s =
+        (m['layoutOptions'] as Map?)?['elk.port.side'] ??
+        (m['layoutOptions'] as Map?)?['port.side'] ??
+        m['side'];
     if (s != null) {
       side = switch ('$s'.toUpperCase()) {
         'NORTH' => ElkPortSide.north,
@@ -51,6 +86,10 @@ class ElkPort {
       side: side,
       width: (m['width'] as num?)?.toDouble() ?? 0,
       height: (m['height'] as num?)?.toDouble() ?? 0,
+      labels: [
+        for (final l in (m['labels'] as List? ?? const []))
+          if (l is Map) ElkLabel.fromJson(l.cast<String, dynamic>()),
+      ],
     );
   }
 
@@ -58,7 +97,10 @@ class ElkPort {
   final ElkPortSide? side;
   final double width;
   final double height;
+  final List<ElkLabel> labels;
 }
+
+enum ElkNodeLabelPlacement { topLeft, topCenter, center, bottomCenter }
 
 /// A node. A leaf node carries [width]/[height]; a node with [children] is a
 /// compound node (cluster) whose size is computed by the layout.
@@ -72,12 +114,23 @@ class ElkNode {
     this.labels = const [],
     this.ports = const [],
     this.layoutOptions,
+    this.labelPlacement,
   });
 
   factory ElkNode.fromJson(Map<String, dynamic> m) {
     double num0(Object? v) => v is num ? v.toDouble() : 0;
     return ElkNode(
       id: m['id'].toString(),
+      labelPlacement:
+          switch ('${(m['layoutOptions'] as Map?)?['elk.nodeLabels.placement'] ?? (m['layoutOptions'] as Map?)?['nodeLabels.placement'] ?? ''}') {
+            final value when value.contains('V_CENTER') =>
+              ElkNodeLabelPlacement.center,
+            final value when value.contains('V_BOTTOM') =>
+              ElkNodeLabelPlacement.bottomCenter,
+            final value when value.contains('H_CENTER') =>
+              ElkNodeLabelPlacement.topCenter,
+            _ => null,
+          },
       width: num0(m['width']),
       height: num0(m['height']),
       children: _nodeList(m['children']),
@@ -109,6 +162,7 @@ class ElkNode {
 
   /// Per-node option overrides (e.g. a subgraph with its own [ElkDirection]).
   final ElkLayoutOptions? layoutOptions;
+  final ElkNodeLabelPlacement? labelPlacement;
 
   bool get isCompound => children.isNotEmpty;
 }
@@ -122,23 +176,29 @@ class ElkEdge {
     required this.sources,
     required this.targets,
     this.labels = const [],
+    this.thickness = 1,
   });
 
   factory ElkEdge.fromJson(Map<String, dynamic> m) => ElkEdge(
-        id: (m['id'] ?? '').toString(),
-        sources: [for (final s in (m['sources'] as List? ?? const [])) '$s'],
-        targets: [for (final t in (m['targets'] as List? ?? const [])) '$t'],
-        labels: [
-          if (m['labels'] is List)
-            for (final l in m['labels'] as List)
-              if (l is Map) ElkLabel.fromJson(l.cast<String, dynamic>()),
-        ],
-      );
+    id: (m['id'] ?? '').toString(),
+    sources: [for (final s in (m['sources'] as List? ?? const [])) '$s'],
+    targets: [for (final t in (m['targets'] as List? ?? const [])) '$t'],
+    thickness:
+        ((m['layoutOptions'] as Map?)?['elk.edge.thickness'] as num?)
+            ?.toDouble() ??
+        1,
+    labels: [
+      if (m['labels'] is List)
+        for (final l in m['labels'] as List)
+          if (l is Map) ElkLabel.fromJson(l.cast<String, dynamic>()),
+    ],
+  );
 
   final String id;
   final List<String> sources;
   final List<String> targets;
   final List<ElkLabel> labels;
+  final double thickness;
 
   String get source => sources.first;
   String get target => targets.first;
@@ -159,7 +219,8 @@ class ElkGraph {
     return ElkGraph(
       id: (m['id'] ?? 'root').toString(),
       layoutOptions: ElkLayoutOptions.fromElkJson(
-          (m['layoutOptions'] as Map?)?.cast<String, dynamic>() ?? const {}),
+        (m['layoutOptions'] as Map?)?.cast<String, dynamic>() ?? const {},
+      ),
       children: _nodeList(m['children']),
       edges: _edgeList(m['edges']),
     );
@@ -172,13 +233,13 @@ class ElkGraph {
 }
 
 List<ElkNode> _nodeList(Object? v) => [
-      if (v is List)
-        for (final n in v)
-          if (n is Map) ElkNode.fromJson(n.cast<String, dynamic>()),
-    ];
+  if (v is List)
+    for (final n in v)
+      if (n is Map) ElkNode.fromJson(n.cast<String, dynamic>()),
+];
 
 List<ElkEdge> _edgeList(Object? v) => [
-      if (v is List)
-        for (final e in v)
-          if (e is Map) ElkEdge.fromJson(e.cast<String, dynamic>()),
-    ];
+  if (v is List)
+    for (final e in v)
+      if (e is Map) ElkEdge.fromJson(e.cast<String, dynamic>()),
+];

@@ -14,6 +14,7 @@
 /// `// TODO(elk-faithful): ...`.
 library;
 
+import 'attached_labels.dart' show placePortLabels;
 import 'lgraph.dart';
 import 'phase.dart';
 import 'property.dart';
@@ -168,6 +169,7 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
         if (node.type == NodeType.normal) {
           _processNode(node, graph);
         }
+        if (node.type == NodeType.externalPort) placePortLabels(node);
       }
     }
   }
@@ -187,7 +189,7 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
         node, PortSide.north, portPortSpacing);
     _placeHorizontalFreePorts(
         node, PortSide.south, portPortSpacing);
-    // TODO(elk-faithful): place node labels.
+    placePortLabels(node);
   }
 
   /// Horizontal counterpart of [_placeVerticalFreePorts]. North and south

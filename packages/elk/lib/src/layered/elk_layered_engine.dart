@@ -15,6 +15,7 @@
 /// (which uses a seeded RNG). See PORTING.md.
 library;
 
+import 'attached_labels.dart';
 import '../api/graph.dart';
 import '../api/options.dart';
 import '../api/result.dart';
@@ -327,6 +328,12 @@ class _Engine {
 
     lg.setProperty(spacingPortsSurroundingTop, options.spacingPortsSurroundingTop);
     lg.setProperty(spacingPortsSurroundingBottom, options.spacingPortsSurroundingBottom);
+    lg.setProperty(labelTranspose, transpose);
+    lg.setProperty(labelMirror, dir == ElkDirection.left || dir == ElkDirection.up);
+    lg.setProperty(nodeLabelSpacing, options.spacingNodeLabel);
+    lg.setProperty(labelStackSpacing, options.spacingLabelLabel);
+    lg.setProperty(edgeLabelSpacing, options.spacingEdgeLabel);
+    lg.setProperty(portLabelSpacing, options.spacingPortLabel);
     final byId = <String, LNode>{};
     nodesByGraph[lg] = byId;
     _graphElkNodes[lg] = nodes;
@@ -339,6 +346,8 @@ class _Engine {
       final ln = LNode(lg)..identifier = n.id;
       ln.setProperty(modelOrder, _modelOrderCounter++);
       byId[n.id] = ln;
+      ln.setProperty(nodeLabelPlacement, n.labelPlacement ?? (n.isCompound ? ElkNodeLabelPlacement.topCenter : ElkNodeLabelPlacement.topLeft));
+      for (final label in n.labels) { ln.labels.add(_makeLabel(label)); }
       if (n.isCompound) {
         // Recurse: nested graph holds this node's own declared edges plus the
         // edges routed down to it by LCA assignment above.
@@ -353,9 +362,9 @@ class _Engine {
         if (n.labels.isNotEmpty) {
           var h = 0.0;
           for (final l in n.labels) {
-            if (l.height > h) h = l.height;
+            h += l.height + options.spacingLabelLabel;
           }
-          if (h > 0) _compoundBand[ln] = h + _labelBandMargin;
+          if (h > 0) _compoundBand[ln] = h - options.spacingLabelLabel + _labelBandMargin;
         }
       } else {
         origSize[ln] = (n.width, n.height);
@@ -382,6 +391,7 @@ class _Engine {
           // Port size in internal space (transposed like the node).
           lp.size.x = transpose ? ep.height : ep.width;
           lp.size.y = transpose ? ep.width : ep.height;
+          for (final label in ep.labels) { lp.labels.add(_makeLabel(label)); }
           ln.ports.add(lp);
         }
 
@@ -475,7 +485,16 @@ class _Engine {
         // full source→target chain for stitching, and mark every segment so the
         // extractor accumulates rather than emits it.
         edgeMap['__seg${_segCounter++}'] = le;
-        _attachLabels(le, e);
+        final chain = [...srcSegs, le, ...tgtSegs];
+        for (final label in e.labels) {
+          final segment = switch (label.placement) {
+            ElkEdgeLabelPlacement.center => le,
+            ElkEdgeLabelPlacement.tail => chain.first,
+            ElkEdgeLabelPlacement.head => chain.last,
+          };
+          segment.setProperty(labelEdgeThickness, e.thickness);
+          segment.labels.add(_makeLabel(label));
+        }
         _crossSegmentEdges.add(le);
         for (final s in [...srcSegs, ...tgtSegs]) {
           _crossSegmentEdges.add(s);
@@ -632,13 +651,18 @@ class _Engine {
 
   /// Copies the public edge's labels onto the [LEdge] so LabelDummyInserter can
   /// reserve space for them; sizes are in internal (RIGHT) space (transposed).
+  LLabel _makeLabel(ElkLabel label) {
+    final result = LLabel(label.text);
+    result.size.x = transpose ? label.height : label.width;
+    result.size.y = transpose ? label.width : label.height;
+    result.setProperty(labelPlacement, label.placement);
+    result.setProperty(labelSide, label.side);
+    return result;
+  }
+
   void _attachLabels(LEdge le, ElkEdge e) {
-    for (final el in e.labels) {
-      final ll = LLabel(el.text);
-      ll.size.x = transpose ? el.height : el.width;
-      ll.size.y = transpose ? el.width : el.height;
-      le.labels.add(ll);
-    }
+    le.setProperty(labelEdgeThickness, e.thickness);
+    le.labels.addAll(e.labels.map(_makeLabel));
   }
 
   /// Maps an endpoint id to the direct child of this level that contains it
@@ -721,8 +745,8 @@ class _Engine {
   /// segment runs bottom-up.
   List<ILayoutProcessor> _postCrossminProcessors() => [
         // before P4
-        InnermostNodeMarginCalculator(),
         LabelAndNodeSizeProcessor(),
+        InnermostNodeMarginCalculator(),
 
         InLayerConstraintProcessor(),
         HyperedgeDummyMerger(),
@@ -744,6 +768,7 @@ class _Engine {
   void _runProcessors(List<ILayoutProcessor> ps, LGraph lg) {
     for (final p in ps) {
       p.process(lg);
+      if (p is ReversedEdgeRestorer) placeGraphEndLabels(lg);
     }
   }
 
@@ -920,6 +945,20 @@ class _Engine {
     }
     for (final node in _placedNodes(graph)) {
       yield (node.position.x, node.position.y, node.size.x, node.size.y);
+      for (final label in node.labels) {
+        yield (node.position.x + label.position.x, node.position.y + label.position.y, label.size.x, label.size.y);
+      }
+      for (final port in node.ports) {
+        for (final label in port.labels) {
+          yield (node.position.x + port.position.x + label.position.x,
+              node.position.y + port.position.y + label.position.y, label.size.x, label.size.y);
+        }
+      }
+    }
+    for (final edge in edgesByGraph[graph]?.values ?? <LEdge>[]) {
+      for (final label in edge.labels) {
+        yield (label.position.x, label.position.y, label.size.x, label.size.y);
+      }
     }
   }
 
@@ -1021,7 +1060,8 @@ class _Engine {
       final ports = _extractDeclaredPorts(ln, x, y, w, h, parentOut);
 
       return ElkPositionedNode(
-          id: ln.identifier!, x: x, y: y, width: w, height: h, ports: ports);
+          id: ln.identifier!, x: x, y: y, width: w, height: h, ports: ports,
+          labels: _nodeLabels(ln, w, h));
     }
 
     // Compound node: its own size in output space.
@@ -1073,7 +1113,29 @@ class _Engine {
       height: oh,
       children: children,
       ports: ports,
+      labels: _nodeLabels(ln, ow, oh, compound: true),
     );
+  }
+
+  List<ElkPositionedLabel> _nodeLabels(LNode node, double width, double height,
+      {bool compound = false}) {
+    final total = node.labels.fold(0.0, (v, l) => v + (transpose ? l.size.x : l.size.y)) +
+        (node.labels.length > 1 ? (node.labels.length - 1) * options.spacingLabelLabel : 0);
+    final placement = node.getProperty(nodeLabelPlacement);
+    var y = switch (placement) {
+      ElkNodeLabelPlacement.topLeft => 0.0,
+      ElkNodeLabelPlacement.topCenter => options.spacingNodeLabel,
+      ElkNodeLabelPlacement.center => (height-total)/2,
+      ElkNodeLabelPlacement.bottomCenter => height-total-options.spacingNodeLabel,
+    };
+    return [for (final label in node.labels) (() {
+      final w = transpose ? label.size.y : label.size.x;
+      final h = transpose ? label.size.x : label.size.y;
+      final result = ElkPositionedLabel(text: label.text, x: placement == ElkNodeLabelPlacement.topLeft ? 0 : (width - w) / 2,
+          y: y, width: w, height: h);
+      y += h + options.spacingLabelLabel;
+      return result;
+    })()];
   }
 
   /// Extracts the declared [LPort]s of [ln] as [ElkPositionedPort]s, with
@@ -1115,6 +1177,15 @@ class _Engine {
         y: relY,
         width: pw,
         height: ph,
+        labels: [for (final label in lp.labels) (() {
+          final pos = parentOut(ln.position.x + lp.position.x + label.position.x,
+              ln.position.y + lp.position.y + label.position.y);
+          final w = transpose ? label.size.y : label.size.x;
+          final h = transpose ? label.size.x : label.size.y;
+          return ElkPositionedLabel(text: label.text,
+            x: pos.x - px - (dir == ElkDirection.left ? w : 0),
+            y: pos.y - py - (dir == ElkDirection.up ? h : 0), width: w, height: h);
+        })()],
       ));
     }
     return result;
@@ -1139,6 +1210,7 @@ class _Engine {
         return ElkPoint(p.x + absX, p.y + absY);
       }
 
+      placeEndLabels(le);
       final pts = <ElkPoint>[
         at(src.absoluteAnchor.x, src.absoluteAnchor.y),
         for (final b in le.bendPoints.points) at(b.x, b.y),
@@ -1150,8 +1222,8 @@ class _Engine {
             final p = at(ll.position.x, ll.position.y);
             return ElkPositionedLabel(
               text: ll.text,
-              x: p.x,
-              y: p.y,
+              x: p.x - (dir == ElkDirection.left ? (transpose ? ll.size.y : ll.size.x) : 0),
+              y: p.y - (dir == ElkDirection.up ? (transpose ? ll.size.x : ll.size.y) : 0),
               width: transpose ? ll.size.y : ll.size.x,
               height: transpose ? ll.size.x : ll.size.y,
             );

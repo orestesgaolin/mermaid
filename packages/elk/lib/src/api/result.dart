@@ -56,12 +56,14 @@ class ElkPositionedPort {
     required this.y,
     this.width = 0,
     this.height = 0,
+    this.labels = const [],
   });
   final String id;
   final double x;
   final double y;
   final double width;
   final double height;
+  final List<ElkPositionedLabel> labels;
 }
 
 /// A node after layout. [x]/[y] are the top-left corner **relative to the

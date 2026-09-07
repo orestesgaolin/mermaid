@@ -32,7 +32,13 @@ enum ElkHierarchyHandling { inherit, includeChildren, separateChildren }
 enum ElkConsiderModelOrder { none, nodesAndEdges, preferEdges, preferNodes }
 
 /// Strategy used to break cycles before layering.
-enum ElkCycleBreaking { greedy, depthFirst, interactive, modelOrder, greedyModelOrder }
+enum ElkCycleBreaking {
+  greedy,
+  depthFirst,
+  interactive,
+  modelOrder,
+  greedyModelOrder,
+}
 
 /// Immutable layout options. Defaults match ELK/elkjs for the `layered`
 /// algorithm as configured by mermaid (`spacing.baseValue` 40, Brandes–Köpf
@@ -49,6 +55,10 @@ class ElkLayoutOptions {
     this.considerModelOrder = ElkConsiderModelOrder.none,
     this.forceNodeModelOrder = false,
     this.cycleBreaking = ElkCycleBreaking.greedy,
+    this.spacingLabelLabel = 0,
+    this.spacingEdgeLabel = 2,
+    this.spacingNodeLabel = 5,
+    this.spacingPortLabel = 1,
     this.spacingPortsSurroundingTop = 0,
     this.spacingPortsSurroundingBottom = 0,
     this.spacingNodeNode,
@@ -72,6 +82,10 @@ class ElkLayoutOptions {
   final ElkCycleBreaking cycleBreaking;
 
   /// Explicit spacing overrides; when null, derived from [spacingBaseValue].
+  final double spacingLabelLabel;
+  final double spacingEdgeLabel;
+  final double spacingNodeLabel;
+  final double spacingPortLabel;
   final double spacingPortsSurroundingTop;
   final double spacingPortsSurroundingBottom;
   final double? spacingNodeNode;
@@ -97,30 +111,48 @@ class ElkLayoutOptions {
         v is num ? v.toDouble() : (v is String ? double.tryParse(v) : null);
     bool asBool(Object? v) => v == true || v == 'true';
     ElkDirection dir(Object? v) => switch ('$v'.toUpperCase()) {
-          'UP' => ElkDirection.up,
-          'LEFT' => ElkDirection.left,
-          'RIGHT' => ElkDirection.right,
-          _ => ElkDirection.down,
-        };
+      'UP' => ElkDirection.up,
+      'LEFT' => ElkDirection.left,
+      'RIGHT' => ElkDirection.right,
+      _ => ElkDirection.down,
+    };
     ElkFixedAlignment align(Object? v) => switch ('$v'.toUpperCase()) {
-          'LEFTUP' => ElkFixedAlignment.leftUp,
-          'LEFTDOWN' => ElkFixedAlignment.leftDown,
-          'RIGHTUP' => ElkFixedAlignment.rightUp,
-          'RIGHTDOWN' => ElkFixedAlignment.rightDown,
-          'BALANCED' => ElkFixedAlignment.balanced,
-          _ => ElkFixedAlignment.none,
-        };
+      'LEFTUP' => ElkFixedAlignment.leftUp,
+      'LEFTDOWN' => ElkFixedAlignment.leftDown,
+      'RIGHTUP' => ElkFixedAlignment.rightUp,
+      'RIGHTDOWN' => ElkFixedAlignment.rightDown,
+      'BALANCED' => ElkFixedAlignment.balanced,
+      _ => ElkFixedAlignment.none,
+    };
     return ElkLayoutOptions(
       algorithm: (m['elk.algorithm'] ?? m['algorithm'] ?? 'layered').toString(),
       direction: dir(m['elk.direction'] ?? m['direction']),
       spacingBaseValue: asNum(m['spacing.baseValue']) ?? 40,
-      fixedAlignment:
-          align(m['elk.layered.nodePlacement.bk.fixedAlignment']),
+      fixedAlignment: align(m['elk.layered.nodePlacement.bk.fixedAlignment']),
       mergeEdges: asBool(m['elk.layered.mergeEdges']),
-      forceNodeModelOrder:
-          asBool(m['elk.layered.crossingMinimization.forceNodeModelOrder']),
-      spacingPortsSurroundingTop: asNum(m['elk.spacing.portsSurrounding.top'] ?? m['spacing.portsSurrounding.top']) ?? 0,
-      spacingPortsSurroundingBottom: asNum(m['elk.spacing.portsSurrounding.bottom'] ?? m['spacing.portsSurrounding.bottom']) ?? 0,
+      forceNodeModelOrder: asBool(
+        m['elk.layered.crossingMinimization.forceNodeModelOrder'],
+      ),
+      spacingLabelLabel:
+          asNum(m['elk.spacing.labelLabel'] ?? m['spacing.labelLabel']) ?? 0,
+      spacingEdgeLabel:
+          asNum(m['elk.spacing.edgeLabel'] ?? m['spacing.edgeLabel']) ?? 2,
+      spacingNodeLabel:
+          asNum(m['elk.spacing.nodeLabel'] ?? m['spacing.nodeLabel']) ?? 5,
+      spacingPortLabel:
+          asNum(m['elk.spacing.portLabel'] ?? m['spacing.portLabel']) ?? 1,
+      spacingPortsSurroundingTop:
+          asNum(
+            m['elk.spacing.portsSurrounding.top'] ??
+                m['spacing.portsSurrounding.top'],
+          ) ??
+          0,
+      spacingPortsSurroundingBottom:
+          asNum(
+            m['elk.spacing.portsSurrounding.bottom'] ??
+                m['spacing.portsSurrounding.bottom'],
+          ) ??
+          0,
       spacingNodeNode: asNum(m['spacing.nodeNode']),
       spacingEdgeNode: asNum(m['spacing.edgeNode']),
       spacingNodeNodeBetweenLayers: asNum(m['spacing.nodeNodeBetweenLayers']),
@@ -138,6 +170,10 @@ class ElkLayoutOptions {
     ElkConsiderModelOrder? considerModelOrder,
     bool? forceNodeModelOrder,
     ElkCycleBreaking? cycleBreaking,
+    double? spacingLabelLabel,
+    double? spacingEdgeLabel,
+    double? spacingNodeLabel,
+    double? spacingPortLabel,
     double? spacingPortsSurroundingTop,
     double? spacingPortsSurroundingBottom,
     double? spacingNodeNode,
@@ -155,8 +191,14 @@ class ElkLayoutOptions {
       considerModelOrder: considerModelOrder ?? this.considerModelOrder,
       forceNodeModelOrder: forceNodeModelOrder ?? this.forceNodeModelOrder,
       cycleBreaking: cycleBreaking ?? this.cycleBreaking,
-      spacingPortsSurroundingTop: spacingPortsSurroundingTop ?? this.spacingPortsSurroundingTop,
-      spacingPortsSurroundingBottom: spacingPortsSurroundingBottom ?? this.spacingPortsSurroundingBottom,
+      spacingLabelLabel: spacingLabelLabel ?? this.spacingLabelLabel,
+      spacingEdgeLabel: spacingEdgeLabel ?? this.spacingEdgeLabel,
+      spacingNodeLabel: spacingNodeLabel ?? this.spacingNodeLabel,
+      spacingPortLabel: spacingPortLabel ?? this.spacingPortLabel,
+      spacingPortsSurroundingTop:
+          spacingPortsSurroundingTop ?? this.spacingPortsSurroundingTop,
+      spacingPortsSurroundingBottom:
+          spacingPortsSurroundingBottom ?? this.spacingPortsSurroundingBottom,
       spacingNodeNode: spacingNodeNode ?? this.spacingNodeNode,
       spacingEdgeNode: spacingEdgeNode ?? this.spacingEdgeNode,
       spacingNodeNodeBetweenLayers:
