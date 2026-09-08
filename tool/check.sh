@@ -12,5 +12,6 @@ flutter test packages/mermaid_flutter
 # evidence command. CI runs the demo's real test directory.
 flutter test apps/demo/test
 flutter test apps/website
+(cd packages/elk && dart pub publish --dry-run)
 (cd packages/mermaid_core && dart pub publish --dry-run)
 (cd packages/mermaid_flutter && flutter pub publish --dry-run)

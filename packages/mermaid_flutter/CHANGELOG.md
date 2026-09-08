@@ -1,7 +1,9 @@
-## Unreleased
+## 0.3.0
 
 - Expose `MermaidView.onSceneChanged`, including fullscreen views, while retaining
   the existing geometry-only notification behavior for paint overrides.
+
+- Require `mermaid_core` 0.3.0 for the configuration and layout fixes.
 
 ## 0.2.1
 

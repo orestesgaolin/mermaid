@@ -40,6 +40,16 @@ jobs:
       - name: Check tag commit is on main
         run: git merge-base --is-ancestor "$GITHUB_SHA" origin/main
 
+      - name: Check ELK release is available on pub.dev
+        shell: bash
+        run: |
+          elk_version="$(sed -n 's/^version: //p' packages/elk/pubspec.yaml)"
+          curl --fail --silent --show-error https://pub.dev/api/packages/elk > "$RUNNER_TEMP/elk-package.json"
+          if ! jq --exit-status --arg version "$elk_version" 'any(.versions[]; .version == $version)' "$RUNNER_TEMP/elk-package.json" >/dev/null; then
+            echo "Publish elk $elk_version before releasing Mermaid. Workspace dry runs do not verify hosted dependency availability."
+            exit 1
+          fi
+
       - name: Analyze, test, and check packages
         run: bash tool/check.sh
 

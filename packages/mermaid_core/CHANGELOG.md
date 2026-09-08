@@ -1,4 +1,4 @@
-## Unreleased
+## 0.3.0
 
 - Honor active per-diagram layout and style configuration through init directives
   and frontmatter, including nested flow collections. See the configuration
@@ -8,6 +8,12 @@
   numeric validation and channel clamping.
 - Honor Kanban ticket URLs and all radar margins. Keep Cynefin boundary
   randomness within 32-bit arithmetic on the Dart VM.
+
+- Add registered Kanban task icons, task styles, and interaction directives.
+- Apply requirement element styles and interaction directives.
+- Correct right-to-left Git graph layout and adjacent class-note placement.
+- Require ELK 0.2.0 for corrected compound routes, ports, labels, loops,
+  spacing, and layout strategy handling.
 
 ## 0.2.1
 

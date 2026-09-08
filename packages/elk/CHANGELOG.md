@@ -1,3 +1,23 @@
+## 0.2.0
+
+- Implement distinct INCLUDE_CHILDREN, SEPARATE_CHILDREN, and INHERIT modes,
+  including JSON aliases and independent direction/hierarchy inheritance.
+  Separated cross-boundary edges remain in the result without route sections
+  or fabricated label positions. Full coordinated hierarchy optimization
+  remains outside the supported contract.
+- Preserve deep hierarchy endpoints, labels, and orthogonal boundary routes
+  across nested directions and compound title bands.
+- Correct four-side explicit port placement, outward edge attachment, and
+  internal compound-boundary attachment. Preserve self-loop clearance beyond
+  nonzero port rectangles and reserve matching layout margins.
+- Place edge, node, and port labels; support crossing constraints and hyperedge
+  junctions; improve self-loop sizing and edge straightening.
+- Honor cycle-breaking, model-order, edge-merging, and Brandes–Köpf alignment
+  choices exposed by the public API.
+- Parse standard ELK option aliases and spacing keys while retaining legacy
+  aliases. Honor explicit asymmetric root padding in all four directions.
+- Include ports, labels, routed strokes, and loops in returned layout bounds.
+
 ## 0.1.1
 
 - Fixed explicit north/south ports attaching to
