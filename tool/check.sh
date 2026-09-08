@@ -8,7 +8,9 @@ dart analyze --fatal-infos
 dart test packages/elk
 dart test packages/mermaid_core
 flutter test packages/mermaid_flutter
-flutter test apps/demo
+# The parity corpus generator under apps/demo/tool is an explicit macOS-only
+# evidence command. CI runs the demo's real test directory.
+flutter test apps/demo/test
 flutter test apps/website
 (cd packages/mermaid_core && dart pub publish --dry-run)
 (cd packages/mermaid_flutter && flutter pub publish --dry-run)
