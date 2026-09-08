@@ -46,6 +46,7 @@ import 'intermediate_sizing.dart';
 import 'lgraph.dart';
 import 'property.dart';
 import 'p1_greedy_cycle_breaker.dart';
+import 'p1_cycle_breakers.dart';
 import 'p2_network_simplex_layerer.dart';
 import 'p3_layer_sweep_crossing_minimizer.dart';
 import 'p4_bk_node_placer.dart';
@@ -383,6 +384,16 @@ class _Engine {
 
     for (final n in nodes) {
       final ln = LNode(lg)..identifier = n.id;
+      final inputX = n.x ?? 0;
+      final inputY = n.y ?? 0;
+      final internalWidth = transpose ? n.height : n.width;
+      ln.position.x = switch (dir) {
+        ElkDirection.right => inputX,
+        ElkDirection.left => -inputX - internalWidth,
+        ElkDirection.down => inputY,
+        ElkDirection.up => -inputY - internalWidth,
+      };
+      ln.position.y = transpose ? inputX : inputY;
       ln.setProperty(modelOrder, _modelOrderCounter++);
       byId[n.id] = ln;
       ln.setProperty(nodeSizeFixed, n.fixedSize);
@@ -849,7 +860,13 @@ class _Engine {
     // before P1
     EdgeAndLayerConstraintEdgeReverser(),
     // P1
-    GreedyCycleBreaker(),
+    switch (options.cycleBreaking) {
+      ElkCycleBreaking.greedy => GreedyCycleBreaker(),
+      ElkCycleBreaking.depthFirst => DepthFirstCycleBreaker(),
+      ElkCycleBreaking.interactive => InteractiveCycleBreaker(),
+      ElkCycleBreaking.modelOrder => ModelOrderCycleBreaker(),
+      ElkCycleBreaking.greedyModelOrder => GreedyModelOrderCycleBreaker(),
+    },
     // before P2
     LayerConstraintPreprocessor(),
     LabelDummyInserter(),

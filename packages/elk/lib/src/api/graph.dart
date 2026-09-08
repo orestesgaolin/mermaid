@@ -107,6 +107,8 @@ enum ElkNodeLabelPlacement { topLeft, topCenter, center, bottomCenter }
 class ElkNode {
   const ElkNode({
     required this.id,
+    this.x,
+    this.y,
     this.width = 0,
     this.height = 0,
     this.children = const [],
@@ -127,6 +129,8 @@ class ElkNode {
     double num0(Object? v) => v is num ? v.toDouble() : 0;
     return ElkNode(
       id: m['id'].toString(),
+      x: (m['x'] as num?)?.toDouble(),
+      y: (m['y'] as num?)?.toDouble(),
       labelPlacement:
           switch ('${(m['layoutOptions'] as Map?)?['elk.nodeLabels.placement'] ?? (m['layoutOptions'] as Map?)?['nodeLabels.placement'] ?? ''}') {
             final value when value.contains('V_CENTER') =>
@@ -159,6 +163,11 @@ class ElkNode {
   }
 
   final String id;
+
+  /// Optional position from a previous layout. The interactive cycle-breaking
+  /// strategy uses this drawing order before computing the new layout.
+  final double? x;
+  final double? y;
   final double width;
   final double height;
   final List<ElkNode> children;

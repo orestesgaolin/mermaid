@@ -86,7 +86,7 @@ class GreedyCycleBreaker implements ILayoutProcessor {
             }
           }
         }
-        final maxNode = maxNodes.first; // ELK: random tie-break (see header)
+        final maxNode = chooseNodeWithMaxOutflow(maxNodes);
         _mark[maxNode.id] = nextLeft++;
         _updateNeighbors(maxNode);
         unprocessed--;
@@ -114,6 +114,10 @@ class GreedyCycleBreaker implements ILayoutProcessor {
     }
   }
 
+  /// Selects among nodes with the same maximum out-flow. ELK's
+  /// `GreedyModelOrderCycleBreaker` overrides this tie-break only.
+  LNode chooseNodeWithMaxOutflow(List<LNode> nodes) => nodes.first;
+
   void _updateNeighbors(LNode node) {
     for (final port in node.ports) {
       for (final edge in port.connectedEdges) {
@@ -126,7 +130,8 @@ class GreedyCycleBreaker implements ILayoutProcessor {
         if (_mark[index] == 0) {
           if (edge.target == connectedPort) {
             _indeg[index] -= priority + 1;
-            if (_indeg[index] <= 0 && _outdeg[index] > 0) _sources.add(endpoint);
+            if (_indeg[index] <= 0 && _outdeg[index] > 0)
+              _sources.add(endpoint);
           } else {
             _outdeg[index] -= priority + 1;
             if (_outdeg[index] <= 0 && _indeg[index] > 0) _sinks.add(endpoint);

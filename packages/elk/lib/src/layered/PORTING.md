@@ -10,7 +10,7 @@ not reject the accepted partial features below.
 | Stage | Implementation | Current behavior |
 | --- | --- | --- |
 | Graph/model and builder | `lgraph.dart`, `property.dart`, `elk_layered_engine.dart` | Public JSON graph, nested scopes, direction transforms, recursive layout and extraction |
-| Cycle breaking | `p1_greedy_cycle_breaker.dart` | Greedy cycle breaking, reversed-edge restoration |
+| Cycle breaking | `p1_greedy_cycle_breaker.dart`, `p1_cycle_breakers.dart` | Greedy, depth-first, interactive, model-order and greedy model-order strategies; reversed-edge restoration |
 | Layering | `p2_network_simplex_layerer.dart` | Network simplex with intermediate long-edge and label nodes |
 | Crossing minimization | `p3_layer_sweep_crossing_minimizer.dart` | Layer sweeps, seeded Java-compatible random generator, model order, explicit port ordering |
 | Node placement | `p4_bk_node_placer.dart` | Brandes–Köpf alignment/compaction; port anchors participate through generic endpoint coordinates |
@@ -28,6 +28,7 @@ Paths below are relative to `packages/elk/` unless they name a phase file above.
 | Labels | Edge center/head/tail roles, explicit sides and thickness clearance; node labels, outside port labels, direction-aware coordinates | [Label contract](../../../LABELS.md), `test/elk_labels_test.dart`, #52 |
 | Self-loops and sizing | Explicit side pairs, per-side loop spacing, content sizing constraints and BK edge straightening | `test/issue54_selfloop_routing_test.dart`, #54 |
 | Advanced constraints and hyperedges | Weighted successor blocks and barycenter associates; shared-port branch expansion, critical segment splitting and junction output | `test/issue53_hyperedge_routing_test.dart`, #53 |
+| Cycle strategy | JSON and Dart select the cycle breaker; interactive ordering uses supplied node centers in the selected direction | `test/cycle_breaking_strategies_test.dart`, `test/cycle_breaking_processors_test.dart`, #64 |
 | Model order | Input order can constrain crossing minimization | `test/elk_spacing_modelorder_test.dart` |
 
 Explicit port coordinates in positioned output refer to the port rectangle's

@@ -138,6 +138,13 @@ class ElkLayoutOptions {
       spacingBaseValue: asNum(m['spacing.baseValue']) ?? 40,
       fixedAlignment: align(m['elk.layered.nodePlacement.bk.fixedAlignment']),
       mergeEdges: asBool(layeredOption('mergeEdges')),
+      cycleBreaking: switch ('${layeredOption('cycleBreaking.strategy')}'.toUpperCase()) {
+        'DEPTH_FIRST' => ElkCycleBreaking.depthFirst,
+        'INTERACTIVE' => ElkCycleBreaking.interactive,
+        'MODEL_ORDER' => ElkCycleBreaking.modelOrder,
+        'GREEDY_MODEL_ORDER' => ElkCycleBreaking.greedyModelOrder,
+        _ => ElkCycleBreaking.greedy,
+      },
       considerModelOrder: switch ('${layeredOption('considerModelOrder.strategy')}'.toUpperCase()) {
         'NODES_AND_EDGES' => ElkConsiderModelOrder.nodesAndEdges,
         'PREFER_EDGES' => ElkConsiderModelOrder.preferEdges,

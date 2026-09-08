@@ -84,6 +84,8 @@ class HyperedgeExpansion {
       for (final n in values)
         ElkNode(
           id: n.id,
+          x: n.x,
+          y: n.y,
           width: n.width,
           height: n.height,
           children: clone(n.children),
