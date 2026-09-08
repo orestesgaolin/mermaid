@@ -136,7 +136,7 @@ class ElkLayoutOptions {
       algorithm: (m['elk.algorithm'] ?? m['algorithm'] ?? 'layered').toString(),
       direction: dir(m['elk.direction'] ?? m['direction']),
       spacingBaseValue: asNum(m['spacing.baseValue']) ?? 40,
-      fixedAlignment: align(m['elk.layered.nodePlacement.bk.fixedAlignment']),
+      fixedAlignment: align(layeredOption('nodePlacement.bk.fixedAlignment')),
       mergeEdges: asBool(layeredOption('mergeEdges')),
       cycleBreaking: switch ('${layeredOption('cycleBreaking.strategy')}'.toUpperCase()) {
         'DEPTH_FIRST' => ElkCycleBreaking.depthFirst,

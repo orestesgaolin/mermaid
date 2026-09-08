@@ -376,6 +376,14 @@ class _Engine {
     );
     lg.setProperty(selfLoopNodeSpacing, options.spacingEdgeNode ?? 10);
     lg.setProperty(selfLoopEdgeSpacing, options.spacingEdgeEdge);
+    lg.setProperty(bkFixedAlignment, switch (options.fixedAlignment) {
+      ElkFixedAlignment.none => BkFixedAlignment.none,
+      ElkFixedAlignment.leftUp => BkFixedAlignment.leftUp,
+      ElkFixedAlignment.leftDown => BkFixedAlignment.leftDown,
+      ElkFixedAlignment.rightUp => BkFixedAlignment.rightUp,
+      ElkFixedAlignment.rightDown => BkFixedAlignment.rightDown,
+      ElkFixedAlignment.balanced => BkFixedAlignment.balanced,
+    });
     lg.setProperty(bkImproveStraightness, options.improveStraightness);
     lg.setProperty(labelTranspose, localTranspose);
     lg.setProperty(

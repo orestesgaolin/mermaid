@@ -49,10 +49,10 @@ const bkEdgeEdgeSpacing = Property<double>('bk.spacing.edgeEdge', 10.0);
 /// Mirrors ELK's `LayeredOptions.SPACING_NODE_NODE_BETWEEN_LAYERS` default of 20.
 const bkLayerSpacing = Property<double>('bk.spacing.layer', 20.0);
 
-/// Fixed-alignment option.  Default: [_FixedAlignment.none] (balance all four).
-const bkFixedAlignment = Property<_FixedAlignment>(
+/// Fixed-alignment option.  Default: [BkFixedAlignment.none] (balance all four).
+const bkFixedAlignment = Property<BkFixedAlignment>(
   'bk.fixedAlignment',
-  _FixedAlignment.none,
+  BkFixedAlignment.none,
 );
 const bkImproveStraightness = Property<bool>('bk.improveStraightness', false);
 
@@ -61,7 +61,7 @@ const bkImproveStraightness = Property<bool>('bk.improveStraightness', false);
 // ---------------------------------------------------------------------------
 
 /// Which of the four single alignments to lock in (or NONE = balance all).
-enum _FixedAlignment { none, leftDown, leftUp, rightDown, rightUp, balanced }
+enum BkFixedAlignment { none, leftDown, leftUp, rightDown, rightUp, balanced }
 
 /// Vertical traversal direction within a layer.
 enum _VDirection { down, up }
@@ -107,14 +107,14 @@ class BKNodePlacer implements ILayoutProcessor {
     // Balancing happens only when explicitly requested via BALANCED.
     const bool favorStraightEdges = true; // orthogonal edge routing
     final bool produceBalanced =
-        (fixedAlign == _FixedAlignment.none && !favorStraightEdges) ||
-        fixedAlign == _FixedAlignment.balanced;
+        (fixedAlign == BkFixedAlignment.none && !favorStraightEdges) ||
+        fixedAlign == BkFixedAlignment.balanced;
 
     final layouts = <_BKAlignedLayout>[];
     _BKAlignedLayout? rightDown, rightUp, leftDown, leftUp;
 
     switch (fixedAlign) {
-      case _FixedAlignment.leftDown:
+      case BkFixedAlignment.leftDown:
         leftDown = _BKAlignedLayout(
           graph,
           ni.nodeCount,
@@ -122,7 +122,7 @@ class BKNodePlacer implements ILayoutProcessor {
           _HDirection.left,
         );
         layouts.add(leftDown);
-      case _FixedAlignment.leftUp:
+      case BkFixedAlignment.leftUp:
         leftUp = _BKAlignedLayout(
           graph,
           ni.nodeCount,
@@ -130,7 +130,7 @@ class BKNodePlacer implements ILayoutProcessor {
           _HDirection.left,
         );
         layouts.add(leftUp);
-      case _FixedAlignment.rightDown:
+      case BkFixedAlignment.rightDown:
         rightDown = _BKAlignedLayout(
           graph,
           ni.nodeCount,
@@ -138,7 +138,7 @@ class BKNodePlacer implements ILayoutProcessor {
           _HDirection.right,
         );
         layouts.add(rightDown);
-      case _FixedAlignment.rightUp:
+      case BkFixedAlignment.rightUp:
         rightUp = _BKAlignedLayout(
           graph,
           ni.nodeCount,

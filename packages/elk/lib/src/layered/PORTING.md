@@ -28,6 +28,7 @@ Paths below are relative to `packages/elk/` unless they name a phase file above.
 | Ports | Four explicit sides, spaced N/S anchors, fixed-side preservation, fixed cross-boundary ports; configurable surrounding top/bottom spacing | `test/elk_ports_test.dart`, #51 |
 | Labels | Edge center/head/tail roles, explicit sides and thickness clearance; node labels, outside port labels, direction-aware coordinates | [Label contract](../../../LABELS.md), `test/elk_labels_test.dart`, #52 |
 | Self-loops and sizing | Explicit side pairs, per-side loop spacing, content sizing constraints and BK edge straightening | `test/issue54_selfloop_routing_test.dart`, #54 |
+| BK fixed alignment | Dart and ELK JSON options select single-pass or balanced BK compaction; NONE remains the default | `test/fixed_alignment_test.dart`, #66 |
 | Advanced constraints and hyperedges | Weighted successor blocks and barycenter associates; shared-port branch expansion, critical segment splitting and junction output | `test/issue53_hyperedge_routing_test.dart`, #53 |
 | Cycle strategy | JSON and Dart select the cycle breaker; interactive ordering uses supplied node centers in the selected direction | `test/cycle_breaking_strategies_test.dart`, `test/cycle_breaking_processors_test.dart`, #64 |
 | Model order | Input order can constrain crossing minimization | `test/elk_spacing_modelorder_test.dart` |
