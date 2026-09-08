@@ -287,6 +287,12 @@ const elkStressExamples = <ElkStressExample>[
   ),
   ElkStressExample(
     title: 'Shared deployment routes',
+    comparisonNote:
+        'Release → Production → Telemetry → Rollback → Release is '
+        'a cycle, so one edge must run backward. elkjs chooses Production → '
+        'Telemetry; Dart chooses Rollback → Release. Follow the arrowheads '
+        'to read the same directed sequence in either layout.',
+    trackingIssue: 77,
     description:
         'Three build sources fan into one release hub, then share '
         'outgoing trunks to four environments. Junctions expose the merged '

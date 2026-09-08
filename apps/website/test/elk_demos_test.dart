@@ -45,6 +45,7 @@ void main() {
   test('gallery preserves all route sections at a shared coordinate scale', () {
     final demos = buildElkDemos();
     final examples = buildElkExamples();
+    final markerIds = <String>{};
     for (final demo in demos) {
       expect(demo.referenceError, isNull, reason: demo.title);
       expect(demo.referenceSvg, isNotNull, reason: demo.title);
@@ -73,6 +74,33 @@ void main() {
           ),
           reason: 'No compound or branching route sections may be dropped',
         );
+        final marker = RegExp(
+          r'<marker id="([^"]+)"',
+        ).firstMatch(svg)!.group(1)!;
+        expect(
+          markerIds.add(marker),
+          isTrue,
+          reason: 'Each comparison panel must resolve its own marker',
+        );
+        final markedEdges = <String, int>{};
+        for (final path in RegExp(r'<polyline [^>]+>').allMatches(svg)) {
+          final tag = path.group(0)!;
+          if (!tag.contains('marker-end=')) continue;
+          expect(tag, contains('marker-end="url(#$marker)"'));
+          final id = RegExp(
+            r'data-edge-id="([^"]+)"',
+          ).firstMatch(tag)!.group(1)!;
+          markedEdges.update(id, (count) => count + 1, ifAbsent: () => 1);
+        }
+        for (final edge in result.edges) {
+          expect(
+            markedEdges[edge.id],
+            1,
+            reason:
+                '${demo.title}: ${edge.id} must mark its target once, '
+                'including split hierarchy routes and self loops',
+          );
+        }
         expect(svg, isNot(contains('NaN')));
         expect(svg, isNot(contains('Infinity')));
       }

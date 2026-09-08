@@ -72,8 +72,8 @@ class ElkDemoPage extends StatelessComponent {
           strong([.text('no mermaid, no diagram DSL')]),
           .text(
             '. Both panels use the same coordinate scale, so spacing and '
-            'routing differences stay visible. The shared preview renderer '
-            'omits arrowheads in both panels. This is a behavioral comparison, '
+            'routing differences stay visible. Arrowheads mark confirmed '
+            'target endpoints in both panels. This is a behavioral comparison, '
             'not a claim of pixel or layout parity.',
           ),
         ]),

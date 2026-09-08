@@ -238,9 +238,11 @@ String _renderSvg(
   final w = bounds.width + _pad * 2;
   final h = bounds.height + _pad * 2;
   final thickness = <String, double>{};
+  final targets = <String, List<String>>{};
   void collectEdges(List<ElkNode> nodes, List<ElkEdge> edges) {
     for (final edge in edges) {
       thickness[edge.id] = edge.thickness;
+      targets[edge.id] = edge.targets;
     }
     for (final node in nodes) {
       collectEdges(node.children, node.edges);
@@ -248,6 +250,35 @@ String _renderSvg(
   }
 
   collectEdges(input.children, input.edges);
+  final nodes = r.nodesById;
+  final endpoints = <String, (double, double, double, double)>{
+    for (final node in nodes.values) ...{
+      node.id: (node.x, node.y, node.width, node.height),
+      for (final port in node.ports)
+        port.id: (node.x + port.x, node.y + port.y, port.width, port.height),
+    },
+  };
+  bool reachesTarget(String edgeId, ElkPoint point) {
+    for (final id in targets[edgeId] ?? const <String>[]) {
+      final rect = endpoints[id];
+      if (rect == null) continue;
+      final (x, y, width, height) = rect;
+      const tolerance = 0.01;
+      final inX = point.x >= x - tolerance && point.x <= x + width + tolerance;
+      final inY = point.y >= y - tolerance && point.y <= y + height + tolerance;
+      final onX =
+          (point.x - x).abs() < tolerance ||
+          (point.x - x - width).abs() < tolerance;
+      final onY =
+          (point.y - y).abs() < tolerance ||
+          (point.y - y - height).abs() < tolerance;
+      if ((inX && onY) || (inY && onX)) return true;
+    }
+    return false;
+  }
+
+  final marker =
+      'arrow-${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
   final b = StringBuffer();
   b.writeln(
     '<svg viewBox="0 0 ${_n(w)} ${_n(h)}" '
@@ -256,6 +287,12 @@ String _renderSvg(
     'xmlns="http://www.w3.org/2000/svg" class="elk-svg" role="img">',
   );
   b.writeln('<title>${_esc(title)}</title>');
+  b.writeln(
+    '<defs><marker id="$marker" viewBox="0 0 10 10" '
+    'refX="10" refY="5" markerWidth="7" markerHeight="7" '
+    'markerUnits="userSpaceOnUse" orient="auto">'
+    '<path d="M0,0 L10,5 L0,10 z" fill="$_edgeStroke"/></marker></defs>',
+  );
   b.writeln(
     '<g transform="translate(${_n(_pad - bounds.minX)},'
     '${_n(_pad - bounds.minY)})">',
@@ -328,8 +365,9 @@ String _renderSvg(
           .map((p) => '${_n(p.x)},${_n(p.y)}')
           .join(' ');
       b.writeln(
-        '<polyline points="$points" fill="none" stroke="$_edgeStroke" '
-        'stroke-width="${_n(thickness[edge.id] ?? 1)}"/>',
+        '<polyline data-edge-id="${_esc(edge.id)}" points="$points" fill="none" stroke="$_edgeStroke" '
+        'stroke-width="${_n(thickness[edge.id] ?? 1)}" '
+        '${reachesTarget(edge.id, section.endPoint) ? 'marker-end="url(#$marker)"' : ''}/>',
       );
     }
     for (final point in edge.junctionPoints) {
@@ -459,5 +497,8 @@ class _Bounds {
 }
 
 String _n(double v) => v.toStringAsFixed(1);
-String _esc(String s) =>
-    s.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+String _esc(String s) => s
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;');
