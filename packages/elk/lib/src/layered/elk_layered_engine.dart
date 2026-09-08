@@ -22,6 +22,7 @@ import 'implicit_port_merger.dart';
 import '../api/graph.dart';
 import '../api/options.dart';
 import '../api/result.dart';
+import '../api/result_padding.dart';
 // intermediate_constraints and intermediate_ports both define PortConstraints
 // and portConstraints with the same property id but as separate Dart types.
 // intermediate_constraints' processors read the property using their own type,
@@ -103,7 +104,10 @@ ElkResult layeredLayout(ElkGraph graph) {
   engine.layoutHierarchy(root);
 
   // Extract the root graph into the result tree.
-  return expansion.restore(engine.extractRoot(root));
+  return padRootResult(
+    expansion.restore(engine.extractRoot(root)),
+    graph.layoutOptions.padding,
+  );
 }
 
 /// Maps a declared [ElkPortSide] (in output space) to the internal [PortSide]

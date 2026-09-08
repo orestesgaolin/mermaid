@@ -40,12 +40,47 @@ enum ElkCycleBreaking {
   greedyModelOrder,
 }
 
+/// Insets around the root layout, in final output coordinates.
+class ElkPadding {
+  const ElkPadding({
+    this.top = 0,
+    this.left = 0,
+    this.bottom = 0,
+    this.right = 0,
+  }) : assert(top >= 0 && top < double.infinity),
+       assert(left >= 0 && left < double.infinity),
+       assert(bottom >= 0 && bottom < double.infinity),
+       assert(right >= 0 && right < double.infinity);
+
+  final double top, left, bottom, right;
+
+  static ElkPadding _fromJson(Object? value) {
+    final fields = <String, double>{};
+    if (value is String) {
+      for (final match in RegExp(
+        r'(top|left|bottom|right)\s*=\s*([+-]?[0-9]+(?:\.[0-9]+)?)',
+      ).allMatches(value)) {
+        final number = double.tryParse(match[2]!);
+        if (number != null && number.isFinite && number >= 0)
+          fields[match[1]!] = number;
+      }
+    }
+    return ElkPadding(
+      top: fields['top'] ?? 0,
+      left: fields['left'] ?? 0,
+      bottom: fields['bottom'] ?? 0,
+      right: fields['right'] ?? 0,
+    );
+  }
+}
+
 /// Immutable layout options. Defaults match ELK/elkjs for the `layered`
 /// algorithm as configured by mermaid (`spacing.baseValue` 40, Brandes–Köpf
 /// placement, `fixedAlignment` NONE).
 class ElkLayoutOptions {
   const ElkLayoutOptions({
     this.algorithm = 'layered',
+    this.padding = const ElkPadding(),
     this.direction = ElkDirection.down,
     this.spacingBaseValue = 40,
     this.nodePlacement = ElkNodePlacement.brandesKoepf,
@@ -69,6 +104,9 @@ class ElkLayoutOptions {
   });
 
   final String algorithm;
+
+  /// Explicit root padding. Unspecified padding preserves tight output bounds.
+  final ElkPadding padding;
   final ElkDirection direction;
 
   /// Base spacing unit; ELK derives the concrete node/edge/layer spacings from
@@ -140,6 +178,7 @@ class ElkLayoutOptions {
     Object? layeredOption(String key) => option('layered.$key');
     return ElkLayoutOptions(
       algorithm: (option('algorithm') ?? 'layered').toString(),
+      padding: ElkPadding._fromJson(option('padding')),
       direction: dir(option('direction')),
       spacingBaseValue: asNum(option('spacing.baseValue')) ?? 40,
       fixedAlignment: align(layeredOption('nodePlacement.bk.fixedAlignment')),
@@ -187,6 +226,7 @@ class ElkLayoutOptions {
 
   ElkLayoutOptions copyWith({
     String? algorithm,
+    ElkPadding? padding,
     ElkDirection? direction,
     double? spacingBaseValue,
     ElkNodePlacement? nodePlacement,
@@ -210,6 +250,7 @@ class ElkLayoutOptions {
   }) {
     return ElkLayoutOptions(
       algorithm: algorithm ?? this.algorithm,
+      padding: padding ?? this.padding,
       direction: direction ?? this.direction,
       spacingBaseValue: spacingBaseValue ?? this.spacingBaseValue,
       nodePlacement: nodePlacement ?? this.nodePlacement,
