@@ -24,6 +24,7 @@ Paths below are relative to `packages/elk/` unless they name a phase file above.
 | Feature | Contract | Tests / tracking |
 | --- | --- | --- |
 | Hierarchy | Recursive child graphs; edges split through every ancestor and reassembled at their original endpoints; positioned labels retained | `test/elk_hierarchy_test.dart`, #50 |
+| Nested directions | Each child graph can override its parent's direction; descendant geometry, ports, labels, junctions and cross-boundary segments are converted bottom-up into the parent frame | `test/nested_direction_test.dart`, #62 |
 | Ports | Four explicit sides, spaced N/S anchors, fixed-side preservation, fixed cross-boundary ports; configurable surrounding top/bottom spacing | `test/elk_ports_test.dart`, #51 |
 | Labels | Edge center/head/tail roles, explicit sides and thickness clearance; node labels, outside port labels, direction-aware coordinates | [Label contract](../../../LABELS.md), `test/elk_labels_test.dart`, #52 |
 | Self-loops and sizing | Explicit side pairs, per-side loop spacing, content sizing constraints and BK edge straightening | `test/issue54_selfloop_routing_test.dart`, #54 |

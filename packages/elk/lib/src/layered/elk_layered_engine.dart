@@ -16,6 +16,7 @@
 library;
 
 import 'attached_labels.dart';
+import 'graph_direction.dart';
 import 'hyperedge_adapter.dart';
 import 'implicit_port_merger.dart';
 import '../api/graph.dart';
@@ -98,7 +99,7 @@ ElkResult layeredLayout(ElkGraph graph) {
   final engine = _Engine(graph.layoutOptions, transpose, dir);
 
   // Build the (possibly hierarchical) LGraph; lay it out.
-  final root = engine.buildGraph(graph.children, graph.edges);
+  final root = engine.buildGraph(graph.children, graph.edges, dir);
   engine.layoutHierarchy(root);
 
   // Extract the root graph into the result tree.
@@ -209,7 +210,7 @@ class _PortLink {
 /// within each hierarchy level.
 class _Engine {
   _Engine(this.options, this.transpose, this.dir)
-      : _implicitPorts = ImplicitPortMerger(enabled: options.mergeEdges);
+    : _implicitPorts = ImplicitPortMerger(enabled: options.mergeEdges);
 
   final ImplicitPortMerger _implicitPorts;
 
@@ -222,6 +223,7 @@ class _Engine {
 
   /// Per-graph: id → LNode for the nodes directly in that graph.
   final Map<LGraph, Map<String, LNode>> nodesByGraph = {};
+  final Map<LGraph, ElkDirection> _directionByGraph = {};
 
   /// Per-graph: edge id → LEdge for the edges directly in that graph.
   final Map<LGraph, Map<String, LEdge>> edgesByGraph = {};
@@ -274,10 +276,18 @@ class _Engine {
 
   /// Builds an [LGraph] from a level's [nodes] and [edges]. Compound children
   /// recurse into a [LNode.nestedGraph]. Edges are placed in the graph that
-  /// directly contains both endpoints; cross-hierarchy edges are routed to the
-  /// nearest enclosing cluster boundary, or skipped if truly cross-level.
-  LGraph buildGraph(List<ElkNode> nodes, List<ElkEdge> edges) {
+  /// directly contains both endpoints; cross-hierarchy edges are split at each
+  /// enclosing cluster boundary and stitched during result extraction.
+  LGraph buildGraph(
+    List<ElkNode> nodes,
+    List<ElkEdge> edges,
+    ElkDirection localDirection,
+  ) {
     final lg = LGraph();
+    _directionByGraph[lg] = localDirection;
+    final localTranspose =
+        localDirection == ElkDirection.down ||
+        localDirection == ElkDirection.up;
     // Apply the resolved spacing from the public options. These derive from
     // `spacingBaseValue` (default 40) when not explicitly overridden — ELK's raw
     // defaults (20/10) are too tight and let dense graphs overlap; the
@@ -319,8 +329,10 @@ class _Engine {
     // Model order: the crossing minimizer reads these to keep nodes in input
     // declaration order (ELK's considerModelOrder / forceNodeModelOrder).
     lg.setProperty(considerModelOrder, switch (options.considerModelOrder) {
-      ElkConsiderModelOrder.none => options.forceNodeModelOrder
-          ? ModelOrderStrategy.nodesAndEdges : ModelOrderStrategy.none,
+      ElkConsiderModelOrder.none =>
+        options.forceNodeModelOrder
+            ? ModelOrderStrategy.nodesAndEdges
+            : ModelOrderStrategy.none,
       ElkConsiderModelOrder.nodesAndEdges => ModelOrderStrategy.nodesAndEdges,
       ElkConsiderModelOrder.preferEdges => ModelOrderStrategy.preferEdges,
       ElkConsiderModelOrder.preferNodes => ModelOrderStrategy.preferNodes,
@@ -365,10 +377,10 @@ class _Engine {
     lg.setProperty(selfLoopNodeSpacing, options.spacingEdgeNode ?? 10);
     lg.setProperty(selfLoopEdgeSpacing, options.spacingEdgeEdge);
     lg.setProperty(bkImproveStraightness, options.improveStraightness);
-    lg.setProperty(labelTranspose, transpose);
+    lg.setProperty(labelTranspose, localTranspose);
     lg.setProperty(
       labelMirror,
-      dir == ElkDirection.left || dir == ElkDirection.up,
+      localDirection == ElkDirection.left || localDirection == ElkDirection.up,
     );
     lg.setProperty(nodeLabelSpacing, options.spacingNodeLabel);
     lg.setProperty(labelStackSpacing, options.spacingLabelLabel);
@@ -386,14 +398,14 @@ class _Engine {
       final ln = LNode(lg)..identifier = n.id;
       final inputX = n.x ?? 0;
       final inputY = n.y ?? 0;
-      final internalWidth = transpose ? n.height : n.width;
-      ln.position.x = switch (dir) {
+      final internalWidth = localTranspose ? n.height : n.width;
+      ln.position.x = switch (localDirection) {
         ElkDirection.right => inputX,
         ElkDirection.left => -inputX - internalWidth,
         ElkDirection.down => inputY,
         ElkDirection.up => -inputY - internalWidth,
       };
-      ln.position.y = transpose ? inputX : inputY;
+      ln.position.y = localTranspose ? inputX : inputY;
       ln.setProperty(modelOrder, _modelOrderCounter++);
       byId[n.id] = ln;
       ln.setProperty(nodeSizeFixed, n.fixedSize);
@@ -408,7 +420,7 @@ class _Engine {
                 : ElkNodeLabelPlacement.topLeft),
       );
       for (final label in n.labels) {
-        ln.labels.add(_makeLabel(label));
+        ln.labels.add(_makeLabel(label, localTranspose));
       }
       if (n.isCompound) {
         // Recurse: nested graph holds this node's own declared edges plus the
@@ -416,7 +428,7 @@ class _Engine {
         ln.nestedGraph = buildGraph(n.children, [
           ...n.edges,
           ...?perChild[n.id],
-        ]);
+        ], n.layoutOptions?.direction ?? localDirection);
         // Size is computed bottom-up after the nested layout; placeholder now.
         ln.size.x = 0;
         ln.size.y = 0;
@@ -434,8 +446,8 @@ class _Engine {
         }
       } else {
         // Internal RIGHT space: transpose swaps width/height.
-        ln.size.x = transpose ? n.height : n.width;
-        ln.size.y = transpose ? n.width : n.height;
+        ln.size.x = localTranspose ? n.height : n.width;
+        ln.size.y = localTranspose ? n.width : n.height;
       }
 
       // Build declared LPorts for this node.
@@ -450,14 +462,18 @@ class _Engine {
           portNodeById[ep.id] = ln;
 
           if (ep.side != null) {
-            lp.side = _outputSideToInternal(ep.side!, transpose, dir);
+            lp.side = _outputSideToInternal(
+              ep.side!,
+              localTranspose,
+              localDirection,
+            );
             hasFixedSide = true;
           }
           // Port size in internal space (transposed like the node).
-          lp.size.x = transpose ? ep.height : ep.width;
-          lp.size.y = transpose ? ep.width : ep.height;
+          lp.size.x = localTranspose ? ep.height : ep.width;
+          lp.size.y = localTranspose ? ep.width : ep.height;
           for (final label in ep.labels) {
-            lp.labels.add(_makeLabel(label));
+            lp.labels.add(_makeLabel(label, localTranspose));
           }
           ln.ports.add(lp);
         }
@@ -504,12 +520,8 @@ class _Engine {
       final sn = _resolveDirectChild(byId, portNodeById, nodes, e.source);
       final tn = _resolveDirectChild(byId, portNodeById, nodes, e.target);
       if (sn == null || tn == null) {
-        // TODO(elk-faithful): truly cross-level edge (an endpoint is neither a
-        // direct child of this graph nor reachable via a single enclosing
-        // cluster at this level). ELK handles these with
-        // CompoundGraphPreprocessor (CrossHierarchyEdge), splitting the edge at
-        // each hierarchy crossing; here we skip routing it rather than
-        // mis-route.
+        // An endpoint ID is outside this graph's node/port hierarchy. Skip the
+        // invalid edge rather than emitting a route to an invented endpoint.
         continue;
       }
       if (sn == tn) {
@@ -525,8 +537,8 @@ class _Engine {
               (LPort(node)
                 ..side = _outputSideToInternal(
                   ElkPortSide.north,
-                  transpose,
-                  dir,
+                  localTranspose,
+                  localDirection,
                 ));
           if (!node.ports.contains(sp)) node.ports.add(sp);
           final tp =
@@ -534,16 +546,17 @@ class _Engine {
               (LPort(node)
                 ..side = _outputSideToInternal(
                   ElkPortSide.north,
-                  transpose,
-                  dir,
+                  localTranspose,
+                  localDirection,
                 ));
           if (!node.ports.contains(tp)) node.ports.add(tp);
           _nodesWithFixedSides.add(node);
-          final le = LEdge()..identifier = e.id
-          ..setProperty(edgeModelOrder, ownedHere.indexOf(e));
+          final le = LEdge()
+            ..identifier = e.id
+            ..setProperty(edgeModelOrder, ownedHere.indexOf(e));
           le.source = sp;
           le.target = tp;
-          _attachLabels(le, e);
+          _attachLabels(le, e, localTranspose);
           edgeMap[e.id] = le;
         }
         // else: edge internal to a compound cluster — routed in the nested
@@ -587,14 +600,15 @@ class _Engine {
 
       if (sp == null || tp == null) continue;
 
-      final le = LEdge()..identifier = e.id
-          ..setProperty(edgeModelOrder, ownedHere.indexOf(e));
+      final le = LEdge()
+        ..identifier = e.id
+        ..setProperty(edgeModelOrder, ownedHere.indexOf(e));
       le.source = sp;
       le.target = tp;
 
       if (srcSegs.isEmpty && tgtSegs.isEmpty) {
         // Same-level edge between two direct children — the classic case.
-        _attachLabels(le, e);
+        _attachLabels(le, e, localTranspose);
         edgeMap[e.id] = le;
       } else {
         // Cross-hierarchy: `le` is the segment at this (LCA) level. Register the
@@ -609,7 +623,12 @@ class _Engine {
             ElkEdgeLabelPlacement.head => chain.last,
           };
           segment.setProperty(labelEdgeThickness, e.thickness);
-          segment.labels.add(_makeLabel(label));
+          final segmentDirection =
+              _directionByGraph[segment.source!.node.graph]!;
+          final segmentTranspose =
+              segmentDirection == ElkDirection.down ||
+              segmentDirection == ElkDirection.up;
+          segment.labels.add(_makeLabel(label, segmentTranspose));
         }
         _crossSegmentEdges.add(le);
         for (final s in [...srcSegs, ...tgtSegs]) {
@@ -679,7 +698,12 @@ class _Engine {
     String endpoint,
     PortSide defaultSide,
   ) {
-    return _implicitPorts.resolve(node, endpoint, defaultSide, declaredPortsById);
+    return _implicitPorts.resolve(
+      node,
+      endpoint,
+      defaultSide,
+      declaredPortsById,
+    );
   }
 
   /// Counter for synthetic segment edge ids (cross-hierarchy splits).
@@ -789,18 +813,20 @@ class _Engine {
 
   /// Copies the public edge's labels onto the [LEdge] so LabelDummyInserter can
   /// reserve space for them; sizes are in internal (RIGHT) space (transposed).
-  LLabel _makeLabel(ElkLabel label) {
+  LLabel _makeLabel(ElkLabel label, bool localTranspose) {
     final result = LLabel(label.text);
-    result.size.x = transpose ? label.height : label.width;
-    result.size.y = transpose ? label.width : label.height;
+    result.size.x = localTranspose ? label.height : label.width;
+    result.size.y = localTranspose ? label.width : label.height;
     result.setProperty(labelPlacement, label.placement);
     result.setProperty(labelSide, label.side);
     return result;
   }
 
-  void _attachLabels(LEdge le, ElkEdge e) {
+  void _attachLabels(LEdge le, ElkEdge e, bool localTranspose) {
     le.setProperty(labelEdgeThickness, e.thickness);
-    le.labels.addAll(e.labels.map(_makeLabel));
+    le.labels.addAll(
+      e.labels.map((label) => _makeLabel(label, localTranspose)),
+    );
   }
 
   /// Maps an endpoint id to the direct child of this level that contains it
@@ -1024,14 +1050,18 @@ class _Engine {
 
   /// Phase C: post-crossmin (size + place + route), bottom-up so each compound
   /// child is laid out and sized before its parent is placed.
-  void _phasePostCrossmin(LGraph lg) {
+  void _phasePostCrossmin(LGraph lg, [ElkDirection? parentDirection]) {
+    final localDirection = _directionByGraph[lg]!;
+    final localTranspose =
+        localDirection == ElkDirection.down ||
+        localDirection == ElkDirection.up;
     for (final ln in [
       for (final layer in lg.layers) ...layer.nodes,
       ...lg.layerlessNodes,
     ]) {
       final nested = ln.nestedGraph;
       if (nested == null) continue;
-      _phasePostCrossmin(nested);
+      _phasePostCrossmin(nested, localDirection);
       final (w, h) = _internalBounds(nested);
       // The compound node's internal-space size = nested bbox + padding on all
       // sides. (Internal space is RIGHT; the nested bbox is already in it.)
@@ -1043,7 +1073,7 @@ class _Engine {
       // grow the compound so the parent reserves room for it.
       final band = _compoundBand[ln] ?? 0;
       if (band > 0) {
-        if (transpose) {
+        if (localTranspose) {
           ln.size.x += band;
         } else {
           ln.size.y += band;
@@ -1053,7 +1083,7 @@ class _Engine {
       // Cross-hierarchy: copy each boundary dummy's resolved cross position onto
       // the cluster's external port so the parent routes the outer segment to
       // the matching border point.
-      final (_, nOy) = _internalOrigin(nested);
+      final (nOx, nOy) = _internalOrigin(nested);
       for (final link in _portLinks) {
         if (link.dummy.graph != nested) continue;
         // The dummy's connection point (its inward port anchor) in nested space,
@@ -1061,7 +1091,7 @@ class _Engine {
         // The dummy's port can be absent if a processor removed it; fall back to
         // the dummy's own position rather than throwing.
         final dPort = link.dummy.ports.isEmpty ? null : link.dummy.ports.first;
-        final dummyCrossY = link.dummy.position.y + (dPort?.anchor.y ?? 0);
+        final dummyAnchor = dPort?.absoluteAnchor ?? link.dummy.position;
         // For non-transposed flow (LR/RL) the label band is reserved on the
         // cross axis (size.y), and `childOut` shifts the children down by `band`
         // at extraction. The external port must shift by the same band, or the
@@ -1070,10 +1100,37 @@ class _Engine {
         // (cross-hierarchy edges appearing to stop at the cluster edge instead
         // of reaching the inner node). For transposed flow (DOWN/UP) the band is
         // on the flow axis and produces a clean stub, so no cross-axis shift.
-        final crossBand = transpose ? 0.0 : band;
-        link.port.position
-          ..x = link.east ? ln.size.x : 0
-          ..y = (dummyCrossY - nOy) + _compoundPadding + crossBand;
+        final crossBand = localTranspose ? 0.0 : band;
+        final boundarySide = switch (dPort?.side) {
+          PortSide.east => PortSide.west,
+          PortSide.west => PortSide.east,
+          PortSide.north => PortSide.south,
+          PortSide.south => PortSide.north,
+          _ => link.east ? PortSide.east : PortSide.west,
+        };
+        final contentX = dummyAnchor.x - nOx + _compoundPadding;
+        final contentY = dummyAnchor.y - nOy + _compoundPadding + crossBand;
+        link.port.side = boundarySide;
+        switch (boundarySide) {
+          case PortSide.west:
+            link.port.position
+              ..x = 0
+              ..y = contentY;
+          case PortSide.east:
+            link.port.position
+              ..x = ln.size.x
+              ..y = contentY;
+          case PortSide.north:
+            link.port.position
+              ..x = contentX
+              ..y = 0;
+          case PortSide.south:
+            link.port.position
+              ..x = contentX
+              ..y = ln.size.y;
+          case PortSide.undefined:
+            break;
+        }
         // Anchor at the port's own position (size is zero), so the outer edge
         // segment meets the border exactly where the inner segment does.
         link.port.anchor
@@ -1082,6 +1139,17 @@ class _Engine {
       }
     }
     _runProcessors(_postCrossminProcessors(), lg);
+    if (parentDirection != null && parentDirection != localDirection) {
+      _transformSubtree(lg, GraphDirection(localDirection, parentDirection));
+    }
+  }
+
+  void _transformSubtree(LGraph graph, GraphDirection transform) {
+    transform.apply(graph, edgesByGraph[graph]?.values ?? const <LEdge>[]);
+    _directionByGraph[graph] = transform.to;
+    for (final nested in _nestedGraphsOf(graph)) {
+      _transformSubtree(nested, transform);
+    }
   }
 
   /// Internal-space (RIGHT) bounding-box width/height of a laid-out graph,
@@ -1416,7 +1484,11 @@ class _Engine {
         return ElkPoint(p.x + absX, p.y + absY);
       }
 
-      placeEndLabels(le);
+      // Cross-segment end labels were placed after routing/restoration in their
+      // owning graph and then transformed once with that subtree. Recomputing
+      // them here uses a clipped segment instead of the stitched route and can
+      // move a TAIL label to the opposite side of its original endpoint.
+      if (!_crossSegmentEdges.contains(le)) placeEndLabels(le);
       final pts = <ElkPoint>[
         at(src.absoluteAnchor.x, src.absoluteAnchor.y),
         for (final b in le.bendPoints.points) at(b.x, b.y),

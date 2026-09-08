@@ -22,8 +22,8 @@
 ///   - Hyperedge junction points are emitted through the `junctionPoints`
 ///     property and propagated to the public layout result.
 ///
-/// Other directions (NORTH_TO_SOUTH, SOUTH_TO_NORTH) are stubbed out with a
-/// `TODO(elk-faithful)` comment.
+/// The engine normalizes every requested direction into this west-to-east
+/// routing frame and converts the completed graph back into its parent frame.
 library;
 
 import 'lgraph.dart';

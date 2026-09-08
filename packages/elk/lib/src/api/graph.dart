@@ -131,6 +131,13 @@ class ElkNode {
       id: m['id'].toString(),
       x: (m['x'] as num?)?.toDouble(),
       y: (m['y'] as num?)?.toDouble(),
+      layoutOptions: switch (m['layoutOptions']) {
+        final Map options
+            when options.containsKey('elk.direction') ||
+                options.containsKey('direction') =>
+          ElkLayoutOptions.fromElkJson(options.cast<String, dynamic>()),
+        _ => null,
+      },
       labelPlacement:
           switch ('${(m['layoutOptions'] as Map?)?['elk.nodeLabels.placement'] ?? (m['layoutOptions'] as Map?)?['nodeLabels.placement'] ?? ''}') {
             final value when value.contains('V_CENTER') =>
@@ -181,13 +188,17 @@ class ElkNode {
 
   /// Per-node option overrides (e.g. a subgraph with its own [ElkDirection]).
   final ElkLayoutOptions? layoutOptions;
+
   /// Keeps the declared width and height unchanged. Set false to enable
   /// content-derived sizing; [sizeForLabels] and [sizeForPorts] select inputs.
   final bool fixedSize;
+
   /// Includes node-label bounds when computing a non-fixed node's size.
   final bool sizeForLabels;
+
   /// Includes each side's port group when computing a non-fixed node's size.
   final bool sizeForPorts;
+
   /// Treats the declared width and height as minima during content sizing.
   final bool preserveMinimumSize;
   final ElkNodeLabelPlacement? labelPlacement;
