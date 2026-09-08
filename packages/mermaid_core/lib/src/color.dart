@@ -31,7 +31,9 @@ class Color {
   ///
   /// Eight-digit hex values use the CSS `#rrggbbaa` order. RGB channels and
   /// alpha values are clamped to their CSS ranges. Returns null when the
-  /// syntax or a numeric value is invalid.
+  /// syntax or a numeric value is invalid. Mermaid source and configuration
+  /// consumers treat that null result as an unsupported color and retain the
+  /// applicable theme or diagram default; they do not emit a diagnostic.
   static Color? tryParse(String css) {
     final s = css.trim().toLowerCase();
     if (s.isEmpty) return null;

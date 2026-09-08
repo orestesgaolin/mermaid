@@ -79,6 +79,25 @@ Node ids and link indices that are not present in the scene are ignored. Text,
 topology, spacing, interpolation, and font-metric changes still require a full
 render.
 
+## CSS colors
+
+Diagram styles, theme variables, and color configuration accept CSS named
+colors, `#rgb`, `#rgba`, `#rrggbb`, `#rrggbbaa`, numeric or percentage
+`rgb()`/`rgba()`, and `hsl()`/`hsla()`. Eight-digit hex uses CSS channel order,
+so the final pair is alpha.
+
+An invalid color in Mermaid source or configuration is ignored and the
+applicable theme or diagram default remains in use. Rendering does not emit a
+color diagnostic. Applications that accept user-entered colors can report the
+problem before rendering by checking `Color.tryParse`:
+
+```dart
+final color = Color.tryParse(input);
+if (color == null) {
+  // Tell the user that input is not a supported CSS color.
+}
+```
+
 ## Command-line tool
 
 Activate the package globally:
