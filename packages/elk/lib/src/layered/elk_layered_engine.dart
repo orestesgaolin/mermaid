@@ -624,13 +624,15 @@ class _Engine {
         // extractor accumulates rather than emits it.
         edgeMap['__seg${_segCounter++}'] = le;
         final chain = [...srcSegs, le, ...tgtSegs];
+        for (final segment in chain) {
+          segment.setProperty(labelEdgeThickness, e.thickness);
+        }
         for (final label in e.labels) {
           final segment = switch (label.placement) {
             ElkEdgeLabelPlacement.center => le,
             ElkEdgeLabelPlacement.tail => chain.first,
             ElkEdgeLabelPlacement.head => chain.last,
           };
-          segment.setProperty(labelEdgeThickness, e.thickness);
           final segmentDirection =
               _directionByGraph[segment.source!.node.graph]!;
           final segmentTranspose =
@@ -1190,6 +1192,12 @@ class _Engine {
         );
       }
       for (final port in node.ports) {
+        yield (
+          node.position.x + port.position.x,
+          node.position.y + port.position.y,
+          port.size.x,
+          port.size.y,
+        );
         for (final label in port.labels) {
           yield (
             node.position.x + port.position.x + label.position.x,
@@ -1201,6 +1209,20 @@ class _Engine {
       }
     }
     for (final edge in edgesByGraph[graph]?.values ?? <LEdge>[]) {
+      final halfThickness = edge.getProperty(labelEdgeThickness) / 2;
+      for (final point in [
+        if (edge.source != null) edge.source!.absoluteAnchor,
+        ...edge.bendPoints.points,
+        if (edge.target != null) edge.target!.absoluteAnchor,
+        ...?edge.getProperty(junctionPoints)?.points,
+      ]) {
+        yield (
+          point.x - halfThickness,
+          point.y - halfThickness,
+          halfThickness * 2,
+          halfThickness * 2,
+        );
+      }
       for (final label in edge.labels) {
         yield (label.position.x, label.position.y, label.size.x, label.size.y);
       }
