@@ -255,7 +255,9 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
       port.position.x = currentX;
       port.position.y = side == PortSide.north ? -port.size.y : node.size.y;
       port.anchor.x = port.size.x / 2;
-      port.anchor.y = side == PortSide.north ? port.size.y : 0;
+      // Edges meet the outward face of a nonzero port, matching ELK. The
+      // positioned rectangle itself lies outside the node border.
+      port.anchor.y = side == PortSide.north ? 0 : port.size.y;
       currentX += port.size.x + portPortSpacing;
     }
   }
@@ -343,7 +345,7 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
       port.position.y = currentY;
 
       // Anchor = centre of the port face that connects to edges.
-      port.anchor.x = side == PortSide.east ? 0 : port.size.x;
+      port.anchor.x = side == PortSide.east ? port.size.x : 0;
       port.anchor.y = port.size.y / 2;
 
       currentY += port.size.y + portPortSpacing;

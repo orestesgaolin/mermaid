@@ -301,8 +301,8 @@ class SelfLoopRouter implements ILayoutProcessor {
 
     // Node-relative anchor of each port.
     // Port positions are relative to the node top-left; anchor is within the
-    // port.  We want the point on the *node border* where the edge leaves the
-    // port, i.e. port.position + port.anchor.
+    // port. We want the point on the port's outward face where the edge leaves,
+    // i.e. port.position + port.anchor.
     final spAnchorX = sle.sourcePort.position.x + sle.sourcePort.anchor.x;
     final spAnchorY = sle.sourcePort.position.y + sle.sourcePort.anchor.y;
     final tpAnchorX = sle.targetPort.position.x + sle.targetPort.anchor.x;

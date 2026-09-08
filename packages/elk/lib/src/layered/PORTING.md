@@ -35,8 +35,9 @@ Paths below are relative to `packages/elk/` unless they name a phase file above.
 | Model order | Input order can constrain crossing minimization | `test/elk_spacing_modelorder_test.dart` |
 
 Explicit port coordinates in positioned output refer to the port rectangle's
-top-left. Edge endpoints use the port anchor, which can be a different point
-for a nonzero-size port. Head/tail labels on deep edges refer to the original
+top-left. Edge endpoints use the outward face of the port rectangle; this is
+different from the node-border coordinate for a nonzero-size port. Head/tail
+labels on deep edges refer to the original
 source/target, not the enclosing compound.
 
 Multi-endpoint edges return one section per source-target branch and retain the
