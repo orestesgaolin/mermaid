@@ -133,7 +133,8 @@ class ElkNode {
       y: (m['y'] as num?)?.toDouble(),
       layoutOptions: switch (m['layoutOptions']) {
         final Map options
-            when options.containsKey('elk.direction') ||
+            when options.containsKey('org.eclipse.elk.direction') ||
+                options.containsKey('elk.direction') ||
                 options.containsKey('direction') =>
           ElkLayoutOptions.fromElkJson(options.cast<String, dynamic>()),
         _ => null,

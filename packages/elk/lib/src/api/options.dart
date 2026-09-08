@@ -94,6 +94,7 @@ class ElkLayoutOptions {
   final double? spacingEdgeNode;
   final double? spacingNodeNodeBetweenLayers;
   final double spacingEdgeEdge;
+
   /// Enables ELK's BK threshold strategy, which trades compactness for more
   /// straight edge segments.
   final bool improveStraightness;
@@ -111,6 +112,9 @@ class ElkLayoutOptions {
 
   /// Parses an elkjs-style `layoutOptions` map (keys like `elk.direction`,
   /// `spacing.baseValue`, `elk.layered.nodePlacement.bk.fixedAlignment`).
+  /// Supported keys accept full `org.eclipse.elk.`, `elk.`, and short aliases,
+  /// in that precedence order. Layered spacing uses `layered.spacing.*`; the
+  /// legacy `spacing.nodeNodeBetweenLayers` key is also accepted.
   /// Unknown keys are ignored; absent ones keep their defaults.
   factory ElkLayoutOptions.fromElkJson(Map<String, dynamic> m) {
     double? asNum(Object? v) =>
@@ -130,58 +134,54 @@ class ElkLayoutOptions {
       'BALANCED' => ElkFixedAlignment.balanced,
       _ => ElkFixedAlignment.none,
     };
-    Object? layeredOption(String key) =>
-        m['org.eclipse.elk.layered.$key'] ?? m['elk.layered.$key'] ?? m['layered.$key'];
+    // Full identifiers win when an input supplies more than one alias.
+    Object? option(String key) =>
+        m['org.eclipse.elk.$key'] ?? m['elk.$key'] ?? m[key];
+    Object? layeredOption(String key) => option('layered.$key');
     return ElkLayoutOptions(
-      algorithm: (m['elk.algorithm'] ?? m['algorithm'] ?? 'layered').toString(),
-      direction: dir(m['elk.direction'] ?? m['direction']),
-      spacingBaseValue: asNum(m['spacing.baseValue']) ?? 40,
+      algorithm: (option('algorithm') ?? 'layered').toString(),
+      direction: dir(option('direction')),
+      spacingBaseValue: asNum(option('spacing.baseValue')) ?? 40,
       fixedAlignment: align(layeredOption('nodePlacement.bk.fixedAlignment')),
       mergeEdges: asBool(layeredOption('mergeEdges')),
-      cycleBreaking: switch ('${layeredOption('cycleBreaking.strategy')}'.toUpperCase()) {
+      cycleBreaking: switch ('${layeredOption('cycleBreaking.strategy')}'
+          .toUpperCase()) {
         'DEPTH_FIRST' => ElkCycleBreaking.depthFirst,
         'INTERACTIVE' => ElkCycleBreaking.interactive,
         'MODEL_ORDER' => ElkCycleBreaking.modelOrder,
         'GREEDY_MODEL_ORDER' => ElkCycleBreaking.greedyModelOrder,
         _ => ElkCycleBreaking.greedy,
       },
-      considerModelOrder: switch ('${layeredOption('considerModelOrder.strategy')}'.toUpperCase()) {
-        'NODES_AND_EDGES' => ElkConsiderModelOrder.nodesAndEdges,
-        'PREFER_EDGES' => ElkConsiderModelOrder.preferEdges,
-        'PREFER_NODES' => ElkConsiderModelOrder.preferNodes,
-        _ => ElkConsiderModelOrder.none,
-      },
+      considerModelOrder:
+          switch ('${layeredOption('considerModelOrder.strategy')}'
+              .toUpperCase()) {
+            'NODES_AND_EDGES' => ElkConsiderModelOrder.nodesAndEdges,
+            'PREFER_EDGES' => ElkConsiderModelOrder.preferEdges,
+            'PREFER_NODES' => ElkConsiderModelOrder.preferNodes,
+            _ => ElkConsiderModelOrder.none,
+          },
       forceNodeModelOrder: asBool(
-        m['elk.layered.crossingMinimization.forceNodeModelOrder'],
+        layeredOption('crossingMinimization.forceNodeModelOrder'),
       ),
-      spacingLabelLabel:
-          asNum(m['elk.spacing.labelLabel'] ?? m['spacing.labelLabel']) ?? 0,
-      spacingEdgeLabel:
-          asNum(m['elk.spacing.edgeLabel'] ?? m['spacing.edgeLabel']) ?? 2,
-      spacingNodeLabel:
-          asNum(m['elk.spacing.nodeLabel'] ?? m['spacing.nodeLabel']) ?? 5,
-      spacingPortLabel:
-          asNum(m['elk.spacing.portLabel'] ?? m['spacing.portLabel']) ?? 1,
+      spacingLabelLabel: asNum(option('spacing.labelLabel')) ?? 0,
+      spacingEdgeLabel: asNum(option('spacing.edgeLabel')) ?? 2,
+      spacingNodeLabel: asNum(option('spacing.nodeLabel')) ?? 5,
+      spacingPortLabel: asNum(option('spacing.portLabel')) ?? 1,
       spacingPortsSurroundingTop:
-          asNum(
-            m['elk.spacing.portsSurrounding.top'] ??
-                m['spacing.portsSurrounding.top'],
-          ) ??
-          0,
+          asNum(option('spacing.portsSurrounding.top')) ?? 0,
       spacingPortsSurroundingBottom:
-          asNum(
-            m['elk.spacing.portsSurrounding.bottom'] ??
-                m['spacing.portsSurrounding.bottom'],
-          ) ??
-          0,
-      spacingNodeNode: asNum(m['spacing.nodeNode']),
-      spacingEdgeNode: asNum(m['spacing.edgeNode']),
-      spacingNodeNodeBetweenLayers: asNum(m['spacing.nodeNodeBetweenLayers']),
-      spacingEdgeEdge:
-          asNum(m['elk.spacing.edgeEdge'] ?? m['spacing.edgeEdge']) ?? 10,
+          asNum(option('spacing.portsSurrounding.bottom')) ?? 0,
+      spacingNodeNode: asNum(option('spacing.nodeNode')),
+      spacingEdgeNode: asNum(option('spacing.edgeNode')),
+      spacingNodeNodeBetweenLayers: asNum(
+        layeredOption('spacing.nodeNodeBetweenLayers') ??
+            option('spacing.nodeNodeBetweenLayers'),
+      ),
+      spacingEdgeEdge: asNum(option('spacing.edgeEdge')) ?? 10,
       improveStraightness:
-          '${m['elk.layered.nodePlacement.bk.edgeStraightening']}'.toUpperCase() ==
-              'IMPROVE_STRAIGHTNESS',
+          '${layeredOption('nodePlacement.bk.edgeStraightening')}'
+              .toUpperCase() ==
+          'IMPROVE_STRAIGHTNESS',
     );
   }
 
