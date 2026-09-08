@@ -1102,15 +1102,15 @@ class _Engine {
         // the dummy's own position rather than throwing.
         final dPort = link.dummy.ports.isEmpty ? null : link.dummy.ports.first;
         final dummyAnchor = dPort?.absoluteAnchor ?? link.dummy.position;
-        // For non-transposed flow (LR/RL) the label band is reserved on the
-        // cross axis (size.y), and `childOut` shifts the children down by `band`
-        // at extraction. The external port must shift by the same band, or the
-        // inner segment meets the border at a band-sized offset from the cluster
-        // port — a diagonal kink that the edge clip then snaps to the border
-        // (cross-hierarchy edges appearing to stop at the cluster edge instead
-        // of reaching the inner node). For transposed flow (DOWN/UP) the band is
-        // on the flow axis and produces a clean stub, so no cross-axis shift.
-        final crossBand = localTranspose ? 0.0 : band;
+        // The label band shifts nested content along output Y. In the parent's
+        // internal frame that is Y for LR/RL and X for DOWN/UP. Shift the
+        // external port along the same axis so its outer segment meets the
+        // already-shifted inner segment at one orthogonal point.
+        // DOWN needs an explicit internal-X shift. UP's mirror already moves
+        // the content by the size increase, so adding the band again would
+        // displace the boundary port by exactly one label band.
+        final bandX = localDirection == ElkDirection.down ? band : 0.0;
+        final bandY = localTranspose ? 0.0 : band;
         final boundarySide = switch (dPort?.side) {
           PortSide.east => PortSide.west,
           PortSide.west => PortSide.east,
@@ -1118,8 +1118,8 @@ class _Engine {
           PortSide.south => PortSide.north,
           _ => link.east ? PortSide.east : PortSide.west,
         };
-        final contentX = dummyAnchor.x - nOx + _compoundPadding;
-        final contentY = dummyAnchor.y - nOy + _compoundPadding + crossBand;
+        final contentX = dummyAnchor.x - nOx + _compoundPadding + bandX;
+        final contentY = dummyAnchor.y - nOy + _compoundPadding + bandY;
         link.port.side = boundarySide;
         switch (boundarySide) {
           case PortSide.west:
