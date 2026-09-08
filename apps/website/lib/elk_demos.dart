@@ -7,6 +7,8 @@ library;
 
 import 'package:elk/elk.dart';
 
+import 'elk_stress_examples.dart';
+
 /// A titled demo: the explanation plus its rendered SVG. [wide] cards span the
 /// full width of the card grid (e.g. the wide left-to-right graph).
 class ElkDemo {
@@ -42,7 +44,13 @@ List<ElkDemo> buildElkDemos() {
           ElkEdge(id: 'e5', sources: ['d'], targets: ['e']),
         ],
       ),
-      const {'a': 'Start', 'b': 'Build', 'c': 'Test', 'd': 'Merge', 'e': 'Deploy'},
+      const {
+        'a': 'Start',
+        'b': 'Build',
+        'c': 'Test',
+        'd': 'Merge',
+        'e': 'Deploy',
+      },
     ),
     _demo(
       'Nested cluster',
@@ -53,10 +61,13 @@ List<ElkDemo> buildElkDemos() {
         layoutOptions: ElkLayoutOptions(direction: ElkDirection.down),
         children: [
           ElkNode(id: 'in', width: 100, height: 44),
-          ElkNode(id: 'pool', children: [
-            ElkNode(id: 'w1', width: 100, height: 44),
-            ElkNode(id: 'w2', width: 100, height: 44),
-          ]),
+          ElkNode(
+            id: 'pool',
+            children: [
+              ElkNode(id: 'w1', width: 100, height: 44),
+              ElkNode(id: 'w2', width: 100, height: 44),
+            ],
+          ),
           ElkNode(id: 'out', width: 100, height: 44),
         ],
         edges: [
@@ -109,14 +120,31 @@ List<ElkDemo> buildElkDemos() {
       },
       wide: true,
     ),
+    for (final example in elkStressExamples)
+      _demo(
+        example.title,
+        example.description,
+        example.graph,
+        example.labels,
+        wide: example.wide,
+      ),
   ];
 }
 
 ElkDemo _demo(
-    String title, String blurb, ElkGraph graph, Map<String, String> labels,
-    {bool wide = false}) {
+  String title,
+  String blurb,
+  ElkGraph graph,
+  Map<String, String> labels, {
+  bool wide = false,
+}) {
   final result = const ElkLayered().layout(graph);
-  return ElkDemo(title, blurb, _renderSvg(result, labels), wide: wide);
+  return ElkDemo(
+    title,
+    blurb,
+    _renderSvg(result, graph, labels, title),
+    wide: wide,
+  );
 }
 
 // --- SVG rendering (pure; nodes as rounded rects, clusters as dashed
@@ -129,65 +157,146 @@ const _clusterFill = '#f6f4fc';
 const _clusterStroke = '#c8bfe8';
 const _edgeStroke = '#6b5fb0';
 
-String _renderSvg(ElkResult r, Map<String, String> labels) {
+String _renderSvg(
+  ElkResult r,
+  ElkGraph input,
+  Map<String, String> labels,
+  String title,
+) {
   final w = r.width + _pad * 2;
   final h = r.height + _pad * 2;
+  final marker =
+      'arrow-${title.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '-')}';
+  final thickness = <String, double>{};
+  void collectEdges(List<ElkNode> nodes, List<ElkEdge> edges) {
+    for (final edge in edges) {
+      thickness[edge.id] = edge.thickness;
+    }
+    for (final node in nodes) {
+      collectEdges(node.children, node.edges);
+    }
+  }
+
+  collectEdges(input.children, input.edges);
   final b = StringBuffer();
-  b.writeln('<svg viewBox="0 0 ${_n(w)} ${_n(h)}" '
-      'xmlns="http://www.w3.org/2000/svg" class="elk-svg" role="img">');
-  b.writeln('<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" '
-      'markerWidth="7" markerHeight="7" orient="auto-start-reverse">'
-      '<path d="M0,0 L10,5 L0,10 z" fill="$_edgeStroke"/></marker></defs>');
+  b.writeln(
+    '<svg viewBox="0 0 ${_n(w)} ${_n(h)}" '
+    'width="${_n(w)}" height="${_n(h)}" '
+    'style="min-width: ${_n(w > 900 ? 900 : w)}px; flex-shrink: 0" '
+    'xmlns="http://www.w3.org/2000/svg" class="elk-svg" role="img">',
+  );
+  b.writeln('<title>${_esc(title)}</title>');
+  b.writeln(
+    '<defs><marker id="$marker" viewBox="0 0 10 10" refX="9" refY="5" '
+    'markerWidth="6" markerHeight="6" orient="auto-start-reverse">'
+    '<path d="M0,0 L10,5 L0,10 z" fill="$_edgeStroke"/></marker></defs>',
+  );
   b.writeln('<g transform="translate(${_n(_pad)},${_n(_pad)})">');
 
-  void drawClusters(List<ElkPositionedNode> nodes, double dx, double dy) {
+  void drawLabel(
+    ElkPositionedLabel label,
+    double dx,
+    double dy, {
+    String cssClass = 'edge-label',
+    bool backing = false,
+  }) {
+    final x = dx + label.x, y = dy + label.y;
+    if (backing) {
+      b.writeln(
+        '<rect x="${_n(x)}" y="${_n(y)}" '
+        'width="${_n(label.width)}" height="${_n(label.height)}" '
+        'rx="2" fill="#fff" fill-opacity="0.94"/>',
+      );
+    }
+    b.writeln(
+      '<text x="${_n(x + label.width / 2)}" '
+      'y="${_n(y + label.height / 2)}" class="$cssClass" '
+      'text-anchor="middle" dominant-baseline="central">'
+      '${_esc(label.text)}</text>',
+    );
+  }
+
+  void drawNodes(List<ElkPositionedNode> nodes, double dx, double dy) {
     for (final n in nodes) {
       final ax = n.x + dx, ay = n.y + dy;
-      if (n.children.isNotEmpty) {
-        b.writeln('<rect x="${_n(ax)}" y="${_n(ay)}" width="${_n(n.width)}" '
-            'height="${_n(n.height)}" rx="8" fill="$_clusterFill" '
-            'stroke="$_clusterStroke" stroke-dasharray="4 3"/>');
-        final label = labels[n.id];
-        if (label != null) {
-          // Draw the label just above the cluster box so it never overlaps the
-          // child nodes inside.
-          b.writeln('<text x="${_n(ax + 2)}" y="${_n(ay - 5)}" '
-              'class="cluster-label">${_esc(label)}</text>');
+      final compound = n.children.isNotEmpty;
+      b.writeln(
+        '<rect x="${_n(ax)}" y="${_n(ay)}" width="${_n(n.width)}" '
+        'height="${_n(n.height)}" rx="${compound ? 8 : 6}" '
+        'fill="${compound ? _clusterFill : _nodeFill}" '
+        'stroke="${compound ? _clusterStroke : _nodeStroke}" '
+        '${compound ? 'stroke-dasharray="4 3"' : ''}/>',
+      );
+      if (n.labels.isNotEmpty) {
+        for (final label in n.labels) {
+          drawLabel(
+            label,
+            ax,
+            ay,
+            cssClass: compound ? 'cluster-label' : 'node-label',
+          );
         }
-        drawClusters(n.children, ax, ay);
-      }
-    }
-  }
-
-  void drawLeaves(List<ElkPositionedNode> nodes, double dx, double dy) {
-    for (final n in nodes) {
-      final ax = n.x + dx, ay = n.y + dy;
-      if (n.children.isNotEmpty) {
-        drawLeaves(n.children, ax, ay);
+      } else if (compound) {
+        if (labels[n.id] case final String label) {
+          b.writeln(
+            '<text x="${_n(ax + 2)}" y="${_n(ay - 5)}" '
+            'class="cluster-label">${_esc(label)}</text>',
+          );
+        }
       } else {
-        b.writeln('<rect x="${_n(ax)}" y="${_n(ay)}" width="${_n(n.width)}" '
-            'height="${_n(n.height)}" rx="6" fill="$_nodeFill" '
-            'stroke="$_nodeStroke"/>');
-        final label = labels[n.id] ?? n.id;
-        b.writeln('<text x="${_n(ax + n.width / 2)}" '
-            'y="${_n(ay + n.height / 2)}" class="node-label" '
-            'text-anchor="middle" dominant-baseline="central">'
-            '${_esc(label)}</text>');
+        b.writeln(
+          '<text x="${_n(ax + n.width / 2)}" '
+          'y="${_n(ay + n.height / 2)}" class="node-label" '
+          'text-anchor="middle" dominant-baseline="central">'
+          '${_esc(labels[n.id] ?? n.id)}</text>',
+        );
       }
+      drawNodes(n.children, ax, ay);
     }
   }
 
-  drawClusters(r.children, 0, 0);
-  drawLeaves(r.children, 0, 0);
+  drawNodes(r.children, 0, 0);
 
-  for (final e in r.edges) {
-    if (e.sections.isEmpty) continue;
-    final pts =
-        e.sections.first.points.map((p) => '${_n(p.x)},${_n(p.y)}').join(' ');
-    b.writeln('<polyline points="$pts" fill="none" stroke="$_edgeStroke" '
-        'stroke-width="1.6" marker-end="url(#arrow)"/>');
+  for (final edge in r.edges) {
+    for (final section in edge.sections) {
+      final points = section.points
+          .map((p) => '${_n(p.x)},${_n(p.y)}')
+          .join(' ');
+      b.writeln(
+        '<polyline points="$points" fill="none" stroke="$_edgeStroke" '
+        'stroke-width="${_n(thickness[edge.id] ?? 1)}" '
+        'marker-end="url(#$marker)"/>',
+      );
+    }
+    for (final point in edge.junctionPoints) {
+      b.writeln(
+        '<circle cx="${_n(point.x)}" cy="${_n(point.y)}" '
+        'r="2.5" fill="$_edgeStroke"/>',
+      );
+    }
+    for (final label in edge.labels) {
+      drawLabel(label, 0, 0, backing: true);
+    }
   }
 
+  void drawPorts(List<ElkPositionedNode> nodes, double dx, double dy) {
+    for (final node in nodes) {
+      final ax = node.x + dx, ay = node.y + dy;
+      for (final port in node.ports) {
+        b.writeln(
+          '<rect x="${_n(ax + port.x)}" y="${_n(ay + port.y)}" '
+          'width="${_n(port.width)}" height="${_n(port.height)}" '
+          'fill="#f7e6a0" stroke="#8e6d24"/>',
+        );
+        for (final label in port.labels) {
+          drawLabel(label, ax + port.x, ay + port.y, cssClass: 'port-label');
+        }
+      }
+      drawPorts(node.children, ax, ay);
+    }
+  }
+
+  drawPorts(r.children, 0, 0);
   b.writeln('</g></svg>');
   return b.toString();
 }

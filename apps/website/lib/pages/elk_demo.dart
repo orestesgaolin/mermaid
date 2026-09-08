@@ -67,7 +67,8 @@ class ElkDemoPage extends StatelessComponent {
           .text(' package and drawn straight to SVG — '),
           strong([.text('no mermaid, no diagram DSL')]),
           .text('. You hand it a graph of nodes and edges; it returns '
-              'coordinates and orthogonal edge routes.'),
+              'coordinates and orthogonal edge routes. Wide examples scroll '
+              'horizontally on small screens.'),
         ]),
       ]),
       div(classes: 'elk-cards', [
@@ -133,6 +134,7 @@ class ElkDemoPage extends StatelessComponent {
           ),
         ]),
         css('.elk-card').styles(
+          raw: {'min-width': '0'},
           margin: .zero,
           border: .all(
               style: BorderStyle.solid, color: const Color('#e3ddf5'), width: 1.px),
@@ -156,9 +158,10 @@ class ElkDemoPage extends StatelessComponent {
           margin: .zero,
         ),
         css('.elk-svg-wrap').styles(
+          overflow: .auto,
           padding: .all(14.px),
           display: .flex,
-          justifyContent: .center,
+          justifyContent: .start,
         ),
         css('.elk-svg-wrap svg').styles(
           maxWidth: 100.percent,
@@ -166,6 +169,9 @@ class ElkDemoPage extends StatelessComponent {
         ),
         css('.node-label').styles(
           raw: {'fill': '#33335a', 'font-size': '14px'},
+        ),
+        css('.edge-label, .port-label').styles(
+          raw: {'fill': '#4a3a8a', 'font-size': '11px'},
         ),
         css('.cluster-label').styles(
           raw: {'fill': '#4a3a8a', 'font-size': '12px', 'font-weight': '600'},
@@ -258,6 +264,9 @@ class ElkDemoPage extends StatelessComponent {
           padding: .zero,
         ),
         css('.elk-readme table').styles(
+          display: .block,
+          overflow: .auto,
+          maxWidth: 100.percent,
           width: 100.percent,
           margin: .only(top: 8.px, bottom: 12.px),
           fontSize: 0.92.rem,
