@@ -98,9 +98,19 @@ ElkResult layeredLayout(ElkGraph graph) {
   final transpose = dir == ElkDirection.down || dir == ElkDirection.up;
 
   final engine = _Engine(graph.layoutOptions, transpose, dir);
+  final rootHierarchy =
+      graph.layoutOptions.hierarchyHandling ==
+          ElkHierarchyHandling.includeChildren
+      ? _HierarchyMode.includeChildren
+      : _HierarchyMode.separateChildren;
 
   // Build the (possibly hierarchical) LGraph; lay it out.
-  final root = engine.buildGraph(graph.children, graph.edges, dir);
+  final root = engine.buildGraph(
+    graph.children,
+    graph.edges,
+    dir,
+    rootHierarchy,
+  );
   engine.layoutHierarchy(root);
 
   // Extract the root graph into the result tree.
@@ -203,11 +213,21 @@ class _MarkFixedSideConstraints implements ILayoutProcessor {
 /// segment to the same border point. [east] = the port is on the cluster's east
 /// (output) side; otherwise west (input).
 class _PortLink {
-  _PortLink(this.port, this.dummy, this.east);
+  _PortLink(this.port, this.dummy, this.east, {this.declaredSide});
   final LPort port;
   final LNode dummy;
   final bool east;
+  final PortSide? declaredSide;
 }
+
+class _DeclaredBoundaryRoute {
+  const _DeclaredBoundaryRoute(this.owner, this.port, this.source);
+  final LNode owner;
+  final LPort port;
+  final bool source;
+}
+
+enum _HierarchyMode { includeChildren, separateChildren }
 
 /// Per-run layout engine. Holds the shared options/transform and the mapping
 /// from input ids to [LNode]s so cross-references (edges) can be resolved
@@ -228,6 +248,7 @@ class _Engine {
   /// Per-graph: id → LNode for the nodes directly in that graph.
   final Map<LGraph, Map<String, LNode>> nodesByGraph = {};
   final Map<LGraph, ElkDirection> _directionByGraph = {};
+  final Map<LGraph, _HierarchyMode> _hierarchyByGraph = {};
 
   /// Per-graph: edge id → LEdge for the edges directly in that graph.
   final Map<LGraph, Map<String, LEdge>> edgesByGraph = {};
@@ -268,9 +289,17 @@ class _Engine {
   final Map<LEdge, List<ElkPositionedLabel>> _crossSegmentLabels = {};
   final Map<LEdge, List<ElkPoint>> _crossSegmentJunctions = {};
 
+  /// Edges crossing a SEPARATE_CHILDREN boundary remain in output but have no
+  /// routed sections, matching the useful part of elkjs separate-hierarchy
+  /// output without throwing for a nested explicit boundary.
+  final Map<String, ElkEdge> _unroutedEdges = {};
+
   /// Deferred links: after a nested graph is laid out, copy each external-port
   /// dummy's resolved border position onto the cluster's external [LPort].
   final List<_PortLink> _portLinks = [];
+  final Map<LEdge, _DeclaredBoundaryRoute> _declaredBoundaryRoutes = {};
+  final Map<LEdge, ElkPoint> _declaredBoundaryPoints = {};
+  final Map<LPort, ElkPortSide> _declaredOutputSides = {};
 
   /// Output-space band (height) reserved at the top of a compound node for its
   /// label (subgraph title). ELK upstream reserves this via node labels with
@@ -286,9 +315,11 @@ class _Engine {
     List<ElkNode> nodes,
     List<ElkEdge> edges,
     ElkDirection localDirection,
+    _HierarchyMode hierarchyMode,
   ) {
     final lg = LGraph();
     _directionByGraph[lg] = localDirection;
+    _hierarchyByGraph[lg] = hierarchyMode;
     final localTranspose =
         localDirection == ElkDirection.down ||
         localDirection == ElkDirection.up;
@@ -359,6 +390,10 @@ class _Engine {
           continue; // leaves can't own (self-loops stay here)
         if (_endpointInSubtree(n, e.source) &&
             _endpointInSubtree(n, e.target)) {
+          final touchesBoundaryPort = n.ports.any(
+            (port) => port.id == e.source || port.id == e.target,
+          );
+          if (touchesBoundaryPort) break;
           owner = n;
           break;
         }
@@ -367,6 +402,20 @@ class _Engine {
         (perChild[owner.id] ??= []).add(e);
       } else {
         ownedHere.add(e);
+      }
+    }
+    // An edge declared by a compound and attached to one of that compound's
+    // own ports belongs to the enclosing graph. Hoist it here so the boundary
+    // port can be resolved together with the compound node.
+    final hoistedBoundaryEdges = <String, Set<String>>{};
+    for (final node in nodes.where((node) => node.isCompound)) {
+      final boundaryPortIds = {for (final port in node.ports) port.id};
+      for (final edge in node.edges) {
+        if (boundaryPortIds.contains(edge.source) ||
+            boundaryPortIds.contains(edge.target)) {
+          ownedHere.add(edge);
+          (hoistedBoundaryEdges[node.id] ??= {}).add(edge.id);
+        }
       }
     }
 
@@ -435,12 +484,25 @@ class _Engine {
         ln.labels.add(_makeLabel(label, localTranspose));
       }
       if (n.isCompound) {
+        final hierarchyOverride = n.layoutOptions?.hierarchyHandlingOverride;
+        final childHierarchy =
+            hierarchyMode == _HierarchyMode.separateChildren ||
+                hierarchyOverride == ElkHierarchyHandling.separateChildren
+            ? _HierarchyMode.separateChildren
+            : _HierarchyMode.includeChildren;
         // Recurse: nested graph holds this node's own declared edges plus the
         // edges routed down to it by LCA assignment above.
-        ln.nestedGraph = buildGraph(n.children, [
-          ...n.edges,
-          ...?perChild[n.id],
-        ], n.layoutOptions?.direction ?? localDirection);
+        ln.nestedGraph = buildGraph(
+          n.children,
+          [
+            for (final edge in n.edges)
+              if (!(hoistedBoundaryEdges[n.id]?.contains(edge.id) ?? false))
+                edge,
+            ...?perChild[n.id],
+          ],
+          n.layoutOptions?.directionOverride ?? localDirection,
+          childHierarchy,
+        );
         // Size is computed bottom-up after the nested layout; placeholder now.
         ln.size.x = 0;
         ln.size.y = 0;
@@ -474,6 +536,7 @@ class _Engine {
           portNodeById[ep.id] = ln;
 
           if (ep.side != null) {
+            _declaredOutputSides[lp] = ep.side!;
             lp.side = _outputSideToInternal(
               ep.side!,
               localTranspose,
@@ -538,6 +601,77 @@ class _Engine {
       }
       if (sn == tn) {
         final node = byId[sn];
+        final childElk = nodes.firstWhere((candidate) => candidate.id == sn);
+        final sourceBoundary = node == null
+            ? null
+            : declaredPortsById[node]?[e.source];
+        final targetBoundary = node == null
+            ? null
+            : declaredPortsById[node]?[e.target];
+        if (node?.nestedGraph != null &&
+            (sourceBoundary == null) != (targetBoundary == null)) {
+          final boundaryIsSource = sourceBoundary != null;
+          final innerEndpoint = boundaryIsSource ? e.target : e.source;
+          if (_crossesSeparateBelowBoundary(node!, childElk, innerEndpoint)) {
+            _unroutedEdges[e.id] = e;
+            continue;
+          }
+          final chain = <LEdge>[];
+          _endpointPort(
+            node,
+            childElk,
+            innerEndpoint,
+            !boundaryIsSource,
+            chain,
+            declarationOrder: ownedHere.indexOf(e),
+            outerPort: sourceBoundary ?? targetBoundary,
+          );
+          if (chain.isNotEmpty) {
+            if (chain.length == 1) {
+              final segment = chain.single;
+              final segmentGraph = segment.source!.node.graph;
+              final nestedMap = edgesByGraph[segmentGraph]!;
+              nestedMap.removeWhere((_, value) => identical(value, segment));
+              nestedMap[e.id] = segment;
+              segment.setProperty(labelEdgeThickness, e.thickness);
+              _declaredBoundaryRoutes[segment] = _DeclaredBoundaryRoute(
+                node,
+                sourceBoundary ?? targetBoundary!,
+                boundaryIsSource,
+              );
+              final segmentDirection = _directionByGraph[segmentGraph]!;
+              _attachLabels(
+                segment,
+                e,
+                segmentDirection == ElkDirection.down ||
+                    segmentDirection == ElkDirection.up,
+              );
+              continue;
+            }
+            for (final segment in chain) {
+              segment.setProperty(labelEdgeThickness, e.thickness);
+              _crossSegmentEdges.add(segment);
+            }
+            for (final label in e.labels) {
+              final segment = switch (label.placement) {
+                ElkEdgeLabelPlacement.center => chain[chain.length ~/ 2],
+                ElkEdgeLabelPlacement.tail => chain.first,
+                ElkEdgeLabelPlacement.head => chain.last,
+              };
+              final segmentDirection =
+                  _directionByGraph[segment.source!.node.graph]!;
+              segment.labels.add(
+                _makeLabel(
+                  label,
+                  segmentDirection == ElkDirection.down ||
+                      segmentDirection == ElkDirection.up,
+                ),
+              );
+            }
+            _crossSegments[e.id] = chain;
+          }
+          continue;
+        }
         if (node != null &&
             (e.source == e.target ||
                 (portNodeById[e.source] == node &&
@@ -579,6 +713,12 @@ class _Engine {
       final rn = byId[tn]!;
       final sChildElk = nodes.firstWhere((n) => n.id == sn);
       final tChildElk = nodes.firstWhere((n) => n.id == tn);
+
+      if (_crossesSeparateBoundary(ln, sChildElk, e.source) ||
+          _crossesSeparateBoundary(rn, tChildElk, e.target)) {
+        _unroutedEdges[e.id] = e;
+        continue;
+      }
 
       // Cross-hierarchy splitting: if an endpoint lies one level inside a
       // compound child, split the edge through an external port on the cluster
@@ -653,6 +793,55 @@ class _Engine {
     }
 
     return lg;
+  }
+
+  bool _crossesSeparateBoundary(
+    LNode childLn,
+    ElkNode childElk,
+    String endpoint,
+  ) {
+    final isChildItself =
+        childElk.id == endpoint ||
+        childElk.ports.any((port) => port.id == endpoint);
+    if (isChildItself) return false;
+    final nested = childLn.nestedGraph;
+    if (nested == null) return false;
+    if (_hierarchyByGraph[nested] == _HierarchyMode.separateChildren) {
+      return true;
+    }
+    final innerId = _resolveDirectChild(
+      nodesByGraph[nested]!,
+      _graphPortNode[nested]!,
+      childElk.children,
+      endpoint,
+    );
+    if (innerId == null) return false;
+    return _crossesSeparateBoundary(
+      nodesByGraph[nested]![innerId]!,
+      childElk.children.firstWhere((node) => node.id == innerId),
+      endpoint,
+    );
+  }
+
+  bool _crossesSeparateBelowBoundary(
+    LNode childLn,
+    ElkNode childElk,
+    String endpoint,
+  ) {
+    final nested = childLn.nestedGraph;
+    if (nested == null) return false;
+    final innerId = _resolveDirectChild(
+      nodesByGraph[nested]!,
+      _graphPortNode[nested]!,
+      childElk.children,
+      endpoint,
+    );
+    if (innerId == null) return false;
+    return _crossesSeparateBoundary(
+      nodesByGraph[nested]![innerId]!,
+      childElk.children.firstWhere((node) => node.id == innerId),
+      endpoint,
+    );
   }
 
   /// Coarse longest-path layer rank of the direct children at one level, over
@@ -740,6 +929,7 @@ class _Engine {
     List<LEdge> segs, {
     bool backward = false,
     int declarationOrder = 0,
+    LPort? outerPort,
   }) {
     // Which border the cross-hierarchy edge attaches to. For a forward edge a
     // source exits the DOWNSTREAM side (last layer / EAST) and a target enters
@@ -749,7 +939,8 @@ class _Engine {
     // of wrapping around and cutting through the cluster to reach the opposite
     // border. `useFirst` is the first-layer (UPSTREAM / WEST) attachment.
     final useFirst = isSource ? backward : !backward;
-    final clusterSide = useFirst ? PortSide.west : PortSide.east;
+    final clusterSide =
+        outerPort?.side ?? (useFirst ? PortSide.west : PortSide.east);
 
     final isChildItself =
         childElk.id == endpoint || childElk.ports.any((p) => p.id == endpoint);
@@ -782,9 +973,9 @@ class _Engine {
     if (innerPort == null) return null;
 
     // External port on the cluster + external-port dummy inside the nested graph.
-    final p = LPort(childLn)..side = clusterSide;
+    final p = outerPort ?? (LPort(childLn)..side = clusterSide);
     p.setProperty(crossHierarchyFixedPort, true);
-    childLn.ports.add(p);
+    if (!childLn.ports.contains(p)) childLn.ports.add(p);
     _nodesWithFixedSides.add(childLn);
 
     final d = LNode(nested)..type = NodeType.externalPort;
@@ -794,14 +985,28 @@ class _Engine {
     );
     // The dummy's own port faces inward (toward the cluster's content), i.e. the
     // side opposite the border it sits on.
-    final dPort = LPort(d)..side = useFirst ? PortSide.east : PortSide.west;
+    final dPort = LPort(d)
+      ..side = switch (clusterSide) {
+        PortSide.west => PortSide.east,
+        PortSide.east => PortSide.west,
+        PortSide.north => PortSide.south,
+        PortSide.south => PortSide.north,
+        PortSide.undefined => useFirst ? PortSide.east : PortSide.west,
+      };
     d.ports.add(dPort);
     nested.layerlessNodes.add(d);
     // `east` must reflect the actual border the port sits on (first layer → WEST
     // → x=0; last layer → EAST → x=ln.size.x), so the post-crossmin position
     // copy places the external port on the same border its inner dummy ended up
     // on. Using `isSource` here breaks for flipped back-edges.
-    _portLinks.add(_PortLink(p, d, !useFirst));
+    _portLinks.add(
+      _PortLink(
+        p,
+        d,
+        clusterSide == PortSide.east,
+        declaredSide: outerPort?.side,
+      ),
+    );
 
     // Inner segment connecting the real node to the boundary dummy.
     final seg = LEdge()..setProperty(edgeModelOrder, declarationOrder);
@@ -1115,13 +1320,15 @@ class _Engine {
         // displace the boundary port by exactly one label band.
         final bandX = localDirection == ElkDirection.down ? band : 0.0;
         final bandY = localTranspose ? 0.0 : band;
-        final boundarySide = switch (dPort?.side) {
-          PortSide.east => PortSide.west,
-          PortSide.west => PortSide.east,
-          PortSide.north => PortSide.south,
-          PortSide.south => PortSide.north,
-          _ => link.east ? PortSide.east : PortSide.west,
-        };
+        final boundarySide =
+            link.declaredSide ??
+            switch (dPort?.side) {
+              PortSide.east => PortSide.west,
+              PortSide.west => PortSide.east,
+              PortSide.north => PortSide.south,
+              PortSide.south => PortSide.north,
+              _ => link.east ? PortSide.east : PortSide.west,
+            };
         final contentX = dummyAnchor.x - nOx + _compoundPadding + bandX;
         final contentY = dummyAnchor.y - nOy + _compoundPadding + bandY;
         link.port.side = boundarySide;
@@ -1147,9 +1354,11 @@ class _Engine {
         }
         // Anchor at the port's own position (size is zero), so the outer edge
         // segment meets the border exactly where the inner segment does.
-        link.port.anchor
-          ..x = 0
-          ..y = 0;
+        if (link.declaredSide == null) {
+          link.port.anchor
+            ..x = 0
+            ..y = 0;
+        }
       }
     }
     _runProcessors(_postCrossminProcessors(), lg);
@@ -1303,6 +1512,12 @@ class _Engine {
     // dropping duplicate points where segments meet at a cluster border.
     _stitchCrossEdges();
 
+    for (final edge in _unroutedEdges.values) {
+      _edges.add(
+        ElkPositionedEdge(id: edge.id, sections: const [], labels: const []),
+      );
+    }
+
     return ElkResult(width: gw, height: gh, children: nodes, edges: _edges);
   }
 
@@ -1373,15 +1588,40 @@ class _Engine {
       return ElkPoint(ox + _compoundPadding, oy + _compoundPadding + band);
     }
 
+    final ports = _extractDeclaredPorts(ln, x, y, ow, oh, parentOut);
+    for (final entry in _declaredBoundaryRoutes.entries) {
+      if (entry.value.owner != ln) continue;
+      final portId = declaredPortsById[ln]!.entries
+          .singleWhere((candidate) => candidate.value == entry.value.port)
+          .key;
+      final port = ports.singleWhere((candidate) => candidate.id == portId);
+      final side = _declaredOutputSides[entry.value.port]!;
+      _declaredBoundaryPoints[entry.key] = switch (side) {
+        ElkPortSide.north => ElkPoint(
+          myAbsX + port.x + port.width / 2,
+          myAbsY + port.y + port.height,
+        ),
+        ElkPortSide.south => ElkPoint(
+          myAbsX + port.x + port.width / 2,
+          myAbsY + port.y,
+        ),
+        ElkPortSide.east => ElkPoint(
+          myAbsX + port.x,
+          myAbsY + port.y + port.height / 2,
+        ),
+        ElkPortSide.west => ElkPoint(
+          myAbsX + port.x + port.width,
+          myAbsY + port.y + port.height / 2,
+        ),
+      };
+    }
+
     final children = <ElkPositionedNode>[
       for (final c in _placedNodes(nested))
         _extractNode(c, childOut, myAbsX, myAbsY),
     ];
     // Edges internal to this cluster, collected in root-absolute output space.
     _collectEdges(nested, childOut, myAbsX, myAbsY);
-
-    // Emit declared ports for the compound node too (if any).
-    final ports = _extractDeclaredPorts(ln, x, y, ow, oh, parentOut);
 
     return ElkPositionedNode(
       id: ln.identifier!,
@@ -1528,6 +1768,32 @@ class _Engine {
         for (final b in le.bendPoints.points) at(b.x, b.y),
         at(tgt.absoluteAnchor.x, tgt.absoluteAnchor.y),
       ];
+      final boundary = _declaredBoundaryRoutes[le];
+      final boundaryPoint = _declaredBoundaryPoints[le];
+      if (boundary != null && boundaryPoint != null) {
+        final side = _declaredOutputSides[boundary.port]!;
+        if (boundary.source) {
+          final oldStart = pts.first;
+          pts[0] = boundaryPoint;
+          final corner = side == ElkPortSide.north || side == ElkPortSide.south
+              ? ElkPoint(boundaryPoint.x, oldStart.y)
+              : ElkPoint(oldStart.x, boundaryPoint.y);
+          pts.insertAll(1, [corner, oldStart]);
+        } else {
+          final oldEnd = pts.last;
+          pts[pts.length - 1] = boundaryPoint;
+          final corner = side == ElkPortSide.north || side == ElkPortSide.south
+              ? ElkPoint(boundaryPoint.x, oldEnd.y)
+              : ElkPoint(oldEnd.x, boundaryPoint.y);
+          pts.insertAll(pts.length - 1, [oldEnd, corner]);
+        }
+        for (var index = pts.length - 1; index > 0; index--) {
+          if (pts[index].x == pts[index - 1].x &&
+              pts[index].y == pts[index - 1].y) {
+            pts.removeAt(index);
+          }
+        }
+      }
       final labels = <ElkPositionedLabel>[
         for (final ll in le.labels)
           () {

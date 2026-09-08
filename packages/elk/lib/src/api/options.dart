@@ -81,11 +81,11 @@ class ElkLayoutOptions {
   const ElkLayoutOptions({
     this.algorithm = 'layered',
     this.padding = const ElkPadding(),
-    this.direction = ElkDirection.down,
+    ElkDirection? direction,
     this.spacingBaseValue = 40,
     this.nodePlacement = ElkNodePlacement.brandesKoepf,
     this.fixedAlignment = ElkFixedAlignment.none,
-    this.hierarchyHandling = ElkHierarchyHandling.includeChildren,
+    ElkHierarchyHandling? hierarchyHandling,
     this.mergeEdges = false,
     this.considerModelOrder = ElkConsiderModelOrder.none,
     this.forceNodeModelOrder = false,
@@ -102,13 +102,22 @@ class ElkLayoutOptions {
     this.spacingNodeNodeBetweenLayers,
     this.spacingEdgeEdge = 10,
     this.improveStraightness = false,
-  });
+  }) : directionOverride = direction,
+       hierarchyHandlingOverride = hierarchyHandling;
 
   final String algorithm;
 
   /// Explicit root padding. Unspecified padding preserves tight output bounds.
   final ElkPadding padding;
-  final ElkDirection direction;
+
+  /// Explicit direction supplied for this graph or compound node.
+  ///
+  /// A null value lets a nested graph inherit its enclosing direction. At the
+  /// root, absence resolves to [ElkDirection.down] to preserve the package
+  /// default.
+  final ElkDirection? directionOverride;
+
+  ElkDirection get direction => directionOverride ?? ElkDirection.down;
 
   /// Base spacing unit; ELK derives the concrete node/edge/layer spacings from
   /// it when those are not set explicitly. See [resolvedNodeNode] etc.
@@ -116,7 +125,16 @@ class ElkLayoutOptions {
 
   final ElkNodePlacement nodePlacement;
   final ElkFixedAlignment fixedAlignment;
-  final ElkHierarchyHandling hierarchyHandling;
+
+  /// Explicit hierarchy mode supplied for this graph or compound node.
+  ///
+  /// A null value lets a nested graph inherit its enclosing mode. At the root,
+  /// absence resolves to [ElkHierarchyHandling.includeChildren] to preserve the
+  /// package default.
+  final ElkHierarchyHandling? hierarchyHandlingOverride;
+
+  ElkHierarchyHandling get hierarchyHandling =>
+      hierarchyHandlingOverride ?? ElkHierarchyHandling.includeChildren;
   final bool mergeEdges;
   final ElkConsiderModelOrder considerModelOrder;
   final bool forceNodeModelOrder;
@@ -183,6 +201,8 @@ class ElkLayoutOptions {
     Object? option(String key) =>
         m['org.eclipse.elk.$key'] ?? m['elk.$key'] ?? m[key];
     Object? layeredOption(String key) => option('layered.$key');
+    final directionValue = option('direction');
+    final hierarchyValue = option('hierarchyHandling');
     final surrounding = option('spacing.portsSurrounding');
     double? surroundingSide(String side) {
       if (surrounding is Map) return asNum(surrounding[side]);
@@ -198,9 +218,16 @@ class ElkLayoutOptions {
     return ElkLayoutOptions(
       algorithm: (option('algorithm') ?? 'layered').toString(),
       padding: ElkPadding._fromJson(option('padding')),
-      direction: dir(option('direction')),
+      direction: directionValue == null ? null : dir(directionValue),
       spacingBaseValue: asNum(option('spacing.baseValue')) ?? 40,
       fixedAlignment: align(layeredOption('nodePlacement.bk.fixedAlignment')),
+      hierarchyHandling: hierarchyValue == null
+          ? null
+          : switch ('$hierarchyValue'.toUpperCase()) {
+              'INHERIT' => ElkHierarchyHandling.inherit,
+              'SEPARATE_CHILDREN' => ElkHierarchyHandling.separateChildren,
+              _ => ElkHierarchyHandling.includeChildren,
+            },
       mergeEdges: asBool(layeredOption('mergeEdges')),
       cycleBreaking: switch ('${layeredOption('cycleBreaking.strategy')}'
           .toUpperCase()) {
@@ -284,11 +311,11 @@ class ElkLayoutOptions {
     return ElkLayoutOptions(
       algorithm: algorithm ?? this.algorithm,
       padding: padding ?? this.padding,
-      direction: direction ?? this.direction,
+      direction: direction ?? directionOverride,
       spacingBaseValue: spacingBaseValue ?? this.spacingBaseValue,
       nodePlacement: nodePlacement ?? this.nodePlacement,
       fixedAlignment: fixedAlignment ?? this.fixedAlignment,
-      hierarchyHandling: hierarchyHandling ?? this.hierarchyHandling,
+      hierarchyHandling: hierarchyHandling ?? hierarchyHandlingOverride,
       mergeEdges: mergeEdges ?? this.mergeEdges,
       considerModelOrder: considerModelOrder ?? this.considerModelOrder,
       forceNodeModelOrder: forceNodeModelOrder ?? this.forceNodeModelOrder,

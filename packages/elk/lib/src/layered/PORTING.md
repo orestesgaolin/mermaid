@@ -24,6 +24,7 @@ Paths below are relative to `packages/elk/` unless they name a phase file above.
 | Feature | Contract | Tests / tracking |
 | --- | --- | --- |
 | Hierarchy | Recursive child graphs; edges split through every ancestor and reassembled at their original endpoints; positioned labels retained | `test/elk_hierarchy_test.dart`, #50 |
+| Hierarchy modes | Root and per-compound INCLUDE_CHILDREN, SEPARATE_CHILDREN and INHERIT resolution; independent groups retain unrouted cross-boundary edge IDs with empty sections | `test/hierarchy_handling_test.dart`, #69 |
 | Nested directions | Each child graph can override its parent's direction; descendant geometry, ports, labels, junctions and cross-boundary segments are converted bottom-up into the parent frame | `test/nested_direction_test.dart`, #62 |
 | Output bounds | Root and compound extents include ports, routed stroke extents, junctions and labels | `test/bounds_geometry_test.dart`, #68 |
 | Ports | Four explicit sides, spaced N/S anchors, fixed-side preservation, fixed cross-boundary ports; configurable surrounding top/bottom spacing | `test/elk_ports_test.dart`, #51 |
@@ -36,8 +37,9 @@ Paths below are relative to `packages/elk/` unless they name a phase file above.
 
 Explicit port coordinates in positioned output refer to the port rectangle's
 top-left. Edge endpoints use the outward face of the port rectangle; this is
-different from the node-border coordinate for a nonzero-size port. Head/tail
-labels on deep edges refer to the original
+different from the node-border coordinate for a nonzero-size port. Edges
+inside a compound connect to its boundary ports at their inward face; edges
+outside the compound use their outward face. Head/tail labels on deep edges refer to the original
 source/target, not the enclosing compound.
 
 Multi-endpoint edges return one section per source-target branch and retain the
@@ -70,7 +72,7 @@ and leaf overlap. Compound containment is expected and is not a leaf overlap.
 separate action from running tests against the recorded output.
 
 The recursive hierarchy arrangement is not the complete upstream coordinated
-INCLUDE_CHILDREN optimization. Dense graphs can differ in boundary port order,
+INCLUDE_CHILDREN optimization (#78). Dense graphs can differ in boundary port order,
 edge clearance and total edge length. The seeded random implementation does
 not promise the same random call sequence or bit-identical tie-breaking as
 elkjs. Accepted alternative node-placement strategy names may still use BK;

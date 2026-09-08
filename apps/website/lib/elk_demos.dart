@@ -376,8 +376,10 @@ String _renderSvg(
         'r="2.5" fill="$_edgeStroke"/>',
       );
     }
-    for (final label in edge.labels) {
-      drawLabel(label, 0, 0, backing: true);
+    if (edge.sections.isNotEmpty) {
+      for (final label in edge.labels) {
+        drawLabel(label, 0, 0, backing: true);
+      }
     }
   }
 
@@ -462,8 +464,10 @@ _Bounds _geometryBounds(ElkResult result, ElkGraph input) {
     for (final point in edge.junctionPoints) {
       bounds = bounds.includeRect(point.x - 2.5, point.y - 2.5, 5, 5);
     }
-    for (final label in edge.labels) {
-      includeLabel(label, 0, 0);
+    if (edge.sections.isNotEmpty) {
+      for (final label in edge.labels) {
+        includeLabel(label, 0, 0);
+      }
     }
   }
   return bounds;

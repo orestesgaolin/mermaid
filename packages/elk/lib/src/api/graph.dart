@@ -135,7 +135,10 @@ class ElkNode {
         final Map options
             when options.containsKey('org.eclipse.elk.direction') ||
                 options.containsKey('elk.direction') ||
-                options.containsKey('direction') =>
+                options.containsKey('direction') ||
+                options.containsKey('org.eclipse.elk.hierarchyHandling') ||
+                options.containsKey('elk.hierarchyHandling') ||
+                options.containsKey('hierarchyHandling') =>
           ElkLayoutOptions.fromElkJson(options.cast<String, dynamic>()),
         _ => null,
       },

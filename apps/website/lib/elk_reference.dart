@@ -120,9 +120,14 @@ Map<String, dynamic> _node(ElkNode n) => {
   'width': n.width,
   'height': n.height,
   'layoutOptions': {
-    // Direction is the only nested graph override implemented by Dart ELK.
-    if (n.layoutOptions != null)
-      'elk.direction': n.layoutOptions!.direction.name.toUpperCase(),
+    if (n.layoutOptions?.directionOverride case final direction?)
+      'elk.direction': direction.name.toUpperCase(),
+    if (n.layoutOptions?.hierarchyHandlingOverride case final handling?)
+      'elk.hierarchyHandling': switch (handling) {
+        ElkHierarchyHandling.inherit => 'INHERIT',
+        ElkHierarchyHandling.includeChildren => 'INCLUDE_CHILDREN',
+        ElkHierarchyHandling.separateChildren => 'SEPARATE_CHILDREN',
+      },
     if (n.ports.isNotEmpty && n.ports.every((port) => port.side != null))
       'elk.portConstraints': 'FIXED_SIDE',
     if (!n.fixedSize)

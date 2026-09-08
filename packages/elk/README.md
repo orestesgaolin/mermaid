@@ -41,7 +41,7 @@ flat map with absolute coordinates.
 ## Options
 
 `ElkLayoutOptions` controls direction, spacing, node placement, fixed
-alignment, model-order handling, edge merging, and cycle breaking. For
+alignment, hierarchy handling, model-order handling, edge merging, and cycle breaking. For
 example:
 
 ```dart
@@ -55,6 +55,35 @@ const options = ElkLayoutOptions(
 Edges can refer to a node ID or to an `ElkPort` ID. A node with children is
 laid out as a compound node. Existing elkjs graph JSON can be loaded with
 `ElkGraph.fromJson`.
+
+## Hierarchy modes
+
+Set `hierarchyHandling` on root or compound `ElkLayoutOptions`. JSON accepts
+`org.eclipse.elk.hierarchyHandling`, `elk.hierarchyHandling`, and
+`hierarchyHandling`.
+
+| Mode | Behavior |
+| --- | --- |
+| `includeChildren` / `INCLUDE_CHILDREN` | Routes edges across included compound boundaries. |
+| `separateChildren` / `SEPARATE_CHILDREN` | Lays out groups independently. Edges internal to each group, including links from its own boundary ports to its children, remain routed; edges crossing a separated boundary remain in the result with empty `sections`. |
+| `inherit` / `INHERIT` | Uses the enclosing mode; at the root, resolves to `SEPARATE_CHILDREN`. |
+
+Omitting the root mode preserves Dart's existing `INCLUDE_CHILDREN` default.
+Omitting a compound override inherits its enclosing mode. An explicit included
+child does not reconnect a boundary separated by an ancestor. A direction-only
+compound override changes direction without changing the inherited mode; a
+hierarchy-only override preserves the inherited direction.
+
+Unlike elkjs 0.9.3, Dart retains cross-boundary edge IDs with empty `sections`
+when an included parent contains a separated child, rather than throwing.
+Unrouted edges have no positioned labels. Their original label metadata remains
+on the input graph. Consumers should draw only the sections that are present.
+
+Dart also retains its existing mixed-direction support under `INCLUDE_CHILDREN`.
+elkjs 0.9.3 ignores nested directions in that mode. The broader coordinated
+hierarchy optimization remains tracked in
+[issue #78](https://github.com/orestesgaolin/mermaid/issues/78); these modes do
+not promise identical coordinates or crossing order.
 
 ## Validation
 
@@ -72,6 +101,12 @@ $ dart run tool/validation/compare.dart
 The comparison checks layer assignment, node overlap, ordering, and graph
 bounds. Differences in within-layer ordering and exact coordinates are
 expected.
+
+The hierarchy tests also read retained elkjs 0.9.3 inputs and outputs from
+`test/fixtures/hierarchy_handling_elkjs.json`. After an intentional reference
+update, regenerate them from the package root with
+`node tool/validation/generate_hierarchy_reference.mjs`. Ordinary tests never
+regenerate reference data.
 
 ## License
 

@@ -33,7 +33,7 @@ const elkStressExamples = <ElkStressExample>[
         'elkjs 0.9.3 ignores child directions under INCLUDE_CHILDREN. '
         'Dart honors the DOWN service group and LEFT worker pool, so this '
         'layout is taller. Broader hierarchy compatibility remains tracked.',
-    trackingIssue: 69,
+    trackingIssue: 78,
     description:
         'A left-to-right system contains a vertical service group '
         'and a right-to-left worker pool. Cross-boundary edges keep their '
