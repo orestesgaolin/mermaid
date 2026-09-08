@@ -17,6 +17,7 @@ library;
 
 import 'attached_labels.dart';
 import 'hyperedge_adapter.dart';
+import 'implicit_port_merger.dart';
 import '../api/graph.dart';
 import '../api/options.dart';
 import '../api/result.dart';
@@ -206,7 +207,10 @@ class _PortLink {
 /// from input ids to [LNode]s so cross-references (edges) can be resolved
 /// within each hierarchy level.
 class _Engine {
-  _Engine(this.options, this.transpose, this.dir);
+  _Engine(this.options, this.transpose, this.dir)
+      : _implicitPorts = ImplicitPortMerger(enabled: options.mergeEdges);
+
+  final ImplicitPortMerger _implicitPorts;
 
   final ElkLayoutOptions options;
   final bool transpose;
@@ -657,15 +661,7 @@ class _Engine {
     String endpoint,
     PortSide defaultSide,
   ) {
-    final portMap = declaredPortsById[node];
-    if (portMap != null) {
-      final existing = portMap[endpoint];
-      if (existing != null) return existing;
-    }
-    // Auto-create a per-edge port (not declared, not tracked for extraction).
-    final p = LPort(node)..side = defaultSide;
-    node.ports.add(p);
-    return p;
+    return _implicitPorts.resolve(node, endpoint, defaultSide, declaredPortsById);
   }
 
   /// Counter for synthetic segment edge ids (cross-hierarchy splits).
