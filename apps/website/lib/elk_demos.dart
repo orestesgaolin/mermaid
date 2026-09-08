@@ -21,6 +21,8 @@ class ElkDemo {
     this.blurb,
     this.svg, {
     this.wide = false,
+    this.comparisonNote,
+    this.trackingIssue,
     this.referenceSvg,
     this.referenceError,
     this.version = '',
@@ -32,6 +34,8 @@ class ElkDemo {
   final String blurb;
   final String svg;
   final bool wide;
+  final String? comparisonNote;
+  final int? trackingIssue;
   final String? referenceSvg, referenceError;
   final String version, inputJson, dimensions, referenceDimensions;
 }
@@ -137,7 +141,16 @@ List<ElkStressExample> buildElkExamples() {
       },
       wide: true,
     ),
-    ...elkStressExamples,
+    for (final example in elkStressExamples)
+      _example(
+        example.title,
+        example.description,
+        example.graph,
+        example.labels,
+        wide: example.wide,
+        comparisonNote: example.comparisonNote,
+        trackingIssue: example.trackingIssue,
+      ),
   ];
 }
 
@@ -147,12 +160,24 @@ ElkStressExample _example(
   ElkGraph graph,
   Map<String, String> labels, {
   bool wide = false,
+  String? comparisonNote,
+  int? trackingIssue,
 }) => ElkStressExample(
   title: title,
   description: blurb,
-  graph: graph,
+  graph: ElkGraph(
+    id: graph.id,
+    children: graph.children,
+    edges: graph.edges,
+    layoutOptions: graph.layoutOptions.copyWith(
+      padding: const ElkPadding(top: 12, left: 12, bottom: 12, right: 12),
+      spacingEdgeNode: graph.layoutOptions.resolvedEdgeNode,
+    ),
+  ),
   labels: labels,
   wide: wide,
+  comparisonNote: comparisonNote,
+  trackingIssue: trackingIssue,
 );
 
 List<ElkDemo> buildElkDemos() => [
@@ -181,6 +206,8 @@ ElkDemo _demo(ElkStressExample example) {
             bounds,
           ),
     referenceError: reference.error,
+    comparisonNote: example.comparisonNote,
+    trackingIssue: example.trackingIssue,
     version: reference.elkjsVersion,
     inputJson: const JsonEncoder.withIndent('  ').convert(reference.input),
     dimensions: '${_n(result.width)} × ${_n(result.height)}',

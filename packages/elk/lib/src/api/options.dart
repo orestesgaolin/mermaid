@@ -96,6 +96,7 @@ class ElkLayoutOptions {
     this.spacingPortLabel = 1,
     this.spacingPortsSurroundingTop = 0,
     this.spacingPortsSurroundingBottom = 0,
+    this.spacingNodeSelfLoop,
     this.spacingNodeNode,
     this.spacingEdgeNode,
     this.spacingNodeNodeBetweenLayers,
@@ -128,6 +129,7 @@ class ElkLayoutOptions {
   final double spacingPortLabel;
   final double spacingPortsSurroundingTop;
   final double spacingPortsSurroundingBottom;
+  final double? spacingNodeSelfLoop;
   final double? spacingNodeNode;
   final double? spacingEdgeNode;
   final double? spacingNodeNodeBetweenLayers;
@@ -142,6 +144,11 @@ class ElkLayoutOptions {
 
   /// Spacing between a node and an edge routed past it.
   double get resolvedEdgeNode => spacingEdgeNode ?? spacingBaseValue * 0.5;
+
+  /// Spacing between a node and its self loops. ELK defaults this to 10 even
+  /// when general edge-to-node spacing is derived from a larger base value.
+  double get resolvedNodeSelfLoop =>
+      spacingNodeSelfLoop ?? spacingEdgeNode ?? 10;
 
   /// Spacing between adjacent layers (ELK scales the base value up between
   /// layers to leave room for orthogonal edge channels).
@@ -176,6 +183,18 @@ class ElkLayoutOptions {
     Object? option(String key) =>
         m['org.eclipse.elk.$key'] ?? m['elk.$key'] ?? m[key];
     Object? layeredOption(String key) => option('layered.$key');
+    final surrounding = option('spacing.portsSurrounding');
+    double? surroundingSide(String side) {
+      if (surrounding is Map) return asNum(surrounding[side]);
+      if (surrounding is String) {
+        final match = RegExp(
+          '$side\\s*=\\s*([+-]?[0-9]+(?:\\.[0-9]+)?)',
+        ).firstMatch(surrounding);
+        return asNum(match?[1]);
+      }
+      return null;
+    }
+
     return ElkLayoutOptions(
       algorithm: (option('algorithm') ?? 'layered').toString(),
       padding: ElkPadding._fromJson(option('padding')),
@@ -204,12 +223,25 @@ class ElkLayoutOptions {
       ),
       spacingLabelLabel: asNum(option('spacing.labelLabel')) ?? 0,
       spacingEdgeLabel: asNum(option('spacing.edgeLabel')) ?? 2,
-      spacingNodeLabel: asNum(option('spacing.nodeLabel')) ?? 5,
-      spacingPortLabel: asNum(option('spacing.portLabel')) ?? 1,
+      spacingNodeLabel:
+          asNum(option('spacing.labelNode') ?? option('spacing.nodeLabel')) ??
+          5,
+      spacingPortLabel:
+          asNum(
+            option('spacing.labelPortHorizontal') ??
+                option('spacing.labelPortVertical') ??
+                option('spacing.portLabel'),
+          ) ??
+          1,
       spacingPortsSurroundingTop:
-          asNum(option('spacing.portsSurrounding.top')) ?? 0,
+          surroundingSide('top') ??
+          asNum(option('spacing.portsSurrounding.top')) ??
+          0,
       spacingPortsSurroundingBottom:
-          asNum(option('spacing.portsSurrounding.bottom')) ?? 0,
+          surroundingSide('bottom') ??
+          asNum(option('spacing.portsSurrounding.bottom')) ??
+          0,
+      spacingNodeSelfLoop: asNum(option('spacing.nodeSelfLoop')),
       spacingNodeNode: asNum(option('spacing.nodeNode')),
       spacingEdgeNode: asNum(option('spacing.edgeNode')),
       spacingNodeNodeBetweenLayers: asNum(
@@ -242,6 +274,7 @@ class ElkLayoutOptions {
     double? spacingPortLabel,
     double? spacingPortsSurroundingTop,
     double? spacingPortsSurroundingBottom,
+    double? spacingNodeSelfLoop,
     double? spacingNodeNode,
     double? spacingEdgeNode,
     double? spacingNodeNodeBetweenLayers,
@@ -268,6 +301,7 @@ class ElkLayoutOptions {
           spacingPortsSurroundingTop ?? this.spacingPortsSurroundingTop,
       spacingPortsSurroundingBottom:
           spacingPortsSurroundingBottom ?? this.spacingPortsSurroundingBottom,
+      spacingNodeSelfLoop: spacingNodeSelfLoop ?? this.spacingNodeSelfLoop,
       spacingNodeNode: spacingNodeNode ?? this.spacingNodeNode,
       spacingEdgeNode: spacingEdgeNode ?? this.spacingEdgeNode,
       spacingNodeNodeBetweenLayers:

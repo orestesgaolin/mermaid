@@ -378,7 +378,7 @@ class _Engine {
       spacingPortsSurroundingBottom,
       options.spacingPortsSurroundingBottom,
     );
-    lg.setProperty(selfLoopNodeSpacing, options.spacingEdgeNode ?? 10);
+    lg.setProperty(selfLoopNodeSpacing, options.resolvedNodeSelfLoop);
     lg.setProperty(selfLoopEdgeSpacing, options.spacingEdgeEdge);
     lg.setProperty(bkFixedAlignment, switch (options.fixedAlignment) {
       ElkFixedAlignment.none => BkFixedAlignment.none,

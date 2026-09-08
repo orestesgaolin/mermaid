@@ -11,6 +11,8 @@ class ElkStressExample {
     required this.graph,
     required this.labels,
     this.wide = false,
+    this.comparisonNote,
+    this.trackingIssue,
   });
 
   final String title;
@@ -18,6 +20,8 @@ class ElkStressExample {
   final ElkGraph graph;
   final Map<String, String> labels;
   final bool wide;
+  final String? comparisonNote;
+  final int? trackingIssue;
 }
 
 /// Graphs chosen to exercise hierarchy, ports, cycles, shared routing, and BK
@@ -25,6 +29,11 @@ class ElkStressExample {
 const elkStressExamples = <ElkStressExample>[
   ElkStressExample(
     title: 'Nested services in three directions',
+    comparisonNote:
+        'elkjs 0.9.3 ignores child directions under INCLUDE_CHILDREN. '
+        'Dart honors the DOWN service group and LEFT worker pool, so this '
+        'layout is taller. Broader hierarchy compatibility remains tracked.',
+    trackingIssue: 69,
     description:
         'A left-to-right system contains a vertical service group '
         'and a right-to-left worker pool. Cross-boundary edges keep their '
@@ -104,6 +113,10 @@ const elkStressExamples = <ElkStressExample>[
   ),
   ElkStressExample(
     title: 'Ports, loops, and a message broker',
+    comparisonNote:
+        'FIXED_SIDE fixes each port side, but permits different '
+        'positions and node order. Both engines use the same explicit loop '
+        'clearance; alternative arrangements can still be valid.',
     description:
         'Named ports keep publishers and consumers on deliberate '
         'sides. Retry and health loops show route clearance around nodes.',

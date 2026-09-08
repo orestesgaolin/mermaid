@@ -90,6 +90,18 @@ class ElkDemoPage extends StatelessComponent {
             figcaption([
               h3([.text(d.title)]),
               p([.text(d.blurb)]),
+              if (d.comparisonNote != null)
+                p(classes: 'elk-comparison-note', [
+                  .text(d.comparisonNote!),
+                  if (d.trackingIssue != null) ...[
+                    .text(' '),
+                    a(
+                      href:
+                          'https://github.com/orestesgaolin/mermaid/issues/${d.trackingIssue}',
+                      [.text('Track #${d.trackingIssue}')],
+                    ),
+                  ],
+                ]),
               label(classes: 'elk-size-control', [
                 input(type: InputType.checkbox, classes: 'elk-actual-size'),
                 .text(' Actual size (both panels)'),
@@ -181,6 +193,15 @@ class ElkDemoPage extends StatelessComponent {
 
   @css
   static List<StyleRule> get styles => [
+    css('.elk-comparison-note').styles(
+      raw: {
+        'padding': '10px 12px',
+        'background': '#f6f4fc',
+        'border-left': '3px solid #9b8fd6',
+        'font-size': '13px',
+        'line-height': '1.5',
+      },
+    ),
     css('.elk-cards').styles(
       display: .grid,
       gridTemplate: GridTemplate(columns: GridTracks([GridTrack(.fr(1))])),

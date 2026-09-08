@@ -73,7 +73,8 @@ Map<String, dynamic> _options(ElkLayoutOptions o) => {
   'elk.direction': o.direction.name.toUpperCase(),
   'elk.edgeRouting': 'ORTHOGONAL',
   'elk.randomSeed': 1,
-  'elk.padding': '[top=12,left=12,bottom=12,right=12]',
+  'elk.padding':
+      '[top=${o.padding.top},left=${o.padding.left},bottom=${o.padding.bottom},right=${o.padding.right}]',
   'elk.hierarchyHandling': switch (o.hierarchyHandling) {
     ElkHierarchyHandling.inherit => 'INHERIT',
     ElkHierarchyHandling.includeChildren => 'INCLUDE_CHILDREN',
@@ -87,10 +88,12 @@ Map<String, dynamic> _options(ElkLayoutOptions o) => {
   'elk.layered.spacing.edgeEdgeBetweenLayers': o.spacingEdgeEdge,
   'elk.spacing.labelLabel': o.spacingLabelLabel,
   'elk.spacing.edgeLabel': o.spacingEdgeLabel,
-  'elk.spacing.nodeLabel': o.spacingNodeLabel,
-  'elk.spacing.portLabel': o.spacingPortLabel,
-  'elk.spacing.portsSurrounding.top': o.spacingPortsSurroundingTop,
-  'elk.spacing.portsSurrounding.bottom': o.spacingPortsSurroundingBottom,
+  'elk.spacing.labelNode': o.spacingNodeLabel,
+  'elk.spacing.labelPortHorizontal': o.spacingPortLabel,
+  'elk.spacing.labelPortVertical': o.spacingPortLabel,
+  'elk.spacing.portsSurrounding':
+      '[top=${o.spacingPortsSurroundingTop},bottom=${o.spacingPortsSurroundingBottom}]',
+  'elk.spacing.nodeSelfLoop': o.resolvedNodeSelfLoop,
   'elk.layered.mergeEdges': o.mergeEdges,
   'elk.layered.nodePlacement.bk.fixedAlignment': switch (o.fixedAlignment) {
     ElkFixedAlignment.none => 'NONE',
@@ -128,8 +131,11 @@ Map<String, dynamic> _node(ElkNode n) => {
         if (n.sizeForPorts) 'PORTS',
         if (n.preserveMinimumSize) 'MINIMUM_SIZE',
       ].join(' '),
-    if (n.labelPlacement != null)
-      'elk.nodeLabels.placement': switch (n.labelPlacement!) {
+    if (n.labels.isNotEmpty)
+      'elk.nodeLabels.placement': switch (n.labelPlacement ??
+          (n.children.isEmpty
+              ? ElkNodeLabelPlacement.topLeft
+              : ElkNodeLabelPlacement.topCenter)) {
         ElkNodeLabelPlacement.topLeft => 'INSIDE V_TOP H_LEFT',
         ElkNodeLabelPlacement.topCenter => 'INSIDE V_TOP H_CENTER',
         ElkNodeLabelPlacement.center => 'INSIDE V_CENTER H_CENTER',
