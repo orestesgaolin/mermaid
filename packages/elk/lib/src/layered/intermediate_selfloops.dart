@@ -134,6 +134,17 @@ class SelfLoopPreProcessor implements ILayoutProcessor {
     holder.edges.addAll(selfLoopEdges);
     node.setProperty(_selfLoopHolder, holder);
     final counts = <PortSide, int>{};
+    final protrusions = <PortSide, double>{};
+    void includePort(PortSide side, LPort port) {
+      final protrusion = switch (side) {
+        PortSide.north || PortSide.south => port.size.y,
+        PortSide.east || PortSide.west => port.size.x,
+        PortSide.undefined => 0.0,
+      };
+      final current = protrusions[side] ?? 0;
+      if (protrusion > current) protrusions[side] = protrusion;
+    }
+
     for (final loop in selfLoopEdges) {
       final source = loop.sourcePort.side == PortSide.undefined
           ? PortSide.north
@@ -143,17 +154,23 @@ class SelfLoopPreProcessor implements ILayoutProcessor {
           : loop.targetPort.side;
       counts[source] = (counts[source] ?? 0) + 1;
       if (target != source) counts[target] = (counts[target] ?? 0) + 1;
+      includePort(source, loop.sourcePort);
+      includePort(target, loop.targetPort);
     }
     final nodeGap = node.graph.getProperty(selfLoopNodeSpacing);
     final edgeGap = node.graph.getProperty(selfLoopEdgeSpacing);
-    double extra(PortSide side) => (counts[side] ?? 0) == 0
-        ? 0
-        : nodeGap + ((counts[side] ?? 1) - 1) * edgeGap;
-    node.margin.top += extra(PortSide.north);
-    node.margin.right += extra(PortSide.east);
-    node.margin.bottom += extra(PortSide.south);
-    node.margin.left += extra(PortSide.west);
+    double extent(PortSide side, double current) {
+      final count = counts[side] ?? 0;
+      if (count == 0) return current;
+      final protrusion = protrusions[side] ?? 0;
+      final baseline = current > protrusion ? current : protrusion;
+      return baseline + nodeGap + (count - 1) * edgeGap;
+    }
 
+    node.margin.top = extent(PortSide.north, node.margin.top);
+    node.margin.right = extent(PortSide.east, node.margin.right);
+    node.margin.bottom = extent(PortSide.south, node.margin.bottom);
+    node.margin.left = extent(PortSide.west, node.margin.left);
 
     // Detach edges from the port graph so the pipeline doesn't see them.
     for (final sle in selfLoopEdges) {
@@ -253,19 +270,34 @@ class SelfLoopRouter implements ILayoutProcessor {
     // for completeness and future multi-side support.
     final nodeDistance = node.graph.getProperty(selfLoopNodeSpacing);
     final edgeDistance = node.graph.getProperty(selfLoopEdgeSpacing);
+    double baseline(PortSide side, double originalMargin) {
+      final protrusion = _portProtrusion(holder, side);
+      return originalMargin > protrusion ? originalMargin : protrusion;
+    }
+
     Map<PortSide, double Function(int slot)> slotPos = {
       // NORTH: grows negative (upward)
       PortSide.north: (slot) =>
-          -(marginTop + nodeDistance + slot * edgeDistance),
+          -(baseline(PortSide.north, marginTop) +
+              nodeDistance +
+              slot * edgeDistance),
       // EAST: grows positive (rightward)
       PortSide.east: (slot) =>
-          node.size.x + marginEast + nodeDistance + slot * edgeDistance,
+          node.size.x +
+          baseline(PortSide.east, marginEast) +
+          nodeDistance +
+          slot * edgeDistance,
       // SOUTH: grows positive (downward)
       PortSide.south: (slot) =>
-          node.size.y + marginSouth + nodeDistance + slot * edgeDistance,
+          node.size.y +
+          baseline(PortSide.south, marginSouth) +
+          nodeDistance +
+          slot * edgeDistance,
       // WEST: grows negative (leftward)
       PortSide.west: (slot) =>
-          -(marginWest + nodeDistance + slot * edgeDistance),
+          -(baseline(PortSide.west, marginWest) +
+              nodeDistance +
+              slot * edgeDistance),
     };
 
     // --- 3. Compute bend points for each self-loop --------------------------
@@ -380,6 +412,31 @@ class SelfLoopRouter implements ILayoutProcessor {
     }
 
   }
+}
+
+double _portProtrusion(SelfLoopHolder holder, PortSide side) {
+  var result = 0.0;
+  void include(LPort port, PortSide resolvedSide) {
+    if (resolvedSide != side) return;
+    final protrusion = switch (side) {
+      PortSide.north || PortSide.south => port.size.y,
+      PortSide.east || PortSide.west => port.size.x,
+      PortSide.undefined => 0.0,
+    };
+    if (protrusion > result) result = protrusion;
+  }
+
+  for (final loop in holder.edges) {
+    final source = loop.sourcePort.side == PortSide.undefined
+        ? PortSide.north
+        : loop.sourcePort.side;
+    final target = loop.targetPort.side == PortSide.undefined
+        ? source
+        : loop.targetPort.side;
+    include(loop.sourcePort, source);
+    include(loop.targetPort, target);
+  }
+  return result;
 }
 
 // ---------------------------------------------------------------------------

@@ -113,6 +113,7 @@ const elkStressExamples = <ElkStressExample>[
   ),
   ElkStressExample(
     title: 'Ports, loops, and a message broker',
+    trackingIssue: 76,
     comparisonNote:
         'FIXED_SIDE fixes each port side, but permits different '
         'positions and node order. Both engines use the same explicit loop '
