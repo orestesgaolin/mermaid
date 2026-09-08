@@ -296,16 +296,17 @@ const elkStressExamples = <ElkStressExample>[
         ElkNode(id: 'rollback', width: 100, height: 42),
       ],
       edges: [
+        ElkEdge(id: 'bundle-web', sources: ['web'], targets: ['release']),
+        ElkEdge(id: 'bundle-api', sources: ['api'], targets: ['release']),
+        ElkEdge(id: 'bundle-worker', sources: ['worker'], targets: ['release']),
+        ElkEdge(id: 'deploy-dev', sources: ['release'], targets: ['dev']),
         ElkEdge(
-          id: 'bundle',
-          sources: ['web', 'api', 'worker'],
-          targets: ['release'],
-        ),
-        ElkEdge(
-          id: 'deploy',
+          id: 'deploy-staging',
           sources: ['release'],
-          targets: ['dev', 'staging', 'canary', 'prod'],
+          targets: ['staging'],
         ),
+        ElkEdge(id: 'deploy-canary', sources: ['release'], targets: ['canary']),
+        ElkEdge(id: 'deploy-prod', sources: ['release'], targets: ['prod']),
         ElkEdge(id: 'observe', sources: ['prod'], targets: ['telemetry']),
         ElkEdge(id: 'revert', sources: ['telemetry'], targets: ['rollback']),
         ElkEdge(

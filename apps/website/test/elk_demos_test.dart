@@ -1,6 +1,7 @@
 import 'package:elk/elk.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:website/elk_demos.dart';
+import 'package:website/elk_reference.dart';
 import 'package:website/elk_stress_examples.dart';
 
 void main() {
@@ -41,27 +42,40 @@ void main() {
     });
   }
 
-  test('gallery renders every example with local SVG marker references', () {
+  test('gallery preserves all route sections at a shared coordinate scale', () {
     final demos = buildElkDemos();
-    final ids = <String>{};
+    final examples = buildElkExamples();
     for (final demo in demos) {
-      final markers = RegExp(
-        r'<marker id="([^"]+)"',
-      ).allMatches(demo.svg).map((m) => m.group(1)!).toSet();
-      for (final marker in markers) {
+      expect(demo.referenceError, isNull, reason: demo.title);
+      expect(demo.referenceSvg, isNotNull, reason: demo.title);
+      final viewBox = RegExp(r'viewBox="([^"]+)"');
+      expect(
+        viewBox.firstMatch(demo.svg)!.group(1),
+        viewBox.firstMatch(demo.referenceSvg!)!.group(1),
+        reason: 'Both layouts must retain the same coordinate scale',
+      );
+      final reference = elkReferenceFor(
+        examples.singleWhere((e) => e.title == demo.title),
+      );
+      final dart = const ElkLayered().layout(
+        ElkGraph.fromJson(reference.input),
+      );
+      for (final pair in [
+        (demo.svg, dart),
+        (demo.referenceSvg!, reference.result!),
+      ]) {
+        final (svg, result) = pair;
         expect(
-          ids.add(marker),
-          isTrue,
-          reason: 'Markers must not resolve to a different diagram',
+          RegExp('<polyline ').allMatches(svg).length,
+          result.edges.fold<int>(
+            0,
+            (count, edge) => count + edge.sections.length,
+          ),
+          reason: 'No compound or branching route sections may be dropped',
         );
+        expect(svg, isNot(contains('NaN')));
+        expect(svg, isNot(contains('Infinity')));
       }
-      for (final ref in RegExp(
-        r'marker-end="url\(#([^)]+)\)"',
-      ).allMatches(demo.svg)) {
-        expect(markers, contains(ref.group(1)));
-      }
-      expect(demo.svg, isNot(contains('NaN')));
-      expect(demo.svg, isNot(contains('Infinity')));
     }
   });
 }
