@@ -317,10 +317,13 @@ class _Engine {
     );
     // Model order: the crossing minimizer reads these to keep nodes in input
     // declaration order (ELK's considerModelOrder / forceNodeModelOrder).
-    if (options.considerModelOrder != ElkConsiderModelOrder.none ||
-        options.forceNodeModelOrder) {
-      lg.setProperty(considerModelOrder, true);
-    }
+    lg.setProperty(considerModelOrder, switch (options.considerModelOrder) {
+      ElkConsiderModelOrder.none => options.forceNodeModelOrder
+          ? ModelOrderStrategy.nodesAndEdges : ModelOrderStrategy.none,
+      ElkConsiderModelOrder.nodesAndEdges => ModelOrderStrategy.nodesAndEdges,
+      ElkConsiderModelOrder.preferEdges => ModelOrderStrategy.preferEdges,
+      ElkConsiderModelOrder.preferNodes => ModelOrderStrategy.preferNodes,
+    });
     if (options.forceNodeModelOrder) {
       lg.setProperty(forceNodeModelOrder, true);
     }
@@ -525,7 +528,8 @@ class _Engine {
                 ));
           if (!node.ports.contains(tp)) node.ports.add(tp);
           _nodesWithFixedSides.add(node);
-          final le = LEdge()..identifier = e.id;
+          final le = LEdge()..identifier = e.id
+          ..setProperty(edgeModelOrder, ownedHere.indexOf(e));
           le.source = sp;
           le.target = tp;
           _attachLabels(le, e);
@@ -558,6 +562,7 @@ class _Engine {
         true,
         srcSegs,
         backward: backward,
+        declarationOrder: ownedHere.indexOf(e),
       );
       final tp = _endpointPort(
         rn,
@@ -566,11 +571,13 @@ class _Engine {
         false,
         tgtSegs,
         backward: backward,
+        declarationOrder: ownedHere.indexOf(e),
       );
 
       if (sp == null || tp == null) continue;
 
-      final le = LEdge()..identifier = e.id;
+      final le = LEdge()..identifier = e.id
+          ..setProperty(edgeModelOrder, ownedHere.indexOf(e));
       le.source = sp;
       le.target = tp;
 
@@ -683,6 +690,7 @@ class _Engine {
     bool isSource,
     List<LEdge> segs, {
     bool backward = false,
+    int declarationOrder = 0,
   }) {
     // Which border the cross-hierarchy edge attaches to. For a forward edge a
     // source exits the DOWNSTREAM side (last layer / EAST) and a target enters
@@ -720,6 +728,7 @@ class _Engine {
       isSource,
       childSegs,
       backward: backward,
+      declarationOrder: declarationOrder,
     );
     if (innerPort == null) return null;
 
@@ -746,7 +755,7 @@ class _Engine {
     _portLinks.add(_PortLink(p, d, !useFirst));
 
     // Inner segment connecting the real node to the boundary dummy.
-    final seg = LEdge();
+    final seg = LEdge()..setProperty(edgeModelOrder, declarationOrder);
     if (isSource) {
       seg.source = innerPort;
       seg.target = dPort;

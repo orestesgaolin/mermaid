@@ -130,12 +130,20 @@ class ElkLayoutOptions {
       'BALANCED' => ElkFixedAlignment.balanced,
       _ => ElkFixedAlignment.none,
     };
+    Object? layeredOption(String key) =>
+        m['org.eclipse.elk.layered.$key'] ?? m['elk.layered.$key'] ?? m['layered.$key'];
     return ElkLayoutOptions(
       algorithm: (m['elk.algorithm'] ?? m['algorithm'] ?? 'layered').toString(),
       direction: dir(m['elk.direction'] ?? m['direction']),
       spacingBaseValue: asNum(m['spacing.baseValue']) ?? 40,
       fixedAlignment: align(m['elk.layered.nodePlacement.bk.fixedAlignment']),
-      mergeEdges: asBool(m['elk.layered.mergeEdges']),
+      mergeEdges: asBool(layeredOption('mergeEdges')),
+      considerModelOrder: switch ('${layeredOption('considerModelOrder.strategy')}'.toUpperCase()) {
+        'NODES_AND_EDGES' => ElkConsiderModelOrder.nodesAndEdges,
+        'PREFER_EDGES' => ElkConsiderModelOrder.preferEdges,
+        'PREFER_NODES' => ElkConsiderModelOrder.preferNodes,
+        _ => ElkConsiderModelOrder.none,
+      },
       forceNodeModelOrder: asBool(
         m['elk.layered.crossingMinimization.forceNodeModelOrder'],
       ),

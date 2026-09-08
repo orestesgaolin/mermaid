@@ -58,6 +58,9 @@ const int _randomSeed = 1;
 /// mapped to the `isOrderFixed()` notion — here a simple bool: true = fixed order.
 const _portOrderFixed = Property<bool>('p3.portOrderFixed', false);
 
+/// Internal form of ELK's model-order preprocessing strategy.
+enum ModelOrderStrategy { none, nodesAndEdges, preferEdges, preferNodes }
+
 // ---------------------------------------------------------------------------
 // Model-order properties (public — wired by elk_layered_engine.dart)
 // ---------------------------------------------------------------------------
@@ -69,9 +72,14 @@ const modelOrder = Property<int>('modelOrder');
 
 /// Graph-level flag: bias barycenter tie-breaking toward input-model order.
 /// ELK option id: `"org.eclipse.elk.layered.considerModelOrder.strategy"`
-/// (non-NONE activates the ModelOrderBarycenterHeuristic comparator path).
-/// Set this to `true` on the LGraph when the elk option is not NONE.
-const considerModelOrder = Property<bool>('considerModelOrder', false);
+/// The engine maps the public enum to this property before P3 runs.
+const considerModelOrder = Property<ModelOrderStrategy>(
+  'considerModelOrder',
+  ModelOrderStrategy.none,
+);
+
+/// Declaration index of an edge within its input scope.
+const edgeModelOrder = Property<int>('edgeModelOrder');
 
 /// Graph-level flag: model order dominates — no reordering that violates it.
 /// ELK option id: `"org.eclipse.elk.layered.crossingMinimization.forceNodeModelOrder"`.
@@ -106,6 +114,13 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     // Build the working node-order matrix  [layer][position]
     final order = _buildOrder(layers);
 
+    _applyInitialModelOrder(
+      order,
+      graph.getProperty(forceNodeModelOrder)
+          ? ModelOrderStrategy.preferNodes
+          : graph.getProperty(considerModelOrder),
+    );
+
     // Assign stable IDs for layers, nodes and ports (used as array indices).
     _assignIds(order);
 
@@ -133,12 +148,19 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     // run it once.
     final _SweepCopy best;
     if (crossMin.useModelOrder) {
-      best = _minimizeCrossingsWithCounter(
+      final initial = _SweepCopy(order);
+      final initialCrossings = crossCount.countAllCrossings(order);
+      final minimized = _minimizeCrossingsWithCounter(
         order,
         crossMin,
         portDist,
         crossCount,
-      ).bestCopy;
+      );
+      // ELK's FIRST_TRY_WITH_INITIAL_ORDER keeps the model-derived order when
+      // crossing minimization cannot improve its crossing count.
+      best = initialCrossings <= minimized.crossings
+          ? initial
+          : minimized.bestCopy;
     } else {
       best = _compareDifferentRandomizedLayouts(
         order,
@@ -226,6 +248,79 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     return [for (final layer in layers) List<LNode>.from(layer.nodes)];
   }
 
+  void _applyInitialModelOrder(
+    List<List<LNode>> order,
+    ModelOrderStrategy strategy,
+  ) {
+    if (strategy == ModelOrderStrategy.none) return;
+    for (final layer in order) {
+      if (strategy != ModelOrderStrategy.preferNodes) {
+        int edgeRank(LNode node) {
+          var result = 0x7fffffff;
+          for (final port in node.ports) {
+            for (final edge in port.incomingEdges) {
+              if (edge.hasProperty(edgeModelOrder)) {
+                final rank = edge.getProperty(edgeModelOrder);
+                if (rank < result) result = rank;
+              }
+            }
+          }
+          return result == 0x7fffffff
+              ? (node.hasProperty(modelOrder)
+                    ? node.getProperty(modelOrder)
+                    : result)
+              : result;
+        }
+
+        layer.sort((a, b) {
+          final comparison = edgeRank(a).compareTo(edgeRank(b));
+          if (comparison != 0) return comparison;
+          return _nodeModelOrder(a).compareTo(_nodeModelOrder(b));
+        });
+      } else {
+        layer.sort((a, b) => _nodeModelOrder(a).compareTo(_nodeModelOrder(b)));
+      }
+      for (final node in layer) {
+        node.ports.sort((a, b) {
+          final comparison = _portModelRank(
+            a,
+            strategy,
+          ).compareTo(_portModelRank(b, strategy));
+          return comparison != 0 ? comparison : a.side.index - b.side.index;
+        });
+      }
+    }
+  }
+
+  static int _nodeModelOrder(LNode node) =>
+      node.hasProperty(modelOrder) ? node.getProperty(modelOrder) : 0x7fffffff;
+
+  static int _portModelRank(LPort port, ModelOrderStrategy strategy) {
+    final edges = [...port.incomingEdges, ...port.outgoingEdges];
+    if (edges.isEmpty) return 0x7fffffff;
+    if (strategy == ModelOrderStrategy.preferNodes) {
+      var rank = 0x7fffffff;
+      for (final edge in edges) {
+        final other = identical(edge.source, port)
+            ? edge.target?.node
+            : edge.source?.node;
+        if (other != null) {
+          final candidate = _nodeModelOrder(other);
+          if (candidate < rank) rank = candidate;
+        }
+      }
+      return rank;
+    }
+    var rank = 0x7fffffff;
+    for (final edge in edges) {
+      if (edge.hasProperty(edgeModelOrder)) {
+        final candidate = edge.getProperty(edgeModelOrder);
+        if (candidate < rank) rank = candidate;
+      }
+    }
+    return rank;
+  }
+
   /// Assigns contiguous IDs needed as array indices.
   /// - `layer.id` = layer index
   /// - `node.id`  = position within its layer (node index)
@@ -290,7 +385,7 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
       final node = layer[i];
       final state = baryList[startIdx][node.id];
       final double seedValue = useModelOrder
-          ? (node.hasProperty(modelOrder)
+          ? (crossMin.preferNodeOrder && node.hasProperty(modelOrder)
                 ? node.getProperty(modelOrder).toDouble()
                 : i.toDouble())
           : crossMin.random.nextDouble();
@@ -336,7 +431,7 @@ class LayerSweepCrossingMinimizer implements ILayoutProcessor {
     _BarycenterHeuristic? crossMin,
   }) {
     final stateList = bary[layerIdx];
-    if (crossMin != null && crossMin.useModelOrder) {
+    if (crossMin != null && crossMin.preferNodeOrder) {
       order[layerIdx].sort((a, b) => crossMin._compareNodes(a, b, stateList));
     } else {
       order[layerIdx].sort((a, b) {
@@ -399,7 +494,7 @@ class _ConstraintGroup {
 
 class _BarycenterHeuristic {
   _BarycenterHeuristic(this._portRanks, this.bary, LGraph graph, this.random)
-    : useModelOrder = graph.getProperty(considerModelOrder),
+    : strategy = graph.getProperty(considerModelOrder),
       _forceModelOrder = graph.getProperty(forceNodeModelOrder);
 
   /// Shared port-ranks array (written by `_PortDistributor.calculatePortRanks`).
@@ -412,8 +507,13 @@ class _BarycenterHeuristic {
   /// Per-layer per-node barycenter state; indexed [layer][node.id].
   final List<List<_BarycenterState>> bary;
 
-  /// True when the graph has `considerModelOrder = true` (NONE strategy → false).
-  final bool useModelOrder;
+  /// Selected model-order preprocessing strategy.
+  final ModelOrderStrategy strategy;
+
+  bool get useModelOrder => strategy != ModelOrderStrategy.none;
+  bool get preferNodeOrder =>
+      strategy == ModelOrderStrategy.nodesAndEdges ||
+      strategy == ModelOrderStrategy.preferNodes;
 
   /// True when `forceNodeModelOrder` is set on the graph — insertion sort is
   /// used instead of stable sort so that model order dominates for real nodes.
@@ -544,7 +644,7 @@ class _BarycenterHeuristic {
   /// `ModelOrderBarycenterHeuristic` (without the group-model-order sub-path
   /// which is not ported).
   int _compareNodes(LNode n1, LNode n2, List<_BarycenterState> stateList) {
-    if (!useModelOrder) {
+    if (!preferNodeOrder) {
       return _compareByBarycenter(n1, n2, stateList);
     }
 
