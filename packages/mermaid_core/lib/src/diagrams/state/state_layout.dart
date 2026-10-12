@@ -409,7 +409,7 @@ class _StateLayout {
                 titleSize.width,
                 titleSize.height,
               ),
-              style: baseStyle.copyWith(fontWeight: 700),
+              style: baseStyle,
               color: theme.textColor,
             ),
             SceneShape(
@@ -976,7 +976,7 @@ class _StateLayout {
               p.labelSize.width,
               p.labelSize.height,
             ),
-            style: baseStyle.copyWith(fontWeight: 700),
+            style: baseStyle,
             color: theme.textColor,
           ),
         ]);

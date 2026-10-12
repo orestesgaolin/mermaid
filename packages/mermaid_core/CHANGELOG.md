@@ -1,3 +1,9 @@
+## Unreleased
+
+- Paint state names and composite titles at normal weight, as mermaid.js
+  renders them. They were measured at normal weight but painted bold, so the
+  last letter wrapped outside the state box.
+
 ## 0.3.0
 
 - Honor active per-diagram layout and style configuration through init directives

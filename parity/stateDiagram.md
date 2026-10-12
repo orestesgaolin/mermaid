@@ -12,9 +12,9 @@
   - choice: `choice.ts` diamond, `s = max(28, width)` then forced to **28×28**; fill `mainBkg`, stroke `nodeBorder` (from `.node polygon`).
   - fork/join: `forkJoin.ts` rect **70×10** (TB) or **10×70** (LR), fill+stroke `lineColor`; `+ padding/2` added to bounds. Slightly rounded only in handDrawn; otherwise sharp corners.
   - note: `note.ts` rectangle, **rx/ry = 0**, fill `noteBkgColor` (#fff5ad), stroke `noteBorderColor` (#aaaa33), text `noteTextColor`. Note is wrapped in a `noteGroup` cluster and joined by a dashed `note-edge` (`stroke-dasharray:5`) with `arrowhead:'none'`.
-- Composite cluster: `roundedWithTitle`; styles.js `.statediagram-cluster rect` fill `compositeTitleBackground` (= mainBkg), `rect.outer rx/ry = 5`, inner fill `compositeBackground` (= background); title is bold (`.cluster-label`). Concurrency `--` becomes a `divider` shape with `stroke-dasharray:10,10`.
+- Composite cluster: `roundedWithTitle`; styles.js `.statediagram-cluster rect` fill `compositeTitleBackground` (= mainBkg), `rect.outer rx/ry = 5`, inner fill `compositeBackground` (= background); the title renders at normal weight (400), like state names (see below). Concurrency `--` becomes a `divider` shape with `stroke-dasharray:10,10`.
 - Edges: curveBasis path, stroke `transitionColor` (= lineColor) width = `strokeWidth||1` (**1**), arrowhead `barb` marker filled `lineColor`. Edge label `labelpos:'c'`, label rect fill `edgeLabelBackground` at **opacity 0.5**, text `transitionLabelColor || tertiaryTextColor`.
-- State default text: `font-size 10px`, weight bold for `.state-title`/`.stateLabel` (`styles.js:90-94`), fill `stateLabelColor`.
+- State default text: `font-size 10px`, fill `stateLabelColor`. `styles.js:90-94` sets bold on `.state-title`/`.stateLabel text`, but those rules match no rendered label: names and composite titles are HTML `<p>` in a `foreignObject` (or `tspan.text-inner-tspan` with `htmlLabels: false`), and both compute to `font-weight: 400` in Chromium with mermaid 12.1.0.
 - No history pseudo-state in upstream stateDb (`type` is only `default|fork|join|choice|divider|start|end`); `[H]`/`[H*]` is not parsed/rendered upstream.
 
 ## How mermaid_dart implements it
@@ -47,8 +47,8 @@
    - Upstream outer r=7 (diameter=node.width=14), inner r≈2.5 fill nodeBorder; ours outer r=9, inner r=5 fill lineColor. Ours has a much larger filled core and a different inner color (lineColor vs nodeBorder).
 7. `[open] (medium) Edge label background opaque vs upstream opacity 0.5`
    - Label rect uses opaque `edgeLabelBackground`; upstream `.edgeLabel rect { opacity:0.5 }`. Ours hides underlying lines more.
-8. `[open] (low) State label not bold / wrong color`
-   - Upstream `.state-title`/`.stateLabel text` is `font-weight:bold` and fill `stateLabelColor`; ours uses normal weight `baseStyle` and `theme.textColor`.
+8. `[resolved] (low) State label weight / color`
+   - Upstream renders state names and composite titles at normal weight (the bold `.stateLabel text` rule matches no rendered label); ours uses normal weight `baseStyle` and `theme.textColor`.
 9. `[open] (low) Choice fill should be mainBkg via .node polygon, but ours allows class fill on choice while upstream choice has node.label='' and only polygon styling`
    - Minor: choice default fill ok (`mainBkg`), but upstream clears label; ours never had a choice label anyway. Mostly equivalent — flag only the stroke default which matches.
 10. `[open] (low) Composite cluster fill uses background; upstream outer fill is compositeTitleBackground (mainBkg) with inner = background`
@@ -70,7 +70,7 @@
 5. In `state_layout.dart:_measure` fork/join return 70×10 (10×70 LR) and draw sharp rect (`rx:0`) in `_buildState`.
 6. In `state_layout.dart:_buildState` end case, use outer r=7 (stroke width per fix 3), inner r≈2.5 filled with `theme.nodeBorder` instead of r9/r5/lineColor.
 7. In `state_layout.dart` edge-label rect `Fill(theme.edgeLabelBackground)` — render at ~0.5 opacity (e.g. premultiplied alpha color) to match `.edgeLabel rect{opacity:0.5}`.
-8. In `state_layout.dart:_buildState` state label `SceneText`, apply `baseStyle.copyWith(fontWeight: 700)` and color from a state-label color (textColor is acceptable; bold is the key change).
+8. In `state_layout.dart:_buildState` state label `SceneText`, keep normal weight `baseStyle`; color from a state-label color (textColor is acceptable).
 9. (Optional) In `state_layout.dart:_buildState` choice, keep stroke `nodeBorder`/fill `mainBkg`; clear any label — already effectively done.
 10. In `state_layout.dart` cluster builder, fill outer rect with `theme.mainBkg` (title band) and the inner area with `theme.background`, and reduce cluster `rx` to 5.
 11. In `state_layout.dart` note text `SceneText`, use `theme.textColor` (noteTextColor) instead of `Color.black`.
@@ -87,7 +87,7 @@
   5. Done — fork/join `_measure` 60×8 → 70×10 (10×70 LR); sharp rect (no rx) filled+stroked lineColor.
   6. Done — end outer circle r9→7 stroke width 1.5→2; inner circle r5→2.5, fill lineColor→nodeBorder.
   7. Done — edge-label rect fill now `edgeLabelBackground.withOpacity(0.5)`.
-  8. Done — state label uses `baseStyle.copyWith(fontWeight: 700)`.
+  8. Done — state label and composite title use normal weight `baseStyle`, measured and painted with the same style.
   9. Done (already equivalent) — choice keeps fill/stroke from class/style default (mainBkg/nodeBorder); no label.
   10. Done — cluster outer rect filled `mainBkg` (title band tint) with an inner rect filled `background` below the divider; cluster rx 8 → 5.
   11. Done — note text color `Color.black` → `theme.textColor` (= noteTextColor #333).

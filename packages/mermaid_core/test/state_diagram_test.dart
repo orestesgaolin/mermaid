@@ -338,6 +338,30 @@ state Other {
         isTrue,
       );
     });
+    test('state and composite labels paint in the style they are measured '
+        'with', () {
+      // mermaid.js renders state names and composite titles at normal
+      // weight. Backends wrap SceneText to its bounds width, so painting in a
+      // wider style than the one measured pushes the last letter onto a new
+      // line outside the box.
+      const measurer = ApproximateTextMeasurer();
+      final s = layout(
+        '[*] --> Closed\nClosed --> SynSent\nSynSent --> Established\n'
+        'state Established {\nOpen --> Draining\n}',
+      );
+      for (final id in ['Closed', 'SynSent', 'Established', 'Open']) {
+        final label = flattenScene(
+          sceneGroup(s, id).children,
+        ).whereType<SceneText>().firstWhere((t) => t.text == id);
+        expect(label.style.fontWeight, 400, reason: id);
+        final painted = measurer.measure(id, label.style);
+        expect(
+          label.bounds.width,
+          greaterThanOrEqualTo(painted.width),
+          reason: '$id label bounds fit the painted text',
+        );
+      }
+    });
     test('empty composite renders as a box that transitions can target', () {
       final s = layout('A --> B\nstate B {\n}\n');
       final box = sceneNodeBounds(sceneGroup(s, 'B'))!;
