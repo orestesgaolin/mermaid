@@ -335,6 +335,7 @@ class _IsolatedCluster {
     required this.fragment,
     required this.titleText,
     required this.titleSize,
+    this.titleRich,
     required this.width,
     required this.height,
   });
@@ -344,6 +345,9 @@ class _IsolatedCluster {
 
   /// Cluster title with soft wraps resolved to `\n`, matching [titleSize].
   final String titleText;
+
+  /// Styled runs when the title uses `<b>`/`<i>` emphasis tags.
+  final MarkdownLabelLayout? titleRich;
   final Size titleSize;
   final double width;
   final double height;
@@ -461,8 +465,19 @@ _Fragment _layoutGraph(
       elkOptions: elkOptions,
       originalLinkIndices: subLinkIndices,
     );
+    final titleRich = hasEmphasisTags(sgs[root].title)
+        ? layoutMarkdownLabel(
+            sgs[root].title,
+            baseStyle,
+            measurer,
+            markdown: false,
+            wrappingWidth: config.wrappingWidth,
+          )
+        : null;
     final wrappedTitle = sgs[root].title.isEmpty
         ? const _WrappedLabel('', Size.zero)
+        : titleRich != null
+        ? _WrappedLabel(titleRich.plainText, titleRich.size)
         : _wrapLabel(
             sgs[root].title,
             baseStyle,
@@ -475,6 +490,7 @@ _Fragment _layoutGraph(
       fragment: fragment,
       titleText: wrappedTitle.text,
       titleSize: titleSize,
+      titleRich: titleRich,
       width:
           math.max(fragment.bounds.width, titleSize.width) +
           2 * _clusterPadding,
@@ -512,8 +528,14 @@ _Fragment _layoutGraph(
     // phantom node with the subgraph's id; the cluster wins.
     if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
-    if (node.markdown && node.icon == null && !node.label.contains('\n')) {
-      final richLabel = layoutMarkdownLabel(node.label, baseStyle, measurer);
+    if (node.icon == null && (node.markdown || hasEmphasisTags(node.label))) {
+      final richLabel = layoutMarkdownLabel(
+        node.label,
+        baseStyle,
+        measurer,
+        markdown: node.markdown,
+        wrappingWidth: config.wrappingWidth,
+      );
       placed[node.id] = _PlacedNode(
         node: node,
         style: style,
@@ -540,7 +562,8 @@ _Fragment _layoutGraph(
       continue;
     }
     final wrappedLabel = _wrapLabel(
-      node.label,
+      // Icon nodes paint the label as one plain text block.
+      stripEmphasisTags(node.label),
       baseStyle,
       measurer,
       config.wrappingWidth,
@@ -663,6 +686,7 @@ _Fragment _layoutGraph(
   // backends break it at the same places the measured size assumed.
   final edgeLabelText = <int, String>{};
   final edgeMath = <int, MathLayout>{};
+  final edgeRich = <int, MarkdownLabelLayout>{};
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
     if (isAbsorbedEdge(e)) continue;
@@ -673,6 +697,16 @@ _Fragment _layoutGraph(
       if (ml != null) {
         edgeMath[i] = ml;
         labelSize = ml.size;
+      } else if (hasEmphasisTags(label)) {
+        final rich = layoutMarkdownLabel(
+          label,
+          baseStyle,
+          measurer,
+          markdown: false,
+          wrappingWidth: config.wrappingWidth,
+        );
+        edgeRich[i] = rich;
+        labelSize = rich.size;
       } else {
         final wrapped = _wrapLabel(
           label,
@@ -713,11 +747,24 @@ _Fragment _layoutGraph(
   ElkLayoutResult? elkResult;
   // Subgraph title sizes, so ELK reserves a top band for each (matching
   // upstream mermaid-layout-elk, which passes the title as a node label).
-  final clusterTitleStyleForElk = baseStyle.copyWith(fontWeight: 400);
+  final clusterTitleStyle = baseStyle.copyWith(fontWeight: 400);
+  // Titles with `<b>`/`<i>` emphasis tags, laid out as styled runs.
+  final clusterTitleRich = <String, MarkdownLabelLayout>{
+    for (var i = 0; i < sgs.length; i++)
+      if (!removedSubgraphs.contains(i) && hasEmphasisTags(sgs[i].title))
+        sgs[i].id: layoutMarkdownLabel(
+          sgs[i].title,
+          clusterTitleStyle,
+          measurer,
+          markdown: false,
+        ),
+  };
   final clusterLabels = <String, Size>{
     for (var i = 0; i < sgs.length; i++)
       if (!removedSubgraphs.contains(i) && sgs[i].title.isNotEmpty)
-        sgs[i].id: measurer.measure(sgs[i].title, clusterTitleStyleForElk),
+        sgs[i].id:
+            clusterTitleRich[sgs[i].id]?.size ??
+            measurer.measure(sgs[i].title, clusterTitleStyle),
   };
   if (useElk) {
     final effectiveElkOptions = elkOptions.copyWith(
@@ -796,13 +843,13 @@ _Fragment _layoutGraph(
 
   // Clusters, outermost first so nested ones paint on top.
   final clusterRects = <String, Rect>{};
-  final clusterTitleStyle = baseStyle.copyWith(fontWeight: 400);
   final clusterTitleSizes = <String, Size>{
     for (var i = 0; i < sgs.length; i++)
       if (!removedSubgraphs.contains(i))
         sgs[i].id: sgs[i].title.isEmpty
             ? Size.zero
-            : measurer.measure(sgs[i].title, clusterTitleStyle),
+            : clusterTitleRich[sgs[i].id]?.size ??
+                  measurer.measure(sgs[i].title, clusterTitleStyle),
   };
   // Dagre's compound boundary includes its own generous top margin. Mermaid
   // paints the visible border around the title band and first member instead.
@@ -918,14 +965,19 @@ _Fragment _layoutGraph(
       SceneGroup(
         id: sg.id,
         role: SceneGroupRole.cluster,
-        semanticLabel: sg.title.isEmpty ? null : sg.title,
+        semanticLabel: sg.title.isEmpty ? null : stripEmphasisTags(sg.title),
         children: [
           SceneShape(
             geometry: RectGeometry(rect),
             fill: Fill(theme.clusterBkg),
             stroke: Stroke(color: theme.clusterBorder),
           ),
-          if (sg.title.isNotEmpty)
+          if (clusterTitleRich[sg.id] case final rich?)
+            ...rich.render(
+              Point(rect.center.x, titleTop + titleSize.height / 2),
+              theme.titleColor,
+            )
+          else if (sg.title.isNotEmpty)
             SceneText(
               // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
               text: sg.title,
@@ -954,7 +1006,21 @@ _Fragment _layoutGraph(
         fill: Fill(theme.clusterBkg),
         stroke: Stroke(color: theme.clusterBorder),
       ),
-      if (cluster.subgraph.title.isNotEmpty)
+      if (cluster.titleRich case final rich?)
+        ...rich.render(
+          Point(
+            rect.center.x,
+            rect.top +
+                config.subGraphTitleMarginTop +
+                _clusterTitleOffset(
+                  clusterTitleStyle.fontSize,
+                  cluster.titleSize,
+                ) +
+                cluster.titleSize.height / 2,
+          ),
+          theme.titleColor,
+        )
+      else if (cluster.subgraph.title.isNotEmpty)
         SceneText(
           // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
           text: cluster.titleText,
@@ -990,7 +1056,7 @@ _Fragment _layoutGraph(
         role: SceneGroupRole.cluster,
         semanticLabel: cluster.subgraph.title.isEmpty
             ? null
-            : cluster.subgraph.title,
+            : stripEmphasisTags(cluster.subgraph.title),
         children: children,
       ),
     );
@@ -1067,7 +1133,7 @@ _Fragment _layoutGraph(
         SceneGroup(
           id: groupId,
           role: SceneGroupRole.edge,
-          semanticLabel: e.label,
+          semanticLabel: e.label == null ? null : stripEmphasisTags(e.label!),
           edge: metadata,
           children: loopNodes,
         ),
@@ -1084,6 +1150,7 @@ _Fragment _layoutGraph(
             baseStyle,
             theme,
             math: edgeMath[i],
+            rich: edgeRich[i],
             paintText: edgeLabelText[i],
           ),
         );
@@ -1246,7 +1313,7 @@ _Fragment _layoutGraph(
       SceneGroup(
         id: groupId,
         role: SceneGroupRole.edge,
-        semanticLabel: e.label,
+        semanticLabel: e.label == null ? null : stripEmphasisTags(e.label!),
         edge: metadata,
         children: children,
       ),
@@ -1275,6 +1342,7 @@ _Fragment _layoutGraph(
           baseStyle,
           theme,
           math: edgeMath[i],
+          rich: edgeRich[i],
           paintText: edgeLabelText[i],
         ),
       );
@@ -1394,6 +1462,7 @@ SceneGroup _edgeLabelGroup(
   TextStyleSpec baseStyle,
   MermaidTheme theme, {
   MathLayout? math,
+  MarkdownLabelLayout? rich,
   // Label text with soft wraps already resolved to `\n`; falls back to the
   // edge's raw label.
   String? paintText,
@@ -1424,6 +1493,8 @@ SceneGroup _edgeLabelGroup(
             labelCenter.y - math.size.height / 2,
           ),
         )
+      else if (rich != null)
+        ...rich.render(labelCenter, theme.textColor)
       else
         SceneText(
           text: paintText ?? e.label!,

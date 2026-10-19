@@ -89,6 +89,25 @@ final _lineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 final _legacyIcon = RegExp(r'fa[bklrs]?:fa-[\w-]+');
 final _blanks = RegExp(r'[ \t]+');
 
+/// An HTML comment or an opening/closing/self-closing HTML tag in a label.
+final _htmlMarkup = RegExp(
+  r'<!--[\s\S]*?-->|<(/?)([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?/?>',
+);
+
+/// Elements whose content DOMPurify (mermaid.js `sanitizeText`) removes
+/// together with the element. Other unknown elements keep their text.
+const _droppedContentTags = {
+  'script',
+  'style',
+  'iframe',
+  'noscript',
+  'noembed',
+  'noframes',
+  'template',
+  'title',
+  'xmp',
+};
+
 class _FlowParser {
   _FlowParser(this.text, this.title, this.inheritDir);
 
@@ -1113,6 +1132,43 @@ class _FlowParser {
     return inner.length >= 2 && inner.startsWith('`') && inner.endsWith('`');
   }
 
+  /// Mirrors how mermaid.js shows label HTML (htmlLabels, default
+  /// `securityLevel: strict`): `sanitizeText` keeps the markup and the browser
+  /// renders it. The emphasis tags `<b>`/`<strong>` and `<i>`/`<em>` become
+  /// the canonical `<b>`/`<i>` that the layout paints as bold and italic runs.
+  /// Every other tag is removed and its text kept, as the browser shows the
+  /// text of an element it does not style here; script-like elements lose
+  /// their text too, as DOMPurify removes it. A `<` that does not start a tag
+  /// (`a < b`) stays literal text.
+  static String _normalizeHtmlTags(String s) {
+    final out = StringBuffer();
+    var pos = 0;
+    while (pos < s.length) {
+      final m = _htmlMarkup.allMatches(s, pos).firstOrNull;
+      if (m == null) break;
+      out.write(s.substring(pos, m.start));
+      pos = m.end;
+      final name = m.group(2)?.toLowerCase();
+      if (name == null) continue; // Comment.
+      final closing = m.group(1)!.isNotEmpty;
+      switch (name) {
+        case 'b' || 'strong':
+          out.write(closing ? '</b>' : '<b>');
+        case 'i' || 'em':
+          out.write(closing ? '</i>' : '<i>');
+        default:
+          if (!closing && _droppedContentTags.contains(name)) {
+            final end = s.toLowerCase().indexOf('</$name', pos);
+            if (end < 0) return out.toString();
+            final close = s.indexOf('>', end);
+            pos = close < 0 ? s.length : close + 1;
+          }
+      }
+    }
+    out.write(s.substring(pos));
+    return out.toString();
+  }
+
   String _normalizeLabel(String raw) {
     var s = raw.trim();
     if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
@@ -1122,7 +1178,8 @@ class _FlowParser {
     if (s.length >= 2 && s.startsWith('`') && s.endsWith('`')) {
       s = s.substring(1, s.length - 1);
     }
-    // One scan finds whether a `<br>` or a legacy `fa:` icon is possible.
+    // One scan finds whether HTML markup (`<br>`, `<b>`, ...) or a legacy
+    // `fa:` icon is possible.
     var hasLt = false;
     var hasFa = false;
     for (var i = 0; i < s.length; i++) {
@@ -1135,6 +1192,7 @@ class _FlowParser {
     }
     if (hasLt) {
       s = s.replaceAll(_lineBreak, '\n');
+      if (s.contains('<')) s = _normalizeHtmlTags(s);
       // Removing `<br>` can join an `f` and an `a`.
       hasFa = s.contains('fa');
     }

@@ -9,7 +9,10 @@
   members; and the initial node order used an unstable sort. Flowchart,
   class, state and requirement layouts can change; they now match
   dagre-d3-es, the dagre build mermaid.js uses.
-
+- Render `<b>`/`<strong>` and `<i>`/`<em>` in flowchart node labels, edge
+  labels and subgraph titles as bold and italic text, as mermaid.js does, and
+  stop drawing other HTML tags as literal text (#79). Markdown-string labels
+  with line breaks also keep their `**bold**` styling now.
 - Paint state names and composite titles at normal weight, as mermaid.js
   renders them. They were measured at normal weight but painted bold, so the
   last letter wrapped outside the state box.

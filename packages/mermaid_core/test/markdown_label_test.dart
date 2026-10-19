@@ -26,10 +26,16 @@ void main() {
       MermaidTheme.defaultTheme.textColor,
     );
     final textNodes = sceneNodes.cast<SceneText>().toList();
-    expect(textNodes.map((node) => node.text), ['As an ', 'App developer']);
+    // SVG drops spaces at the ends of a <text>, so the trailing space is not
+    // painted; it stays in the run advance and the next run starts after it.
+    expect(textNodes.map((node) => node.text), ['As an', 'App developer']);
+    const measurer = ApproximateTextMeasurer();
     expect(
       textNodes.last.bounds.left,
-      closeTo(textNodes.first.bounds.right, 0.001),
+      closeTo(
+        textNodes.first.bounds.left + measurer.measure('As an ', style).width,
+        0.001,
+      ),
     );
 
     final svg = renderSceneToSvg(
