@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.1
 
 - Remove the unused vendored copy of dart_dagre from `lib/src/dagre` and its
   `NOTICE`. The layered engine does not use it.

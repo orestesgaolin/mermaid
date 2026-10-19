@@ -1,4 +1,4 @@
-## Unreleased
+## 0.3.2
 
 - Keep flowchart nodes inside their subgraph box and sibling subgraph boxes
   apart when many edges cross between subgraphs (#82). A node used in
@@ -23,6 +23,10 @@
   kanban sections, cards and assigned labels. `<br>` now breaks the line in
   ER, requirement and block labels and in multi-line state notes, and a
   quoted requirement name is shown without its quotes.
+- Write each line of a styled label to SVG as one `<text>` with a `<tspan>`
+  per bold or italic run, so browsers keep normal spaces between runs. The
+  new optional `SceneText.run` (`SceneTextRun`) marks the runs of a line.
+- Require `elk` 0.2.1.
 - Paint state names and composite titles at normal weight, as mermaid.js
   renders them. They were measured at normal weight but painted bold, so the
   last letter wrapped outside the state box.

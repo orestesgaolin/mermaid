@@ -1,3 +1,10 @@
+## 0.3.2
+
+- Require `mermaid_core` 0.3.2: subgraph members stay inside their subgraph
+  box, `<b>`/`<i>` in labels render as bold and italic text in the diagrams
+  that mermaid.js renders as HTML, and state names are painted at normal
+  weight.
+
 ## 0.3.1
 
 - Require `mermaid_core` 0.3.1: about 9x faster rendering of large
