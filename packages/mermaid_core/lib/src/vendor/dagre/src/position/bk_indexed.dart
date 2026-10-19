@@ -4,9 +4,8 @@ part of 'bk.dart';
 /// maps. It reproduces the reference code above step for step, including the
 /// behaviour of this port that differs from dagre.js, because the output
 /// must not change:
-/// - _findType2Conflicts reduces with swapped arguments, so every layer is
-///   checked as `north` against layer 0 as `south`, and the trailing scan
-///   runs once per south node instead of once per layer,
+/// - _findType2Conflicts runs its trailing scan once per south node instead
+///   of once per layer, as dagre-d3-es (the dagre build mermaid uses) does,
 /// - _findSmallestWidthAlignment starts its maximum at double.minPositive.
 /// Neighbour lists keep the graph's insertion order, so `find`, `sort` and
 /// the compaction stack see the same sequences as the reference code.
@@ -92,7 +91,7 @@ class IndexedBk {
 
   void _findType2Conflicts() {
     if (layers.isEmpty) return;
-    final south = layers[0];
+    var south = layers[0];
     void scan(
       int from,
       int to,
@@ -111,8 +110,10 @@ class IndexedBk {
       }
     }
 
+    // Each layer is the `south` below the layer before it.
     for (var l = 1; l < layers.length; l++) {
-      final northLength = layers[l].length.toDouble();
+      final northLength = layers[l - 1].length.toDouble();
+      south = layers[l];
       var prevNorthPos = -1.0;
       double? nextNorthPos;
       var southPos = 0;

@@ -997,7 +997,16 @@ class _Layout {
     for (final v in simpleNodes) {
       rankOf[v] = n(v).rank!;
     }
-    simpleNodes.sort((a, b) => rankOf[a].compareTo(rankOf[b]));
+    // Stable, as lodash sortBy in dagre.js: nodes of one rank keep graph
+    // order. List.sort is not stable for longer lists.
+    final graphPos = Int32List(g.labels.length);
+    for (var i = 0; i < simpleNodes.length; i++) {
+      graphPos[simpleNodes[i]] = i;
+    }
+    simpleNodes.sort((a, b) {
+      final byRank = rankOf[a].compareTo(rankOf[b]);
+      return byRank != 0 ? byRank : graphPos[a] - graphPos[b];
+    });
     final stack = <int>[];
     for (final start in simpleNodes) {
       stack.add(start);

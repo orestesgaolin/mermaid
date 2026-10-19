@@ -16,6 +16,10 @@ int _twoLayerCrossCount(Graph g, List<String> northLayer, List<String> southLaye
   for (int i = 0; i < southLayer.length; i++) {
     southPos[southLayer[i]] = i;
   }
+  // Vendored fix: dagre.js sorts each north node's out-edges by south
+  // position and keeps the north-layer order between nodes. Sorting all
+  // entries by south position put them in ascending order, so no entry ever
+  // had a heavier one to its right and every layering counted 0 crossings.
   List<_InnerResult> southEntries = [];
   for (var ele in northLayer) {
     List<_InnerResult> v = List.from((g.outEdges(ele)??[]).map((e) {
@@ -23,11 +27,11 @@ int _twoLayerCrossCount(Graph g, List<String> northLayer, List<String> southLaye
       num weight = g.edge2(e)[weightK];
       return _InnerResult(pos, weight);
     }));
+    v.sort((a, b) {
+      return a.pos.compareTo(b.pos);
+    });
     southEntries.addAll(v);
   }
-  southEntries.sort((a, b) {
-    return a.pos.compareTo(b.pos);
-  });
 
   // Build the accumulator tree
   int firstIndex = 1;

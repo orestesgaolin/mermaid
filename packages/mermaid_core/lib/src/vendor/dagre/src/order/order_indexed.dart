@@ -405,17 +405,23 @@ class IndexedOrder {
       }
       final positions = <int>[];
       final weights = <num>[];
+      final idx = <int>[];
       for (final v in north) {
         final targets = outTargets[v];
+        final start = positions.length;
         for (var i = 0; i < targets.length; i++) {
           positions.add(southPos[targets[i]]);
           weights.add(outWeights[v][i]);
         }
+        // As dagre.js: each north node's entries sorted by south position,
+        // north nodes kept in layer order. Entries with equal positions do
+        // not count against each other, so their relative order is
+        // irrelevant.
+        idx.addAll(
+          List<int>.generate(positions.length - start, (i) => start + i)
+            ..sort((a, b) => positions[a].compareTo(positions[b])),
+        );
       }
-      // Sort entries by position; entries with equal positions do not
-      // count against each other, so their relative order is irrelevant.
-      final idx = List<int>.generate(positions.length, (i) => i)
-        ..sort((a, b) => positions[a].compareTo(positions[b]));
       var firstIndex = 1;
       while (firstIndex < south.length) {
         firstIndex <<= 1;

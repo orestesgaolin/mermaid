@@ -43,8 +43,13 @@ List<List<String>> initOrder(Graph g) {
   var orderedVs =simpleNodes;
   // Same comparisons as reading the labels in the comparator, read once.
   final rankOf = {for (var v in orderedVs) v: g.node(v).getD(rankK)};
+  // Vendored fix: lodash sortBy in dagre.js is stable, so nodes of one rank
+  // keep graph order. List.sort is not stable for longer lists, which
+  // changed the initial order of clusters and disconnected components.
+  final graphPos = {for (var i = 0; i < orderedVs.length; i++) orderedVs[i]: i};
   orderedVs.sort((a, b) {
-    return rankOf[a]!.compareTo(rankOf[b]!);
+    final byRank = rankOf[a]!.compareTo(rankOf[b]!);
+    return byRank != 0 ? byRank : graphPos[a]! - graphPos[b]!;
   });
   orderedVs.forEach(dfs);
   return layers;

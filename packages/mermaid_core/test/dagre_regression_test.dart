@@ -13,11 +13,20 @@
 ///    making nodeEdges drop a source node's out-edges; feasibleTree could
 ///    then never grow past the nesting root, hanging forever on graphs
 ///    with several disconnected components (fixture 22).
+/// 4. order/cross_count.dart sorted all edge entries by south position, so
+///    every layering counted 0 crossings and the order sweeps never ran.
+/// 5. order/init_order.dart used the unstable List.sort where dagre.js uses
+///    the stable lodash sortBy.
+///
+/// The type-2 conflict defect in position/bk.dart (layers reduced with
+/// swapped arguments) is covered by flowchart_cluster_containment_test.dart:
+/// without those conflicts, cluster borders drift away from their members.
 library;
 
 import 'package:mermaid_core/src/diagrams/flowchart/flow_layout.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
+import 'package:mermaid_core/src/ir/scene_utils.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
 import 'package:test/test.dart';
@@ -131,5 +140,60 @@ void main() {
           FlowGraph(direction: FlowDirection.lr, nodes: nodes, edges: edges);
       expectSaneScene(layout(graph));
     }, timeout: const Timeout(Duration(seconds: 30)));
+
+    test('bug 4: order sweeps remove crossings the initial order has', () {
+      // The initial DFS order puts the targets as [f, d] under [a, b, c, e],
+      // which crosses a->f with b->d and c->d. crossCount sorted all edge
+      // entries by south position, so it always returned 0, the
+      // no-crossings early exit fired, and the sweeps never ran.
+      final graph = FlowGraph(
+        direction: FlowDirection.tb,
+        nodes: {for (final id in ['a', 'b', 'c', 'd', 'e', 'f']) id: node(id)},
+        edges: const [
+          FlowEdge(from: 'a', to: 'f'),
+          FlowEdge(from: 'b', to: 'd'),
+          FlowEdge(from: 'c', to: 'd'),
+          FlowEdge(from: 'e', to: 'f'),
+        ],
+      );
+      final bounds = layout(graph).nodeBounds;
+      double x(String id) => bounds[id]!.center.x;
+      const edges = [('a', 'f'), ('b', 'd'), ('c', 'd'), ('e', 'f')];
+      for (final (u, v) in edges) {
+        for (final (p, q) in edges) {
+          if (u == p || v == q) continue;
+          expect(
+            (x(u) - x(p)) * (x(v) - x(q)),
+            greaterThan(0),
+            reason: '$u->$v crosses $p->$q',
+          );
+        }
+      }
+    });
+
+    test('bug 5: disconnected components keep declaration order', () {
+      // initOrder sorts nodes by rank with lodash sortBy, which is stable.
+      // List.sort is not stable for longer lists, so components of
+      // fixture 32 came out shuffled (N first, A ninth).
+      final ids = 'ABCDEFGHIJKLMN'.split('');
+      final graph = FlowGraph(
+        direction: FlowDirection.lr,
+        nodes: {
+          for (final id in ids) ...{
+            '${id}1': node('${id}1'),
+            '${id}2': node('${id}2'),
+          },
+        },
+        edges: [
+          for (final id in ids)
+            FlowEdge(from: '${id}1', to: '${id}2', label: 'default style'),
+        ],
+      );
+      final bounds = layout(graph).nodeBounds;
+      final ys = [for (final id in ids) bounds['${id}1']!.center.y];
+      for (var i = 1; i < ys.length; i++) {
+        expect(ys[i], greaterThan(ys[i - 1]), reason: '${ids[i]}1 position');
+      }
+    });
   });
 }

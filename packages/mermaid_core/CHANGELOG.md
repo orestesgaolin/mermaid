@@ -1,5 +1,15 @@
 ## Unreleased
 
+- Keep flowchart nodes inside their subgraph box and sibling subgraph boxes
+  apart when many edges cross between subgraphs (#82). A node used in
+  several subgraphs now belongs to the first one that lists it, as in
+  mermaid.js. Three defects in the vendored dagre are fixed: crossing counts
+  were always 0, so edge-crossing reduction did not run; type-2 alignment
+  conflicts were not found, so cluster borders drifted away from their
+  members; and the initial node order used an unstable sort. Flowchart,
+  class, state and requirement layouts can change; they now match
+  dagre-d3-es, the dagre build mermaid.js uses.
+
 - Paint state names and composite titles at normal weight, as mermaid.js
   renders them. They were measured at normal weight but painted bold, so the
   last letter wrapped outside the state box.

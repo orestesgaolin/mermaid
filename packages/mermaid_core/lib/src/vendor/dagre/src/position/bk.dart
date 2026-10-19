@@ -91,7 +91,12 @@ Map<String, Map<String, bool>> _findType2Conflicts(Graph g, List<List<String>> l
   }
 
   if (layering.isNotEmpty) {
-    layering.reduce2(visitLayer);
+    // Vendored fix: dagre.js reduces as visitLayer(previous, current), so
+    // each layer is scanned as `south` below the layer before it. reduce2
+    // passes (element, accumulator), which scanned every layer as `north`
+    // against layer 0 and missed the type-2 conflicts between inner
+    // segments that keep edges from crossing cluster borders.
+    layering.reduce(visitLayer);
   }
   return conflicts;
 }
