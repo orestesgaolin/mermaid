@@ -578,8 +578,10 @@ _Fragment _layoutGraph(
     );
   }
 
-  // Innermost subgraph wins when a node id is listed at several levels
-  // (subgraphs are ordered outermost-first).
+  // The parser lists each node in one subgraph only (the first to close
+  // with it, as upstream makeUniq does). For a hand-built graph that lists
+  // a node at several levels, the innermost subgraph wins (subgraphs are
+  // ordered outermost-first).
   final parentOf = <String, String>{};
   for (var i = 0; i < sgs.length; i++) {
     if (removedSubgraphs.contains(i)) continue;

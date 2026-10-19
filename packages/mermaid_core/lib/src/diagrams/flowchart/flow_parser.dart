@@ -413,10 +413,21 @@ class _FlowParser {
       throw MermaidParseException('"end" without open subgraph', line: line);
     }
     final open = _openSubgraphs.removeLast();
+    // A node belongs to the first subgraph that closes with it listed, as in
+    // upstream FlowDB.addSubGraph (makeUniq). A nested subgraph closes before
+    // its parent, so the innermost one wins; among siblings the earlier one
+    // wins, also when a later subgraph mentions the node in an edge.
+    final claimed = <String>{
+      for (final sg in _builtSubgraphs)
+        if (sg != null) ...sg.nodeIds,
+    };
     _builtSubgraphs[open.listIndex!] = FlowSubgraph(
       id: open.id,
       title: open.title,
-      nodeIds: open.nodeIds,
+      nodeIds: [
+        for (final id in open.nodeIds)
+          if (!claimed.contains(id)) id,
+      ],
       direction: open.direction,
       parentIndex: open.parentIndex,
     );

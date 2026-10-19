@@ -431,6 +431,49 @@ end
       expect(outer.nodeIds, ['o1']);
       expect(inner.nodeIds, ['i1', 'i2']);
     });
+    // Upstream FlowDB.addSubGraph drops ids that an earlier-closed subgraph
+    // already lists (makeUniq), so a node belongs to one subgraph only.
+    test('a node used in a later sibling stays in the first one', () {
+      final g = parseFlowchart('''
+flowchart TB
+subgraph one
+  a --> b
+end
+subgraph two
+  b --> c
+  a --> c
+end
+''');
+      expect(g.subgraphs[0].nodeIds, ['a', 'b']);
+      expect(g.subgraphs[1].nodeIds, ['c']);
+    });
+    test('a nested subgraph closes first and keeps a shared node', () {
+      final g = parseFlowchart('''
+flowchart TB
+subgraph outer
+  x
+  subgraph inner
+    x --> y
+  end
+  x --> z
+end
+''');
+      expect(g.subgraphs[1].nodeIds, ['x', 'y']);
+      expect(g.subgraphs[0].nodeIds, ['z']);
+    });
+    test('a subgraph whose nodes are all taken stays as an empty one', () {
+      final g = parseFlowchart('''
+flowchart TB
+subgraph one
+  a --> b
+end
+subgraph two
+  b --> a
+end
+''');
+      expect(g.subgraphs.map((s) => s.id), ['one', 'two']);
+      expect(g.subgraphs[1].nodeIds, isEmpty);
+    });
     test('direction inside subgraph', () {
       final g = parseFlowchart(
         'flowchart TB\nsubgraph s1\ndirection LR\na-->b\nend',
