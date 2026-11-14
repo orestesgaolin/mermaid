@@ -1,6 +1,7 @@
 /// Inline HTML in diagram labels, reduced to what the label layout paints.
 library;
 
+import 'label_entities.dart';
 import 'label_markup.dart';
 
 /// `<br>`, `<br/>` or `<br />`: a line break in a label.
@@ -70,3 +71,12 @@ String normalizeHtmlTags(String s) {
 /// a label that mermaid.js shows as an HTML label.
 String normalizeHtmlMarkup(String s) =>
     s.contains('<') ? normalizeHtmlTags(s.replaceAll(htmlLineBreak, '\n')) : s;
+
+/// The text of a label that mermaid.js shows as an HTML label:
+/// [normalizeHtmlMarkup], then `decodeLabelEntities` for entity codes
+/// (`#quot;`, `&lt;`). With [trim], white space at the ends is removed
+/// before the codes are decoded, so a coded space at an end stays.
+String normalizeHtmlLabel(String s, {bool trim = false}) {
+  final markup = normalizeHtmlMarkup(s);
+  return decodeLabelEntities(trim ? markup.trim() : markup);
+}

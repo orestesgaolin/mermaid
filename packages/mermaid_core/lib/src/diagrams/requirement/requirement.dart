@@ -272,7 +272,7 @@ RequirementDiagram parseRequirementDiagram(String source) {
           value = value.substring(1, value.length - 1);
         }
         // mermaid.js shows field values as HTML labels.
-        open.$3.add((key, normalizeHtmlMarkup(value)));
+        open.$3.add((key, normalizeHtmlLabel(value)));
         continue;
       }
       throw MermaidParseException('unrecognized field "$line"', line: i + 1);
@@ -945,7 +945,7 @@ String _displayName(String name) {
   if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
     s = s.substring(1, s.length - 1);
   }
-  return normalizeHtmlMarkup(s);
+  return normalizeHtmlLabel(s);
 }
 
 Point _outsideMarkerCenter(Rect rect, Point border, double radius) {

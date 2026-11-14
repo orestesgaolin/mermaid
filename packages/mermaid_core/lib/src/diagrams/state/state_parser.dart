@@ -363,7 +363,7 @@ class _StateParser {
 
   /// `<br>` becomes a line break and the other tags are reduced to the
   /// `<b>`/`<i>` emphasis runs that mermaid.js shows in its HTML labels.
-  String _normalize(String s) => normalizeHtmlMarkup(s).trim();
+  String _normalize(String s) => normalizeHtmlLabel(s, trim: true);
 
   Map<String, String> _parseStyles(String text) {
     final out = <String, String>{};

@@ -165,7 +165,7 @@ String _resolveIconRef(String ref) {
 
 (MindmapShape, String) _parseNodeText(String content, int line) {
   // mermaid.js shows mindmap node text as an HTML label.
-  String normalize(String s) => normalizeHtmlMarkup(s).trim();
+  String normalize(String s) => normalizeHtmlLabel(s, trim: true);
   // id((label)) etc — the leading id is optional and unused for layout.
   final m = _nodeShape.firstMatch(content);
   if (m == null) return (MindmapShape.plain, normalize(content));

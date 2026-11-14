@@ -6,6 +6,12 @@
   `#lt;b#gt;` shows `<b>`. An entity code in an unquoted edge label
   (`A -- say #quot;hi#quot; --> B`) no longer ends the statement at its `;`,
   which was a parse error.
+- Decode the same entity codes in the other labels that mermaid.js shows as
+  HTML: class labels, notes and relation labels; state descriptions, notes
+  and transition labels; ER entity aliases, attribute comments and
+  relationship labels; requirement names and field values; block and block
+  edge labels; mindmap nodes; and kanban sections, cards and assigned
+  labels.
 
 ## 0.3.2
 

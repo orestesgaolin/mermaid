@@ -403,7 +403,7 @@ class _ClassParser {
   /// line break and the other tags are reduced to `<b>`/`<i>` emphasis runs.
   /// Members and methods do not use it: upstream escapes their `<` and `>`,
   /// so their tags show as text.
-  String _normalize(String s) => normalizeHtmlMarkup(s).trim();
+  String _normalize(String s) => normalizeHtmlLabel(s, trim: true);
 
   Map<String, String> _parseStyles(String text) {
     final styles = <String, String>{};

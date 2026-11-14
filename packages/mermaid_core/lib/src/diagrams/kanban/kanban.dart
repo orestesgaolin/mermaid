@@ -97,7 +97,7 @@ _NodeHead _parseHead(String s) {
     label = label.substring(1, label.length - 1);
   }
   // mermaid.js shows kanban labels as HTML labels.
-  label = normalizeHtmlMarkup(label);
+  label = normalizeHtmlLabel(label);
   return _NodeHead(id, label);
 }
 
@@ -112,7 +112,7 @@ void _applyMeta(KanbanTask task, String key, String value) {
   switch (key.trim()) {
     case 'label':
     case 'descr':
-      task.title = normalizeHtmlMarkup(v);
+      task.title = normalizeHtmlLabel(v);
       break;
     case 'ticket':
       task.ticket = v;
@@ -121,7 +121,7 @@ void _applyMeta(KanbanTask task, String key, String value) {
       task.priority = _normalizePriority(v);
       break;
     case 'assigned':
-      task.assigned = normalizeHtmlMarkup(v);
+      task.assigned = normalizeHtmlLabel(v);
       break;
     case 'icon':
       task.icon = v;
