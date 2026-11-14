@@ -1,11 +1,10 @@
 /// Inline HTML in diagram labels, reduced to what the label layout paints.
 library;
 
-/// Follows a `<` in a normalized label that is text although the characters
-/// after it read as a canonical emphasis tag (`#lt;b#gt;` decodes to the text
-/// `<b>`). U+2060 WORD JOINER has no width. `layoutMarkdownLabel` and
-/// `stripEmphasisTags` remove it.
-const literalLtMark = '\u2060';
+import 'label_markup.dart';
+
+/// `<br>`, `<br/>` or `<br />`: a line break in a label.
+final htmlLineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 
 /// An HTML comment or an opening/closing/self-closing HTML tag in a label.
 final _htmlMarkup = RegExp(
@@ -51,9 +50,9 @@ String normalizeHtmlTags(String s) {
     final closing = m.group(1)!.isNotEmpty;
     switch (name) {
       case 'b' || 'strong':
-        out.write(closing ? '</b>' : '<b>');
+        out.write(canonicalEmphasisTag(bold: true, closing: closing));
       case 'i' || 'em':
-        out.write(closing ? '</i>' : '<i>');
+        out.write(canonicalEmphasisTag(bold: false, closing: closing));
       default:
         if (!closing && _droppedContentTags.contains(name)) {
           final end = s.toLowerCase().indexOf('</$name', pos);
@@ -67,9 +66,7 @@ String normalizeHtmlTags(String s) {
   return out.toString();
 }
 
-final _lineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
-
 /// [normalizeHtmlTags] after `<br>`, `<br/>` and `<br />` became `\n`, for
 /// a label that mermaid.js shows as an HTML label.
-String normalizeHtmlLabel(String s) =>
-    s.contains('<') ? normalizeHtmlTags(s.replaceAll(_lineBreak, '\n')) : s;
+String normalizeHtmlMarkup(String s) =>
+    s.contains('<') ? normalizeHtmlTags(s.replaceAll(htmlLineBreak, '\n')) : s;

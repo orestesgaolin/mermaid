@@ -1,7 +1,9 @@
 import '../color.dart';
 import '../geometry.dart';
 import '../ir/scene.dart';
-import 'html_tags.dart';
+import 'label_markup.dart';
+
+export 'label_markup.dart' show hasLabelMarkup, plainLabelText;
 import 'text_measurer.dart';
 import 'text_style.dart';
 
@@ -151,26 +153,6 @@ MarkdownLabelRun _measureRun(
   );
 }
 
-/// Whether [label] (after `normalizeHtmlTags`) contains markup that
-/// [layoutMarkdownLabel] reads: an emphasis tag, which becomes a styled
-/// run, or a `<` marked as text with [literalLtMark].
-bool hasEmphasisTags(String label) =>
-    label.contains('<') &&
-    (label.contains('<b>') ||
-        label.contains('</b>') ||
-        label.contains('<i>') ||
-        label.contains('</i>') ||
-        label.contains(_literalLt));
-
-/// Removes the markup that [hasEmphasisTags] detects, leaving the text a
-/// reader hears (for semantic labels).
-String stripEmphasisTags(String label) => hasEmphasisTags(label)
-    ? label.replaceAll(_emphasisTag, '').replaceAll(_literalLt, '<')
-    : label;
-
-final _emphasisTag = RegExp(r'</?[bi]>');
-const _literalLt = '<$literalLtMark';
-
 /// [layoutMarkdownLabel] for a label that uses the canonical `<b>`/`<i>`
 /// emphasis tags, or null for a label without them, which keeps its plain
 /// text path. [wrappingWidth] has the meaning of `TextMeasurer.measure`'s
@@ -180,7 +162,7 @@ MarkdownLabelLayout? layoutHtmlLabel(
   TextStyleSpec baseStyle,
   TextMeasurer measurer, {
   double? wrappingWidth,
-}) => hasEmphasisTags(label)
+}) => hasLabelMarkup(label)
     ? layoutMarkdownLabel(
         label,
         baseStyle,
@@ -284,7 +266,7 @@ List<List<_Span>> _parseSpans(String label, bool markdown) {
       continue;
     }
     if (c == 0x3c) {
-      final tag = _emphasisTagAt(label, i);
+      final tag = emphasisTagAt(label, i);
       if (tag != null) {
         flush();
         final (length, isBold, closing) = tag;
@@ -328,15 +310,6 @@ List<List<_Span>> _parseSpans(String label, bool markdown) {
   }
   flush();
   return lines;
-}
-
-/// `(length, isBold, closing)` for a canonical emphasis tag at [i].
-(int, bool, bool)? _emphasisTagAt(String s, int i) {
-  if (s.startsWith('<b>', i)) return (3, true, false);
-  if (s.startsWith('</b>', i)) return (4, true, true);
-  if (s.startsWith('<i>', i)) return (3, false, false);
-  if (s.startsWith('</i>', i)) return (4, false, true);
-  return null;
 }
 
 /// Joins adjacent spans with the same style into one run.

@@ -164,7 +164,7 @@ class _ClassLayout {
       final n = diagram.notes[i];
       final size = labels.measure(n.text, baseStyle, maxWidth: 200);
       noteBoxes[i] = _Box(
-        ClassNode(id: '__note$i', label: stripEmphasisTags(n.text)),
+        ClassNode(id: '__note$i', label: plainLabelText(n.text)),
         size.width + 2 * _padding,
         size.height + 2 * _padding,
         [],
@@ -432,7 +432,7 @@ class _ClassLayout {
         SceneGroup(
           id: 'rel_${r.from}_${r.to}_$i',
           role: SceneGroupRole.edge,
-          semanticLabel: r.label == null ? null : stripEmphasisTags(r.label!),
+          semanticLabel: r.label == null ? null : plainLabelText(r.label!),
           children: children,
         ),
       );
@@ -754,7 +754,7 @@ class _ClassLayout {
     }
     return SceneGroup(
       id: b.node.id,
-      semanticLabel: stripEmphasisTags(b.node.label),
+      semanticLabel: plainLabelText(b.node.label),
       children: children,
     );
   }

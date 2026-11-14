@@ -248,7 +248,7 @@ class _ErLayout {
         SceneGroup(
           id: 'rel_${r.from}_${r.to}_$i',
           role: SceneGroupRole.edge,
-          semanticLabel: r.label.isEmpty ? null : stripEmphasisTags(r.label),
+          semanticLabel: r.label.isEmpty ? null : plainLabelText(r.label),
           children: [
             SceneShape(
               geometry: PathGeometry(
@@ -522,7 +522,7 @@ class _ErLayout {
     }
     return SceneGroup(
       id: b.entity.id,
-      semanticLabel: stripEmphasisTags(b.entity.label),
+      semanticLabel: plainLabelText(b.entity.label),
       children: children,
     );
   }

@@ -272,7 +272,7 @@ RequirementDiagram parseRequirementDiagram(String source) {
           value = value.substring(1, value.length - 1);
         }
         // mermaid.js shows field values as HTML labels.
-        open.$3.add((key, normalizeHtmlLabel(value)));
+        open.$3.add((key, normalizeHtmlMarkup(value)));
         continue;
       }
       throw MermaidParseException('unrecognized field "$line"', line: i + 1);
@@ -897,7 +897,7 @@ RenderScene layoutRequirementDiagram(
     nodes.add(
       SceneGroup(
         id: id,
-        semanticLabel: stripEmphasisTags(_displayName(n.id)),
+        semanticLabel: plainLabelText(_displayName(n.id)),
         link: n.link,
         tooltip: n.tooltip,
         children: children,
@@ -945,7 +945,7 @@ String _displayName(String name) {
   if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
     s = s.substring(1, s.length - 1);
   }
-  return normalizeHtmlLabel(s);
+  return normalizeHtmlMarkup(s);
 }
 
 Point _outsideMarkerCenter(Rect rect, Point border, double radius) {

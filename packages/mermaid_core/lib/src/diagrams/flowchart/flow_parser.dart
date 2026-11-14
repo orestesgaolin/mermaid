@@ -87,7 +87,6 @@ final _solidTextLinkEnd = RegExp(r'(-{2,}[-xo>])');
 final _dottedTextLinkEnd = RegExp(r'(\.+-[xo>]?)');
 final _thickTextLinkEnd = RegExp(r'(={2,}[=xo>]?)');
 final _space = RegExp(r'\s');
-final _lineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 final _legacyIcon = RegExp(r'fa[bklrs]?:fa-[\w-]+');
 final _blanks = RegExp(r'[ \t]+');
 
@@ -1148,28 +1147,13 @@ class _FlowParser {
     if (s.length >= 2 && s.startsWith('`') && s.endsWith('`')) {
       s = s.substring(1, s.length - 1);
     }
-    // One scan finds whether HTML markup (`<br>`, `<b>`, ...) or a legacy
-    // `fa:` icon is possible.
-    var hasLt = false;
-    var hasFa = false;
-    for (var i = 0; i < s.length; i++) {
-      final c = s.codeUnitAt(i);
-      if (c == 0x3c) {
-        hasLt = true;
-      } else if (c == 0x66 && i + 1 < s.length && s.codeUnitAt(i + 1) == 0x61) {
-        hasFa = true;
+    s = normalizeHtmlMarkup(s);
+    // A legacy `fa:` icon is removed with the blanks around it.
+    if (s.contains('fa')) {
+      final withoutLegacyIcons = s.replaceAll(_legacyIcon, '');
+      if (withoutLegacyIcons != s) {
+        s = withoutLegacyIcons.replaceAll(_blanks, ' ');
       }
-    }
-    if (hasLt) {
-      s = s.replaceAll(_lineBreak, '\n');
-      if (s.contains('<')) s = normalizeHtmlTags(s);
-      // Removing `<br>` can join an `f` and an `a`.
-      hasFa = s.contains('fa');
-    }
-    if (!hasFa) return decodeLabelEntities(s.trim());
-    final withoutLegacyIcons = s.replaceAll(_legacyIcon, '');
-    if (withoutLegacyIcons != s) {
-      s = withoutLegacyIcons.replaceAll(_blanks, ' ');
     }
     return decodeLabelEntities(s.trim());
   }

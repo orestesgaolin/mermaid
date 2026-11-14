@@ -21,7 +21,6 @@ import '../../theme/theme.dart';
 
 final _kanbanItemSpec = RegExp(r'^([^\s\[\(\{@]+)\s*[\[\(\{]+(.*?)[\]\)\}]+\s*$');
 final _kanbanBareId = RegExp(r'^(\S+)$');
-final _kanbanLineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 final _kanbanHeader = RegExp(r'^\s*kanban\b');
 final _kanbanClassDef = RegExp(r'^classDef\s+([^\s]+)\s+(.+)$');
 final _kanbanClassAssign = RegExp(r'^class\s+([^\s]+)\s+([^\s]+)\s*$');
@@ -98,7 +97,7 @@ _NodeHead _parseHead(String s) {
     label = label.substring(1, label.length - 1);
   }
   // mermaid.js shows kanban labels as HTML labels.
-  label = normalizeHtmlTags(label.replaceAll(_kanbanLineBreak, '\n'));
+  label = normalizeHtmlMarkup(label);
   return _NodeHead(id, label);
 }
 
@@ -113,7 +112,7 @@ void _applyMeta(KanbanTask task, String key, String value) {
   switch (key.trim()) {
     case 'label':
     case 'descr':
-      task.title = normalizeHtmlTags(v.replaceAll(_kanbanLineBreak, '\n'));
+      task.title = normalizeHtmlMarkup(v);
       break;
     case 'ticket':
       task.ticket = v;
@@ -122,7 +121,7 @@ void _applyMeta(KanbanTask task, String key, String value) {
       task.priority = _normalizePriority(v);
       break;
     case 'assigned':
-      task.assigned = normalizeHtmlLabel(v);
+      task.assigned = normalizeHtmlMarkup(v);
       break;
     case 'icon':
       task.icon = v;
@@ -719,7 +718,7 @@ RenderScene layoutKanban(
           SceneGroup(
             id: card.task.id,
             role: SceneGroupRole.node,
-            semanticLabel: stripEmphasisTags(card.task.title),
+            semanticLabel: plainLabelText(card.task.title),
             link: card.task.link,
             tooltip: card.task.tooltip,
             children: cardChildren,

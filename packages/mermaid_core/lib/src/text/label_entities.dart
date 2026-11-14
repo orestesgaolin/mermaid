@@ -1,7 +1,7 @@
 /// Entity codes in diagram labels, decoded as mermaid.js shows them.
 library;
 
-import 'html_tags.dart';
+import 'label_markup.dart';
 
 /// A mermaid entity code (`#quot;`, `#35;`) or an HTML character reference
 /// (`&lt;`, `&#35;`, `&#x23;`).
@@ -9,9 +9,6 @@ final _entity = RegExp(
   r'#([0-9]+|[A-Za-z][A-Za-z0-9]*);'
   r'|&(#[0-9]+|#[xX][0-9A-Fa-f]+|[A-Za-z][A-Za-z0-9]*);',
 );
-
-final _canonicalTag = RegExp(r'</?[bi]>');
-final _tagLikeLt = RegExp(r'<(?=/?[bi]>)');
 
 /// Whether [name] (the text between `#` and `;`) is a mermaid entity code:
 /// a decimal code point or a known entity name.
@@ -48,7 +45,7 @@ String decodeLabelEntities(String s) {
   if (!s.contains('<')) return _decodeText(s);
   final out = StringBuffer();
   var pos = 0;
-  for (final tag in _canonicalTag.allMatches(s)) {
+  for (final tag in emphasisTag.allMatches(s)) {
     out
       ..write(_decodeText(s.substring(pos, tag.start)))
       ..write(tag[0]);
@@ -60,13 +57,12 @@ String decodeLabelEntities(String s) {
 
 /// Decodes the entities of a label part that has no tags.
 String _decodeText(String s) {
-  final decoded = s.replaceAllMapped(_entity, (m) {
-    final code = m[1] != null ? _codePoint(m[1]!) : _htmlCodePoint(m[2]!);
-    return code == null ? m[0]! : String.fromCharCode(code);
-  });
-  return decoded.contains('<')
-      ? decoded.replaceAll(_tagLikeLt, '<$literalLtMark')
-      : decoded;
+  return markLiteralLt(
+    s.replaceAllMapped(_entity, (m) {
+      final code = m[1] != null ? _codePoint(m[1]!) : _htmlCodePoint(m[2]!);
+      return code == null ? m[0]! : String.fromCharCode(code);
+    }),
+  );
 }
 
 /// The code point of a decimal code or an entity name, or null for an

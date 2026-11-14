@@ -304,7 +304,7 @@ BlockNode _parseNode(String spec) {
     if (label.length >= 2 && label.startsWith('"') && label.endsWith('"')) {
       label = label.substring(1, label.length - 1);
     }
-    label = normalizeHtmlLabel(label.replaceAll('&nbsp;', ' ')).trim();
+    label = normalizeHtmlMarkup(label.replaceAll('&nbsp;', ' ')).trim();
     final dirs = <BlockArrowDir>{};
     for (final d in arrowM.group(3)!.split(',')) {
       switch (d.trim().toLowerCase()) {
@@ -350,7 +350,7 @@ BlockNode _parseNode(String spec) {
     label = label.substring(1, label.length - 1);
   }
   // mermaid.js shows block labels as HTML labels.
-  label = normalizeHtmlLabel(label);
+  label = normalizeHtmlMarkup(label);
   if (label.isEmpty) label = id;
   // Mirror upstream `typeStr2Type` keyed on the open+close delimiter pair.
   final shape = switch (open) {
@@ -440,7 +440,7 @@ void _parseEdges(String line, List<BlockEdge> edges) {
     ops.add((
       to: lastCh == '>' || lastCh == 'o' || lastCh == 'x',
       from: firstCh == '<' || firstCh == 'o' || firstCh == 'x',
-      label: normalizeHtmlLabel(label.replaceAll('&nbsp;', ' ')).trim(),
+      label: normalizeHtmlMarkup(label.replaceAll('&nbsp;', ' ')).trim(),
       thick: opStr.contains('='),
       dotted: opStr.contains('.'),
       mTo: _markerFor(lastCh),
@@ -964,7 +964,7 @@ List<SceneNode> _drawNode(
   return [
     SceneGroup(
       id: n.id,
-      semanticLabel: stripEmphasisTags(n.label),
+      semanticLabel: plainLabelText(n.label),
       children: [
         ...shapes,
         ...labels.paint(
