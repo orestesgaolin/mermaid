@@ -1,3 +1,12 @@
+## Unreleased
+
+- Decode entity codes in flowchart node labels, edge labels and subgraph
+  titles, as mermaid.js does (#86): `#quot;`, `#lt;`, `#35;`, `#9829;` and
+  the HTML forms `&lt;`, `&#35;`, `&#x23;`. A decoded `<` or `>` is text, so
+  `#lt;b#gt;` shows `<b>`. An entity code in an unquoted edge label
+  (`A -- say #quot;hi#quot; --> B`) no longer ends the statement at its `;`,
+  which was a parse error.
+
 ## 0.3.2
 
 - Keep flowchart nodes inside their subgraph box and sibling subgraph boxes

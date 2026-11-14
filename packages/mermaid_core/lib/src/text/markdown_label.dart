@@ -1,6 +1,7 @@
 import '../color.dart';
 import '../geometry.dart';
 import '../ir/scene.dart';
+import 'html_tags.dart';
 import 'text_measurer.dart';
 import 'text_style.dart';
 
@@ -150,21 +151,25 @@ MarkdownLabelRun _measureRun(
   );
 }
 
-/// Whether [label] (after `normalizeHtmlTags`) contains an
-/// emphasis tag that [layoutMarkdownLabel] turns into a styled run.
+/// Whether [label] (after `normalizeHtmlTags`) contains markup that
+/// [layoutMarkdownLabel] reads: an emphasis tag, which becomes a styled
+/// run, or a `<` marked as text with [literalLtMark].
 bool hasEmphasisTags(String label) =>
     label.contains('<') &&
     (label.contains('<b>') ||
         label.contains('</b>') ||
         label.contains('<i>') ||
-        label.contains('</i>'));
+        label.contains('</i>') ||
+        label.contains(_literalLt));
 
-/// Removes the emphasis tags that [hasEmphasisTags] detects, leaving the
-/// text a reader hears (for semantic labels).
-String stripEmphasisTags(String label) =>
-    hasEmphasisTags(label) ? label.replaceAll(_emphasisTag, '') : label;
+/// Removes the markup that [hasEmphasisTags] detects, leaving the text a
+/// reader hears (for semantic labels).
+String stripEmphasisTags(String label) => hasEmphasisTags(label)
+    ? label.replaceAll(_emphasisTag, '').replaceAll(_literalLt, '<')
+    : label;
 
 final _emphasisTag = RegExp(r'</?[bi]>');
+const _literalLt = '<$literalLtMark';
 
 /// [layoutMarkdownLabel] for a label that uses the canonical `<b>`/`<i>`
 /// emphasis tags, or null for a label without them, which keeps its plain
@@ -298,6 +303,12 @@ List<List<_Span>> _parseSpans(String label, bool markdown) {
           }
         }
         i += length;
+        continue;
+      }
+      // A `<` marked as text: keep the `<`, drop the mark.
+      if (label.startsWith(literalLtMark, i + 1)) {
+        buffer.writeCharCode(c);
+        i += 1 + literalLtMark.length;
         continue;
       }
     }

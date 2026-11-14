@@ -12,6 +12,7 @@ import '../../detect.dart';
 import '../../directives.dart';
 import '../../parse_error.dart';
 import '../../text/html_tags.dart';
+import '../../text/label_entities.dart';
 import 'flow_model.dart';
 
 /// Parses flowchart source (including optional frontmatter, directives and
@@ -281,12 +282,36 @@ class _FlowParser {
             depth--;
           }
         case 0x3b when depth == 0: // ;
+          // The `;` of an entity code (`#quot;`) belongs to a label.
+          if (_endsEntityCode(text, i)) continue;
           flush(i);
           start = i + 1;
       }
     }
     flush(n);
     return out;
+  }
+
+  /// Whether the `;` at [end] closes a mermaid entity code (`#quot;`,
+  /// `#35;`). mermaid.js encodes `#\w+;` before it parses, so that `;` does
+  /// not end a statement. A decimal code directly after a `:` is a color of
+  /// a style statement (`fill:#123;`), which mermaid.js excludes too.
+  static bool _endsEntityCode(String text, int end) {
+    var i = end - 1;
+    while (i >= 0) {
+      final c = text.codeUnitAt(i);
+      final isWord =
+          (c >= 0x30 && c <= 0x39) ||
+          (c >= 0x41 && c <= 0x5a) ||
+          (c >= 0x61 && c <= 0x7a);
+      if (!isWord) break;
+      i--;
+    }
+    if (i < 0 || i == end - 1 || text.codeUnitAt(i) != 0x23) return false;
+    if (!isLabelEntityName(text.substring(i + 1, end))) return false;
+    final first = text.codeUnitAt(i + 1);
+    final isDecimal = first >= 0x30 && first <= 0x39;
+    return !(isDecimal && i > 0 && text.codeUnitAt(i - 1) == 0x3a);
   }
 
   /// `text.substring(start, end).trim()`, with one allocation when the ends
@@ -1141,15 +1166,12 @@ class _FlowParser {
       // Removing `<br>` can join an `f` and an `a`.
       hasFa = s.contains('fa');
     }
-    if (!hasFa) return s.trim();
-    final withoutLegacyIcons = s.replaceAll(
-      _legacyIcon,
-      '',
-    );
+    if (!hasFa) return decodeLabelEntities(s.trim());
+    final withoutLegacyIcons = s.replaceAll(_legacyIcon, '');
     if (withoutLegacyIcons != s) {
       s = withoutLegacyIcons.replaceAll(_blanks, ' ');
     }
-    return s.trim();
+    return decodeLabelEntities(s.trim());
   }
 }
 

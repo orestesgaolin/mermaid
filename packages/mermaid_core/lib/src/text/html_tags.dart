@@ -1,6 +1,12 @@
 /// Inline HTML in diagram labels, reduced to what the label layout paints.
 library;
 
+/// Follows a `<` in a normalized label that is text although the characters
+/// after it read as a canonical emphasis tag (`#lt;b#gt;` decodes to the text
+/// `<b>`). U+2060 WORD JOINER has no width. `layoutMarkdownLabel` and
+/// `stripEmphasisTags` remove it.
+const literalLtMark = '\u2060';
+
 /// An HTML comment or an opening/closing/self-closing HTML tag in a label.
 final _htmlMarkup = RegExp(
   r'<!--[\s\S]*?-->|<(/?)([A-Za-z][A-Za-z0-9-]*)(?:\s[^<>]*)?/?>',
