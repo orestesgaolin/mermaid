@@ -16,11 +16,11 @@ void main() {
     test('bare class', () {
       final d = parse('class Animal');
       expect(d.classes.keys, ['Animal']);
-      expect(d.classes['Animal']!.label, 'Animal');
+      expect(d.classes['Animal']!.label.text, 'Animal');
     });
     test('class with display label', () {
       final d = parse('class Animal["Living being"]');
-      expect(d.classes['Animal']!.label, 'Living being');
+      expect(d.classes['Animal']!.label.text, 'Living being');
     });
     test('implicit declaration via relation', () {
       final d = parse('Animal <|-- Duck');
@@ -29,11 +29,11 @@ void main() {
     test('generic class name', () {
       final d = parse('class List~T~');
       expect(d.classes.keys, ['List']);
-      expect(d.classes['List']!.label, 'List<T>');
+      expect(d.classes['List']!.label.text, 'List<T>');
     });
     test('generic suffix declaration', () {
       final d = parse('class People List~List~Person~~');
-      expect(d.classes['People']!.label, 'People List<List<Person>>');
+      expect(d.classes['People']!.label.text, 'People List<List<Person>>');
     });
     test('classDiagram-v2 header accepted', () {
       expect(parseClassDiagram('classDiagram-v2\nclass A').classes.keys, ['A']);
@@ -136,16 +136,16 @@ void main() {
     });
     test('cardinalities', () {
       final r = rel('Customer "1" --> "*" Ticket');
-      expect(r.cardFrom, '1');
-      expect(r.cardTo, '*');
+      expect(r.cardFrom?.text, '1');
+      expect(r.cardTo?.text, '*');
     });
     test('label', () {
-      expect(rel('A --> B : uses').label, 'uses');
+      expect(rel('A --> B : uses').label?.text, 'uses');
     });
     test('label and cardinalities together', () {
       final r = rel('Galaxy --> "many" Star : contains');
-      expect(r.cardTo, 'many');
-      expect(r.label, 'contains');
+      expect(r.cardTo?.text, 'many');
+      expect(r.label?.text, 'contains');
     });
   });
 
@@ -167,12 +167,12 @@ void main() {
     });
     test('namespace with label', () {
       final d = parse('namespace Auth["Authentication Service"] {\nclass A\n}');
-      expect(d.namespaces.single.label, 'Authentication Service');
+      expect(d.namespaces.single.label.text, 'Authentication Service');
     });
     test('note for class', () {
       final d = parse('class A\nnote for A "important"');
       expect(d.notes.single.forClass, 'A');
-      expect(d.notes.single.text, 'important');
+      expect(d.notes.single.text.text, 'important');
     });
     test('floating note', () {
       expect(parse('note "hello"').notes.single.forClass, isNull);

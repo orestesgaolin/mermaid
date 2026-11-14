@@ -39,10 +39,10 @@ final _kanbanNumberBare = RegExp(r'\d*\.?\d+');
 class KanbanTask {
   KanbanTask(this.title, {this.id});
   final String? id;
-  String title;
+  LabelText title;
   String? ticket;
   String? priority;
-  String? assigned;
+  LabelText? assigned;
   String? icon;
   final classes = <String>[];
   final styles = <String, String>{};
@@ -52,13 +52,13 @@ class KanbanTask {
 
 class KanbanColumn {
   KanbanColumn(this.title);
-  final String title;
+  final LabelText title;
 
   /// Rich task cards with optional metadata.
   final cards = <KanbanTask>[];
 
   /// Task titles, in order. Backward-compatible view over [cards].
-  List<String> get tasks => [for (final c in cards) c.title];
+  List<String> get tasks => [for (final c in cards) c.title.text];
 }
 
 class KanbanBoard {
@@ -71,7 +71,7 @@ class KanbanBoard {
 class _NodeHead {
   _NodeHead(this.id, this.label);
   final String? id;
-  final String label;
+  final LabelText label;
 }
 
 /// Strips an optional `id[...]` / `id(...)` prefix and surrounding quotes,
@@ -97,8 +97,7 @@ _NodeHead _parseHead(String s) {
     label = label.substring(1, label.length - 1);
   }
   // mermaid.js shows kanban labels as HTML labels.
-  label = normalizeHtmlLabel(label);
-  return _NodeHead(id, label);
+  return _NodeHead(id, parseHtmlLabel(label));
 }
 
 /// Parses one `key: value` line from a `@{ ... }` block. Values may be quoted.
@@ -112,7 +111,7 @@ void _applyMeta(KanbanTask task, String key, String value) {
   switch (key.trim()) {
     case 'label':
     case 'descr':
-      task.title = normalizeHtmlLabel(v);
+      task.title = parseHtmlLabel(v);
       break;
     case 'ticket':
       task.ticket = v;
@@ -121,7 +120,7 @@ void _applyMeta(KanbanTask task, String key, String value) {
       task.priority = _normalizePriority(v);
       break;
     case 'assigned':
-      task.assigned = normalizeHtmlLabel(v);
+      task.assigned = parseHtmlLabel(v);
       break;
     case 'icon':
       task.icon = v;
@@ -718,7 +717,7 @@ RenderScene layoutKanban(
           SceneGroup(
             id: card.task.id,
             role: SceneGroupRole.node,
-            semanticLabel: plainLabelText(card.task.title),
+            semanticLabel: card.task.title.text,
             link: card.task.link,
             tooltip: card.task.tooltip,
             children: cardChildren,

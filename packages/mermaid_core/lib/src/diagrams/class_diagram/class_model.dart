@@ -1,6 +1,7 @@
 /// Immutable model for a parsed class diagram, mirroring upstream classDb.
 library;
 
+import '../../text/label_text.dart';
 import '../flowchart/flow_model.dart' show FlowDirection;
 
 class ClassDiagram {
@@ -41,7 +42,7 @@ class ClassNode {
   final String id;
 
   /// Display name; generics already converted (`List~T~` → `List<T>`).
-  final String label;
+  final LabelText label;
 
   /// Stereotypes like `interface`, `abstract`, `enumeration` (without `<<>>`).
   final List<String> annotations;
@@ -52,7 +53,7 @@ class ClassNode {
   final String? link;
 
   ClassNode copyWith({
-    String? label,
+    LabelText? label,
     List<String>? annotations,
     List<ClassMember>? attributes,
     List<ClassMember>? methods,
@@ -129,28 +130,28 @@ class ClassRelation {
   final RelationEnd endFrom;
   final RelationEnd endTo;
   final bool dotted;
-  final String? label;
+  final LabelText? label;
 
   /// Cardinality strings like `1`, `0..n` at each end.
-  final String? cardFrom;
-  final String? cardTo;
+  final LabelText? cardFrom;
+  final LabelText? cardTo;
 }
 
 class ClassNamespace {
-  const ClassNamespace({required this.id, required this.classIds, String? label})
-      : label = label ?? id;
+  ClassNamespace({required this.id, required this.classIds, LabelText? label})
+    : label = label ?? LabelText(id);
 
   final String id;
 
   /// Display title (`namespace Auth["Authentication Service"]`).
-  final String label;
+  final LabelText label;
   final List<String> classIds;
 }
 
 class ClassNote {
   const ClassNote({required this.text, this.forClass});
 
-  final String text;
+  final LabelText text;
 
   /// Attached to a class (`note for X "..."`) or floating when null.
   final String? forClass;

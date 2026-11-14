@@ -36,7 +36,7 @@ class _Statement {
 class _OpenSubgraph {
   _OpenSubgraph(this.id, this.title, this.parentIndex);
   final String id;
-  final String title;
+  final LabelText title;
   final int? parentIndex;
   final List<String> nodeIds = [];
   FlowDirection? direction;
@@ -56,7 +56,7 @@ class _EdgeSpec {
   final ArrowHead headFrom;
   final ArrowHead headTo;
   final int minLen;
-  final String? label;
+  final LabelText? label;
 }
 
 // Statement and token patterns, compiled once.
@@ -137,7 +137,7 @@ class _FlowParser {
     }
     if (_openSubgraphs.isNotEmpty) {
       throw MermaidParseException(
-        'unclosed subgraph "${_openSubgraphs.last.title}"',
+        'unclosed subgraph "${_openSubgraphs.last.title.text}"',
       );
     }
     final finalEdges =
@@ -406,20 +406,20 @@ class _FlowParser {
 
   void _openSubgraph(String header, int line) {
     String id;
-    String titleText;
+    LabelText titleText;
     final bracket = _subgraphIdTitle.firstMatch(header);
     if (bracket != null) {
       id = bracket.group(1)!;
       titleText = _normalizeLabel(bracket.group(2)!);
     } else if (header.isEmpty) {
       id = 'subGraph${_anonSubgraphCount++}';
-      titleText = '';
+      titleText = LabelText.empty;
     } else if (_quotedTitle.hasMatch(header)) {
       titleText = _normalizeLabel(header);
       id = 'subGraph${_anonSubgraphCount++}';
     } else if (!header.contains(' ')) {
       id = header;
-      titleText = header;
+      titleText = LabelText(header);
     } else {
       id = 'subGraph${_anonSubgraphCount++}';
       titleText = _normalizeLabel(header);
@@ -670,11 +670,12 @@ class _FlowParser {
         final shape = _tryParseShape(sc);
         if (shape == null) break;
         final (kind, rawLabel) = shape;
-        final label = _normalizeLabel(rawLabel);
+        final markdown = _isMarkdownLabel(rawLabel);
+        final label = _normalizeLabel(rawLabel, markdown: markdown);
         nodes[id] = nodes[id]!.copyWith(
-          label: label.isEmpty ? id : label,
+          label: label.isEmpty ? LabelText(id) : label,
           shape: kind,
-          markdown: _isMarkdownLabel(rawLabel),
+          markdown: markdown,
         );
         shapeParsed = true;
       } else {
@@ -747,10 +748,11 @@ class _FlowParser {
       node = node.copyWith(shape: shape ?? FlowNodeShape.rect);
     }
     if (label != null) {
-      final normalized = _normalizeLabel(label);
+      final markdown = _isMarkdownLabel(label);
+      final normalized = _normalizeLabel(label, markdown: markdown);
       node = node.copyWith(
-        label: normalized.isEmpty ? id : normalized,
-        markdown: _isMarkdownLabel(label),
+        label: normalized.isEmpty ? LabelText(id) : normalized,
+        markdown: markdown,
       );
     }
     if (icon != null) {
@@ -1106,7 +1108,7 @@ class _FlowParser {
   _EdgeSpec _withStartHead(
     _EdgeSpec end,
     String? startHead,
-    String label,
+    LabelText label,
     int line,
   ) {
     var headFrom = end.headFrom;
@@ -1129,7 +1131,7 @@ class _FlowParser {
   // --- helpers -------------------------------------------------------------
 
   FlowNode _ensureNode(String id) =>
-      nodes.putIfAbsent(id, () => FlowNode(id: id, label: id));
+      nodes.putIfAbsent(id, () => FlowNode(id: id, label: LabelText(id)));
 
   bool _isMarkdownLabel(String raw) {
     final s = raw.trim();
@@ -1138,7 +1140,9 @@ class _FlowParser {
     return inner.length >= 2 && inner.startsWith('`') && inner.endsWith('`');
   }
 
-  String _normalizeLabel(String raw) {
+  /// The label for the source [raw]. With [markdown] (a node label written
+  /// as a Markdown string), a `**bold**` pair is bold.
+  LabelText _normalizeLabel(String raw, {bool markdown = false}) {
     var s = raw.trim();
     if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
       s = s.substring(1, s.length - 1);
@@ -1155,7 +1159,7 @@ class _FlowParser {
         s = withoutLegacyIcons.replaceAll(_blanks, ' ');
       }
     }
-    return decodeLabelEntities(s.trim());
+    return parseLabelMarkup(s.trim(), markdown: markdown);
   }
 }
 

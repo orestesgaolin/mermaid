@@ -12,6 +12,7 @@ import 'package:mermaid_core/src/render/svg_renderer.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/text/text_style.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
+import 'package:mermaid_core/src/text/label_text.dart';
 import 'package:test/test.dart';
 
 const measurer = ApproximateTextMeasurer();
@@ -21,7 +22,7 @@ RenderScene layout(FlowGraph graph) =>
     layoutFlowchart(graph, measurer: measurer, theme: theme);
 
 FlowNode node(String id, {String? label, FlowNodeShape shape = FlowNodeShape.rect}) =>
-    FlowNode(id: id, label: label ?? id, shape: shape);
+    FlowNode(id: id, label: LabelText(label ?? id), shape: shape);
 
 FlowGraph chain({
   FlowDirection direction = FlowDirection.tb,
@@ -36,7 +37,7 @@ FlowGraph chain({
         'B': node('B', label: 'Beta'),
       },
       edges: [
-        FlowEdge(from: 'A', to: 'B', stroke: stroke, headTo: headTo, label: edgeLabel),
+        FlowEdge(from: 'A', to: 'B', stroke: stroke, headTo: headTo, label: edgeLabel == null ? null : LabelText(edgeLabel)),
       ],
     );
 
@@ -243,7 +244,7 @@ void main() {
           'C': node('C', shape: FlowNodeShape.cylinder),
         },
         edges: const [
-          FlowEdge(from: 'A', to: 'B', label: 'go'),
+          FlowEdge(from: 'A', to: 'B', label: LabelText('go')),
           FlowEdge(from: 'B', to: 'C'),
         ],
         title: 'My diagram',
@@ -327,7 +328,7 @@ void main() {
           FlowEdge(from: 'C', to: 'D'),
         ],
         subgraphs: const [
-          FlowSubgraph(id: 'sub1', title: 'Inner work', nodeIds: ['B', 'C']),
+          FlowSubgraph(id: 'sub1', title: LabelText('Inner work'), nodeIds: ['B', 'C']),
         ],
       );
       final scene = layout(graph);
@@ -402,13 +403,13 @@ void main() {
         nodes: {
           'A': const FlowNode(
             id: 'A',
-            label: 'A',
+            label: LabelText('A'),
             shape: FlowNodeShape.rect,
             classes: ['hot'],
           ),
           'B': const FlowNode(
             id: 'B',
-            label: 'B',
+            label: LabelText('B'),
             shape: FlowNodeShape.rect,
             styles: {'fill': '#00ff00', 'stroke-width': '3px'},
           ),
@@ -433,7 +434,7 @@ void main() {
       final edges = <FlowEdge>[];
       for (var i = 0; i < shapes.length; i++) {
         final id = 'n$i';
-        nodes[id] = FlowNode(id: id, label: 'Shape ${shapes[i].name}', shape: shapes[i]);
+        nodes[id] = FlowNode(id: id, label: LabelText('Shape ${shapes[i].name}'), shape: shapes[i]);
         if (i > 0) edges.add(FlowEdge(from: 'n${i - 1}', to: id));
       }
       final scene =

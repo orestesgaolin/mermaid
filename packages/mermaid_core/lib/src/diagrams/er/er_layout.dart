@@ -248,7 +248,7 @@ class _ErLayout {
         SceneGroup(
           id: 'rel_${r.from}_${r.to}_$i',
           role: SceneGroupRole.edge,
-          semanticLabel: r.label.isEmpty ? null : plainLabelText(r.label),
+          semanticLabel: r.label.isEmpty ? null : r.label.text,
           children: [
             SceneShape(
               geometry: PathGeometry(
@@ -343,13 +343,15 @@ class _ErLayout {
 
   // --- entity table -----------------------------------------------------------
 
-  List<List<String>> _attributeCells(ErEntity e) => [
+  List<List<LabelText>> _attributeCells(ErEntity e) => [
     for (final a in e.attributes)
       [
-        a.type,
-        a.name,
-        if (e.attributes.any((x) => x.keys.isNotEmpty)) a.keys.join(','),
-        if (e.attributes.any((x) => x.comment != null)) a.comment ?? '',
+        LabelText(a.type),
+        LabelText(a.name),
+        if (e.attributes.any((x) => x.keys.isNotEmpty))
+          LabelText(a.keys.join(',')),
+        if (e.attributes.any((x) => x.comment != null))
+          a.comment ?? LabelText.empty,
       ],
   ];
 
@@ -379,7 +381,7 @@ class _ErLayout {
       for (var c = 0; c < row.length; c++) {
         final size = _isCommentColumn(e, c)
             ? labels.measure(row[c], baseStyle)
-            : measurer.measure(row[c], baseStyle);
+            : measurer.measure(row[c].text, baseStyle);
         // erBox adds PADDING once per column, TEXT_PADDING once per row.
         colWidths[c] = math.max(
           colWidths[c],
@@ -467,12 +469,13 @@ class _ErLayout {
       );
       var x = rect.left;
       for (var c = 0; c < cells[rIdx].length; c++) {
-        final text = cells[rIdx][c];
+        final cell = cells[rIdx][c];
+        final text = cell.text;
         if (text.isNotEmpty && _isCommentColumn(b.entity, c)) {
-          final size = labels.measure(text, baseStyle);
+          final size = labels.measure(cell, baseStyle);
           children.addAll(
             labels.paint(
-              text,
+              cell,
               bounds: Rect.fromLTWH(
                 x + config.diagramPadding / 2,
                 y + (rowH - size.height) / 2,
@@ -522,7 +525,7 @@ class _ErLayout {
     }
     return SceneGroup(
       id: b.entity.id,
-      semanticLabel: plainLabelText(b.entity.label),
+      semanticLabel: b.entity.label.text,
       children: children,
     );
   }

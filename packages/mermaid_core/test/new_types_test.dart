@@ -311,7 +311,7 @@ kanban
   done[Done]
 ''');
     expect(b.columns.length, 2);
-    expect(b.columns.first.title, 'To Do');
+    expect(b.columns.first.title.text, 'To Do');
     expect(b.columns.first.tasks, ['Design API', 'Write specs']);
     final scene = layoutKanban(b, measurer: measurer, theme: theme);
     expect(texts(scene), containsAll(['To Do', 'Design API', 'Done']));

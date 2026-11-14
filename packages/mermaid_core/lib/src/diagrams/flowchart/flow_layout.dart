@@ -476,7 +476,7 @@ _Fragment _layoutGraph(
         : titleRich != null
         ? _WrappedLabel(titleRich.plainText, titleRich.size)
         : _wrapLabel(
-            sgs[root].title,
+            sgs[root].title.text,
             baseStyle,
             measurer,
             config.wrappingWidth,
@@ -525,12 +525,11 @@ _Fragment _layoutGraph(
     // phantom node with the subgraph's id; the cluster wins.
     if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
-    if (node.icon == null && (node.markdown || hasLabelMarkup(node.label))) {
-      final richLabel = layoutMarkdownLabel(
+    if (node.icon == null && (node.markdown || node.label.isStyled)) {
+      final richLabel = layoutStyledLabel(
         node.label,
         baseStyle,
         measurer,
-        markdown: node.markdown,
         wrappingWidth: config.wrappingWidth,
       );
       placed[node.id] = _PlacedNode(
@@ -547,7 +546,12 @@ _Fragment _layoutGraph(
       continue;
     }
     // A label containing `$$...$$` is laid out as math (whole or inline-mixed).
-    final ml = layoutLabel(node.label, baseStyle, measurer, style.textColor);
+    final ml = layoutLabel(
+      node.label.text,
+      baseStyle,
+      measurer,
+      style.textColor,
+    );
     if (ml != null) {
       placed[node.id] = _PlacedNode(
         node: node,
@@ -560,7 +564,7 @@ _Fragment _layoutGraph(
     }
     final wrappedLabel = _wrapLabel(
       // Icon nodes paint the label as one plain text block.
-      plainLabelText(node.label),
+      node.label.text,
       baseStyle,
       measurer,
       config.wrappingWidth,
@@ -690,7 +694,7 @@ _Fragment _layoutGraph(
     Size? labelSize;
     final label = e.label;
     if (label != null && label.isNotEmpty) {
-      final ml = layoutLabel(label, baseStyle, measurer, theme.textColor);
+      final ml = layoutLabel(label.text, baseStyle, measurer, theme.textColor);
       if (ml != null) {
         edgeMath[i] = ml;
         labelSize = ml.size;
@@ -705,7 +709,7 @@ _Fragment _layoutGraph(
         labelSize = rich.size;
       } else {
         final wrapped = _wrapLabel(
-          label,
+          label.text,
           baseStyle,
           measurer,
           config.wrappingWidth,
@@ -755,7 +759,7 @@ _Fragment _layoutGraph(
       if (!removedSubgraphs.contains(i) && sgs[i].title.isNotEmpty)
         sgs[i].id:
             clusterTitleRich[sgs[i].id]?.size ??
-            measurer.measure(sgs[i].title, clusterTitleStyle),
+            measurer.measure(sgs[i].title.text, clusterTitleStyle),
   };
   if (useElk) {
     final effectiveElkOptions = elkOptions.copyWith(
@@ -840,7 +844,7 @@ _Fragment _layoutGraph(
         sgs[i].id: sgs[i].title.isEmpty
             ? Size.zero
             : clusterTitleRich[sgs[i].id]?.size ??
-                  measurer.measure(sgs[i].title, clusterTitleStyle),
+                  measurer.measure(sgs[i].title.text, clusterTitleStyle),
   };
   // Dagre's compound boundary includes its own generous top margin. Mermaid
   // paints the visible border around the title band and first member instead.
@@ -956,7 +960,7 @@ _Fragment _layoutGraph(
       SceneGroup(
         id: sg.id,
         role: SceneGroupRole.cluster,
-        semanticLabel: sg.title.isEmpty ? null : plainLabelText(sg.title),
+        semanticLabel: sg.title.isEmpty ? null : sg.title.text,
         children: [
           SceneShape(
             geometry: RectGeometry(rect),
@@ -971,7 +975,7 @@ _Fragment _layoutGraph(
           else if (sg.title.isNotEmpty)
             SceneText(
               // Title sits flush at the cluster top (subGraphTitleMargin.top = 0).
-              text: sg.title,
+              text: sg.title.text,
               bounds: Rect.fromLTWH(
                 rect.center.x - titleSize.width / 2,
                 titleTop,
@@ -1047,7 +1051,7 @@ _Fragment _layoutGraph(
         role: SceneGroupRole.cluster,
         semanticLabel: cluster.subgraph.title.isEmpty
             ? null
-            : plainLabelText(cluster.subgraph.title),
+            : cluster.subgraph.title.text,
         children: children,
       ),
     );
@@ -1124,7 +1128,7 @@ _Fragment _layoutGraph(
         SceneGroup(
           id: groupId,
           role: SceneGroupRole.edge,
-          semanticLabel: e.label == null ? null : plainLabelText(e.label!),
+          semanticLabel: e.label?.text,
           edge: metadata,
           children: loopNodes,
         ),
@@ -1304,7 +1308,7 @@ _Fragment _layoutGraph(
       SceneGroup(
         id: groupId,
         role: SceneGroupRole.edge,
-        semanticLabel: e.label == null ? null : plainLabelText(e.label!),
+        semanticLabel: e.label?.text,
         edge: metadata,
         children: children,
       ),
@@ -1387,7 +1391,7 @@ _Fragment _layoutGraph(
       );
       children.add(
         SceneText(
-          text: p.paintText ?? p.node.label,
+          text: p.paintText ?? p.node.label.text,
           bounds: Rect.fromCenter(
             Point(
               p.center.x,
@@ -1408,7 +1412,7 @@ _Fragment _layoutGraph(
           math.min(_labelPaintTolerance, horizontalSlack / 2);
       children.add(
         SceneText(
-          text: p.paintText ?? p.node.label,
+          text: p.paintText ?? p.node.label.text,
           bounds: Rect.fromCenter(
             p.shape.labelCenter(p.center),
             paintWidth,
@@ -1423,7 +1427,7 @@ _Fragment _layoutGraph(
     nodeGroups.add(
       SceneGroup(
         id: p.node.id,
-        semanticLabel: p.richLabel?.plainText ?? p.node.label,
+        semanticLabel: p.node.label.text,
         link: p.node.link,
         tooltip: p.node.tooltip,
         children: children,
@@ -1488,7 +1492,7 @@ SceneGroup _edgeLabelGroup(
         ...rich.render(labelCenter, theme.textColor)
       else
         SceneText(
-          text: paintText ?? e.label!,
+          text: paintText ?? e.label!.text,
           bounds: Rect.fromCenter(
             labelCenter,
             labelSize.width,
@@ -1504,7 +1508,7 @@ SceneGroup _edgeLabelGroup(
 /// Pseudo placed-node standing in for a compound cluster at an edge
 /// endpoint, so boundary clipping can reuse the rect intersect.
 _PlacedNode _clusterEndpointNode(Rect rect) => _PlacedNode(
-  node: const FlowNode(id: '', label: ''),
+  node: const FlowNode(id: '', label: LabelText.empty),
   style: _NodeStyle(
     fill: Color.transparent,
     stroke: Color.transparent,

@@ -59,7 +59,7 @@ class _ClassParser {
 
   /// Open `namespace N { ... }` blocks (nesting allowed); each entry is
   /// (id, label, members).
-  final _namespaceStack = <(String, String, List<String>)>[];
+  final _namespaceStack = <(String, LabelText, List<String>)>[];
 
   ClassDiagram parse() {
     title = frontTitle;
@@ -144,8 +144,8 @@ class _ClassParser {
         // Trailing generic text: `class People List~List~Person~~` displays
         // the full converted text as the label.
         classes[id] = node.copyWith(
-            label:
-                _convertGenerics('${m.group(1)!} ${m.group(4)!}'.trim()));
+            label: LabelText(
+                _convertGenerics('${m.group(1)!} ${m.group(4)!}'.trim())));
       }
       if (m.group(5) != null) _openClass = id;
       if (_namespaceStack.isNotEmpty) _namespaceStack.last.$3.add(id);
@@ -361,7 +361,7 @@ class _ClassParser {
     final id = _stripGenerics(rawId);
     return classes.putIfAbsent(
       id,
-      () => ClassNode(id: id, label: _convertGenerics(rawId)),
+      () => ClassNode(id: id, label: LabelText(_convertGenerics(rawId))),
     );
   }
 
@@ -403,7 +403,7 @@ class _ClassParser {
   /// line break and the other tags are reduced to `<b>`/`<i>` emphasis runs.
   /// Members and methods do not use it: upstream escapes their `<` and `>`,
   /// so their tags show as text.
-  String _normalize(String s) => normalizeHtmlLabel(s, trim: true);
+  LabelText _normalize(String s) => parseHtmlLabel(s, trim: true);
 
   Map<String, String> _parseStyles(String text) {
     final styles = <String, String>{};

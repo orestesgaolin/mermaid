@@ -3,6 +3,8 @@
 /// mutable-singleton machinery.
 library;
 
+import '../../text/label_text.dart';
+
 class FlowGraph {
   const FlowGraph({
     required this.direction,
@@ -140,9 +142,9 @@ class FlowNode {
 
   final String id;
 
-  /// Display label. `<br/>` in source is normalized to `\n`. Defaults to [id]
+  /// Display label. `<br/>` in source is a line break. Defaults to [id]
   /// when the node never declared a label.
-  final String label;
+  final LabelText label;
   final FlowNodeShape shape;
 
   /// Whether [label] came from Mermaid's quoted-backtick Markdown syntax.
@@ -162,7 +164,7 @@ class FlowNode {
   final String? tooltip;
 
   FlowNode copyWith({
-    String? label,
+    LabelText? label,
     FlowNodeShape? shape,
     bool? markdown,
     List<String>? classes,
@@ -203,7 +205,7 @@ class FlowEdge {
 
   final String from;
   final String to;
-  final String? label;
+  final LabelText? label;
   final EdgeStroke stroke;
 
   /// Edge curve from `linkStyle … interpolate <curve>` (basis/linear/step/…).
@@ -247,7 +249,7 @@ class FlowSubgraph {
   });
 
   final String id;
-  final String title;
+  final LabelText title;
 
   /// Ids of member nodes. Nested subgraphs appear in [parentIndex] links
   /// rather than here.

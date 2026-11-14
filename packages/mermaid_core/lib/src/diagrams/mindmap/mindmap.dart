@@ -41,7 +41,7 @@ enum MindmapShape { plain, rect, rounded, circle, bang, cloud, hexagon }
 class MindmapNode {
   MindmapNode({required this.label, required this.shape, required this.depth});
 
-  final String label;
+  final LabelText label;
   final MindmapShape shape;
   final int depth;
   final children = <MindmapNode>[];
@@ -163,9 +163,9 @@ String _resolveIconRef(String ref) {
   return '${parts.first}:${parts.sublist(1).join(' ')}';
 }
 
-(MindmapShape, String) _parseNodeText(String content, int line) {
+(MindmapShape, LabelText) _parseNodeText(String content, int line) {
   // mermaid.js shows mindmap node text as an HTML label.
-  String normalize(String s) => normalizeHtmlLabel(s, trim: true);
+  LabelText normalize(String s) => parseHtmlLabel(s, trim: true);
   // id((label)) etc — the leading id is optional and unused for layout.
   final m = _nodeShape.firstMatch(content);
   if (m == null) return (MindmapShape.plain, normalize(content));
@@ -826,8 +826,8 @@ RenderScene layoutMindmap(
     }
     nodes.add(
       SceneGroup(
-        id: 'mind_${plainLabelText(n.label)}',
-        semanticLabel: plainLabelText(n.label),
+        id: 'mind_${n.label.text}',
+        semanticLabel: n.label.text,
         children: children,
       ),
     );

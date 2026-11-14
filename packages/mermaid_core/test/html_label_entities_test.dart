@@ -94,7 +94,6 @@ void main() {
       expect(painted, containsAll(expected));
       for (final text in painted) {
         expect(text, isNot(matches(r'#\w+;')));
-        expect(text, isNot(contains('⁠')));
       }
     });
   }

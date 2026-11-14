@@ -1,3 +1,4 @@
+import 'package:mermaid_core/src/text/html_tags.dart';
 import 'package:mermaid_core/src/text/markdown_label.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
@@ -10,8 +11,8 @@ import 'package:test/test.dart';
 void main() {
   test('renders strong emphasis without Markdown delimiters', () {
     const style = TextStyleSpec(fontFamily: 'sans-serif', fontSize: 16);
-    final label = layoutMarkdownLabel(
-      'As an **App developer**',
+    final label = layoutStyledLabel(
+      parseLabelMarkup('As an **App developer**', markdown: true),
       style,
       const ApproximateTextMeasurer(),
     );

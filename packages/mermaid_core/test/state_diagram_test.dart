@@ -104,7 +104,7 @@ void main() {
       final t = d.transitions.single;
       expect(t.from, 'Still');
       expect(t.to, 'Moving');
-      expect(t.label, 'push');
+      expect(t.label?.text, 'push');
     });
     test('[*] as source becomes a start state', () {
       final d = parse('[*] --> Still');
@@ -122,15 +122,15 @@ void main() {
     });
     test('state with description via as', () {
       final d = parse('state "This is a state" as s1\ns1 --> s2');
-      expect(d.states['s1']!.label, 'This is a state');
+      expect(d.states['s1']!.label.text, 'This is a state');
     });
     test('colon description', () {
       final d = parse('s1 : Some description');
-      expect(d.states['s1']!.label, 'Some description');
+      expect(d.states['s1']!.label.text, 'Some description');
     });
     test('repeat colon descriptions append', () {
       final d = parse('s1 : line one\ns1 : line two');
-      expect(d.states['s1']!.label, 'line one\nline two');
+      expect(d.states['s1']!.label.text, 'line one\nline two');
     });
     test('composite state membership and kind', () {
       final d = parse('state Active {\nIdle --> Busy\n}');
@@ -245,11 +245,11 @@ state Other {
     test('note right of inline', () {
       final d = parse('A\nnote right of A : hello');
       expect(d.notes.single.position, StateNotePosition.rightOf);
-      expect(d.notes.single.text, 'hello');
+      expect(d.notes.single.text.text, 'hello');
     });
     test('multiline note block', () {
       final d = parse('A\nnote left of A\nline one\nline two\nend note');
-      expect(d.notes.single.text, 'line one\nline two');
+      expect(d.notes.single.text.text, 'line one\nline two');
       expect(d.notes.single.position, StateNotePosition.leftOf);
     });
     test('direction statement', () {

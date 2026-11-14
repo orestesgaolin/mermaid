@@ -8,6 +8,7 @@ library;
 import 'package:mermaid_core/src/diagrams/flowchart/flow_model.dart';
 import 'package:mermaid_core/src/diagrams/flowchart/flow_parser.dart';
 import 'package:mermaid_core/src/parse_error.dart';
+import 'package:mermaid_core/src/text/label_text.dart';
 import 'package:test/test.dart';
 
 void main() {
@@ -76,13 +77,13 @@ void main() {
       expect(e.headFrom, ArrowHead.none);
       expect(e.stroke, EdgeStroke.normal);
       expect(e.minLen, 1);
-      expect(e.label, isNull);
+      expect(e.label?.text, isNull);
     });
     test('single node statement', () {
       final g = parseFlowchart('graph TD;A;');
       expect(g.nodes.keys, ['A']);
       expect(g.edges, isEmpty);
-      expect(g.nodes['A']!.label, 'A');
+      expect(g.nodes['A']!.label.text, 'A');
       expect(g.nodes['A']!.shape, FlowNodeShape.plain);
     });
     test('numeric node id', () {
@@ -99,7 +100,7 @@ void main() {
     });
     test('unicode node text', () {
       final g = parseFlowchart('graph TD;A[Detta är ett exempel]-->B;');
-      expect(g.nodes['A']!.label, 'Detta är ett exempel');
+      expect(g.nodes['A']!.label.text, 'Detta är ett exempel');
     });
     test('chained edges', () {
       final g = parseFlowchart('graph TD;A-->B-->C;');
@@ -144,77 +145,77 @@ void main() {
     test('square', () {
       final n = parseNode('A[square text]');
       expect(n.shape, FlowNodeShape.rect);
-      expect(n.label, 'square text');
+      expect(n.label.text, 'square text');
     });
     test('rounded', () {
       final n = parseNode('A(round text)');
       expect(n.shape, FlowNodeShape.rounded);
-      expect(n.label, 'round text');
+      expect(n.label.text, 'round text');
     });
     test('stadium', () {
       final n = parseNode('A([stadium text])');
       expect(n.shape, FlowNodeShape.stadium);
-      expect(n.label, 'stadium text');
+      expect(n.label.text, 'stadium text');
     });
     test('subroutine', () {
       final n = parseNode('A[[subroutine text]]');
       expect(n.shape, FlowNodeShape.subroutine);
-      expect(n.label, 'subroutine text');
+      expect(n.label.text, 'subroutine text');
     });
     test('cylinder', () {
       final n = parseNode('A[(cylinder text)]');
       expect(n.shape, FlowNodeShape.cylinder);
-      expect(n.label, 'cylinder text');
+      expect(n.label.text, 'cylinder text');
     });
     test('circle', () {
       final n = parseNode('A((circle text))');
       expect(n.shape, FlowNodeShape.circle);
-      expect(n.label, 'circle text');
+      expect(n.label.text, 'circle text');
     });
     test('double circle', () {
       final n = parseNode('A(((double text)))');
       expect(n.shape, FlowNodeShape.doubleCircle);
-      expect(n.label, 'double text');
+      expect(n.label.text, 'double text');
     });
     test('asymmetric', () {
       final n = parseNode('A>odd text]');
       expect(n.shape, FlowNodeShape.asymmetric);
-      expect(n.label, 'odd text');
+      expect(n.label.text, 'odd text');
     });
     test('diamond', () {
       final n = parseNode('A{diamond text}');
       expect(n.shape, FlowNodeShape.diamond);
-      expect(n.label, 'diamond text');
+      expect(n.label.text, 'diamond text');
     });
     test('hexagon', () {
       final n = parseNode('A{{hexagon text}}');
       expect(n.shape, FlowNodeShape.hexagon);
-      expect(n.label, 'hexagon text');
+      expect(n.label.text, 'hexagon text');
     });
     test('lean right', () {
       final n = parseNode('A[/lean right/]');
       expect(n.shape, FlowNodeShape.leanRight);
-      expect(n.label, 'lean right');
+      expect(n.label.text, 'lean right');
     });
     test('lean left', () {
       final n = parseNode(r'A[\lean left\]');
       expect(n.shape, FlowNodeShape.leanLeft);
-      expect(n.label, 'lean left');
+      expect(n.label.text, 'lean left');
     });
     test('trapezoid', () {
       final n = parseNode(r'A[/trapezoid\]');
       expect(n.shape, FlowNodeShape.trapezoid);
-      expect(n.label, 'trapezoid');
+      expect(n.label.text, 'trapezoid');
     });
     test('inverted trapezoid', () {
       final n = parseNode(r'A[\inv trapezoid/]');
       expect(n.shape, FlowNodeShape.invTrapezoid);
-      expect(n.label, 'inv trapezoid');
+      expect(n.label.text, 'inv trapezoid');
     });
     test('ellipse', () {
       final n = parseNode('A(-ellipse text-)');
       expect(n.shape, FlowNodeShape.ellipse);
-      expect(n.label, 'ellipse text');
+      expect(n.label.text, 'ellipse text');
     });
     test('shape in edge chain', () {
       final g = parseFlowchart('graph TD;A[start]-->B{decide};');
@@ -223,32 +224,41 @@ void main() {
     });
     test('quoted label with special characters', () {
       final n = parseNode('A["quoted; text (with) [brackets]"]');
-      expect(n.label, 'quoted; text (with) [brackets]');
+      expect(n.label.text, 'quoted; text (with) [brackets]');
       expect(n.shape, FlowNodeShape.rect);
     });
     test('legacy Font Awesome tokens do not become label text', () {
       expect(
-        parseNode(r'A["fa:fa-cogs DBServer\:SQLAgent"]').label,
+        parseNode(r'A["fa:fa-cogs DBServer\:SQLAgent"]').label.text,
         r'DBServer\:SQLAgent',
       );
-      expect(parseNode('A[1051 AAA fa:fa-check]').label, '1051 AAA');
-      expect(parseNode('A[before fas:fa-server after]').label, 'before after');
+      expect(parseNode('A[1051 AAA fa:fa-check]').label.text, '1051 AAA');
+      expect(
+        parseNode('A[before fas:fa-server after]').label.text,
+        'before after',
+      );
     });
     test('ordinary colon labels are preserved', () {
-      expect(parseNode('A[Server:Service 1]').label, 'Server:Service 1');
+      expect(parseNode('A[Server:Service 1]').label.text, 'Server:Service 1');
     });
     test('br tag becomes newline', () {
       final n = parseNode('A[first<br/>second<br >third]');
-      expect(n.label, 'first\nsecond\nthird');
+      expect(n.label.text, 'first\nsecond\nthird');
     });
     test('markdown string label', () {
       final n = parseNode('A["`As an **App developer**`"]');
-      expect(n.label, 'As an **App developer**');
+      expect(n.label.text, 'As an App developer');
+      expect(n.label.lines, [
+        [
+          const LabelSpan('As an '),
+          const LabelSpan('App developer', bold: true),
+        ],
+      ]);
       expect(n.markdown, isTrue);
     });
     test('bare reference keeps earlier declaration', () {
       final g = parseFlowchart('graph TD;A[The text];A-->B;');
-      expect(g.nodes['A']!.label, 'The text');
+      expect(g.nodes['A']!.label.text, 'The text');
       expect(g.nodes['A']!.shape, FlowNodeShape.rect);
     });
   });
@@ -316,46 +326,46 @@ void main() {
     });
     test('pipe label', () {
       final e = parseEdge('A-->|the label|B');
-      expect(e.label, 'the label');
+      expect(e.label?.text, 'the label');
     });
     test('pipe label on open link', () {
       final e = parseEdge('A---|This is the 123 s text|B');
-      expect(e.label, 'This is the 123 s text');
+      expect(e.label?.text, 'This is the 123 s text');
       expect(e.headTo, ArrowHead.none);
       expect(e.minLen, 1);
     });
     test('text-form label normal', () {
       final e = parseEdge('A-- the text -->B');
-      expect(e.label, 'the text');
+      expect(e.label?.text, 'the text');
       expect(e.headTo, ArrowHead.point);
       expect(e.stroke, EdgeStroke.normal);
     });
     test('text-form label dotted', () {
       final e = parseEdge('A-. the text .->B');
-      expect(e.label, 'the text');
+      expect(e.label?.text, 'the text');
       expect(e.stroke, EdgeStroke.dotted);
       expect(e.headTo, ArrowHead.point);
     });
     test('text-form label thick', () {
       final e = parseEdge('A== the text ==>B');
-      expect(e.label, 'the text');
+      expect(e.label?.text, 'the text');
       expect(e.stroke, EdgeStroke.thick);
       expect(e.headTo, ArrowHead.point);
     });
     test('text-form open link', () {
       final e = parseEdge('A-- the text ---B');
-      expect(e.label, 'the text');
+      expect(e.label?.text, 'the text');
       expect(e.headTo, ArrowHead.none);
     });
     test('quoted pipe label', () {
       final e = parseEdge('A-->|"quoted label"|B');
-      expect(e.label, 'quoted label');
+      expect(e.label?.text, 'quoted label');
     });
     test('bidirectional with text form', () {
       final e = parseEdge('A<-- text -->B');
       expect(e.headFrom, ArrowHead.point);
       expect(e.headTo, ArrowHead.point);
-      expect(e.label, 'text');
+      expect(e.label?.text, 'text');
     });
 
     for (var length = 1; length <= 3; length++) {
@@ -380,7 +390,7 @@ void main() {
       final g = parseFlowchart('graph TB\nsubgraph one\na1-->a2\nend');
       final sg = g.subgraphs.single;
       expect(sg.id, 'one');
-      expect(sg.title, 'one');
+      expect(sg.title.text, 'one');
       expect(sg.nodeIds, ['a1', 'a2']);
     });
     test('multiple subgraphs', () {
@@ -392,24 +402,24 @@ void main() {
     });
     test('quoted title', () {
       final g = parseFlowchart('graph TB\nsubgraph "Some Title"\na-->b\nend');
-      expect(g.subgraphs.single.title, 'Some Title');
+      expect(g.subgraphs.single.title.text, 'Some Title');
     });
     test('id with bracket title', () {
       final g = parseFlowchart(
         'graph TB\nsubgraph sg1[Nice Title]\na-->b\nend',
       );
       expect(g.subgraphs.single.id, 'sg1');
-      expect(g.subgraphs.single.title, 'Nice Title');
+      expect(g.subgraphs.single.title.text, 'Nice Title');
     });
     test('id with quoted bracket title', () {
       final g = parseFlowchart(
         'graph TB\nsubgraph sg1["Quoted Title"]\na-->b\nend',
       );
-      expect(g.subgraphs.single.title, 'Quoted Title');
+      expect(g.subgraphs.single.title.text, 'Quoted Title');
     });
     test('multi-word title without brackets', () {
       final g = parseFlowchart('graph TB\nsubgraph A long title\na-->b\nend');
-      expect(g.subgraphs.single.title, 'A long title');
+      expect(g.subgraphs.single.title.text, 'A long title');
     });
     test('nested subgraphs and parentIndex', () {
       final g = parseFlowchart('''
@@ -544,7 +554,7 @@ end
         'graph TD;A[label]:::exClass-->B;classDef exClass fill:#f9f;',
       );
       expect(g.nodes['A']!.classes, ['exClass']);
-      expect(g.nodes['A']!.label, 'label');
+      expect(g.nodes['A']!.label.text, 'label');
     });
     test('shorthand ::: without shape', () {
       final g = parseFlowchart('graph TD;A:::exClass-->B;');
@@ -610,7 +620,7 @@ end
         'flowchart LR\nA@{ shape: datastore, label: "Datastore" } --> B',
       );
       expect(g.nodes['A']!.shape, FlowNodeShape.cylinder);
-      expect(g.nodes['A']!.label, 'Datastore');
+      expect(g.nodes['A']!.label.text, 'Datastore');
     });
     test('decision alias maps to diamond', () {
       final g = parseFlowchart('flowchart TD\nq@{ shape: decision }');
@@ -619,7 +629,7 @@ end
     test('label only keeps shape', () {
       final g = parseFlowchart('flowchart TD\nA[old]\nA@{ label: "new" }');
       expect(g.nodes['A']!.shape, FlowNodeShape.rect);
-      expect(g.nodes['A']!.label, 'new');
+      expect(g.nodes['A']!.label.text, 'new');
     });
     test('v11 geometries map to their shape', () {
       expect(
@@ -654,7 +664,7 @@ end
       final g = parseFlowchart(
         'flowchart TD\nA@{ label: "a, b } c", shape: stadium }',
       );
-      expect(g.nodes['A']!.label, 'a, b } c');
+      expect(g.nodes['A']!.label.text, 'a, b } c');
       expect(g.nodes['A']!.shape, FlowNodeShape.stadium);
     });
     test('fixture 60 style: attributes mid-chain', () {
@@ -665,7 +675,7 @@ end
       expect(g.nodes['DataStore']!.shape, FlowNodeShape.cylinder);
       expect(g.nodes['Process']!.shape, FlowNodeShape.circle);
       expect(g.edges.length, 2);
-      expect(g.edges[0].label, 'input');
+      expect(g.edges[0].label?.text, 'input');
     });
   });
 

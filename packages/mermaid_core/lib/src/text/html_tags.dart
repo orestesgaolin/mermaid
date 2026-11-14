@@ -3,6 +3,9 @@ library;
 
 import 'label_entities.dart';
 import 'label_markup.dart';
+import 'label_text.dart';
+
+export 'label_text.dart';
 
 /// `<br>`, `<br/>` or `<br />`: a line break in a label.
 final htmlLineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
@@ -29,8 +32,8 @@ const _droppedContentTags = {
 /// Mirrors how mermaid.js shows label HTML (htmlLabels, default
 /// `securityLevel: strict`): `sanitizeText` keeps the markup and the browser
 /// renders it. The emphasis tags `<b>`/`<strong>` and `<i>`/`<em>` become
-/// the canonical `<b>`/`<i>` that `layoutMarkdownLabel` paints as bold and
-/// italic runs. Every other tag is removed and its text kept, as the browser
+/// the canonical `<b>`/`<i>` that [parseLabelMarkup] turns into bold and
+/// italic spans. Every other tag is removed and its text kept, as the browser
 /// shows the text of an element it does not style here; script-like elements
 /// lose their text too, as DOMPurify removes it. A `<` that does not start a
 /// tag (`a < b`) stays literal text.
@@ -72,11 +75,88 @@ String normalizeHtmlTags(String s) {
 String normalizeHtmlMarkup(String s) =>
     s.contains('<') ? normalizeHtmlTags(s.replaceAll(htmlLineBreak, '\n')) : s;
 
-/// The text of a label that mermaid.js shows as an HTML label:
-/// [normalizeHtmlMarkup], then `decodeLabelEntities` for entity codes
-/// (`#quot;`, `&lt;`). With [trim], white space at the ends is removed
-/// before the codes are decoded, so a coded space at an end stays.
-String normalizeHtmlLabel(String s, {bool trim = false}) {
+/// The label that mermaid.js shows as an HTML label for the source [s]:
+/// [normalizeHtmlMarkup], then [parseLabelMarkup]. With [trim], white space
+/// at the ends is removed before entity codes are decoded, so a coded space
+/// at an end stays.
+LabelText parseHtmlLabel(String s, {bool trim = false}) {
   final markup = normalizeHtmlMarkup(s);
-  return decodeLabelEntities(trim ? markup.trim() : markup);
+  return parseLabelMarkup(trim ? markup.trim() : markup);
+}
+
+/// Parses [markup], label text with canonical emphasis tags (the output of
+/// [normalizeHtmlTags]): `\n` starts a line, `<b>` and `<i>` set the style
+/// of the spans in them, and the entity codes of the text between the tags
+/// are decoded. With [markdown], a `**bold**` pair is bold too; an unmatched
+/// `**` stays text.
+LabelText parseLabelMarkup(String markup, {bool markdown = false}) {
+  final hasTags = markup.contains('<') && emphasisTag.hasMatch(markup);
+  if (!hasTags && !(markdown && markup.contains('**'))) {
+    return LabelText(decodeLabelEntities(markup));
+  }
+  final lines = <List<LabelSpan>>[[]];
+  final buffer = StringBuffer();
+  var boldDepth = 0;
+  var italicDepth = 0;
+  var markdownBold = false;
+  void flush() {
+    if (buffer.isEmpty) return;
+    lines.last.add(
+      LabelSpan(
+        decodeLabelEntities(buffer.toString()),
+        bold: boldDepth > 0 || markdownBold,
+        italic: italicDepth > 0,
+      ),
+    );
+    buffer.clear();
+  }
+
+  var i = 0;
+  while (i < markup.length) {
+    final c = markup.codeUnitAt(i);
+    if (c == 0x0a) {
+      flush();
+      lines.add([]);
+      i++;
+      continue;
+    }
+    if (c == 0x3c) {
+      final tag = emphasisTagAt(markup, i);
+      if (tag != null) {
+        flush();
+        final (length, isBold, closing) = tag;
+        // A stray closing tag is ignored, as an HTML parser ignores it.
+        if (isBold) {
+          if (!closing) {
+            boldDepth++;
+          } else if (boldDepth > 0) {
+            boldDepth--;
+          }
+        } else {
+          if (!closing) {
+            italicDepth++;
+          } else if (italicDepth > 0) {
+            italicDepth--;
+          }
+        }
+        i += length;
+        continue;
+      }
+    }
+    // `**` opens strong emphasis only when a closing `**` follows; an
+    // unmatched delimiter stays literal text.
+    if (markdown &&
+        c == 0x2a &&
+        markup.startsWith('**', i) &&
+        (markdownBold || markup.indexOf('**', i + 2) >= 0)) {
+      flush();
+      markdownBold = !markdownBold;
+      i += 2;
+      continue;
+    }
+    buffer.writeCharCode(c);
+    i++;
+  }
+  flush();
+  return LabelText.styled(lines);
 }

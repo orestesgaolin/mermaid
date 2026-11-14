@@ -31,7 +31,7 @@ void main() {
       expect(r.cardFrom, ErCardinality.onlyOne);
       expect(r.cardTo, ErCardinality.zeroOrMore);
       expect(r.identifying, isTrue);
-      expect(r.label, 'places');
+      expect(r.label.text, 'places');
     });
     test('all cardinality tokens', () {
       final d = parseErDiagram(
@@ -67,13 +67,13 @@ void main() {
       final attrs = d.entities['CUSTOMER']!.attributes;
       expect(attrs[0].type, 'string');
       expect(attrs[0].name, 'name');
-      expect(attrs[0].comment, 'the full name');
+      expect(attrs[0].comment?.text, 'the full name');
       expect(attrs[1].keys, ['PK']);
       expect(attrs[2].keys, ['FK', 'UK']);
     });
     test('entity alias', () {
       final d = parseErDiagram('erDiagram\np[Person]\np ||--o| h : owns');
-      expect(d.entities['p']!.label, 'Person');
+      expect(d.entities['p']!.label.text, 'Person');
     });
     test('quoted entity names', () {
       final d = parseErDiagram(
