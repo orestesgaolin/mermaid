@@ -897,7 +897,7 @@ RenderScene layoutRequirementDiagram(
     nodes.add(
       SceneGroup(
         id: id,
-        semanticLabel: stripEmphasisTags(_displayName(n.id)),
+        semanticLabel: plainLabelText(_displayName(n.id)),
         link: n.link,
         tooltip: n.tooltip,
         children: children,

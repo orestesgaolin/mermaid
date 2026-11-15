@@ -13,6 +13,7 @@ import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
 import '../../parse_error.dart';
+import '../../text/html_tags.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
@@ -21,7 +22,6 @@ final _timelineHeader = RegExp(r'^timeline\b(.*)$');
 final _titleLine = RegExp(r'^title\s+(.+)$');
 final _sectionLine = RegExp(r'^section\s+(.+)$');
 final _accLine = RegExp(r'^acc(Title|Descr)\s*[:{]');
-final _lineBreakTag = RegExp(r'<br\s*/?>', caseSensitive: false);
 
 /// Layout direction parsed from the `timeline [LR|TD]` header. Upstream's
 /// renderer is columnar regardless of direction, so this is carried for
@@ -169,7 +169,7 @@ TimelineDiagram parseTimeline(String source) {
 }
 
 String _normalize(String s) =>
-    s.replaceAll(_lineBreakTag, '\n').trim();
+    s.replaceAll(htmlLineBreak, '\n').trim();
 
 // Section/task/event fills are upstream's `cScale<i>` and the per-node bottom
 // underline uses `cScaleInv<i>` (`.section-<i> {rect,path,circle} fill:

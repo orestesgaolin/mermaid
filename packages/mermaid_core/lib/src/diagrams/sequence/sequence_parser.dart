@@ -7,6 +7,7 @@ library;
 
 import '../../detect.dart';
 import '../../parse_error.dart';
+import '../../text/html_tags.dart';
 import 'sequence_model.dart';
 
 SequenceDiagram parseSequence(String source) {
@@ -77,7 +78,6 @@ final _titleDecl = RegExp(r'^title\s*:?\s+(.*)$');
 final _accessibility = RegExp(r'^acc(Title|Descr)\s*[:{]');
 final _linkMetadata = RegExp(r'^(links?|properties|details)\s+');
 final _alias = RegExp(r'^(.+?)\s+as\s+(.+)$');
-final _lineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 final _wrapDirective = RegExp(r'^:?(wrap|nowrap):');
 
 class _SequenceParser {
@@ -406,7 +406,7 @@ class _SequenceParser {
     }
     if (!out.contains('<')) return out.trim();
     return out
-        .replaceAll(_lineBreak, '\n')
+        .replaceAll(htmlLineBreak, '\n')
         .trim();
   }
 

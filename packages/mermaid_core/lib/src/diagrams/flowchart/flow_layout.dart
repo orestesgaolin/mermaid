@@ -465,15 +465,12 @@ _Fragment _layoutGraph(
       elkOptions: elkOptions,
       originalLinkIndices: subLinkIndices,
     );
-    final titleRich = hasEmphasisTags(sgs[root].title)
-        ? layoutMarkdownLabel(
-            sgs[root].title,
-            baseStyle,
-            measurer,
-            markdown: false,
-            wrappingWidth: config.wrappingWidth,
-          )
-        : null;
+    final titleRich = layoutHtmlLabel(
+      sgs[root].title,
+      baseStyle,
+      measurer,
+      wrappingWidth: config.wrappingWidth,
+    );
     final wrappedTitle = sgs[root].title.isEmpty
         ? const _WrappedLabel('', Size.zero)
         : titleRich != null
@@ -528,7 +525,7 @@ _Fragment _layoutGraph(
     // phantom node with the subgraph's id; the cluster wins.
     if (subgraphIndexById.containsKey(node.id)) continue;
     final style = _resolveNodeStyle(node, graph, theme);
-    if (node.icon == null && (node.markdown || hasEmphasisTags(node.label))) {
+    if (node.icon == null && (node.markdown || hasLabelMarkup(node.label))) {
       final richLabel = layoutMarkdownLabel(
         node.label,
         baseStyle,
@@ -563,7 +560,7 @@ _Fragment _layoutGraph(
     }
     final wrappedLabel = _wrapLabel(
       // Icon nodes paint the label as one plain text block.
-      stripEmphasisTags(node.label),
+      plainLabelText(node.label),
       baseStyle,
       measurer,
       config.wrappingWidth,
@@ -697,14 +694,13 @@ _Fragment _layoutGraph(
       if (ml != null) {
         edgeMath[i] = ml;
         labelSize = ml.size;
-      } else if (hasEmphasisTags(label)) {
-        final rich = layoutMarkdownLabel(
-          label,
-          baseStyle,
-          measurer,
-          markdown: false,
-          wrappingWidth: config.wrappingWidth,
-        );
+      } else if (layoutHtmlLabel(
+            label,
+            baseStyle,
+            measurer,
+            wrappingWidth: config.wrappingWidth,
+          )
+          case final rich?) {
         edgeRich[i] = rich;
         labelSize = rich.size;
       } else {
@@ -751,13 +747,8 @@ _Fragment _layoutGraph(
   // Titles with `<b>`/`<i>` emphasis tags, laid out as styled runs.
   final clusterTitleRich = <String, MarkdownLabelLayout>{
     for (var i = 0; i < sgs.length; i++)
-      if (!removedSubgraphs.contains(i) && hasEmphasisTags(sgs[i].title))
-        sgs[i].id: layoutMarkdownLabel(
-          sgs[i].title,
-          clusterTitleStyle,
-          measurer,
-          markdown: false,
-        ),
+      if (!removedSubgraphs.contains(i))
+        sgs[i].id: ?layoutHtmlLabel(sgs[i].title, clusterTitleStyle, measurer),
   };
   final clusterLabels = <String, Size>{
     for (var i = 0; i < sgs.length; i++)
@@ -965,7 +956,7 @@ _Fragment _layoutGraph(
       SceneGroup(
         id: sg.id,
         role: SceneGroupRole.cluster,
-        semanticLabel: sg.title.isEmpty ? null : stripEmphasisTags(sg.title),
+        semanticLabel: sg.title.isEmpty ? null : plainLabelText(sg.title),
         children: [
           SceneShape(
             geometry: RectGeometry(rect),
@@ -1056,7 +1047,7 @@ _Fragment _layoutGraph(
         role: SceneGroupRole.cluster,
         semanticLabel: cluster.subgraph.title.isEmpty
             ? null
-            : stripEmphasisTags(cluster.subgraph.title),
+            : plainLabelText(cluster.subgraph.title),
         children: children,
       ),
     );
@@ -1133,7 +1124,7 @@ _Fragment _layoutGraph(
         SceneGroup(
           id: groupId,
           role: SceneGroupRole.edge,
-          semanticLabel: e.label == null ? null : stripEmphasisTags(e.label!),
+          semanticLabel: e.label == null ? null : plainLabelText(e.label!),
           edge: metadata,
           children: loopNodes,
         ),
@@ -1313,7 +1304,7 @@ _Fragment _layoutGraph(
       SceneGroup(
         id: groupId,
         role: SceneGroupRole.edge,
-        semanticLabel: e.label == null ? null : stripEmphasisTags(e.label!),
+        semanticLabel: e.label == null ? null : plainLabelText(e.label!),
         edge: metadata,
         children: children,
       ),

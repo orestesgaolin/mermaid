@@ -34,7 +34,6 @@ final _memberLabelLine = RegExp(r'^([^\s:]+)\s*:\s*(.+)$');
 final _annotationText = RegExp(r'^<<.*>>$');
 final _visibilityChar = RegExp(r'[+\-#~]');
 final _identChar = RegExp(r'[A-Za-z0-9_]');
-final _htmlBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 
 ClassDiagram parseClassDiagram(String source) {
   final title = frontmatterTitle(source);
@@ -404,8 +403,7 @@ class _ClassParser {
   /// line break and the other tags are reduced to `<b>`/`<i>` emphasis runs.
   /// Members and methods do not use it: upstream escapes their `<` and `>`,
   /// so their tags show as text.
-  String _normalize(String s) =>
-      normalizeHtmlTags(s.replaceAll(_htmlBreak, '\n')).trim();
+  String _normalize(String s) => normalizeHtmlLabel(s, trim: true);
 
   Map<String, String> _parseStyles(String text) {
     final styles = <String, String>{};

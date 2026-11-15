@@ -31,7 +31,6 @@ final _mindmapClassDef = RegExp(
 );
 final _iconLine = RegExp(r'^::icon\(\s*(.+?)\s*\)$');
 final _whitespaceRun = RegExp(r'\s+');
-final _htmlBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 final _nodeShape = RegExp(
   r'^([\wÀ-￿-]*)\s*'
   r'(\(\(|\)\)|\(-|\)|\(|\[|\{\{)(.*?)(\)\)|\(\(|-\)|\(|\)|\]|\}\})\s*$',
@@ -166,8 +165,7 @@ String _resolveIconRef(String ref) {
 
 (MindmapShape, String) _parseNodeText(String content, int line) {
   // mermaid.js shows mindmap node text as an HTML label.
-  String normalize(String s) =>
-      normalizeHtmlTags(s.replaceAll(_htmlBreak, '\n')).trim();
+  String normalize(String s) => normalizeHtmlLabel(s, trim: true);
   // id((label)) etc — the leading id is optional and unused for layout.
   final m = _nodeShape.firstMatch(content);
   if (m == null) return (MindmapShape.plain, normalize(content));
@@ -828,8 +826,8 @@ RenderScene layoutMindmap(
     }
     nodes.add(
       SceneGroup(
-        id: 'mind_${stripEmphasisTags(n.label)}',
-        semanticLabel: stripEmphasisTags(n.label),
+        id: 'mind_${plainLabelText(n.label)}',
+        semanticLabel: plainLabelText(n.label),
         children: children,
       ),
     );

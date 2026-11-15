@@ -24,7 +24,6 @@ final _ignoredLine = RegExp(r'^(hide empty description|scale\s|click\s|acc(Title
 final _transitionLine = RegExp(r'^(\[\*\]|[^\s-]\S*?)\s*-->\s*(\[\*\]|[^\s:]+)\s*(?::\s*(.*))?$');
 final _stateDescLine = RegExp(r'^([^\s:]+)\s*:\s*(.+)$');
 final _bareStateId = RegExp(r'^[\w.-]+$');
-final _htmlBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
 
 StateDiagram parseStateDiagram(String source) {
   final title = frontmatterTitle(source);
@@ -364,8 +363,7 @@ class _StateParser {
 
   /// `<br>` becomes a line break and the other tags are reduced to the
   /// `<b>`/`<i>` emphasis runs that mermaid.js shows in its HTML labels.
-  String _normalize(String s) =>
-      normalizeHtmlTags(s.replaceAll(_htmlBreak, '\n')).trim();
+  String _normalize(String s) => normalizeHtmlLabel(s, trim: true);
 
   Map<String, String> _parseStyles(String text) {
     final out = <String, String>{};
