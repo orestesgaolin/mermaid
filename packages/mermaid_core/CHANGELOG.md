@@ -1,4 +1,4 @@
-## Unreleased
+## 0.4.0
 
 - **Breaking:** model labels are `LabelText`, no longer `String`. A
   `LabelText` is plain text or lines of bold and italic spans

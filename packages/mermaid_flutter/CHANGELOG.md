@@ -1,3 +1,11 @@
+## 0.4.0
+
+- Require `mermaid_core` 0.4.0. **Breaking** for code that reads the diagram
+  models: labels are `LabelText`, no longer `String` (see the `mermaid_core`
+  changelog). The widgets and their parameters did not change.
+- Labels show entity codes as characters, as mermaid.js does: `#quot;`,
+  `#lt;`, `#35;`, `#9829;` and the HTML forms `&lt;`, `&#35;`, `&#x23;`.
+
 ## 0.3.2
 
 - Require `mermaid_core` 0.3.2: subgraph members stay inside their subgraph
