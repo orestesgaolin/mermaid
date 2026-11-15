@@ -56,8 +56,7 @@ flowchart LR
     test('the node shows the decoded characters at normal weight', () {
       // The label is wider than the 200 px wrapping width, so it wraps.
       expect(_nodeTexts(scene, 'n1').map((t) => t.text), [
-        'Token "leaks" via #frag <b>',
-        'and `x`',
+        'Token "leaks" via #frag <b>\nand `x`',
       ]);
       expect(
         _find(scene.nodes, 'n1')!.semanticLabel,
@@ -75,7 +74,6 @@ flowchart LR
       expect(svg, contains('>Token "leaks" via #frag &lt;b&gt;</tspan>'));
       expect(svg, contains('>and `x`</tspan>'));
       expect(svg, isNot(contains('#quot;')));
-      expect(svg, isNot(contains('⁠')));
     });
   });
 

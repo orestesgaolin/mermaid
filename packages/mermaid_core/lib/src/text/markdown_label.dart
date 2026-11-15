@@ -1,19 +1,17 @@
 import '../color.dart';
 import '../geometry.dart';
 import '../ir/scene.dart';
-import 'label_markup.dart';
+import 'label_text.dart';
 
-export 'label_markup.dart' show hasLabelMarkup, plainLabelText;
+export 'label_text.dart';
 import 'text_measurer.dart';
 import 'text_style.dart';
 
 /// A measured label made of styled inline runs.
 ///
 /// Produced for Mermaid Markdown-string labels (`**bold**`) and for labels
-/// that use the HTML emphasis tags `<b>`/`<strong>` and `<i>`/`<em>`.
-/// `normalizeHtmlTags` (`html_tags.dart`) canonicalizes those tags to
-/// `<b>`/`</b>` and `<i>`/`</i>` and removes every other tag, so only those
-/// four tags reach this layout.
+/// that use the HTML emphasis tags `<b>`/`<strong>` and `<i>`/`<em>`, from
+/// the spans of their [LabelText].
 class MarkdownLabelLayout {
   const MarkdownLabelLayout({
     required this.plainText,
@@ -153,57 +151,48 @@ MarkdownLabelRun _measureRun(
   );
 }
 
-/// [layoutMarkdownLabel] for a label that uses the canonical `<b>`/`<i>`
-/// emphasis tags, or null for a label without them, which keeps its plain
-/// text path. [wrappingWidth] has the meaning of `TextMeasurer.measure`'s
-/// `maxWidth`.
+/// [layoutStyledLabel] for a label with a bold or italic part, or null for
+/// a label without one, which keeps its plain text path. [wrappingWidth]
+/// has the meaning of `TextMeasurer.measure`'s `maxWidth`.
 MarkdownLabelLayout? layoutHtmlLabel(
-  String label,
+  LabelText label,
   TextStyleSpec baseStyle,
   TextMeasurer measurer, {
   double? wrappingWidth,
-}) => hasLabelMarkup(label)
-    ? layoutMarkdownLabel(
+}) => label.isStyled
+    ? layoutStyledLabel(
         label,
         baseStyle,
         measurer,
-        markdown: false,
         wrappingWidth: wrappingWidth,
       )
     : null;
 
-/// Parses and measures a styled label.
+/// Measures the spans of [label] as styled runs, one painted line for each
+/// line of the label.
 ///
-/// Recognizes `**bold**` spans when [markdown] is true, and the canonical
-/// `<b>`/`<i>` emphasis tags in any label. `\n` starts a new line. When
-/// [wrappingWidth] is set, a line wider than it wraps at whitespace, like the
-/// `white-space: break-spaces` HTML label of mermaid.js. A single word wider
-/// than the limit stays on its own line.
-MarkdownLabelLayout layoutMarkdownLabel(
-  String label,
+/// When [wrappingWidth] is set, a line wider than it wraps at whitespace,
+/// like the `white-space: break-spaces` HTML label of mermaid.js. A single
+/// word wider than the limit stays on its own line.
+MarkdownLabelLayout layoutStyledLabel(
+  LabelText label,
   TextStyleSpec baseStyle,
   TextMeasurer measurer, {
-  bool markdown = true,
   double? wrappingWidth,
 }) {
-  final hardLines = _parseSpans(label, markdown);
+  final hardLines = label.lines;
   final bold = baseStyle.copyWith(fontWeight: 700);
   final italic = baseStyle.copyWith(italic: true);
   final boldItalic = bold.copyWith(italic: true);
-  TextStyleSpec styleOf(_Span span) => span.bold
+  TextStyleSpec styleOf(LabelSpan span) => span.bold
       ? (span.italic ? boldItalic : bold)
       : (span.italic ? italic : baseStyle);
 
   final emptyHeight = measurer.measure('', baseStyle).height;
   final lines = <MarkdownLabelLine>[];
-  final plain = StringBuffer();
   var width = 0.0;
   var height = 0.0;
   for (final hardLine in hardLines) {
-    if (!identical(hardLine, hardLines.first)) plain.write('\n');
-    for (final span in hardLine) {
-      plain.write(span.text);
-    }
     for (final spans in _wrapSpans(
       hardLine,
       styleOf,
@@ -227,99 +216,24 @@ MarkdownLabelLayout layoutMarkdownLabel(
     }
   }
   return MarkdownLabelLayout(
-    plainText: plain.toString(),
+    plainText: label.text,
     lines: lines,
     size: Size(width, height),
   );
 }
 
-class _Span {
-  const _Span(this.text, this.bold, this.italic);
-
-  final String text;
-  final bool bold;
-  final bool italic;
-}
-
-/// Splits [label] into hard lines of styled spans.
-List<List<_Span>> _parseSpans(String label, bool markdown) {
-  final lines = <List<_Span>>[[]];
-  final buffer = StringBuffer();
-  var boldDepth = 0;
-  var italicDepth = 0;
-  var markdownBold = false;
-  void flush() {
-    if (buffer.isEmpty) return;
-    lines.last.add(
-      _Span(buffer.toString(), boldDepth > 0 || markdownBold, italicDepth > 0),
-    );
-    buffer.clear();
-  }
-
-  var i = 0;
-  while (i < label.length) {
-    final c = label.codeUnitAt(i);
-    if (c == 0x0a) {
-      flush();
-      lines.add([]);
-      i++;
-      continue;
-    }
-    if (c == 0x3c) {
-      final tag = emphasisTagAt(label, i);
-      if (tag != null) {
-        flush();
-        final (length, isBold, closing) = tag;
-        // A stray closing tag is ignored, as an HTML parser ignores it.
-        if (isBold) {
-          if (!closing) {
-            boldDepth++;
-          } else if (boldDepth > 0) {
-            boldDepth--;
-          }
-        } else {
-          if (!closing) {
-            italicDepth++;
-          } else if (italicDepth > 0) {
-            italicDepth--;
-          }
-        }
-        i += length;
-        continue;
-      }
-      // A `<` marked as text: keep the `<`, drop the mark.
-      if (label.startsWith(literalLtMark, i + 1)) {
-        buffer.writeCharCode(c);
-        i += 1 + literalLtMark.length;
-        continue;
-      }
-    }
-    // `**` opens strong emphasis only when a closing `**` follows; an
-    // unmatched delimiter stays literal text.
-    if (markdown &&
-        c == 0x2a &&
-        label.startsWith('**', i) &&
-        (markdownBold || label.indexOf('**', i + 2) >= 0)) {
-      flush();
-      markdownBold = !markdownBold;
-      i += 2;
-      continue;
-    }
-    buffer.writeCharCode(c);
-    i++;
-  }
-  flush();
-  return lines;
-}
-
 /// Joins adjacent spans with the same style into one run.
-List<_Span> _mergeSpans(List<_Span> spans) {
-  final out = <_Span>[];
+List<LabelSpan> _mergeSpans(List<LabelSpan> spans) {
+  final out = <LabelSpan>[];
   for (final span in spans) {
     if (out.isNotEmpty &&
         out.last.bold == span.bold &&
         out.last.italic == span.italic) {
-      out.last = _Span(out.last.text + span.text, span.bold, span.italic);
+      out.last = LabelSpan(
+        out.last.text + span.text,
+        bold: span.bold,
+        italic: span.italic,
+      );
     } else {
       out.add(span);
     }
@@ -330,14 +244,14 @@ List<_Span> _mergeSpans(List<_Span> spans) {
 final _whitespaceOrWord = RegExp(r'\s+|\S+');
 
 /// Greedy whitespace wrap of one hard line of spans.
-List<List<_Span>> _wrapSpans(
-  List<_Span> line,
-  TextStyleSpec Function(_Span) styleOf,
+List<List<LabelSpan>> _wrapSpans(
+  List<LabelSpan> line,
+  TextStyleSpec Function(LabelSpan) styleOf,
   TextMeasurer measurer,
   double? wrappingWidth,
 ) {
   if (wrappingWidth == null || line.isEmpty) return [line];
-  double widthOf(List<_Span> spans) {
+  double widthOf(List<LabelSpan> spans) {
     var w = 0.0;
     for (final s in spans) {
       if (s.text.isNotEmpty) w += measurer.measure(s.text, styleOf(s)).width;
@@ -349,13 +263,13 @@ List<List<_Span>> _wrapSpans(
 
   // Words may cross style boundaries (`<b>foo</b>bar` is one word); a break
   // is allowed only at whitespace.
-  final words = <List<_Span>>[];
-  final gaps = <List<_Span>>[]; // Whitespace before each word.
-  var pendingGap = <_Span>[];
-  List<_Span>? word;
+  final words = <List<LabelSpan>>[];
+  final gaps = <List<LabelSpan>>[]; // Whitespace before each word.
+  var pendingGap = <LabelSpan>[];
+  List<LabelSpan>? word;
   for (final span in line) {
     for (final m in _whitespaceOrWord.allMatches(span.text)) {
-      final piece = _Span(m[0]!, span.bold, span.italic);
+      final piece = LabelSpan(m[0]!, bold: span.bold, italic: span.italic);
       if (piece.text.trim().isEmpty) {
         word = null;
         pendingGap.add(piece);
@@ -370,8 +284,8 @@ List<List<_Span>> _wrapSpans(
     }
   }
 
-  final out = <List<_Span>>[];
-  var current = <_Span>[];
+  final out = <List<LabelSpan>>[];
+  var current = <LabelSpan>[];
   var currentWidth = 0.0;
   for (var w = 0; w < words.length; w++) {
     final wordWidth = widthOf(words[w]);
@@ -396,51 +310,56 @@ List<List<_Span>> _wrapSpans(
   return out.isEmpty ? [line] : out;
 }
 
-/// Measures and paints diagram labels that may carry the canonical
-/// `<b>`/`<i>` emphasis tags from `normalizeHtmlTags`.
+/// Measures and paints diagram labels.
 ///
-/// A label without tags keeps the plain path: one [TextMeasurer.measure]
-/// call and one [SceneText]. A label with tags is laid out once with
-/// [layoutMarkdownLabel] and painted as styled runs, so the measured size is
-/// the size of the runs that paint.
+/// A label without styles keeps the plain path: one [TextMeasurer.measure]
+/// call and one [SceneText]. A label with a bold or italic part is laid out
+/// once with [layoutStyledLabel] and painted as styled runs, so the measured
+/// size is the size of the runs that paint.
 class RichLabels {
   RichLabels(this.measurer);
 
   final TextMeasurer measurer;
-  final _cache = <(String, TextStyleSpec, double?), MarkdownLabelLayout?>{};
+  final _cache = <(LabelText, TextStyleSpec, double?), MarkdownLabelLayout>{};
 
-  /// The styled-run layout of [text], or null when it has no emphasis tags.
+  /// The styled-run layout of [label], or null when it has no styles.
   MarkdownLabelLayout? layout(
-    String text,
+    LabelText label,
     TextStyleSpec style, {
     double? maxWidth,
-  }) => _cache.putIfAbsent((
-    text,
-    style,
-    maxWidth,
-  ), () => layoutHtmlLabel(text, style, measurer, wrappingWidth: maxWidth));
+  }) => label.isStyled
+      ? _cache.putIfAbsent(
+          (label, style, maxWidth),
+          () => layoutStyledLabel(
+            label,
+            style,
+            measurer,
+            wrappingWidth: maxWidth,
+          ),
+        )
+      : null;
 
-  /// The size [paint] fills for [text].
-  Size measure(String text, TextStyleSpec style, {double? maxWidth}) =>
-      layout(text, style, maxWidth: maxWidth)?.size ??
-      measurer.measure(text, style, maxWidth: maxWidth);
+  /// The size [paint] fills for [label].
+  Size measure(LabelText label, TextStyleSpec style, {double? maxWidth}) =>
+      layout(label, style, maxWidth: maxWidth)?.size ??
+      measurer.measure(label.text, style, maxWidth: maxWidth);
 
-  /// Scene nodes for [text] inside [bounds]: the styled runs, aligned in
+  /// Scene nodes for [label] inside [bounds]: the styled runs, aligned in
   /// [bounds] as [align] says, or one [SceneText] for a plain label.
   /// [maxWidth] must be the value [measure] used.
   List<SceneNode> paint(
-    String text, {
+    LabelText label, {
     required Rect bounds,
     required TextStyleSpec style,
     required Color color,
     double? maxWidth,
     TextAlignH align = TextAlignH.center,
   }) {
-    final rich = layout(text, style, maxWidth: maxWidth);
+    final rich = layout(label, style, maxWidth: maxWidth);
     if (rich == null) {
       return [
         SceneText(
-          text: text,
+          text: label.text,
           bounds: bounds,
           style: style,
           color: color,

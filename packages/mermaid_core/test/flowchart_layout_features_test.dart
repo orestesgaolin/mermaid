@@ -10,6 +10,7 @@ import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
+import 'package:mermaid_core/src/text/label_text.dart';
 import 'package:test/test.dart';
 
 RenderScene layout(FlowGraph g) => layoutFlowchart(
@@ -18,7 +19,7 @@ RenderScene layout(FlowGraph g) => layoutFlowchart(
   theme: MermaidTheme.defaultTheme,
 );
 
-FlowNode node(String id) => FlowNode(id: id, label: id);
+FlowNode node(String id) => FlowNode(id: id, label: LabelText(id));
 
 /// Flattens the scene tree, returning every node with its group path.
 List<(List<String?>, SceneNode)> flatten(
@@ -138,7 +139,7 @@ void main() {
       final g = FlowGraph(
         direction: FlowDirection.tb,
         nodes: {'A': node('A')},
-        edges: const [FlowEdge(from: 'A', to: 'A', label: 'again')],
+        edges: const [FlowEdge(from: 'A', to: 'A', label: LabelText('again'))],
       );
       final scene = layout(g);
       final edgeGroup = groupById(scene, 'edge_A_A_0');
@@ -228,7 +229,7 @@ void main() {
       subgraphs: [
         FlowSubgraph(
           id: 's',
-          title: 'Cluster',
+          title: LabelText('Cluster'),
           nodeIds: const ['m1', 'm2'],
           direction: sgDirection,
         ),
@@ -408,7 +409,7 @@ graph LR
       ('Stage Two', 'b1'),
     ]) {
       final clusterId = graph.subgraphs
-          .singleWhere((subgraph) => subgraph.title == clusterTitle)
+          .singleWhere((subgraph) => subgraph.title.text == clusterTitle)
           .id;
       final cluster = groupById(scene, clusterId);
       final clusterRect = cluster.children
@@ -507,7 +508,7 @@ flowchart TD
       subgraphs: const [
         FlowSubgraph(
           id: 'mw',
-          title: 'Middleware',
+          title: LabelText('Middleware'),
           nodeIds: ['a1', 'a2', 'a3'],
           direction: FlowDirection.lr,
         ),
@@ -575,13 +576,13 @@ flowchart TD
         subgraphs: const [
           FlowSubgraph(
             id: 'outer',
-            title: 'Outer',
+            title: LabelText('Outer'),
             nodeIds: ['i1', 'i2'],
             direction: FlowDirection.lr,
           ),
           FlowSubgraph(
             id: 'inner',
-            title: 'Inner',
+            title: LabelText('Inner'),
             nodeIds: ['j1', 'j2'],
             direction: FlowDirection.tb,
             parentIndex: 0,

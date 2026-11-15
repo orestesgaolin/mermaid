@@ -162,15 +162,16 @@ class _ErParser {
     m = _entityDecl.firstMatch(line);
     if (m != null) {
       final id = m.group(2) ?? m.group(1)!;
-      var label = m.group(4)?.trim() ?? id;
-      if (label.length >= 2 && label.startsWith('"') && label.endsWith('"')) {
-        label = label.substring(1, label.length - 1);
+      var alias = m.group(4)?.trim() ?? id;
+      if (alias.length >= 2 && alias.startsWith('"') && alias.endsWith('"')) {
+        alias = alias.substring(1, alias.length - 1);
       }
       // mermaid.js shows the alias as an HTML label.
-      label = normalizeHtmlLabel(label);
+      final label = parseHtmlLabel(alias);
       final existing = entities[id];
-      entities[id] = (existing ?? ErEntity(id: id, label: id)).copyWith(
-        label: m.group(4) != null ? label : existing?.label ?? id,
+      entities[id] = (existing ?? ErEntity(id: id, label: LabelText(id)))
+          .copyWith(
+        label: m.group(4) != null ? label : existing?.label ?? LabelText(id),
       );
       if (m.group(5) != null) _openEntity = id;
       return;
@@ -218,7 +219,7 @@ class _ErParser {
         cardFrom: words[m.group(3)!]!,
         cardTo: words[m.group(5)!]!,
         identifying: m.group(4) == 'to',
-        label: normalizeHtmlLabel((m.group(8) ?? '').trim()),
+        label: parseHtmlLabel((m.group(8) ?? '').trim()),
       ));
       return true;
     }
@@ -239,7 +240,7 @@ class _ErParser {
       cardFrom: cardFrom,
       cardTo: cardTo,
       identifying: identifying,
-      label: normalizeHtmlLabel(label),
+      label: parseHtmlLabel(label),
     ));
     return true;
   }
@@ -266,10 +267,10 @@ class _ErParser {
   /// Attribute row: `type name [PK|FK|UK[, ...]] ["comment"]`.
   void _parseAttribute(String entityId, String line, int n) {
     var rest = line.trim();
-    String? comment;
+    LabelText? comment;
     final commentMatch = _trailingQuoted.firstMatch(rest);
     if (commentMatch != null) {
-      comment = normalizeHtmlLabel(commentMatch.group(1)!);
+      comment = parseHtmlLabel(commentMatch.group(1)!);
       rest = rest.substring(0, commentMatch.start).trim();
     }
     final parts = rest.split(_whitespaceRun);
@@ -322,6 +323,6 @@ class _ErParser {
       ];
 
   void _ensure(String id) {
-    entities.putIfAbsent(id, () => ErEntity(id: id, label: id));
+    entities.putIfAbsent(id, () => ErEntity(id: id, label: LabelText(id)));
   }
 }

@@ -1,8 +1,6 @@
 /// Entity codes in diagram labels, decoded as mermaid.js shows them.
 library;
 
-import 'label_markup.dart';
-
 /// A mermaid entity code (`#quot;`, `#35;`) or an HTML character reference
 /// (`&lt;`, `&#35;`, `&#x23;`).
 final _entity = RegExp(
@@ -25,8 +23,7 @@ bool isLabelEntityName(String name) {
   return _namedEntities.containsKey(name);
 }
 
-/// Decodes entity codes in a label that already went through
-/// `normalizeHtmlTags`.
+/// Decodes the entity codes of label text that has no tags.
 ///
 /// mermaid.js rewrites `#name;` to `&name;` and `#123;` to `&#123;`
 /// (`utils.ts:encodeEntities`, `decodeEntities`) and sets the label as
@@ -37,32 +34,14 @@ bool isLabelEntityName(String name) {
 /// with an unknown name stays as written.
 ///
 /// The browser reads tags before it decodes entities, so decoded text is
-/// never markup. The canonical emphasis tags of [s] stay tags; a decoded
-/// `<` that would start one is followed by [literalLtMark], which the label
-/// layout removes (`#lt;b#gt;` shows as the text `<b>`).
+/// never markup. `parseLabelMarkup` (`html_tags.dart`) calls this for the
+/// text between the tags, so `#lt;b#gt;` is the text `<b>`.
 String decodeLabelEntities(String s) {
   if (!s.contains(';') || !(s.contains('#') || s.contains('&'))) return s;
-  if (!s.contains('<')) return _decodeText(s);
-  final out = StringBuffer();
-  var pos = 0;
-  for (final tag in emphasisTag.allMatches(s)) {
-    out
-      ..write(_decodeText(s.substring(pos, tag.start)))
-      ..write(tag[0]);
-    pos = tag.end;
-  }
-  out.write(_decodeText(s.substring(pos)));
-  return out.toString();
-}
-
-/// Decodes the entities of a label part that has no tags.
-String _decodeText(String s) {
-  return markLiteralLt(
-    s.replaceAllMapped(_entity, (m) {
-      final code = m[1] != null ? _codePoint(m[1]!) : _htmlCodePoint(m[2]!);
-      return code == null ? m[0]! : String.fromCharCode(code);
-    }),
-  );
+  return s.replaceAllMapped(_entity, (m) {
+    final code = m[1] != null ? _codePoint(m[1]!) : _htmlCodePoint(m[2]!);
+    return code == null ? m[0]! : String.fromCharCode(code);
+  });
 }
 
 /// The code point of a decimal code or an entity name, or null for an

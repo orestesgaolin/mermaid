@@ -1,5 +1,18 @@
 ## Unreleased
 
+- **Breaking:** model labels are `LabelText`, no longer `String`. A
+  `LabelText` is plain text or lines of bold and italic spans
+  (`LabelSpan`); `text` is the label without markup. Before, the string
+  held `<b>`/`<i>` tags. Changed fields: `FlowNode.label`, `FlowEdge.label`,
+  `FlowSubgraph.title`; `ClassNode.label`, `ClassRelation.label`, `cardFrom`
+  and `cardTo`, `ClassNamespace.label`, `ClassNote.text`; `StateNode.label`,
+  `StateTransition.label`, `StateNote.text`; `ErEntity.label`,
+  `ErAttribute.comment`, `ErRelationship.label`; `MindmapNode.label`; and
+  the values of `ReqNode.fields`. Read the text with `.text`; make a label
+  with `LabelText('text')`. `ClassNamespace` has no const constructor now.
+- A flowchart node label written as a Markdown string has its `**bold**`
+  parts as spans in the model; `**` written with entity codes
+  (`#42;#42;`) stays text.
 - Decode entity codes in flowchart node labels, edge labels and subgraph
   titles, as mermaid.js does (#86): `#quot;`, `#lt;`, `#35;`, `#9829;` and
   the HTML forms `&lt;`, `&#35;`, `&#x23;`. A decoded `<` or `>` is text, so

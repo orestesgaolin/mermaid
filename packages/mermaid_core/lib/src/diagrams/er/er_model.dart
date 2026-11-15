@@ -1,6 +1,7 @@
 /// Immutable model for a parsed ER diagram, mirroring upstream erDb.
 library;
 
+import '../../text/label_text.dart';
 import '../flowchart/flow_model.dart' show FlowDirection;
 
 class ErDiagram {
@@ -34,7 +35,7 @@ class ErEntity {
   final String id;
 
   /// Display name (`p[Person]` aliases).
-  final String label;
+  final LabelText label;
   final List<ErAttribute> attributes;
 
   /// Inline `style <entity> fill:#f00,stroke:#000` declarations (raw `k:v`).
@@ -44,7 +45,7 @@ class ErEntity {
   final List<String> cssClasses;
 
   ErEntity copyWith({
-    String? label,
+    LabelText? label,
     List<ErAttribute>? attributes,
     List<String>? cssStyles,
     List<String>? cssClasses,
@@ -72,7 +73,7 @@ class ErAttribute {
 
   /// PK / FK / UK markers.
   final List<String> keys;
-  final String? comment;
+  final LabelText? comment;
 }
 
 /// Crow's foot cardinality at one relationship end.
@@ -85,7 +86,7 @@ class ErRelationship {
     required this.cardFrom,
     required this.cardTo,
     this.identifying = true,
-    this.label = '',
+    this.label = LabelText.empty,
   });
 
   final String from;
@@ -97,5 +98,5 @@ class ErRelationship {
 
   /// Solid line (`--`) vs dashed non-identifying (`..`, `.-`, `-.`).
   final bool identifying;
-  final String label;
+  final LabelText label;
 }

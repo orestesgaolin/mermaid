@@ -164,7 +164,7 @@ class _StateLayout {
       final n = diagram.notes[i];
       final size = labels.measure(n.text, baseStyle, maxWidth: 200);
       noteBoxes[i] = _Placed(
-        StateNode(id: '__note$i', label: plainLabelText(n.text)),
+        StateNode(id: '__note$i', label: LabelText(n.text.text)),
         size.width + 2 * config.noteMargin,
         size.height + 2 * config.noteMargin,
         size,
@@ -389,7 +389,7 @@ class _StateLayout {
         SceneGroup(
           id: s.id,
           role: SceneGroupRole.cluster,
-          semanticLabel: plainLabelText(s.label),
+          semanticLabel: s.label.text,
           children: [
             // Outer rect uses compositeTitleBackground (= mainBkg) so the title
             // band is tinted; inner region below the divider uses the background.
@@ -538,7 +538,7 @@ class _StateLayout {
           SceneGroup(
             id: 'trans_${t.from}_${t.to}_$i',
             role: SceneGroupRole.edge,
-            semanticLabel: t.label == null ? null : plainLabelText(t.label!),
+            semanticLabel: t.label?.text,
             children: children,
           ),
         );
@@ -672,7 +672,7 @@ class _StateLayout {
         SceneGroup(
           id: 'trans_${t.from}_${t.to}_$i',
           role: SceneGroupRole.edge,
-          semanticLabel: t.label == null ? null : plainLabelText(t.label!),
+          semanticLabel: t.label?.text,
           children: [
             SceneShape(
               geometry: PathGeometry(
@@ -991,7 +991,7 @@ class _StateLayout {
     }
     return SceneGroup(
       id: s.id,
-      semanticLabel: s.label.isEmpty ? null : plainLabelText(s.label),
+      semanticLabel: s.label.isEmpty ? null : s.label.text,
       children: children,
     );
   }

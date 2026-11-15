@@ -81,7 +81,7 @@ class BlockNode extends BlockItem {
     this.arrowDirs = const {},
   });
   final String id;
-  final String label;
+  final LabelText label;
   final BlockShape shape;
   @override
   final int span;
@@ -118,7 +118,7 @@ class BlockEdge {
   });
   final String from;
   final String to;
-  final String label;
+  final LabelText label;
   final bool arrowTo;
   final bool arrowFrom;
 
@@ -295,7 +295,7 @@ BlockNode _parseNode(String spec) {
     span = int.parse(spanM.group(1)!);
     spec = spec.substring(0, spanM.start);
   }
-  if (spec == 'space') return BlockNode('', '', BlockShape.space, span, {});
+  if (spec == 'space') return BlockNode('', LabelText.empty, BlockShape.space, span, {});
   // Block arrow: id<["label"]>(dir[, dir]) — a fat arrow polygon.
   final arrowM = _blockArrowBlock.firstMatch(spec);
   if (arrowM != null) {
@@ -304,7 +304,10 @@ BlockNode _parseNode(String spec) {
     if (label.length >= 2 && label.startsWith('"') && label.endsWith('"')) {
       label = label.substring(1, label.length - 1);
     }
-    label = normalizeHtmlLabel(label.replaceAll('&nbsp;', ' '), trim: true);
+    final arrowLabel = parseHtmlLabel(
+      label.replaceAll('&nbsp;', ' '),
+      trim: true,
+    );
     final dirs = <BlockArrowDir>{};
     for (final d in arrowM.group(3)!.split(',')) {
       switch (d.trim().toLowerCase()) {
@@ -329,7 +332,7 @@ BlockNode _parseNode(String spec) {
     if (dirs.isEmpty) dirs.add(BlockArrowDir.right);
     return BlockNode(
       id,
-      label,
+      arrowLabel,
       BlockShape.blockArrow,
       span,
       {},
@@ -340,7 +343,7 @@ BlockNode _parseNode(String spec) {
   // any run of non-delimiter chars. `>` opens the `odd` (`id>label]`) shape.
   final m = _blockShapeSpec.firstMatch(spec);
   if (m == null) {
-    return BlockNode(spec, spec, BlockShape.rect, span, {});
+    return BlockNode(spec, LabelText(spec), BlockShape.rect, span, {});
   }
   final id = m.group(1)!;
   final open = m.group(2);
@@ -350,8 +353,8 @@ BlockNode _parseNode(String spec) {
     label = label.substring(1, label.length - 1);
   }
   // mermaid.js shows block labels as HTML labels.
-  label = normalizeHtmlLabel(label);
-  if (label.isEmpty) label = id;
+  final parsed = parseHtmlLabel(label);
+  final nodeLabel = parsed.isEmpty ? LabelText(id) : parsed;
   // Mirror upstream `typeStr2Type` keyed on the open+close delimiter pair.
   final shape = switch (open) {
     '(((' => BlockShape.doubleCircle,
@@ -367,7 +370,7 @@ BlockNode _parseNode(String spec) {
     '>' => BlockShape.odd,
     _ => BlockShape.rect,
   };
-  return BlockNode(id, label, shape, span, {});
+  return BlockNode(id, nodeLabel, shape, span, {});
 }
 
 void _parseEdges(String line, List<BlockEdge> edges) {
@@ -386,7 +389,7 @@ void _parseEdges(String line, List<BlockEdge> edges) {
         ({
           bool to,
           bool from,
-          String label,
+          LabelText label,
           bool thick,
           bool dotted,
           BlockMarker mTo,
@@ -440,7 +443,7 @@ void _parseEdges(String line, List<BlockEdge> edges) {
     ops.add((
       to: lastCh == '>' || lastCh == 'o' || lastCh == 'x',
       from: firstCh == '<' || firstCh == 'o' || firstCh == 'x',
-      label: normalizeHtmlLabel(label.replaceAll('&nbsp;', ' '), trim: true),
+      label: parseHtmlLabel(label.replaceAll('&nbsp;', ' '), trim: true),
       thick: opStr.contains('='),
       dotted: opStr.contains('.'),
       mTo: _markerFor(lastCh),
@@ -964,7 +967,7 @@ List<SceneNode> _drawNode(
   return [
     SceneGroup(
       id: n.id,
-      semanticLabel: plainLabelText(n.label),
+      semanticLabel: n.label.text,
       children: [
         ...shapes,
         ...labels.paint(

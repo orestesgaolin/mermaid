@@ -2,6 +2,7 @@
 /// upstream stateDb.
 library;
 
+import '../../text/label_text.dart';
 import '../flowchart/flow_model.dart' show FlowDirection;
 
 class StateDiagram {
@@ -55,8 +56,8 @@ class StateNode {
   final String id;
 
   /// Display label; `state "Long description" as s1` and `s1 : description`
-  /// set it. `<br/>` normalized to `\n`.
-  final String label;
+  /// set it. `<br/>` is a line break.
+  final LabelText label;
   final StateKind kind;
 
   /// Direct child state ids when [kind] is [StateKind.composite].
@@ -72,7 +73,7 @@ class StateNode {
   final List<List<String>> regions;
 
   StateNode copyWith({
-    String? label,
+    LabelText? label,
     StateKind? kind,
     List<String>? children,
     String? parent,
@@ -109,7 +110,7 @@ class StateTransition {
 
   final String from;
   final String to;
-  final String? label;
+  final LabelText? label;
 }
 
 enum StateNotePosition { leftOf, rightOf }
@@ -122,6 +123,6 @@ class StateNote {
   });
 
   final String target;
-  final String text;
+  final LabelText text;
   final StateNotePosition position;
 }

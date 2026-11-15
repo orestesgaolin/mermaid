@@ -76,7 +76,7 @@ void main() {
         'flowchart LR\n  A@{ icon: "icon:cloud", label: "Cloud" } --> B',
       );
       expect(g.nodes['A']!.icon, 'icon:cloud');
-      expect(g.nodes['A']!.label, 'Cloud');
+      expect(g.nodes['A']!.label.text, 'Cloud');
     });
 
     test('renders icon glyph + label inside the node', () {

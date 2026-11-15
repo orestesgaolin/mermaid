@@ -10,6 +10,7 @@ import 'package:mermaid_core/src/diagrams/c4/c4.dart';
 import 'package:mermaid_core/src/diagrams/mindmap/mindmap.dart';
 import 'package:mermaid_core/src/diagrams/requirement/requirement.dart';
 import 'package:mermaid_core/src/diagrams/xychart/xychart.dart';
+import 'package:mermaid_core/src/text/label_text.dart';
 import 'package:mermaid_core/src/geometry.dart';
 import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/mermaid.dart';
@@ -162,18 +163,18 @@ mindmap
       Deeper
     [Square topic]
 ''');
-      expect(m.root.label, 'Center');
+      expect(m.root.label.text, 'Center');
       expect(m.root.shape, MindmapShape.circle);
       expect(m.root.children.length, 2);
-      expect(m.root.children[0].label, 'A topic');
-      expect(m.root.children[0].children.single.label, 'Deeper');
+      expect(m.root.children[0].label.text, 'A topic');
+      expect(m.root.children[0].children.single.label.text, 'Deeper');
       expect(m.root.children[1].shape, MindmapShape.rect);
     });
     test('icon decorations are tolerated', () {
       final m = parseMindmap(
         'mindmap\n  root\n    A\n    ::icon(fa fa-book)\n    B',
       );
-      expect(m.root.children.map((c) => c.label), ['A', 'B']);
+      expect(m.root.children.map((c) => c.label.text), ['A', 'B']);
     });
     test('layout splits branches around the root', () {
       final s = layoutMindmap(
@@ -237,7 +238,10 @@ requirementDiagram
     test_entity - satisfies -> test_req
 ''');
       expect(d.nodes['test_req']!.kind, 'requirement');
-      expect(d.nodes['test_req']!.fields, contains(('verifyMethod', 'test')));
+      expect(
+        d.nodes['test_req']!.fields,
+        contains(('verifyMethod', const LabelText('test'))),
+      );
       expect(d.nodes['test_entity']!.kind, 'element');
       final r = d.relations.single;
       expect(r.from, 'test_entity');

@@ -62,7 +62,7 @@ block-beta
       (n) => n.shape == BlockShape.blockArrow,
     );
     expect(hasArrow, isTrue);
-    expect(d.edges.single.label, 'yes');
+    expect(d.edges.single.label.text, 'yes');
   });
 
   test('treemap: squarified layout emits a rect + label per leaf', () {

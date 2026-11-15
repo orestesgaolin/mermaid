@@ -231,7 +231,7 @@ class _StateParser {
       final node = _declare(m.group(1)!);
       final desc = _normalize(m.group(2)!);
       states[node.id] = node.copyWith(
-        label: node.label == node.id ? desc : '${node.label}\n$desc',
+        label: node.label.text == node.id ? desc : node.label.withLines(desc),
       );
       return;
     }
@@ -261,7 +261,7 @@ class _StateParser {
       if (!states.containsKey(id)) {
         states[id] = StateNode(
           id: id,
-          label: '',
+          label: LabelText.empty,
           kind: deep ? StateKind.historyDeep : StateKind.history,
           parent: scope.isEmpty ? null : scope,
         );
@@ -275,7 +275,7 @@ class _StateParser {
     if (!states.containsKey(id)) {
       states[id] = StateNode(
         id: id,
-        label: '',
+        label: LabelText.empty,
         kind: isSource ? StateKind.start : StateKind.end,
         parent: scope.isEmpty ? null : scope,
       );
@@ -363,7 +363,7 @@ class _StateParser {
 
   /// `<br>` becomes a line break and the other tags are reduced to the
   /// `<b>`/`<i>` emphasis runs that mermaid.js shows in its HTML labels.
-  String _normalize(String s) => normalizeHtmlLabel(s, trim: true);
+  LabelText _normalize(String s) => parseHtmlLabel(s, trim: true);
 
   Map<String, String> _parseStyles(String text) {
     final out = <String, String>{};

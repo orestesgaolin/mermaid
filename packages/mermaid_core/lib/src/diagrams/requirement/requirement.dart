@@ -71,7 +71,7 @@ class ReqNode {
   final String kind;
 
   /// (label, value) rows like (`id`, `1.1`), (`text`, ...), (`risk`, High).
-  final List<(String, String)> fields;
+  final List<(String, LabelText)> fields;
   final List<String> classes;
   final Map<String, String> styles;
   final String? link;
@@ -209,15 +209,13 @@ const _verifyDisplay = {
 
 /// Applies upstream value normalization for risk/verify keywords. Other field
 /// values pass through unchanged.
-String _displayFieldValue(String key, String value) {
-  switch (key) {
-    case 'risk':
-      return _riskDisplay[value.toLowerCase()] ?? value;
-    case 'verifyMethod':
-      return _verifyDisplay[value.toLowerCase()] ?? value;
-    default:
-      return value;
-  }
+LabelText _displayFieldValue(String key, LabelText value) {
+  final display = switch (key) {
+    'risk' => _riskDisplay[value.text.toLowerCase()],
+    'verifyMethod' => _verifyDisplay[value.text.toLowerCase()],
+    _ => null,
+  };
+  return display == null ? value : LabelText(display);
 }
 
 RequirementDiagram parseRequirementDiagram(String source) {
@@ -228,7 +226,7 @@ RequirementDiagram parseRequirementDiagram(String source) {
   final classDefs = <String, Map<String, String>>{};
   String? title = frontTitle;
   var seenHeader = false;
-  (String, String, List<(String, String)>, List<String>)? open;
+  (String, String, List<(String, LabelText)>, List<String>)? open;
 
   final lines = text.split('\n');
   for (var i = 0; i < lines.length; i++) {
@@ -272,7 +270,7 @@ RequirementDiagram parseRequirementDiagram(String source) {
           value = value.substring(1, value.length - 1);
         }
         // mermaid.js shows field values as HTML labels.
-        open.$3.add((key, normalizeHtmlLabel(value)));
+        open.$3.add((key, parseHtmlLabel(value)));
         continue;
       }
       throw MermaidParseException('unrecognized field "$line"', line: i + 1);
@@ -480,7 +478,8 @@ RenderScene layoutRequirementDiagram(
 
   // Measure boxes: «Type» line, bold name, gap, divider, prefixed field rows.
   // The bool flag marks the row after which a gap is inserted (the name row).
-  final boxes = <String, (Size, List<(String, TextStyleSpec, Size, bool)>)>{};
+  final boxes =
+      <String, (Size, List<(LabelText, TextStyleSpec, Size, bool)>)>{};
   // Box rows, with `<b>`/`<i>` runs in the name and field values.
   final labels = RichLabels(measurer);
   for (final n in diagram.nodes.values) {
@@ -489,8 +488,8 @@ RenderScene layoutRequirementDiagram(
         ? baseStyle.copyWith(fontWeight: 700)
         : baseStyle;
     final nodeTitleStyle = nodeStyle.copyWith(fontWeight: 700);
-    final lines = <(String, TextStyleSpec, Size, bool)>[];
-    void add(String text, TextStyleSpec style, {bool gapAfter = false}) {
+    final lines = <(LabelText, TextStyleSpec, Size, bool)>[];
+    void add(LabelText text, TextStyleSpec style, {bool gapAfter = false}) {
       lines.add((
         text,
         style,
@@ -500,13 +499,13 @@ RenderScene layoutRequirementDiagram(
     }
 
     final display = _kindDisplay[n.kind] ?? n.kind;
-    add('«$display»', nodeStyle.copyWith(italic: true));
+    add(LabelText('«$display»'), nodeStyle.copyWith(italic: true));
     add(_displayName(n.id), nodeTitleStyle, gapAfter: true);
     for (final (k, v) in n.fields) {
       if (v.isEmpty) continue;
       final value = _displayFieldValue(k, v);
       final prefix = _fieldPrefix[k];
-      add(prefix != null ? '$prefix: $value' : '$k: $value', nodeStyle);
+      add(value.withPrefix('${prefix ?? k}: '), nodeStyle);
     }
     var w = 0.0, h = boxPadding;
     for (final (_, _, s, gapAfter) in lines) {
@@ -897,7 +896,7 @@ RenderScene layoutRequirementDiagram(
     nodes.add(
       SceneGroup(
         id: id,
-        semanticLabel: plainLabelText(_displayName(n.id)),
+        semanticLabel: _displayName(n.id).text,
         link: n.link,
         tooltip: n.tooltip,
         children: children,
@@ -940,12 +939,12 @@ RenderScene layoutRequirementDiagram(
 /// The name a requirement box shows. The name stays the node key with its
 /// quotes, so relations find it; mermaid.js strips the quotes of a quoted
 /// name and shows it as an HTML label.
-String _displayName(String name) {
+LabelText _displayName(String name) {
   var s = name;
   if (s.length >= 2 && s.startsWith('"') && s.endsWith('"')) {
     s = s.substring(1, s.length - 1);
   }
-  return normalizeHtmlLabel(s);
+  return parseHtmlLabel(s);
 }
 
 Point _outsideMarkerCenter(Rect rect, Point border, double radius) {

@@ -29,6 +29,7 @@ import 'package:mermaid_core/src/ir/scene.dart';
 import 'package:mermaid_core/src/ir/scene_utils.dart';
 import 'package:mermaid_core/src/text/approximate_text_measurer.dart';
 import 'package:mermaid_core/src/theme/theme.dart';
+import 'package:mermaid_core/src/text/label_text.dart';
 import 'package:test/test.dart';
 
 const measurer = ApproximateTextMeasurer();
@@ -37,7 +38,7 @@ const theme = MermaidTheme.defaultTheme;
 RenderScene layout(FlowGraph graph) =>
     layoutFlowchart(graph, measurer: measurer, theme: theme);
 
-FlowNode node(String id) => FlowNode(id: id, label: 'Node $id');
+FlowNode node(String id) => FlowNode(id: id, label: LabelText('Node $id'));
 
 void expectSaneScene(RenderScene scene) {
   expect(scene.size.width, greaterThan(0));
@@ -98,8 +99,8 @@ void main() {
           FlowEdge(from: 'G', to: 'D'),
         ],
         subgraphs: const [
-          FlowSubgraph(id: 'foo', title: 'Foo SubGraph', nodeIds: ['C', 'D']),
-          FlowSubgraph(id: 'bar', title: 'Bar SubGraph', nodeIds: ['E', 'F']),
+          FlowSubgraph(id: 'foo', title: LabelText('Foo SubGraph'), nodeIds: ['C', 'D']),
+          FlowSubgraph(id: 'bar', title: LabelText('Bar SubGraph'), nodeIds: ['E', 'F']),
         ],
       );
       expectSaneScene(layout(graph));
@@ -115,8 +116,8 @@ void main() {
         nodes: {for (final id in ['A', 'B', 'C', 'D', 'E', 'F', 'G']) id: node(id)},
         edges: const [],
         subgraphs: const [
-          FlowSubgraph(id: 'foo', title: 'Foo', nodeIds: ['C', 'D']),
-          FlowSubgraph(id: 'bar', title: 'Bar', nodeIds: ['E', 'F']),
+          FlowSubgraph(id: 'foo', title: LabelText('Foo'), nodeIds: ['C', 'D']),
+          FlowSubgraph(id: 'bar', title: LabelText('Bar'), nodeIds: ['E', 'F']),
         ],
       );
       expectSaneScene(layout(graph));
@@ -134,7 +135,7 @@ void main() {
       for (var i = 1; i <= 6; i++) {
         nodes['A$i'] = node('A$i');
         nodes['B$i'] = node('B$i');
-        edges.add(FlowEdge(from: 'A$i', to: 'B$i', label: 'Multi Line'));
+        edges.add(FlowEdge(from: 'A$i', to: 'B$i', label: LabelText('Multi Line')));
       }
       final graph =
           FlowGraph(direction: FlowDirection.lr, nodes: nodes, edges: edges);
@@ -186,7 +187,7 @@ void main() {
         },
         edges: [
           for (final id in ids)
-            FlowEdge(from: '${id}1', to: '${id}2', label: 'default style'),
+            FlowEdge(from: '${id}1', to: '${id}2', label: LabelText('default style')),
         ],
       );
       final bounds = layout(graph).nodeBounds;

@@ -95,7 +95,7 @@ class _BoxLine {
     this.centered = false,
     this.separatorAbove = false,
     this.underline = false,
-    this.rich = false,
+    this.label,
   });
 
   final String text;
@@ -108,9 +108,9 @@ class _BoxLine {
   final bool separatorAbove;
   final bool underline;
 
-  /// Whether the line is an HTML label (the class title) that paints
-  /// `<b>`/`<i>` runs. Members and methods show their tags as text.
-  final bool rich;
+  /// Set when the line is an HTML label (the class title), which paints
+  /// bold and italic runs. Members and methods show their tags as text.
+  final LabelText? label;
 }
 
 class _ClassLayout {
@@ -146,7 +146,7 @@ class _ClassLayout {
         final previous = result[id];
         result[id] = ClassNamespace(
           id: id,
-          label: i == parts.length - 1 ? ns.label : parts[i],
+          label: i == parts.length - 1 ? ns.label : LabelText(parts[i]),
           classIds: {...?previous?.classIds, ...ns.classIds}.toList(),
         );
       }
@@ -164,7 +164,7 @@ class _ClassLayout {
       final n = diagram.notes[i];
       final size = labels.measure(n.text, baseStyle, maxWidth: 200);
       noteBoxes[i] = _Box(
-        ClassNode(id: '__note$i', label: plainLabelText(n.text)),
+        ClassNode(id: '__note$i', label: LabelText(n.text.text)),
         size.width + 2 * _padding,
         size.height + 2 * _padding,
         [],
@@ -258,7 +258,7 @@ class _ClassLayout {
 
     // Namespaces are separated in declaration order; a namespace whose members
     // are already claimed by an earlier one is nested, so it moves with it.
-    final separable = <({String label, Set<String> members})>[];
+    final separable = <({LabelText label, Set<String> members})>[];
     final claimed = <String>{};
     for (final ns in namespaces) {
       final members = ns.classIds.where(boxes.containsKey).toSet();
@@ -432,7 +432,7 @@ class _ClassLayout {
         SceneGroup(
           id: 'rel_${r.from}_${r.to}_$i',
           role: SceneGroupRole.edge,
-          semanticLabel: r.label == null ? null : plainLabelText(r.label!),
+          semanticLabel: r.label?.text,
           children: children,
         ),
       );
@@ -471,7 +471,7 @@ class _ClassLayout {
         );
       }
       final cardStyle = baseStyle.copyWith(fontSize: _cardinalityFontSize);
-      void cardinality(String? card, Point tip, Point dir) {
+      void cardinality(LabelText? card, Point tip, Point dir) {
         if (card == null || card.isEmpty) return;
         final size = labels.measure(card, cardStyle);
         final pos = tip - dir * 18 + Point(-dir.y, dir.x) * 12;
@@ -590,10 +590,10 @@ class _ClassLayout {
       bool centered = false,
       bool separator = false,
       bool underline = false,
-      bool rich = false,
+      LabelText? label,
     }) {
-      final size = rich
-          ? labels.measure(text, style, maxWidth: 300)
+      final size = label != null
+          ? labels.measure(label, style, maxWidth: 300)
           : measurer.measure(text, style, maxWidth: 300);
       lines.add(
         _BoxLine(
@@ -604,7 +604,7 @@ class _ClassLayout {
           centered: centered,
           separatorAbove: separator,
           underline: underline,
-          rich: rich,
+          label: label,
         ),
       );
       y += size.height + _memberGap;
@@ -616,7 +616,7 @@ class _ClassLayout {
     if (node.annotations.isNotEmpty) {
       add('«${node.annotations.first}»', baseStyle, centered: true);
     }
-    add(node.label, titleStyle, centered: true, rich: true);
+    add(node.label.text, titleStyle, centered: true, label: node.label);
     y += _padding / 2;
 
     // Upstream `classBox.ts`: with default `hideEmptyMembersBox` (false) and
@@ -711,11 +711,10 @@ class _ClassLayout {
         );
       }
       if (line.text.isEmpty) continue;
-      if (line.rich &&
-          labels.layout(line.text, line.style, maxWidth: 300) != null) {
+      if (line.label case final label? when label.isStyled) {
         children.addAll(
           labels.paint(
-            line.text,
+            label,
             bounds: Rect.fromLTWH(
               rect.center.x - line.size.width / 2,
               rect.top + line.dy,
@@ -754,7 +753,7 @@ class _ClassLayout {
     }
     return SceneGroup(
       id: b.node.id,
-      semanticLabel: plainLabelText(b.node.label),
+      semanticLabel: b.node.label.text,
       children: children,
     );
   }
@@ -828,16 +827,16 @@ class _ClassLayout {
     }
   }
 
-  final _namespaceTitleSizes = <String, Size>{};
+  final _namespaceTitleSizes = <LabelText, Size>{};
 
   /// Measured once per namespace label: the separation sweep and the paint
   /// pass both need it, and the sweep can run several times.
-  Size _namespaceTitleSize(String label) =>
+  Size _namespaceTitleSize(LabelText label) =>
       _namespaceTitleSizes[label] ??= labels.measure(label, baseStyle);
 
   /// The cluster rect a namespace occupies given where its members sit right
   /// now. Null when none of [memberIds] has a box.
-  Rect? _namespaceRect(String label, Iterable<String> memberIds) {
+  Rect? _namespaceRect(LabelText label, Iterable<String> memberIds) {
     Rect? acc;
     for (final id in memberIds) {
       final b = boxes[id];
