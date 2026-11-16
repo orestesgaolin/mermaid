@@ -6,6 +6,7 @@
 - ELK layouts keep edges clear of node and subgraph corners, as mermaid 12 does (#92).
 - ELK flowcharts: no small stair-step jog where one edge leaves a node and another arrives (#93).
 - ELK: short jogs at edge ends are straightened, like mermaid 12 (`elk.straightenEdges`) (#93).
+- ELK flowcharts round edge bends and hop over crossings, as in mermaid 12 (`elk.lineHops`).
 
 ## 0.4.0
 

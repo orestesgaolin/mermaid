@@ -99,3 +99,12 @@
 - Ours: `elk_adapter.dart:straightenEdgeTerminals` ports `elk.straightenEdges` (same limits and crossing/label checks; labels follow the moved run).
 - Not done: `orientFeedbackEdges`, node alignment at small nodes, subgraph title padding and stale endpoints, the 12.3 subgraph-edge fix (#8661), `sanitizeElkEdgePoints` and the marker segment checks.
 - Deviations: straightening runs before shape clipping (same result for rectangles); points a route only passes straight through are ignored.
+
+## ELK line hops and rounded corners (issue #91)
+- Upstream: every ELK edge is `curve: "rounded"` (radius 5); `elk.lineHops` (`true`/`"arc"`, `"gap"`, `false`) adds a radius-6 hop on the horizontal segment of each crossing (`lineJump.ts`).
+- Ours: `line_jumps.dart` ports it with the same constants, run in `flow_layout.dart` after all ELK edges are routed.
+- Deviations:
+  - Arc hops are two cubics (`C` in SVG, not `A`).
+  - Self-loops and invisible edges take no part.
+  - Edges inside a subgraph with its own `direction` are not hopped against outer edges.
+  - State diagrams with ELK are unchanged.
