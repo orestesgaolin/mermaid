@@ -1,6 +1,7 @@
 ## Unreleased
 
 - Spread free ports evenly along a node side, as ELK's default DISTRIBUTED alignment does (#93).
+- Keep free ports inside `spacing.portsSurrounding` on the sides edges use, as elkjs does.
 
 ## 0.2.1
 

@@ -14,7 +14,7 @@
 library;
 
 import 'attached_labels.dart'
-    show labelTranspose, nodeLabelSpacing, placePortLabels;
+    show labelTranspose, nodeLabelSpacing, placePortLabels, portLabelSpacing;
 import 'intermediate_labels.dart' show labelStackSpacing;
 import 'lgraph.dart';
 import 'phase.dart';
@@ -319,9 +319,18 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
       return connectedPortRank(a).compareTo(connectedPortRank(b));
     });
 
+    // As in elkjs, each end keeps portsSurrounding minus the port-label spacing.
+    final graph = node.graph;
+    final labelGap = graph.getProperty(portLabelSpacing);
+    final marginTop = _max(
+        0, graph.getProperty(spacingPortsSurroundingTop) - labelGap);
+    final marginBottom = _max(
+        0, graph.getProperty(spacingPortsSurroundingBottom) - labelGap);
+
     final nodeWidth = node.size.x;
-    final gap = _distributedGap(node.size.y, ports.map((p) => p.size.y));
-    var currentY = gap;
+    final gap = _distributedGap(
+        node.size.y - marginTop - marginBottom, ports.map((p) => p.size.y));
+    var currentY = marginTop + gap;
 
     for (final port in ports) {
       // x: east ports flush with the right edge; west ports flush with the

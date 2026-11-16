@@ -71,4 +71,43 @@ void main() {
       }
     });
   });
+
+  group('free ports inside spacing.portsSurrounding', () {
+    List<double> offsets(double top, double bottom) => _sourceOffsets(
+      const ElkLayered().layout(
+        ElkGraph(
+          layoutOptions: ElkLayoutOptions(
+            direction: ElkDirection.down,
+            spacingPortsSurroundingTop: top,
+            spacingPortsSurroundingBottom: bottom,
+          ),
+          children: [
+            const ElkNode(id: 'R', width: 140, height: 40),
+            for (final id in ['a', 'b', 'c'])
+              ElkNode(id: id, width: 40, height: 30),
+          ],
+          edges: [
+            for (final t in ['a', 'b', 'c'])
+              ElkEdge(id: 'R$t', sources: ['R'], targets: [t]),
+          ],
+        ),
+      ),
+      'R',
+    );
+
+    void expectOffsets(List<double> actual, List<double> expected) {
+      for (var i = 0; i < expected.length; i++) {
+        expect(actual[i], closeTo(expected[i], 1e-6));
+      }
+    }
+
+    test('distribute between the margins, as elkjs 0.12.1 does', () {
+      expectOffsets(offsets(12, 12), [40.5, 70, 99.5]);
+    });
+
+    test('each margin applies to its own end of the side', () {
+      expectOffsets(offsets(12, 0), [43.25, 75.5, 107.75]);
+      expectOffsets(offsets(0, 12), [32.25, 64.5, 96.75]);
+    });
+  });
 }
