@@ -1,3 +1,7 @@
+## Unreleased
+
+- Read `elk` options from YAML frontmatter, not only from `%%{init}%%` directives.
+
 ## 0.4.0
 
 - **Breaking:** model labels are `LabelText`, no longer `String`. A

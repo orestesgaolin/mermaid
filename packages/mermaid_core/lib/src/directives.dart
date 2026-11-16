@@ -257,6 +257,7 @@ elk.ElkLayoutOptions resolveElkConfig(String source) {
     final cfg = _looseJson('{$body}');
     if (cfg is Map && cfg['config'] is Map) merge(cfg['config']);
     merge(cfg);
+    elkCfg.addAll(_frontmatterConfigBlock(body, 'elk'));
   }
   meta.inits.forEach(merge);
 
