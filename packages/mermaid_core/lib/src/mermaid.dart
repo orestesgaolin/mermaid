@@ -80,6 +80,7 @@ class Mermaid {
           engine: resolveLayout(source),
           elkOptions: resolveElkConfig(source),
           straightenElkEdges: resolveElkStraightenEdges(source),
+          lineHops: resolveElkLineHops(source),
           config: FlowchartConfig.fromSource(source),
         );
       case DiagramType.sequence:

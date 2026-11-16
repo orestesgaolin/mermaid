@@ -40,6 +40,16 @@ List<(Point, Point, List<CubicTo>)> _arcHops(PathGeometry path) {
   return hops;
 }
 
+List<(Point, Point)> _gaps(PathGeometry path) {
+  final gaps = <(Point, Point)>[];
+  final c = path.commands;
+  for (var i = 1; i < c.length; i++) {
+    final before = c[i - 1], move = c[i];
+    if (move is MoveTo && before is LineTo) gaps.add((before.p, move.p));
+  }
+  return gaps;
+}
+
 /// True when two straight pieces meet at an angle with no curve between.
 bool _hasSharpBend(PathGeometry path) {
   Point? last;
@@ -110,6 +120,39 @@ void main() {
       }
     });
 
+    test('"gap" breaks the line around the crossed edge', () {
+      final paths = _edgePaths(_elk('gap'));
+      final arcs = _edgePaths(_elk('true'));
+      expect(paths.expand((p) => p.commands).whereType<CubicTo>(), isEmpty);
+      final gaps = [
+        for (final path in paths)
+          for (final gap in _gaps(path)) (path, gap),
+      ];
+      expect(gaps.length, arcs.expand(_arcHops).length);
+      for (final (path, (pre, post)) in gaps) {
+        expect((post.x - pre.x).abs(), inInclusiveRange(7.2, 12));
+        final center = Point((pre.x + post.x) / 2, pre.y);
+        expect(_distanceToOthers(paths, path, center), lessThan(0.5));
+      }
+    });
+
+    test('false draws plain crossings but keeps rounded bends', () {
+      final paths = _edgePaths(_elk('false'));
+      expect(paths.expand((p) => p.commands).whereType<CubicTo>(), isEmpty);
+      for (final path in paths) {
+        expect(_gaps(path), isEmpty);
+        expect(_hasSharpBend(path), isFalse);
+      }
+    });
+
+    test('dagre layout is unchanged by elk.lineHops', () {
+      const dagre = 'flowchart TD\n    A --> C\n    B --> C\n';
+      String svg(String s) => renderSceneToSvg(_mermaid.render(s));
+      expect(
+        svg('%%{init: {"elk": {"lineHops": "gap"}}}%%\n$dagre'),
+        svg(dagre),
+      );
+    });
   });
 
   group('roundedEdgePathsWithJumps', () {

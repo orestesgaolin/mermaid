@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:elk/elk.dart' as elk;
 
 import 'color.dart';
+import 'line_jumps.dart';
 import 'theme/theme.dart';
 
 /// Returns [base] adjusted by any `%%{init}%%` directive or frontmatter
@@ -334,6 +335,17 @@ const Map<String, _ElkPreset> _elkPresets = {
 bool resolveElkStraightenEdges(String source) {
   final value = resolveDiagramConfig(source, 'elk')['straightenEdges'];
   return value != false && value != 'false';
+}
+
+/// Resolves `elk.lineHops` from frontmatter or `%%{init}%%`; defaults to
+/// [ElkLineHops.arc].
+ElkLineHops resolveElkLineHops(String source) {
+  final raw = resolveDiagramConfig(source, 'elk')['lineHops'];
+  return switch (raw is String ? raw.toLowerCase() : raw) {
+    false || 'false' => ElkLineHops.none,
+    'gap' => ElkLineHops.gap,
+    _ => ElkLineHops.arc,
+  };
 }
 
 T _enumByName<T extends Enum>(
