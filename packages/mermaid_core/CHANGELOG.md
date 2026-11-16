@@ -2,6 +2,7 @@
 
 - Labels break at `</br>` as in mermaid.js 12; timeline keeps it as text (#95).
 - C4 labels break at `</br>`, `<br />` and `<BR>` too (#95).
+- Ishikawa labels break at `</br>` and `<BR>` (#95).
 
 ## 0.4.0
 

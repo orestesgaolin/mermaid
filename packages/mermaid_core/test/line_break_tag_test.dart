@@ -59,6 +59,16 @@ C4Context
     _expectTwoLines(source, first: 'desc one', second: 'desc two');
   });
 
+  test('ishikawa labels break at </br> and <BR>', () {
+    const source = '''
+ishikawa-beta
+  one</br>two
+    three<BR>four
+''';
+    _expectTwoLines(source, first: 'one', second: 'two');
+    _expectTwoLines(source, first: 'three', second: 'four');
+  });
+
   test('timeline events keep </br> as text and break at <br>', () {
     final texts = _texts('''
 timeline
