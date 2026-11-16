@@ -73,6 +73,7 @@ RenderScene layoutStateDiagram(
   required MermaidTheme theme,
   String engine = 'auto',
   elk.ElkLayoutOptions? elkOptions,
+  bool straightenElkEdges = true,
   StateConfig config = const StateConfig(),
 }) {
   return _StateLayout(
@@ -82,6 +83,7 @@ RenderScene layoutStateDiagram(
     engine,
     config,
     elkOptions ?? resolveElkConfig('', defaultPreset: 'legacy'),
+    straightenElkEdges,
   ).run();
 }
 
@@ -105,6 +107,7 @@ class _StateLayout {
     this.engine,
     this.config,
     this.elkOptions,
+    this.straightenElkEdges,
   ) : baseStyle = TextStyleSpec(
         fontFamily: theme.fontFamily,
         fontSize: theme.fontSize,
@@ -116,6 +119,7 @@ class _StateLayout {
   final String engine;
   final StateConfig config;
   final elk.ElkLayoutOptions elkOptions;
+  final bool straightenElkEdges;
   final TextStyleSpec baseStyle;
 
   /// State, note, title and transition labels, with `<b>`/`<i>` runs.
@@ -258,6 +262,7 @@ class _StateLayout {
         g,
         direction: diagram.direction,
         options: effectiveElkOptions,
+        straightenEdges: straightenElkEdges,
       );
       for (final p in [...placed.values, ...noteBoxes.values]) {
         final c = elkResult.center(p.node.id);

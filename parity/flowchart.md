@@ -93,3 +93,9 @@
 - Upstream: `elk.preset` selects `default` (BALANCED alignment, DEPTH_FIRST cycle breaking), `legacy` (NONE, GREEDY), `modelOrder` or `depthFirst`. Explicit `elk.*` keys win. `spacing.portsSurrounding` is 12 on every side.
 - Ours: `resolveElkConfig` uses the same table and resolution, and passes the 12px margin.
 - Deviations: `modelOrder` and `depthFirst` place with Brandes–Köpf (the Dart engine has no NETWORK_SIMPLEX placer). Only the top and bottom `portsSurrounding` margins exist: the ends of the sides edges use. Not passed, as the engine lacks them: `unnecessaryBendpoints`, `mergeHierarchyEdges`, `selfLoopDistribution`, `wrapping.multiEdge.*`, and per-subgraph spacing and padding. `considerModelOrder` defaults to NONE (upstream NODES_AND_EDGES).
+
+## ELK edge clean-up after layout (issue #93)
+- Upstream: mermaid 12.3 `elk/render.ts:applyElkEdgeLayout` cleans up ELK routes after layout.
+- Ours: `elk_adapter.dart:straightenEdgeTerminals` ports `elk.straightenEdges` (same limits and crossing/label checks; labels follow the moved run).
+- Not done: `orientFeedbackEdges`, node alignment at small nodes, subgraph title padding and stale endpoints, the 12.3 subgraph-edge fix (#8661), `sanitizeElkEdgePoints` and the marker segment checks.
+- Deviations: straightening runs before shape clipping (same result for rectangles); points a route only passes straight through are ignored.

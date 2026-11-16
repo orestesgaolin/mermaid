@@ -5,6 +5,7 @@
 - ELK state diagrams keep the `legacy` preset unless `elk.preset` is set.
 - ELK layouts keep edges clear of node and subgraph corners, as mermaid 12 does (#92).
 - ELK flowcharts: no small stair-step jog where one edge leaves a node and another arrives (#93).
+- ELK: short jogs at edge ends are straightened, like mermaid 12 (`elk.straightenEdges`) (#93).
 
 ## 0.4.0
 

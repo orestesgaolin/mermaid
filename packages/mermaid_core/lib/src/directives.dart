@@ -330,6 +330,12 @@ const Map<String, _ElkPreset> _elkPresets = {
   ),
 };
 
+/// Resolves `config.elk.straightenEdges`; on unless set to `false`.
+bool resolveElkStraightenEdges(String source) {
+  final value = resolveDiagramConfig(source, 'elk')['straightenEdges'];
+  return value != false && value != 'false';
+}
+
 T _enumByName<T extends Enum>(
   Object? raw,
   List<T> values, {

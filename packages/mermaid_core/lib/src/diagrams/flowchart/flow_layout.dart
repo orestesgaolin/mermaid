@@ -255,6 +255,7 @@ RenderScene layoutFlowchart(
   required MermaidTheme theme,
   String engine = 'dagre',
   elk.ElkLayoutOptions? elkOptions,
+  bool straightenElkEdges = true,
   FlowchartConfig config = const FlowchartConfig(),
 }) {
   ensureBuiltinIconPacks();
@@ -270,6 +271,7 @@ RenderScene layoutFlowchart(
     engine,
     config: config,
     elkOptions: elkOptions ?? resolveElkConfig(''),
+    straightenElkEdges: straightenElkEdges,
     originalLinkIndices: List<int>.generate(graph.edges.length, (i) => i),
   );
   var sceneNodes = fragment.nodes;
@@ -366,6 +368,7 @@ _Fragment _layoutGraph(
   String engine, {
   required FlowchartConfig config,
   required elk.ElkLayoutOptions elkOptions,
+  required bool straightenElkEdges,
   required List<int> originalLinkIndices,
 }) {
   // --- 0. Subgraphs with their own direction become recursive fragments. ---
@@ -463,6 +466,7 @@ _Fragment _layoutGraph(
       engine == 'elk' ? 'elk' : 'dagre',
       config: config,
       elkOptions: elkOptions,
+      straightenElkEdges: straightenElkEdges,
       originalLinkIndices: subLinkIndices,
     );
     final titleRich = layoutHtmlLabel(
@@ -774,6 +778,7 @@ _Fragment _layoutGraph(
       direction: graph.direction,
       options: effectiveElkOptions,
       clusterLabels: clusterLabels,
+      straightenEdges: straightenElkEdges,
     );
     for (final p in placed.values) {
       final c = elkResult.center(p.node.id);
