@@ -291,8 +291,13 @@ elk.ElkLayoutOptions resolveElkConfig(
         ? _elkCycleBreaking(cycleBreaking)
         : preset.cycleBreaking,
     forceNodeModelOrder: elkCfg['forceNodeModelOrder'] == true,
+    spacingPortsSurroundingTop: _elkPortsSurrounding,
+    spacingPortsSurroundingBottom: _elkPortsSurrounding,
   );
 }
+
+/// mermaid 12's `PORTS_SURROUNDING_MARGIN`, used by every preset.
+const double _elkPortsSurrounding = 12;
 
 typedef _ElkPreset = ({
   elk.ElkNodePlacement placement,

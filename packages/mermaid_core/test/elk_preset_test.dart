@@ -1,6 +1,7 @@
 /// mermaid 12 ELK presets (`elk.preset`) for flowcharts, issue #92.
 library;
 
+import 'package:elk/elk.dart' as elk;
 import 'package:mermaid_core/mermaid_core.dart';
 import 'package:mermaid_core/src/ir/scene_utils.dart' show sceneNodeBounds;
 import 'package:test/test.dart';
@@ -85,5 +86,35 @@ void main() {
 
   test('an unknown preset name falls back to default', () {
     expect(_boxes(_elk(_hops, preset: 'Legacy')), _boxes(_elk(_hops)));
+  });
+
+  test('reserves a ports-surrounding margin inside subgraph frames', () {
+    const src = '''
+flowchart LR
+  a1 --> b1
+  a2 --> b1
+  a3 --> b1
+  subgraph S
+    b1
+  end''';
+    Rect frame(elk.ElkLayoutOptions options) => groupsOf(
+      layoutFlowchart(
+        parseFlowchart(src),
+        measurer: const ApproximateTextMeasurer(),
+        theme: MermaidTheme.defaultTheme,
+        engine: 'elk',
+        elkOptions: options,
+      ).nodes,
+    ).where((g) => g.id == 'S').map(sceneNodeBounds).single!;
+    final options = resolveElkConfig(src);
+    expect(options.spacingPortsSurroundingTop, 12);
+    expect(options.spacingPortsSurroundingBottom, 12);
+    final without = frame(
+      options.copyWith(
+        spacingPortsSurroundingTop: 0,
+        spacingPortsSurroundingBottom: 0,
+      ),
+    );
+    expect(frame(options).height, greaterThanOrEqualTo(without.height + 12));
   });
 }

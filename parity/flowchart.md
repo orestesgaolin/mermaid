@@ -90,6 +90,6 @@
 - **tidy-tree:** No upstream counterpart for flowchart (mermaid.js ships only dagre for `graph`/`flowchart`). Our implementation (`layout_engines.dart:tidyTreeLayout`) is a Reingold–Tilford/Walker tidy tree over a BFS spanning forest, ignoring clusters (disabled when subgraphs exist) and routing straight edges. Cannot be assessed for parity; treat as a Dart-only extension (discrepancy #9). Sibling/level gaps reuse nodeSpacing/rankSpacing (50/50).
 
 ## ELK presets (issue #92)
-- Upstream: `elk.preset` selects `default` (BALANCED alignment, DEPTH_FIRST cycle breaking), `legacy` (NONE, GREEDY), `modelOrder` or `depthFirst`. Explicit `elk.*` keys win.
-- Ours: `resolveElkConfig` uses the same table and resolution.
-- Deviations: `modelOrder` and `depthFirst` place with Brandes–Köpf (the Dart engine has no NETWORK_SIMPLEX placer). Not passed, as the engine lacks them: `unnecessaryBendpoints`, `mergeHierarchyEdges`, `selfLoopDistribution`, `wrapping.multiEdge.*`, and per-subgraph spacing and padding. `considerModelOrder` defaults to NONE (upstream NODES_AND_EDGES).
+- Upstream: `elk.preset` selects `default` (BALANCED alignment, DEPTH_FIRST cycle breaking), `legacy` (NONE, GREEDY), `modelOrder` or `depthFirst`. Explicit `elk.*` keys win. `spacing.portsSurrounding` is 12 on every side.
+- Ours: `resolveElkConfig` uses the same table and resolution, and passes the 12px margin.
+- Deviations: `modelOrder` and `depthFirst` place with Brandes–Köpf (the Dart engine has no NETWORK_SIMPLEX placer). Only the top and bottom `portsSurrounding` margins exist: the ends of the sides edges use. Not passed, as the engine lacks them: `unnecessaryBendpoints`, `mergeHierarchyEdges`, `selfLoopDistribution`, `wrapping.multiEdge.*`, and per-subgraph spacing and padding. `considerModelOrder` defaults to NONE (upstream NODES_AND_EDGES).
