@@ -1,3 +1,7 @@
+## Unreleased
+
+- Labels break at `</br>` as in mermaid.js 12; timeline keeps it as text (#95).
+
 ## 0.4.0
 
 - **Breaking:** model labels are `LabelText`, no longer `String`. A
