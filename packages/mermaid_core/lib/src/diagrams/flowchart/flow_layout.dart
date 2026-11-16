@@ -269,7 +269,7 @@ RenderScene layoutFlowchart(
     baseStyle,
     engine,
     config: config,
-    elkOptions: elkOptions ?? const elk.ElkLayoutOptions(),
+    elkOptions: elkOptions ?? resolveElkConfig(''),
     originalLinkIndices: List<int>.generate(graph.edges.length, (i) => i),
   );
   var sceneNodes = fragment.nodes;

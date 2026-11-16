@@ -1,6 +1,8 @@
 ## Unreleased
 
 - Read `elk` options from YAML frontmatter, not only from `%%{init}%%` directives.
+- ELK flowcharts use mermaid 12's `default` preset; `elk.preset: legacy` restores the old layout (#92).
+- ELK state diagrams keep the `legacy` preset unless `elk.preset` is set.
 
 ## 0.4.0
 

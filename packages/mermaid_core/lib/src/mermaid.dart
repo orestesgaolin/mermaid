@@ -101,7 +101,7 @@ class Mermaid {
           measurer: measurer,
           theme: theme,
           engine: resolveLayout(source, defaultLayout: 'auto'),
-          elkOptions: resolveElkConfig(source),
+          elkOptions: resolveElkConfig(source, defaultPreset: 'legacy'),
           config: StateConfig.fromSource(source),
         );
       case DiagramType.er:

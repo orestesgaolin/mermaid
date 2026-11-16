@@ -81,7 +81,7 @@ RenderScene layoutStateDiagram(
     theme,
     engine,
     config,
-    elkOptions ?? const elk.ElkLayoutOptions(),
+    elkOptions ?? resolveElkConfig('', defaultPreset: 'legacy'),
   ).run();
 }
 
