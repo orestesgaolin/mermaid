@@ -52,8 +52,7 @@ Map<String, List<Point>> _routes(RenderScene scene) => {
       group.id!: [
         for (final shape in group.children.whereType<SceneShape>())
           if (shape.paintRole == ScenePaintRole.edgeStroke)
-            for (final c in (shape.geometry as PathGeometry).commands)
-              if (c is MoveTo) c.p else if (c is LineTo) c.p,
+            ...edgeRoute((shape.geometry as PathGeometry).commands),
       ],
 };
 

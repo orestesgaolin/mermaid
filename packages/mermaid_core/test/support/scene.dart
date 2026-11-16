@@ -15,6 +15,33 @@ Iterable<SceneShape> shapesOf(Iterable<SceneNode> nodes) =>
 Iterable<SceneText> textsOf(Iterable<SceneNode> nodes) =>
     flattenScene(nodes).whereType<SceneText>();
 
+/// The route an edge path follows: a rounded corner gives back its corner
+/// point, line hops are skipped, and points on a straight run are dropped.
+List<Point> edgeRoute(Iterable<PathCommand> commands) {
+  final out = <Point>[];
+  void add(Point p) {
+    if (out.isNotEmpty && out.last.distanceTo(p) < 0.01) return;
+    if (out.length >= 2) {
+      final a = out[out.length - 2], b = out.last;
+      final cross = (b.x - a.x) * (p.y - b.y) - (b.y - a.y) * (p.x - b.x);
+      if (cross.abs() < 0.01) out.removeLast();
+    }
+    out.add(p);
+  }
+
+  for (final c in commands) {
+    switch (c) {
+      case MoveTo(:final p) || LineTo(:final p):
+        add(p);
+      case QuadTo(:final c, :final p):
+        add(c);
+        add(p);
+      default:
+    }
+  }
+  return out;
+}
+
 /// Geometry only: deliberately excludes paint. The determinism suite checks
 /// that this detects a changed label layout while ignoring paint changes.
 String sceneGeometry(RenderScene scene) {
