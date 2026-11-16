@@ -1,3 +1,7 @@
+## Unreleased
+
+- Spread free ports evenly along a node side, as ELK's default DISTRIBUTED alignment does (#93).
+
 ## 0.2.1
 
 - Remove the unused vendored copy of dart_dagre from `lib/src/dagre` and its
