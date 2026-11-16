@@ -50,6 +50,15 @@ sequenceDiagram
     _expectTwoLines(source, first: 'note one', second: 'note two');
   });
 
+  test('C4 labels break at </br> and <br />', () {
+    const source = '''
+C4Context
+  Person(a, "first line</br>second line", "desc one<br />desc two")
+''';
+    _expectTwoLines(source);
+    _expectTwoLines(source, first: 'desc one', second: 'desc two');
+  });
+
   test('timeline events keep </br> as text and break at <br>', () {
     final texts = _texts('''
 timeline
