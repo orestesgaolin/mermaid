@@ -1,3 +1,9 @@
+## Unreleased
+
+- `layered`: keep the model-order transitive closure out of the plain barycenter
+  sort. A wide layer no longer costs O(n² log n × closure size) per sort; a
+  918-node graph lays out in 0.12 s instead of 521 s, with identical output.
+
 ## 0.2.1
 
 - Remove the unused vendored copy of dart_dagre from `lib/src/dagre` and its
