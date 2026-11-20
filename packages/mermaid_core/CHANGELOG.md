@@ -1,5 +1,7 @@
-## Unreleased
+## 0.4.1
 
+- Require `elk` 0.2.2: ELK layouts of graphs with wide layers no longer take
+  seconds or minutes in crossing minimization (#100).
 - Flowchart edges into a subgraph no longer kink above its border (#96).
 - Labels break at `</br>` as in mermaid.js 12; timeline keeps it as text (#95).
 - C4 labels break at `</br>`, `<br />` and `<BR>` too (#95).

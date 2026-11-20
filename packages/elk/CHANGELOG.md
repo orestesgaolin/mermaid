@@ -1,4 +1,4 @@
-## Unreleased
+## 0.2.2
 
 - `layered`: keep the model-order transitive closure out of the plain barycenter
   sort. A wide layer no longer costs O(n² log n × closure size) per sort; a

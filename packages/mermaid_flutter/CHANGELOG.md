@@ -1,3 +1,9 @@
+## 0.4.1
+
+- Require `mermaid_core` 0.4.1: flowchart edges into a subgraph no longer
+  kink above its border, labels break at `</br>` as in mermaid.js 12, and ELK
+  layouts of graphs with wide layers are fast again.
+
 ## 0.4.0
 
 - Require `mermaid_core` 0.4.0. **Breaking** for code that reads the diagram
