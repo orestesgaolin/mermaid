@@ -155,3 +155,4 @@ No code change required; `dart analyze` clean.
 
 ## HTML markup in labels
 - Upstream splits labels at `<br>` and writes each line with `tspan.text()` (`ishikawaRenderer.ts:439-480`), so other tags show as text. Ours keep them as text too.
+- Upstream sanitizes labels before splitting, so `</br>` and `<BR>` break too; ours split at them (#95).

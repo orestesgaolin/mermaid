@@ -7,8 +7,9 @@ import 'label_text.dart';
 
 export 'label_text.dart';
 
-/// `<br>`, `<br/>` or `<br />`: a line break in a label.
-final htmlLineBreak = RegExp(r'<br\s*/?>', caseSensitive: false);
+/// `<br>`, `<br/>`, `<br />` or `</br>`: a line break in a label, as
+/// mermaid.js `common.lineBreakRegex` matches it.
+final htmlLineBreak = RegExp(r'</?br\s*/?>', caseSensitive: false);
 
 /// An HTML comment or an opening/closing/self-closing HTML tag in a label.
 final _htmlMarkup = RegExp(
@@ -70,7 +71,7 @@ String normalizeHtmlTags(String s) {
   return out.toString();
 }
 
-/// [normalizeHtmlTags] after `<br>`, `<br/>` and `<br />` became `\n`, for
+/// [normalizeHtmlTags] after every [htmlLineBreak] became `\n`, for
 /// a label that mermaid.js shows as an HTML label.
 String normalizeHtmlMarkup(String s) =>
     s.contains('<') ? normalizeHtmlTags(s.replaceAll(htmlLineBreak, '\n')) : s;

@@ -18,6 +18,7 @@ import '../../geometry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
 import '../../parse_error.dart';
+import '../../text/html_tags.dart';
 import '../../text/text_measurer.dart';
 import '../../text/text_style.dart';
 import '../../theme/theme.dart';
@@ -230,10 +231,8 @@ C4Diagram parseC4Diagram(String source) {
   }
 
   // C4 labels may embed `<br/>`; `'` is ordinary text here, never a quote.
-  String unquoteLabel(String a) => unquote(
-    a,
-    singleQuotes: false,
-  ).replaceAll('<br/>', '\n').replaceAll('<br>', '\n');
+  String unquoteLabel(String a) =>
+      unquote(a, singleQuotes: false).replaceAll(htmlLineBreak, '\n');
 
   List<String> args(String s) => [for (final a in rawArgs(s)) unquoteLabel(a)];
 

@@ -103,3 +103,5 @@ Notes:
 
 ## HTML markup in labels
 - Upstream draws the title, sections, periods and events with `.text()` (`timelineRenderer.ts:209-212`, `svgDraw.js:456-521`), so tags show as text. Ours keep them as text too.
+- `</br>` (#95): upstream splits periods and events with its own `<br>` regex, so `</br>` stays text; ours too.
+- Deviation: upstream shows `</br>` in the title as `<br>`; ours keep `</br>`.
