@@ -681,7 +681,7 @@ class _BarycenterHeuristic {
     final bb = sb.barycenter;
     if (ba != null && bb != null) {
       final cmp = ba.compareTo(bb);
-      if (useModelOrder) {
+      if (preferNodeOrder) {
         if (cmp < 0) {
           _updateBiggerAndSmaller(n1, n2);
         } else if (cmp > 0) {
@@ -691,11 +691,11 @@ class _BarycenterHeuristic {
       return cmp;
     }
     if (ba != null) {
-      if (useModelOrder) _updateBiggerAndSmaller(n1, n2);
+      if (preferNodeOrder) _updateBiggerAndSmaller(n1, n2);
       return -1;
     }
     if (bb != null) {
-      if (useModelOrder) _updateBiggerAndSmaller(n2, n1);
+      if (preferNodeOrder) _updateBiggerAndSmaller(n2, n1);
       return 1;
     }
     return 0;
