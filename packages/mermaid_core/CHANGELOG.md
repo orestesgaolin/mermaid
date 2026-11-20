@@ -1,3 +1,7 @@
+## Unreleased
+
+- Flowchart edges into a subgraph no longer kink above its border (#96).
+
 ## 0.4.0
 
 - **Breaking:** model labels are `LabelText`, no longer `String`. A
