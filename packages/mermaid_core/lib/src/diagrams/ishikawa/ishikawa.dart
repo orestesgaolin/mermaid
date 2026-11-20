@@ -17,7 +17,7 @@ import '../../text/text_style.dart';
 import '../../theme/theme.dart';
 
 final _ishikawaHeader = RegExp(r'^\s*ishikawa(-beta)?\b');
-final _ishikawaBreakOrNewline = RegExp(r'<br\s*/?>|\n');
+final _ishikawaBreakOrNewline = RegExp(r'</?br\s*/?>|\n', caseSensitive: false);
 final _ishikawaWhitespace = RegExp(r'\s+');
 
 /// A node in the arbitrary-depth cause tree (mirrors upstream `IshikawaNode`).

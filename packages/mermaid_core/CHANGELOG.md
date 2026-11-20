@@ -1,5 +1,9 @@
 ## Unreleased
 
+- Flowchart edges into a subgraph no longer kink above its border (#96).
+- Labels break at `</br>` as in mermaid.js 12; timeline keeps it as text (#95).
+- C4 labels break at `</br>`, `<br />` and `<BR>` too (#95).
+- Ishikawa labels break at `</br>` and `<BR>` (#95).
 - Read `elk` options from YAML frontmatter, not only from `%%{init}%%` directives.
 - ELK flowcharts use mermaid 12's `default` preset; `elk.preset: legacy` restores the old layout (#92).
 - ELK state diagrams keep the `legacy` preset unless `elk.preset` is set.
