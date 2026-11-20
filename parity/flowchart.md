@@ -113,4 +113,4 @@
   - Arc hops are two cubics (`C` in SVG, not `A`).
   - Self-loops and invisible edges take no part.
   - Edges inside a subgraph with its own `direction` are not hopped against outer edges.
-  - State diagrams with ELK are unchanged.
+  - State diagrams with ELK get no hops. Their port placement and edge ends do change (see `parity/stateDiagram.md`).

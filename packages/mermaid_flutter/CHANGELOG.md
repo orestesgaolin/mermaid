@@ -1,6 +1,12 @@
-## Unreleased
+## 0.5.0
 
+- Require `mermaid_core` 0.5.0. **Breaking:** the output of ELK layouts
+  changes for flowcharts with `layout: elk` and for state diagrams with a
+  nested composite state (see the `mermaid_core` changelog). The widgets and
+  their parameters did not change.
 - ELK flowcharts paint rounded edge bends and line hops.
+- Flowchart edges into a subgraph no longer kink above its border, and labels
+  break at `</br>` as in mermaid.js 12.
 
 ## 0.4.0
 
