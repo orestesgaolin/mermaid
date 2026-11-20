@@ -8,24 +8,35 @@ import 'package:test/test.dart';
 ///
 /// Sorting such a layer used to merge the model-order transitive closure on
 /// every comparison, which costs O(n² log n × closure size) and took 27 s on a
-/// 150-node layer before that bookkeeping was guarded by `useModelOrder`.
+/// 150-node layer before that bookkeeping was limited to the strategies that
+/// read it (`preferNodeOrder`).
 void main() {
-  test('lays out a graph with wide layers', () {
-    final graph = _wideLayerGraph();
-    final stopwatch = Stopwatch()..start();
-    final result = const ElkLayered().layout(graph);
-    stopwatch.stop();
+  // Only `nodesAndEdges` and `preferNodes` read the closure. `preferEdges`
+  // sorts by barycenter like `none`, so it must not pay for it either.
+  for (final strategy in [
+    ElkConsiderModelOrder.none,
+    ElkConsiderModelOrder.preferEdges,
+  ]) {
+    test(
+      'lays out a graph with wide layers (model order: ${strategy.name})',
+      () {
+        final graph = _wideLayerGraph(strategy);
+        final stopwatch = Stopwatch()..start();
+        final result = const ElkLayered().layout(graph);
+        stopwatch.stop();
 
-    expect(result.children, hasLength(graph.children.length));
-    expect(result.width, greaterThan(0));
-    expect(result.height, greaterThan(0));
-    // The layout itself takes ~0.1 s; the bound only catches the return of the
-    // per-comparison closure bookkeeping, which pushes it past 25 s.
-    expect(stopwatch.elapsed, lessThan(const Duration(seconds: 5)));
-  });
+        expect(result.children, hasLength(graph.children.length));
+        expect(result.width, greaterThan(0));
+        expect(result.height, greaterThan(0));
+        // The layout itself takes ~0.1 s; the bound only catches the return of
+        // the per-comparison closure bookkeeping, which pushes it past 5 s.
+        expect(stopwatch.elapsed, lessThan(const Duration(seconds: 5)));
+      },
+    );
+  }
 }
 
-ElkGraph _wideLayerGraph() {
+ElkGraph _wideLayerGraph(ElkConsiderModelOrder strategy) {
   const widths = [40, 80, 150, 150, 80, 20];
   final random = Random(7);
   final layers = <List<String>>[];
@@ -48,11 +59,12 @@ ElkGraph _wideLayerGraph() {
   }
 
   return ElkGraph(
-    layoutOptions: const ElkLayoutOptions(
+    layoutOptions: ElkLayoutOptions(
       direction: ElkDirection.right,
       spacingNodeNode: 40,
       spacingNodeNodeBetweenLayers: 100,
       mergeEdges: true,
+      considerModelOrder: strategy,
     ),
     children: [
       for (final layer in layers)
