@@ -389,6 +389,44 @@ flowchart TB
     });
   });
 
+  test('edges into a subgraph member never turn back upward', () {
+    final scene = layout(
+      parseFlowchart('''
+flowchart TD
+    a --> x
+    b --> x
+    subgraph G["Group"]
+        x
+    end
+'''),
+    );
+    final clusterTop = groupBounds(groupById(scene, 'G')).top;
+
+    for (final edgeId in ['edge_a_x_0', 'edge_b_x_1']) {
+      final path = groupById(scene, edgeId).children
+          .whereType<SceneShape>()
+          .map((shape) => shape.geometry)
+          .whereType<PathGeometry>()
+          .single;
+      final ys = [
+        for (final command in path.commands)
+          ...switch (command) {
+            CubicTo(:final c1, :final c2, :final p) => [c1.y, c2.y, p.y],
+            _ => [endPointOf(command).y],
+          },
+      ];
+      for (var i = 1; i < ys.length; i++) {
+        expect(
+          ys[i],
+          greaterThanOrEqualTo(ys[i - 1] - 0.001),
+          reason: '$edgeId moves upward at control point $i: $ys',
+        );
+      }
+      expect(ys.first, lessThan(clusterTop));
+      expect(ys.last, greaterThan(clusterTop));
+    }
+  });
+
   test('LR titled subgraphs center on their member row', () {
     final graph = parseFlowchart('''
 graph LR

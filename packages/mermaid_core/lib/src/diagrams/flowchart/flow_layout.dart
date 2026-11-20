@@ -1589,14 +1589,6 @@ List<Point> _bendBeforeCluster(
     FlowDirection.rl => Point(cluster.right, end.y),
   };
 
-  final progressesTowardTarget = switch (direction) {
-    FlowDirection.tb => bend.y > points.first.y,
-    FlowDirection.bt => bend.y < points.first.y,
-    FlowDirection.lr => bend.x > points.first.x,
-    FlowDirection.rl => bend.x < points.first.x,
-  };
-  if (!progressesTowardTarget) return points;
-
   bool aligned(Point p) =>
       vertical ? (p.x - end.x).abs() < 0.001 : (p.y - end.y).abs() < 0.001;
 
@@ -1604,6 +1596,15 @@ List<Point> _bendBeforeCluster(
   while (firstAligned > 0 && aligned(points[firstAligned - 1])) {
     firstAligned--;
   }
+
+  final before = points[firstAligned == 0 ? 0 : firstAligned - 1];
+  final progressesTowardTarget = switch (direction) {
+    FlowDirection.tb => bend.y > before.y,
+    FlowDirection.bt => bend.y < before.y,
+    FlowDirection.lr => bend.x > before.x,
+    FlowDirection.rl => bend.x < before.x,
+  };
+  if (!progressesTowardTarget) return points;
 
   final adjusted = List<Point>.from(points);
   if (firstAligned == points.length - 1) {
