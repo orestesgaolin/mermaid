@@ -1,12 +1,16 @@
-## Unreleased
+## 0.3.0
 
 - `layered`: keep the model-order transitive closure out of the plain barycenter
   sort. A wide layer no longer costs O(n² log n × closure size) per sort; a
   918-node graph lays out in 0.12 s instead of 521 s, with identical output.
   The `preferEdges` model-order strategy does not read the closure and no
   longer maintains it either.
-- Spread free ports evenly along a node side, as ELK's default DISTRIBUTED alignment does (#93).
-- Keep free ports inside `spacing.portsSurrounding` on the sides edges use, as elkjs does.
+- **Breaking:** free ports are spread evenly along a node side, as ELK's
+  default DISTRIBUTED alignment does (#93). Before, they were packed 10 px
+  apart at the centre of the side. Port positions and edge routes of existing
+  layouts change, and no option restores the old placement.
+- Keep free ports inside `spacing.portsSurrounding` on the sides edges use, as
+  elkjs does.
 
 ## 0.2.1
 

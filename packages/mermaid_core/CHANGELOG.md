@@ -1,11 +1,24 @@
-## Unreleased
+## 0.5.0
 
+- **Breaking:** the output of ELK layouts changes. Flowcharts with
+  `layout: elk` use mermaid 12's `default` preset, spread edge ports along the
+  node side, straighten short jogs at edge ends, round the bends and hop over
+  crossings (#91, #92, #93). State diagrams with a nested composite state are
+  laid out with ELK without `layout: elk`, so their default output changes
+  too: ports are spread inside a 12 px margin and short jogs are straightened.
+  `elk.preset: legacy`, `elk.straightenEdges: false` and `elk.lineHops: false`
+  turn the new steps off, but the port placement of `elk` 0.3.0 and the
+  rounded bends stay, so no config gives the 0.4.0 output. Dagre layouts do
+  not change.
+- Require `elk` 0.3.0. ELK layouts of graphs with wide layers no longer take
+  seconds or minutes in crossing minimization (#100).
 - Flowchart edges into a subgraph no longer kink above its border (#96).
 - Labels break at `</br>` as in mermaid.js 12; timeline keeps it as text (#95).
 - C4 labels break at `</br>`, `<br />` and `<BR>` too (#95).
 - Ishikawa labels break at `</br>` and `<BR>` (#95).
 - Read `elk` options from YAML frontmatter, not only from `%%{init}%%` directives.
-- ELK flowcharts use mermaid 12's `default` preset; `elk.preset: legacy` restores the old layout (#92).
+- ELK flowcharts use mermaid 12's `default` preset (`elk.preset`: `default`,
+  `legacy`, `modelOrder`, `depthFirst`) (#92).
 - ELK state diagrams keep the `legacy` preset unless `elk.preset` is set.
 - ELK layouts keep edges clear of node and subgraph corners, as mermaid 12 does (#92).
 - ELK flowcharts: no small stair-step jog where one edge leaves a node and another arrives (#93).

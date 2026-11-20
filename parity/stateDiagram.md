@@ -63,6 +63,7 @@
     - Self-loops are hand-routed (cubic to the right). Upstream lets dagre route self-edges; shape/position will differ. Acceptable approximation.
 15. `[open] (low) ELK state layouts default to the legacy preset`
     - Upstream applies the `default` ELK preset to every diagram. Ours keeps `legacy` for state diagrams unless `elk.preset` is set: our adapter attaches composite transitions to a child state, and BALANCED placement then pulls those children out of line.
+    - The `legacy` preset does not keep the 0.4.0 output. A state diagram with a nested composite uses ELK without `layout: elk`, and it gets the 12 px `portsSurrounding` margin, the distributed ports of `elk` 0.3.0 and edge-end straightening. On a narrow state the ports are close together: four edges on a 42 px side are 4 px apart and their arrowheads overlap. Upstream handles narrow sides with `alignDegenerateNodeToAnchor` and `spreadPorts`, which are not ported.
 
 ## Proposed fixes
 1. In `state_layout.dart:_buildState` normal/composite, change `RectGeometry(p.rect, rx: 8, ry: 8)` to `rx: 5, ry: 5` (and cluster rect to 5).
