@@ -172,6 +172,42 @@ void main() {
         );
       },
     );
+
+    test(
+      'paints ELK line hops as arcs over, or gaps around, a crossing',
+      () async {
+        core.RenderScene scene(String lineHops) =>
+            core.Mermaid(measurer: const FlutterTextMeasurer()).render(
+              '---\nconfig:\n  layout: elk\n  elk:\n    lineHops: $lineHops\n'
+              '---\nflowchart TD\n  A --> C\n  A --> D\n  B --> C\n'
+              '  B --> D\n  A --> E\n  B --> E\n',
+            );
+
+        final arcs = scene('arc');
+        final hop = _firstHop(arcs);
+        expect(hop, isNotNull, reason: 'the crossing edges must hop');
+        final (pre, post) = hop!;
+        final center = core.Point((pre.x + post.x) / 2, pre.y);
+        final radius = (post.x - pre.x).abs() / 2;
+        final onArc = (
+          (center.x - radius * 0.7).floor(),
+          (center.y - radius * 0.7).floor(),
+        );
+        final beside = ((center.x - radius / 2).floor(), center.y.floor());
+
+        final background = await _pixelAt(scene('false'), onArc.$1, onArc.$2);
+        expect(
+          await _pixelAt(arcs, onArc.$1, onArc.$2),
+          isNot(background),
+          reason: 'the arc is painted above the crossing',
+        );
+
+        final plain = await _pixelAt(scene('false'), beside.$1, beside.$2);
+        final gap = await _pixelAt(scene('gap'), beside.$1, beside.$2);
+        expect(gap, background, reason: 'the gap leaves the line unpainted');
+        expect(plain, isNot(background));
+      },
+    );
   });
 
   group('FlutterTextMeasurer', () {
@@ -350,6 +386,34 @@ void main() {
       );
     });
   });
+}
+
+/// Start and end of the first arc hop drawn by an edge in [scene].
+(core.Point, core.Point)? _firstHop(core.RenderScene scene) {
+  Iterable<core.SceneShape> shapes(Iterable<core.SceneNode> nodes) sync* {
+    for (final node in nodes) {
+      if (node is core.SceneShape) yield node;
+      if (node is core.SceneGroup) yield* shapes(node.children);
+    }
+  }
+
+  for (final shape in shapes(scene.nodes)) {
+    if (shape.paintRole != core.ScenePaintRole.edgeStroke) continue;
+    final commands = (shape.geometry as core.PathGeometry).commands;
+    for (var i = 1; i + 1 < commands.length; i++) {
+      final (before, first, second) = (
+        commands[i - 1],
+        commands[i],
+        commands[i + 1],
+      );
+      if (before is core.LineTo &&
+          first is core.CubicTo &&
+          second is core.CubicTo) {
+        return (before.p, second.p);
+      }
+    }
+  }
+  return null;
 }
 
 Future<ui.Color> _pixelAt(core.RenderScene scene, int x, int y) async {

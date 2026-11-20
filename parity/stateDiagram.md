@@ -61,6 +61,8 @@
     - `[H]`/`[H*]` parsing + circle-with-H rendering has no upstream equivalent; harmless but will never match upstream output and could misparse `[H]` as a state elsewhere. Document as port-only extension.
 14. `[open] (low) Self-transition routing is bespoke`
     - Self-loops are hand-routed (cubic to the right). Upstream lets dagre route self-edges; shape/position will differ. Acceptable approximation.
+15. `[open] (low) ELK state layouts default to the legacy preset`
+    - Upstream applies the `default` ELK preset to every diagram. Ours keeps `legacy` for state diagrams unless `elk.preset` is set: our adapter attaches composite transitions to a child state, and BALANCED placement then pulls those children out of line.
 
 ## Proposed fixes
 1. In `state_layout.dart:_buildState` normal/composite, change `RectGeometry(p.rect, rx: 8, ry: 8)` to `rx: 5, ry: 5` (and cluster rect to 5).

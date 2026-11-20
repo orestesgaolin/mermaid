@@ -4,6 +4,13 @@
 - Labels break at `</br>` as in mermaid.js 12; timeline keeps it as text (#95).
 - C4 labels break at `</br>`, `<br />` and `<BR>` too (#95).
 - Ishikawa labels break at `</br>` and `<BR>` (#95).
+- Read `elk` options from YAML frontmatter, not only from `%%{init}%%` directives.
+- ELK flowcharts use mermaid 12's `default` preset; `elk.preset: legacy` restores the old layout (#92).
+- ELK state diagrams keep the `legacy` preset unless `elk.preset` is set.
+- ELK layouts keep edges clear of node and subgraph corners, as mermaid 12 does (#92).
+- ELK flowcharts: no small stair-step jog where one edge leaves a node and another arrives (#93).
+- ELK: short jogs at edge ends are straightened, like mermaid 12 (`elk.straightenEdges`) (#93).
+- ELK flowcharts round edge bends and hop over crossings, as in mermaid 12 (`elk.lineHops`).
 
 ## 0.4.0
 

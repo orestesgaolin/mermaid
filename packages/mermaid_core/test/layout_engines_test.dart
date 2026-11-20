@@ -16,6 +16,16 @@ import 'package:test/test.dart';
 const measurer = ApproximateTextMeasurer();
 const theme = MermaidTheme.defaultTheme;
 
+Map<String, List<Point>> elkEdgeRoutes(RenderScene scene) => {
+  for (final group in groupsOf(scene.nodes))
+    if ((group.id ?? '').startsWith('edge_'))
+      group.id!: [
+        for (final shape in group.children.whereType<SceneShape>())
+          if (shape.paintRole == ScenePaintRole.edgeStroke)
+            ...edgeRoute((shape.geometry as PathGeometry).commands),
+      ],
+};
+
 void main() {
   group('resolveLayout', () {
     test('defaults to dagre', () {
@@ -233,6 +243,23 @@ flowchart TB
         expect(anyCubic, isFalse, reason: 'elk edges are orthogonal');
       },
     );
+
+    test('elk edges between two ranks bend at most twice (#93)', () {
+      final scene = layoutFlowchart(
+        parseFlowchart(
+          'flowchart TD\n  A --> C\n  A --> D\n  B --> C\n'
+          '  B --> D\n  A --> E\n  B --> E',
+        ),
+        measurer: measurer,
+        theme: theme,
+        engine: 'elk',
+      );
+      final routes = elkEdgeRoutes(scene);
+      expect(routes, hasLength(6));
+      routes.forEach((id, points) {
+        expect(points.length, lessThanOrEqualTo(4), reason: '$id: $points');
+      });
+    });
 
     test('elk placement differs from dagre', () {
       final g3 = parseFlowchart('graph TD\n  A-->B\n  A-->C\n  B-->D\n  C-->D');

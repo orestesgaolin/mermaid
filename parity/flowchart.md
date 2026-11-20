@@ -92,5 +92,25 @@
 
 ## Layout engines
 - **dagre (default, primary parity target):** Upstream `rendering-util/layout-algorithms/dagre/index.js` runs graphlib dagre with `rankdir` from direction, `nodesep`/`ranksep` = 50, compound clusters for subgraphs, and edge points from dagre then clipped to shape intersect. Our vendored `dart_dagre` is driven the same way (`flow_layout.dart` step 3–5), with the same nodeSep/rankSep and intersect clipping, plus manual self-loops and representative-member routing for edges to subgraph ids (mirrors `adjustClustersAndEdges`). This is the closest-parity path; remaining gaps are the rect-padding (#1) and cluster-title-band (#5) sizing differences feeding dagre, not the algorithm itself. Edge curve = basis on both sides.
-- **elk:** Upstream flowchart does **not** use elk in v11 — `layout: elk` warns and falls back to dagre (flowRenderer-v3-unified.ts:36); there is no orthogonal ELK routing in core mermaid flowcharts. Our `elk` engine instead keeps the dagre placement but rewrites edges as orthogonal Manhattan paths with `linear` interpolation (`layout_engines.dart:orthogonalRoute`). This is a structural divergence (discrepancy #2): selecting elk yields a diagram mermaid.js would render with smooth basis curves.
+- **elk:** mermaid 12 ships ELK in core (`layout-algorithms/elk/render.ts`). Ours runs the Dart `elk` package via `elk_adapter.dart`, with options from `directives.dart:resolveElkConfig`. See "ELK presets" below.
 - **tidy-tree:** No upstream counterpart for flowchart (mermaid.js ships only dagre for `graph`/`flowchart`). Our implementation (`layout_engines.dart:tidyTreeLayout`) is a Reingold–Tilford/Walker tidy tree over a BFS spanning forest, ignoring clusters (disabled when subgraphs exist) and routing straight edges. Cannot be assessed for parity; treat as a Dart-only extension (discrepancy #9). Sibling/level gaps reuse nodeSpacing/rankSpacing (50/50).
+
+## ELK presets (issue #92)
+- Upstream: `elk.preset` selects `default` (BALANCED alignment, DEPTH_FIRST cycle breaking), `legacy` (NONE, GREEDY), `modelOrder` or `depthFirst`. Explicit `elk.*` keys win. `spacing.portsSurrounding` is 12 on every side.
+- Ours: `resolveElkConfig` uses the same table and resolution, and passes the 12px margin.
+- Deviations: `modelOrder` and `depthFirst` place with Brandes–Köpf (the Dart engine has no NETWORK_SIMPLEX placer). Only the top and bottom `portsSurrounding` margins exist: the ends of the sides edges use. Not passed, as the engine lacks them: `unnecessaryBendpoints`, `mergeHierarchyEdges`, `selfLoopDistribution`, `wrapping.multiEdge.*`, and per-subgraph spacing and padding. `considerModelOrder` defaults to NONE (upstream NODES_AND_EDGES).
+
+## ELK edge clean-up after layout (issue #93)
+- Upstream: mermaid 12.3 `elk/render.ts:applyElkEdgeLayout` cleans up ELK routes after layout.
+- Ours: `elk_adapter.dart:straightenEdgeTerminals` ports `elk.straightenEdges` (same limits and crossing/label checks; labels follow the moved run).
+- Not done: `orientFeedbackEdges`, node alignment at small nodes, subgraph title padding and stale endpoints, the 12.3 subgraph-edge fix (#8661), `sanitizeElkEdgePoints` and the marker segment checks.
+- Deviations: straightening runs before shape clipping (same result for rectangles); points a route only passes straight through are ignored.
+
+## ELK line hops and rounded corners (issue #91)
+- Upstream: every ELK edge is `curve: "rounded"` (radius 5); `elk.lineHops` (`true`/`"arc"`, `"gap"`, `false`) adds a radius-6 hop on the horizontal segment of each crossing (`lineJump.ts`).
+- Ours: `line_jumps.dart` ports it with the same constants, run in `flow_layout.dart` after all ELK edges are routed.
+- Deviations:
+  - Arc hops are two cubics (`C` in SVG, not `A`).
+  - Self-loops and invisible edges take no part.
+  - Edges inside a subgraph with its own `direction` are not hopped against outer edges.
+  - State diagrams with ELK are unchanged.

@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:elk/elk.dart' as elk;
 
 import 'color.dart';
+import 'line_jumps.dart';
 import 'theme/theme.dart';
 
 /// Returns [base] adjusted by any `%%{init}%%` directive or frontmatter
@@ -241,9 +242,15 @@ String resolveLayout(String source, {String defaultLayout = 'dagre'}) {
 }
 
 /// Resolves ELK layered options from `config.elk` in an `%%{init}%%` directive
-/// or frontmatter. Unspecified knobs keep ELK's defaults (Brandes–Köpf
-/// placement, `spacing.baseValue` 40 — matching upstream mermaid-layout-elk).
-elk.ElkLayoutOptions resolveElkConfig(String source) {
+/// or frontmatter, as mermaid 12 does.
+///
+/// `elk.preset` (`default`, `legacy`, `modelOrder`, `depthFirst`) sets the
+/// base options; a missing or unknown name selects [defaultPreset]. Explicit
+/// `elk.*` keys win over the preset.
+elk.ElkLayoutOptions resolveElkConfig(
+  String source, {
+  String defaultPreset = 'default',
+}) {
   final meta = _metadata(source);
   Map<String, dynamic> elkCfg = {};
   void merge(Object? config) {
@@ -257,21 +264,88 @@ elk.ElkLayoutOptions resolveElkConfig(String source) {
     final cfg = _looseJson('{$body}');
     if (cfg is Map && cfg['config'] is Map) merge(cfg['config']);
     merge(cfg);
+    elkCfg.addAll(_frontmatterConfigBlock(body, 'elk'));
   }
   meta.inits.forEach(merge);
 
+  final preset =
+      _elkPresets[elkCfg['preset']] ??
+      _elkPresets[defaultPreset] ??
+      _elkPresets['default']!;
+  final placement = elkCfg['nodePlacementStrategy'];
+  final alignment = elkCfg['nodePlacementAlignment'];
+  final cycleBreaking = elkCfg['cycleBreakingStrategy'];
   return elk.ElkLayoutOptions(
-    nodePlacement: _enumByName(
-      elkCfg['nodePlacementStrategy'],
-      elk.ElkNodePlacement.values,
-      fallback: elk.ElkNodePlacement.brandesKoepf,
-    ),
-    fixedAlignment: _elkAlignment(elkCfg['nodePlacementAlignment']),
+    nodePlacement: placement is String
+        ? _enumByName(
+            placement,
+            elk.ElkNodePlacement.values,
+            fallback: elk.ElkNodePlacement.brandesKoepf,
+          )
+        : preset.placement,
+    fixedAlignment: alignment is String
+        ? _elkAlignment(alignment)
+        : preset.alignment,
     mergeEdges: elkCfg['mergeEdges'] == true,
     considerModelOrder: _elkModelOrder(elkCfg['considerModelOrder']),
-    cycleBreaking: _elkCycleBreaking(elkCfg['cycleBreakingStrategy']),
+    cycleBreaking: cycleBreaking is String
+        ? _elkCycleBreaking(cycleBreaking)
+        : preset.cycleBreaking,
     forceNodeModelOrder: elkCfg['forceNodeModelOrder'] == true,
+    spacingPortsSurroundingTop: _elkPortsSurrounding,
+    spacingPortsSurroundingBottom: _elkPortsSurrounding,
   );
+}
+
+/// mermaid 12's `PORTS_SURROUNDING_MARGIN`, used by every preset.
+const double _elkPortsSurrounding = 12;
+
+typedef _ElkPreset = ({
+  elk.ElkNodePlacement placement,
+  elk.ElkFixedAlignment alignment,
+  elk.ElkCycleBreaking cycleBreaking,
+});
+
+/// mermaid 12's `ELK_PRESETS`, keyed by `elk.preset`. Names are
+/// case-sensitive, as upstream looks them up with `Object.hasOwn`.
+const Map<String, _ElkPreset> _elkPresets = {
+  'default': (
+    placement: elk.ElkNodePlacement.brandesKoepf,
+    alignment: elk.ElkFixedAlignment.balanced,
+    cycleBreaking: elk.ElkCycleBreaking.depthFirst,
+  ),
+  'legacy': (
+    placement: elk.ElkNodePlacement.brandesKoepf,
+    alignment: elk.ElkFixedAlignment.none,
+    cycleBreaking: elk.ElkCycleBreaking.greedy,
+  ),
+  'modelOrder': (
+    placement: elk.ElkNodePlacement.networkSimplex,
+    alignment: elk.ElkFixedAlignment.none,
+    cycleBreaking: elk.ElkCycleBreaking.greedyModelOrder,
+  ),
+  'depthFirst': (
+    placement: elk.ElkNodePlacement.networkSimplex,
+    alignment: elk.ElkFixedAlignment.none,
+    cycleBreaking: elk.ElkCycleBreaking.depthFirst,
+  ),
+};
+
+/// Resolves `config.elk.straightenEdges`; on unless set to `false`.
+bool resolveElkStraightenEdges(String source) {
+  final value = resolveDiagramConfig(source, 'elk')['straightenEdges'];
+  return value != false && value != 'false';
+}
+
+/// Resolves `elk.lineHops` from frontmatter or `%%{init}%%`; defaults to
+/// [ElkLineHops.arc].
+ElkLineHops resolveElkLineHops(String source) {
+  final raw = resolveDiagramConfig(source, 'elk')['lineHops'];
+  return switch (raw is String ? raw.toLowerCase() : raw) {
+    false || 'false' => ElkLineHops.none,
+    'gap' => ElkLineHops.gap,
+    _ => ElkLineHops.arc,
+  };
 }
 
 T _enumByName<T extends Enum>(

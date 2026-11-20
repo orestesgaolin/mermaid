@@ -20,6 +20,7 @@ import '../../geometry.dart';
 import '../../icons/icon_registry.dart';
 import '../../ir/scene.dart';
 import '../../ir/scene_utils.dart';
+import '../../line_jumps.dart';
 import '../../math/tex_math.dart';
 import '../../text/markdown_label.dart';
 import '../../text/text_measurer.dart';
@@ -249,12 +250,17 @@ bool _preferredLabelBreak(String rune) =>
 
 bool _isLabelWhitespace(String rune) => RegExp(r'^\s$').hasMatch(rune);
 
+/// Lays out [graph] and returns its scene.
+///
+/// [engine] is `dagre`, `elk` or `tidy-tree`; [lineHops] applies to `elk`.
 RenderScene layoutFlowchart(
   FlowGraph graph, {
   required TextMeasurer measurer,
   required MermaidTheme theme,
   String engine = 'dagre',
   elk.ElkLayoutOptions? elkOptions,
+  bool straightenElkEdges = true,
+  ElkLineHops lineHops = ElkLineHops.arc,
   FlowchartConfig config = const FlowchartConfig(),
 }) {
   ensureBuiltinIconPacks();
@@ -269,7 +275,9 @@ RenderScene layoutFlowchart(
     baseStyle,
     engine,
     config: config,
-    elkOptions: elkOptions ?? const elk.ElkLayoutOptions(),
+    elkOptions: elkOptions ?? resolveElkConfig(''),
+    straightenElkEdges: straightenElkEdges,
+    lineHops: lineHops,
     originalLinkIndices: List<int>.generate(graph.edges.length, (i) => i),
   );
   var sceneNodes = fragment.nodes;
@@ -366,6 +374,8 @@ _Fragment _layoutGraph(
   String engine, {
   required FlowchartConfig config,
   required elk.ElkLayoutOptions elkOptions,
+  required bool straightenElkEdges,
+  required ElkLineHops lineHops,
   required List<int> originalLinkIndices,
 }) {
   // --- 0. Subgraphs with their own direction become recursive fragments. ---
@@ -463,6 +473,8 @@ _Fragment _layoutGraph(
       engine == 'elk' ? 'elk' : 'dagre',
       config: config,
       elkOptions: elkOptions,
+      straightenElkEdges: straightenElkEdges,
+      lineHops: lineHops,
       originalLinkIndices: subLinkIndices,
     );
     final titleRich = layoutHtmlLabel(
@@ -774,6 +786,7 @@ _Fragment _layoutGraph(
       direction: graph.direction,
       options: effectiveElkOptions,
       clusterLabels: clusterLabels,
+      straightenEdges: straightenElkEdges,
     );
     for (final p in placed.values) {
       final c = elkResult.center(p.node.id);
@@ -1081,6 +1094,7 @@ _Fragment _layoutGraph(
     if (isAbsorbedEdge(e) || e.from == e.to) continue;
     (pairEdges[pairKey(e.from, e.to)] ??= []).add(i);
   }
+  final elkRoutes = <(int, LineJumpEdge)>[];
   for (var i = 0; i < graph.edges.length; i++) {
     final e = graph.edges[i];
     if (isAbsorbedEdge(e)) continue; // Rendered inside the cluster fragment.
@@ -1272,9 +1286,17 @@ _Fragment _layoutGraph(
       points = _softenBasisStart(points);
     }
 
+    if (useElk) {
+      elkRoutes.add((
+        edgeGroups.length,
+        LineJumpEdge(
+          points: [startTip, ...points.sublist(1, points.length - 1), endTip],
+          drawPoints: List.of(points),
+        ),
+      ));
+    }
     final pathGeometry = PathGeometry(
-      // ELK draws orthogonal edges with sharp corners (linear through the
-      // Manhattan route); other engines use the edge's own interpolation.
+      // Rounded and hopped below, once every route is known.
       _edgeCurve(points, useElk ? 'linear' : interpolation),
     );
     children.add(
@@ -1340,6 +1362,27 @@ _Fragment _layoutGraph(
           rich: edgeRich[i],
           paintText: edgeLabelText[i],
         ),
+      );
+    }
+  }
+
+  if (elkRoutes.isNotEmpty) {
+    final paths = roundedEdgePathsWithJumps([
+      for (final (_, route) in elkRoutes) route,
+    ], hops: lineHops);
+    for (var k = 0; k < elkRoutes.length; k++) {
+      final index = elkRoutes[k].$1;
+      final group = edgeGroups[index] as SceneGroup;
+      final stroke = group.children.first as SceneShape;
+      edgeGroups[index] = SceneGroup(
+        id: group.id,
+        role: group.role,
+        semanticLabel: group.semanticLabel,
+        edge: group.edge,
+        children: [
+          stroke.copyWith(geometry: PathGeometry(paths[k])),
+          ...group.children.skip(1),
+        ],
       );
     }
   }

@@ -38,6 +38,7 @@ export 'src/diagrams/timeline/timeline.dart';
 export 'src/diagrams/xychart/xychart.dart';
 export 'src/geometry.dart';
 export 'src/ir/scene.dart';
+export 'src/line_jumps.dart' show ElkLineHops;
 export 'src/ir/scene_utils.dart'
     show RenderSceneBounds, sceneBounds, geometryBounds, distanceToPath;
 export 'src/mermaid.dart';

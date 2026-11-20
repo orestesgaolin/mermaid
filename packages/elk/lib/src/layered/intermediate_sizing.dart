@@ -14,7 +14,7 @@
 library;
 
 import 'attached_labels.dart'
-    show labelTranspose, nodeLabelSpacing, placePortLabels;
+    show labelTranspose, nodeLabelSpacing, placePortLabels, portLabelSpacing;
 import 'intermediate_labels.dart' show labelStackSpacing;
 import 'lgraph.dart';
 import 'phase.dart';
@@ -223,34 +223,30 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
           : contentHeight;
     }
 
-    // Place E and W ports (vertical free placement = CENTER alignment).
-    _placeVerticalFreePorts(
-        node, PortSide.east, portPortSpacing);
-    _placeVerticalFreePorts(
-        node, PortSide.west, portPortSpacing);
-    _placeHorizontalFreePorts(
-        node, PortSide.north, portPortSpacing);
-    _placeHorizontalFreePorts(
-        node, PortSide.south, portPortSpacing);
+    _placeVerticalFreePorts(node, PortSide.east);
+    _placeVerticalFreePorts(node, PortSide.west);
+    _placeHorizontalFreePorts(node, PortSide.north);
+    _placeHorizontalFreePorts(node, PortSide.south);
     placePortLabels(node);
   }
 
+  /// Equal gap around free ports under ELK's default DISTRIBUTED alignment.
+  /// Like elkjs, it may drop below the port-port spacing on a crowded side.
+  static double _distributedGap(double sideLength, Iterable<double> sizes) {
+    final used = sizes.fold<double>(0, (sum, size) => sum + size);
+    return (sideLength - used) / (sizes.length + 1);
+  }
+
   /// Horizontal counterpart of [_placeVerticalFreePorts]. North and south
-  /// ports are ordered left-to-right and centred as a group on the node.
-  void _placeHorizontalFreePorts(
-      LNode node, PortSide side, double portPortSpacing) {
+  /// ports are ordered left-to-right and distributed evenly along the side.
+  void _placeHorizontalFreePorts(LNode node, PortSide side) {
     final ports = node.ports
         .where((p) => p.side == side && !p.getProperty(crossHierarchyFixedPort))
         .toList();
     if (ports.isEmpty) return;
 
-    double totalWidth = 0;
-    for (final port in ports) {
-      totalWidth += port.size.x;
-    }
-    totalWidth += (ports.length - 1) * portPortSpacing;
-
-    var currentX = (node.size.x - totalWidth) / 2;
+    final gap = _distributedGap(node.size.x, ports.map((p) => p.size.x));
+    var currentX = gap;
     for (final port in ports) {
       port.position.x = currentX;
       port.position.y = side == PortSide.north ? -port.size.y : node.size.y;
@@ -258,19 +254,18 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
       // Edges meet the outward face of a nonzero port, matching ELK. The
       // positioned rectangle itself lies outside the node border.
       port.anchor.y = side == PortSide.north ? 0 : port.size.y;
-      currentX += port.size.x + portPortSpacing;
+      currentX += port.size.x + gap;
     }
   }
 
-  /// Mirrors `PortPlacementCalculator.placeVerticalFreePorts` for the CENTER
-  /// alignment case (the default when there is only free port ordering).
+  /// Mirrors `PortPlacementCalculator.placeVerticalFreePorts` for ELK's
+  /// default DISTRIBUTED port alignment.
   ///
   /// Port x-coordinate: east → [LNode.size].x, west → `-port.size.x`
   ///   (no border offset in the default config).
-  /// Port y-coordinate: ports are stacked top-to-bottom, centred vertically
-  ///   in the node height with [portPortSpacing] between them.
-  void _placeVerticalFreePorts(
-      LNode node, PortSide side, double portPortSpacing) {
+  /// Port y-coordinate: ports are spread top-to-bottom with equal gaps
+  ///   before, between and after them (see [_distributedGap]).
+  void _placeVerticalFreePorts(LNode node, PortSide side) {
     // Cross-hierarchy external ports carry a fixed position (set from the inner
     // boundary dummy after the nested layout) so the outer edge segment meets
     // the inner one orthogonally; never re-distribute those.
@@ -324,18 +319,18 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
       return connectedPortRank(a).compareTo(connectedPortRank(b));
     });
 
+    // As in elkjs, each end keeps portsSurrounding minus the port-label spacing.
+    final graph = node.graph;
+    final labelGap = graph.getProperty(portLabelSpacing);
+    final marginTop = _max(
+        0, graph.getProperty(spacingPortsSurroundingTop) - labelGap);
+    final marginBottom = _max(
+        0, graph.getProperty(spacingPortsSurroundingBottom) - labelGap);
+
     final nodeWidth = node.size.x;
-    final nodeHeight = node.size.y;
-
-    // Total height occupied by all ports + inter-port gaps.
-    double totalHeight = 0;
-    for (final p in ports) {
-      totalHeight += p.size.y;
-    }
-    totalHeight += (ports.length - 1) * portPortSpacing;
-
-    // Starting y so that the group is centred in the node.
-    double currentY = (nodeHeight - totalHeight) / 2;
+    final gap = _distributedGap(
+        node.size.y - marginTop - marginBottom, ports.map((p) => p.size.y));
+    var currentY = marginTop + gap;
 
     for (final port in ports) {
       // x: east ports flush with the right edge; west ports flush with the
@@ -348,7 +343,7 @@ class LabelAndNodeSizeProcessor implements ILayoutProcessor {
       port.anchor.x = side == PortSide.east ? port.size.x : 0;
       port.anchor.y = port.size.y / 2;
 
-      currentY += port.size.y + portPortSpacing;
+      currentY += port.size.y + gap;
     }
   }
 }

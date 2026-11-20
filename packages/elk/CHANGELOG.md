@@ -5,6 +5,8 @@
   918-node graph lays out in 0.12 s instead of 521 s, with identical output.
   The `preferEdges` model-order strategy does not read the closure and no
   longer maintains it either.
+- Spread free ports evenly along a node side, as ELK's default DISTRIBUTED alignment does (#93).
+- Keep free ports inside `spacing.portsSurrounding` on the sides edges use, as elkjs does.
 
 ## 0.2.1
 

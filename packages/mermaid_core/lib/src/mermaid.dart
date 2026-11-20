@@ -79,6 +79,8 @@ class Mermaid {
           theme: theme,
           engine: resolveLayout(source),
           elkOptions: resolveElkConfig(source),
+          straightenElkEdges: resolveElkStraightenEdges(source),
+          lineHops: resolveElkLineHops(source),
           config: FlowchartConfig.fromSource(source),
         );
       case DiagramType.sequence:
@@ -101,7 +103,8 @@ class Mermaid {
           measurer: measurer,
           theme: theme,
           engine: resolveLayout(source, defaultLayout: 'auto'),
-          elkOptions: resolveElkConfig(source),
+          elkOptions: resolveElkConfig(source, defaultPreset: 'legacy'),
+          straightenElkEdges: resolveElkStraightenEdges(source),
           config: StateConfig.fromSource(source),
         );
       case DiagramType.er:

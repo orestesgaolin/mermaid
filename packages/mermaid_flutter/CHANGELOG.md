@@ -1,3 +1,7 @@
+## Unreleased
+
+- ELK flowcharts paint rounded edge bends and line hops.
+
 ## 0.4.0
 
 - Require `mermaid_core` 0.4.0. **Breaking** for code that reads the diagram

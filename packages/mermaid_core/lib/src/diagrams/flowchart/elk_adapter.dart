@@ -10,6 +10,8 @@
 /// then reused unchanged.
 library;
 
+import 'dart:math' as math;
+
 import 'package:elk/elk.dart' as elk;
 
 import '../../geometry.dart';
@@ -43,11 +45,13 @@ class ElkLayoutResult {
 }
 
 /// Runs the ELK layered layout over an already-built compound [g].
+/// [straightenEdges] applies [straightenEdgeTerminals] afterwards.
 ElkLayoutResult layoutWithElk(
   dagre.DagreGraph g, {
   required FlowDirection direction,
   required elk.ElkLayoutOptions options,
   Map<String, Size> clusterLabels = const {},
+  bool straightenEdges = true,
 }) {
   // Build the parent → children map from each node's `parent` link.
   final childrenOf = <String?, List<dagre.DagreNode>>{};
@@ -127,6 +131,15 @@ ElkLayoutResult layoutWithElk(
   // here (idempotent: an already-nested fan keeps its lanes).
   final targetOf = {for (final e in edges) e.id: e.targets.first};
   _orderFanIn(edgePoints, targetOf, nodes);
+
+  if (straightenEdges) {
+    final labelSizes = {
+      for (final e in edges)
+        if (e.labels.isNotEmpty)
+          e.id: Size(e.labels.first.width, e.labels.first.height),
+    };
+    straightenEdgeTerminals(edgePoints, labelCenters, labelSizes);
+  }
 
   return ElkLayoutResult(
       nodes, edgePoints, labelCenters, result.width, result.height);
@@ -228,6 +241,215 @@ void _orderFanIn(
       }
     }
   }
+}
+
+// Port of mermaid 12.3 `straightenEdgeTerminals` (elk/render.ts).
+const double _terminalJogMax = 16;
+const double _terminalRunMax = 30;
+const double _jogEps = 0.01;
+
+/// A shifted run of an edge, before and after.
+typedef _Run = ({Point oldA, Point oldB, Point newA, Point newB});
+
+/// Removes a jog of at most 16 px after an edge's first or before its last
+/// segment (at most 30 px), unless that adds a crossing or puts a label over
+/// an edge. A moved label follows the run.
+void straightenEdgeTerminals(
+  Map<String, List<Point>> edgePoints,
+  Map<String, Point> labelCenters,
+  Map<String, Size> labelSizes,
+) {
+  final ids = edgePoints.keys.toList();
+  Rect? labelBox(String id, [Point? center]) {
+    final c = center ?? labelCenters[id];
+    final s = labelSizes[id];
+    if (c == null || s == null || s.width <= 0 || s.height <= 0) return null;
+    return Rect.fromLTWH(
+      c.x - s.width / 2,
+      c.y - s.height / 2,
+      s.width,
+      s.height,
+    );
+  }
+
+  bool covers(List<Point> route, Rect? box) {
+    if (box == null) return false;
+    for (var i = 0; i < route.length - 1; i++) {
+      if (_segmentHitsBox(route[i], route[i + 1], box)) return true;
+    }
+    return false;
+  }
+
+  for (final id in ids) {
+    final original = edgePoints[id]!;
+    final simplified = _dropStraightThroughPoints(original);
+    if (simplified.length < 5) continue;
+    final runs = <_Run>[];
+    var candidate = simplified;
+    final front = _straightenFront(candidate);
+    if (front != null) {
+      candidate = front.$1;
+      runs.add(front.$2);
+    }
+    final back = _straightenFront(candidate.reversed.toList());
+    if (back != null) {
+      candidate = back.$1.reversed.toList();
+      runs.add(back.$2);
+    }
+    if (runs.isEmpty) continue;
+
+    final label = labelBox(id);
+    final oldCenter = labelCenters[id];
+    final moved = label == null || oldCenter == null
+        ? null
+        : _projectOntoRuns(oldCenter, runs);
+    final candidateLabel = moved == null ? label : labelBox(id, moved);
+    var before = 0, after = 0, coveredBefore = 0, coveredAfter = 0;
+    for (final other in ids) {
+      final route = edgePoints[other]!;
+      if (other == id || route.length < 2) continue;
+      before += _crossingCount(original, route);
+      after += _crossingCount(candidate, route);
+      final otherLabel = labelBox(other);
+      if (covers(route, label)) coveredBefore++;
+      if (covers(original, otherLabel)) coveredBefore++;
+      if (covers(route, candidateLabel)) coveredAfter++;
+      if (covers(candidate, otherLabel)) coveredAfter++;
+    }
+    if (after > before || coveredAfter > coveredBefore) continue;
+    edgePoints[id] = candidate;
+    if (moved != null) labelCenters[id] = moved;
+  }
+}
+
+/// Drops repeated points and points a route passes straight through (the
+/// Dart ELK splits routes at subgraph borders; elkjs returns only bends).
+List<Point> _dropStraightThroughPoints(List<Point> pts) {
+  final out = <Point>[];
+  for (final p in pts) {
+    if (out.isNotEmpty && out.last.distanceTo(p) <= _jogEps) continue;
+    if (out.length >= 2) {
+      final a = out[out.length - 2], b = out.last;
+      final axis = _axisOf(a, b);
+      final sameWay = axis == 'h'
+          ? (b.x - a.x).sign == (p.x - b.x).sign
+          : (b.y - a.y).sign == (p.y - b.y).sign;
+      if (axis != null && _axisOf(b, p) == axis && sameWay) out.removeLast();
+    }
+    out.add(p);
+  }
+  return out;
+}
+
+/// `h` for a horizontal segment, `v` for a vertical one, null otherwise.
+String? _axisOf(Point a, Point b) {
+  final dx = (b.x - a.x).abs(), dy = (b.y - a.y).abs();
+  if (dx > _jogEps && dy <= _jogEps) return 'h';
+  if (dy > _jogEps && dx <= _jogEps) return 'v';
+  return null;
+}
+
+(List<Point>, _Run)? _straightenFront(List<Point> pts) {
+  if (pts.length < 5) return null;
+  final [p0, p1, p2, p3, ...] = pts;
+  final axis = _axisOf(p0, p1);
+  final cross = axis == 'h' ? 'v' : 'h';
+  if (axis == null || _axisOf(p2, p3) != axis || _axisOf(p1, p2) != cross) {
+    return null;
+  }
+  if (p0.distanceTo(p1) > _terminalRunMax) return null;
+  final horizontal = axis == 'h';
+  final jog = horizontal ? (p2.y - p1.y).abs() : (p2.x - p1.x).abs();
+  if (jog < _jogEps || jog > _terminalJogMax) return null;
+  final forward = horizontal
+      ? (p1.x - p0.x).sign == (p3.x - p2.x).sign
+      : (p1.y - p0.y).sign == (p3.y - p2.y).sign;
+  if (!forward) return null;
+  var last = 3;
+  while (last + 1 < pts.length && _axisOf(pts[last], pts[last + 1]) == axis) {
+    last++;
+  }
+  if (last == pts.length - 1) return null;
+  final moved = [...pts];
+  for (var i = 2; i <= last; i++) {
+    moved[i] = horizontal ? Point(pts[i].x, p0.y) : Point(p0.x, pts[i].y);
+  }
+  final run = (
+    oldA: pts[2],
+    oldB: pts[last],
+    newA: moved[2],
+    newB: moved[last],
+  );
+  moved.removeRange(1, 3);
+  return (moved, run);
+}
+
+/// Moves [label] with the run nearest to it.
+Point? _projectOntoRuns(Point label, List<_Run> runs) {
+  Point? best;
+  var bestDist = double.infinity;
+  for (final run in runs) {
+    final t = _paramOnSegment(label, run.oldA, run.oldB);
+    final old = _pointAt(run.oldA, run.oldB, t);
+    final d = old.distanceTo(label);
+    if (d < bestDist) {
+      bestDist = d;
+      best = _pointAt(run.newA, run.newB, t);
+    }
+  }
+  return best;
+}
+
+double _paramOnSegment(Point p, Point a, Point b) {
+  final ab = b - a;
+  final lenSq = ab.x * ab.x + ab.y * ab.y;
+  if (lenSq == 0) return 0;
+  final t = ((p.x - a.x) * ab.x + (p.y - a.y) * ab.y) / lenSq;
+  return t.clamp(0.0, 1.0);
+}
+
+Point _pointAt(Point a, Point b, double t) =>
+    Point(a.x + t * (b.x - a.x), a.y + t * (b.y - a.y));
+
+/// Whether segment [a]–[b] passes through [box] (Liang–Barsky).
+bool _segmentHitsBox(Point a, Point b, Rect box) {
+  var t0 = 0.0, t1 = 1.0;
+  final dx = b.x - a.x, dy = b.y - a.y;
+  for (final (p, q) in [
+    (-dx, a.x - box.left),
+    (dx, box.right - a.x),
+    (-dy, a.y - box.top),
+    (dy, box.bottom - a.y),
+  ]) {
+    if (p == 0) {
+      if (q < 0) return false;
+    } else if (p < 0) {
+      t0 = math.max(t0, q / p);
+    } else {
+      t1 = math.min(t1, q / p);
+    }
+  }
+  return t0 < t1;
+}
+
+/// Number of proper crossings between the segments of two polylines.
+int _crossingCount(List<Point> a, List<Point> b) {
+  double side(Point o, Point p, Point q) =>
+      (p.x - o.x) * (q.y - o.y) - (p.y - o.y) * (q.x - o.x);
+  var n = 0;
+  for (var i = 0; i < a.length - 1; i++) {
+    for (var j = 0; j < b.length - 1; j++) {
+      final d1 = side(b[j], b[j + 1], a[i]);
+      final d2 = side(b[j], b[j + 1], a[i + 1]);
+      final d3 = side(a[i], a[i + 1], b[j]);
+      final d4 = side(a[i], a[i + 1], b[j + 1]);
+      if (((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) &&
+          ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0))) {
+        n++;
+      }
+    }
+  }
+  return n;
 }
 
 elk.ElkDirection _direction(FlowDirection d) => switch (d) {
